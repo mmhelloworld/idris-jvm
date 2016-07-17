@@ -5,13 +5,13 @@ JVM bytecode backend for Idris
 
 Install
 =======
-
-*   ```
-    git clone https://github.com/mmhelloworld/idris-jvm.git
-    cd idris-jvm
-    stack install
-    ```
-* Add the installed executable location to the `PATH` if it is not already.
+```
+git clone https://github.com/mmhelloworld/idris-jvm.git
+cd idris-jvm
+stack install
+```
+    
+Add the installed executable location to the `PATH` if it is not already.
 
 Example
 =======

@@ -46,6 +46,7 @@ Status / Future improvements
       go acc Z = acc
       go acc n@(S k) = go (acc + n) k
     ```
+    
 * Tail call is handled using Trampolines. For the following code, `evenT 10909000007` would work just fine and return the result after few seconds. `IO` is used here as otherwise Idris inlines the function calls and the functions end up being tail recursive instead of mutually recursive.
     ```idris
     mutual

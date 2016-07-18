@@ -30,7 +30,7 @@ Example
     ```
 
 * Get [Idris Runtime JAR](https://github.com/mmhelloworld/idrisjvm-runtime/releases/download/1.0-SNAPSHOT/idrisjvm-runtime-1.0-SNAPSHOT.jar) and set the environment variable `IDRIS_JVM_LIB` to the path to the JAR.
-* Make sure `java` is on your path. JDK is not necessary, Just JRE is enough but Java 8 is required. `java` can be explicity specified using `IDRIS_JVM` environment variable.
+* Make sure `java` is on your path. JDK is not necessary, Just JRE is enough but Java 8 is required. `java` can also be explicitly specified using `IDRIS_JVM` environment variable.
 * `$ idris pythag.idr --codegen jvm -o Pythag`
 * `$ java -cp $IDRIS_JVM_LIB:. Pythag`
        

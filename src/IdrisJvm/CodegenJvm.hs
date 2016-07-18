@@ -41,7 +41,7 @@ runProcess :: String -> [String] -> IO ()
 runProcess proc args = do
   (exitCode, stdout, stderr) <- readProcessWithExitCode proc args ""
   case exitCode of
-    ExitFailure _ -> error $ proc <> "ERROR: " <> stdout <> stderr
+    ExitFailure _ -> error $ proc <> " ERROR: " <> stdout <> stderr
     _             -> return ()
     
 data CgEnv = CgEnv { className :: String } deriving Show

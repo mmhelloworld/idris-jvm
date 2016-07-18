@@ -18,6 +18,13 @@ cabal.sandbox.config
 .stack-work/
 cabal.project.local
 
+# Java
+*.class
+*.asm
+
+# Idris
+*.ibc
+
 # Emacs
 *~
 \#*\#

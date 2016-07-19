@@ -573,7 +573,8 @@ cgVar (Glob n) = var n
 
 cgConst :: Const -> Cg ()
 cgConst (I i) = writeIns [Iconst i, boxInt]
-cgConst (Ch c) = writeIns [Iconst (ord c), boxInt] 
+cgConst (Ch c) = writeIns [ Iconst (ord c)
+                          , InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False] 
 cgConst (BI i) = writeIns [Iconst $ fromIntegral i, boxInt] -- TODO: Handle BigInteger
 cgConst (Str s) = writeIns [Ldc $ show s]
 cgConst TheWorld = writeIns [Iconst 0, boxInt]

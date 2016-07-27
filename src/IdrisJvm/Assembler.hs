@@ -1,6 +1,6 @@
 module IdrisJvm.Assembler where
 
-import Data.List (intercalate)
+import           Data.List (intercalate)
 
 data Asm = Aaload
          | Aastore
@@ -13,7 +13,7 @@ data Asm = Aaload
          | ClassCodeStart Int Access ClassName Signature ClassName [ClassName]
          | ClassCodeEnd String
          | CreateClass ClassOpts
-         | CreateLabel String         
+         | CreateLabel String
          | CreateMethod [Access] MethodName Descriptor (Maybe Signature) (Maybe [Exception])
          | Dup
          | Field FieldInsType ClassName FieldName Descriptor
@@ -103,11 +103,11 @@ handleTagj HInvokeStatic     = "Opcodes.H_INVOKESTATIC"
 handleTagj HInvokeSpecial    = "Opcodes.H_INVOKESPECIAL"
 handleTagj HNewInvokeSpecial = "Opcodes.H_NEWINVOKESPECIAL"
 handleTagj HInvokeInterface  = "Opcodes.H_INVOKEINTERFACE"
-  
-data Handle = Handle { tag :: HandleTag
-                     , hClassName :: ClassName
+
+data Handle = Handle { tag         :: HandleTag
+                     , hClassName  :: ClassName
                      , hMethodName :: MethodName
-                     , descriptor :: Descriptor
+                     , descriptor  :: Descriptor
                      , isInterface :: Bool
                      }
 
@@ -119,7 +119,7 @@ handlej (Handle tag cname mname desc isInterface)
                           , boolj isInterface
                           ]
 
-within start str end = start ++ str ++ end 
+within start str end = start ++ str ++ end
 quoted s = within "\"" s "\""
 braced s = within "(" s ")"
 sqrBracketed s = within "[" s "]"
@@ -132,7 +132,7 @@ assign name value = sep " = " [name, value]
 declVarAndAssign name value = sep " " ["var", assign name value]
 declVar v = sep " " ["var" , v]
 
-initializeArray typ xs = call "Java" "to" [within "[" (commaSep xs) "]", quoted typ]  
+initializeArray typ xs = call "Java" "to" [within "[" (commaSep xs) "]", quoted typ]
 
 iconst i | i >= 0 && i <= 5            = call "mv" "visitInsn" ["Opcodes.ICONST_" ++ show i]
          | i == (-1)                   = call "mv" "visitInsn" ["Opcodes.ICONST_M1"]
@@ -153,7 +153,7 @@ imports = declVarAndAssign "imports" $ constructor "JavaImporter" packages where
 
 withImports :: String
 withImports = "with (imports)"
-             
+
 asmj :: Asm -> String
 asmj Aaload = call "mv" "visitInsn" ["Opcodes.AALOAD"]
 asmj Aastore = call "mv" "visitInsn" ["Opcodes.AASTORE"]
@@ -171,7 +171,7 @@ asmj (ClassCodeEnd outFileName)
              , call "out" "close" []
              , "}"
              ]
-    
+
 asmj (ClassCodeStart version acc cname sig super intf)
      = call "cw" "visit" [ show version
                          , accessj acc
@@ -204,7 +204,7 @@ asmj (Frame frameType nlocal local nstack stack)
                            , initializeArray "java.lang.Object[]" local
                            , show nstack
                            , initializeArray "java.lang.Object[]" stack]
-asmj (GetType desc) = call "Type" "getType" [quoted desc] 
+asmj (GetType desc) = call "Type" "getType" [quoted desc]
 asmj (Goto label) = call "mv" "visitJumpInsn" ["Opcodes.GOTO", label]
 asmj I2c = call "mv" "visitInsn" [ "Opcodes.I2C" ]
 asmj I2l = call "mv" "visitInsn" [ "Opcodes.I2L" ]
@@ -239,7 +239,7 @@ asmj (LookupSwitch dflt lbls exprs)
 asmj (MaxStackAndLocal nstack nlocal) = call "mv" "visitMaxs" [show nstack, show nlocal]
 asmj MethodCodeEnd = call "mv" "visitEnd" []
 asmj MethodCodeStart  = call "mv" "visitCode" []
-asmj (New className) = call "mv" "visitTypeInsn" ["Opcodes.NEW", quoted className] 
+asmj (New className) = call "mv" "visitTypeInsn" ["Opcodes.NEW", quoted className]
 asmj Pop = call "mv" "visitInsn" ["Opcodes.POP"]
 asmj Return = call "mv" "visitInsn" ["Opcodes.RETURN"]
 asmj (SourceInfo fileName)  = call "mv" "visitSource" [quoted fileName, "null"]

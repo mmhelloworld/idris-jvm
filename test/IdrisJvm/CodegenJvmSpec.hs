@@ -1,17 +1,17 @@
 module IdrisJvm.CodegenJvmSpec where
 
-import Control.Monad (forM_)
-import Data.Char (toUpper)
-import Data.List
-import Data.Monoid((<>))
-import System.Directory
-import System.Exit
-import System.Environment
-import System.FilePath
-import System.Process (readProcessWithExitCode)
-import Test.Hspec (Spec, parallel, describe, it)
-import qualified Test.Hspec as H
-import Test.Hspec.Expectations.Pretty
+import           Control.Monad                  (forM_)
+import           Data.Char                      (toUpper)
+import           Data.List
+import           Data.Monoid                    ((<>))
+import           System.Directory
+import           System.Environment
+import           System.Exit
+import           System.FilePath
+import           System.Process                 (readProcessWithExitCode)
+import           Test.Hspec                     (Spec, describe, it, parallel)
+import qualified Test.Hspec                     as H
+import           Test.Hspec.Expectations.Pretty
 
 spec :: Spec
 spec = describe "idris-jvm" $ do
@@ -29,17 +29,13 @@ runTest dir = it ("can compile `" <> dir <> "`") $ do
   expected <- readFile $ dir </> "expected"
   actual <- compileAndRun (dir </> (takeBaseName dir ++ ".idr"))
   actual `shouldBe` expected
-  
+
 compileAndRun pgm = do
   let className = capitalize $ takeBaseName pgm
-  runProcess "idris" [pgm, "--codegen", "jvm", "-o", className]
+  runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", className]
   lib <- getEnv "IDRIS_JVM_LIB"
   (_, stdout, _) <- runProcess "java" ["-cp", lib ++ ":.", className]
   return stdout
-  
-lsWithExt dir ext = do
-  fs <- getDirectoryContents dir
-  return $ map (dir </>) $ filter ((==) ext . takeExtension) fs
 
 runProcess :: String -> [String] -> IO (ExitCode, String, String)
 runProcess proc args = do
@@ -50,4 +46,3 @@ runProcess proc args = do
 
 capitalize [] = []
 capitalize (x:xs) = toUpper x: xs
-

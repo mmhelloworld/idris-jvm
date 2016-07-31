@@ -1,27 +1,28 @@
-{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module IdrisJvm.CodegenJvm (codegenJvm) where
 
-import Control.Applicative ((<|>))
-import Control.Monad (join)
-import Control.Monad.RWS
-import IRTS.CodegenCommon
-import IRTS.Lang
-import IRTS.Simplified
-import Idris.Core.TT
+import           Control.Applicative ((<|>))
+import           Control.Arrow       (first)
+import           Control.Monad       (join)
+import           Control.Monad.RWS
+import           Idris.Core.TT
+import           IRTS.CodegenCommon
+import           IRTS.Lang
+import           IRTS.Simplified
 
-import Data.Maybe
-import Data.Char
-import qualified Data.DList as DL
-import Data.List (find, foldl', sortBy)
-import qualified Data.IntSet as IntSet
-import System.Environment
-import System.Exit
-import System.Process (readProcessWithExitCode)
-import qualified Text.PrettyPrint as PP
+import           Data.Char
+import qualified Data.DList          as DL
+import qualified Data.IntSet         as IntSet
+import           Data.List           (find, foldl', sortBy)
+import           Data.Maybe
+import           System.Environment
+import           System.Exit
+import           System.Process      (readProcessWithExitCode)
+import qualified Text.PrettyPrint    as PP
 
-import IdrisJvm.Assembler hiding (assign)
+import           IdrisJvm.Assembler  hiding (assign)
 
 codegenJvm :: CodeGenerator
 codegenJvm ci = do
@@ -43,16 +44,16 @@ runProcess proc args = do
   case exitCode of
     ExitFailure _ -> error $ proc <> " ERROR: " <> stdout <> stderr
     _             -> return ()
-    
+
 data CgEnv = CgEnv { className :: String } deriving Show
 
-data CgState = CgState { cgStLambdaIndex :: Int
-                       , cgStSwitchIndex :: Int
-                       , cgStLabelIndex :: Int
-                       , cgStFunctionName :: String
-                       , cgStLocalVarCount :: Int
+data CgState = CgState { cgStLambdaIndex     :: Int
+                       , cgStSwitchIndex     :: Int
+                       , cgStLabelIndex      :: Int
+                       , cgStFunctionName    :: String
+                       , cgStLocalVarCount   :: Int
                        , shouldDescribeFrame :: Bool
-                       , cgStFunctionArgs :: [Name]
+                       , cgStFunctionArgs    :: [Name]
                        } deriving Show
 
 initialCgState :: CgState
@@ -67,6 +68,8 @@ rtFuncSig = "L" ++ rtClassSig "Function" ++ ";"
 rtThunkSig = "L" ++ rtClassSig "Thunk" ++ ";"
 rtRuntimeSig = "L" ++ rtClassSig "Runtime" ++ ";"
 rtUtilSig = "L" ++ rtClassSig "Util" ++ ";"
+
+createThunkSig = "(" ++ rtFuncSig ++ "[Ljava/lang/Object;)" ++ rtThunkSig
 
 freshLambdaIndex :: Cg Int
 freshLambdaIndex = do
@@ -129,7 +132,7 @@ code ci = do
            ]
   defaultConstructor
   functions ci
-  mainMethod 
+  mainMethod
 
 functions :: CodegenInfo -> Cg ()
 functions ci = mapM_ doCodegen (simpleDecls ci)
@@ -145,7 +148,7 @@ defaultConstructor
              , MethodCodeEnd
              ]
 
-mainMethod :: Cg ()                     
+mainMethod :: Cg ()
 mainMethod = do
   cname <- className <$> ask
   writeIns [ CreateMethod [Public, Static] "main" "([Ljava/lang/String;)V" Nothing Nothing
@@ -153,7 +156,7 @@ mainMethod = do
            , InvokeMethod InvokeStatic cname (jname $ MN 0 "runMain") "()Ljava/lang/Object;" False
            , Pop
            , Return
-           , MaxStackAndLocal (-1) (-1) 
+           , MaxStackAndLocal (-1) (-1)
            , MethodCodeEnd
            ]
 
@@ -201,7 +204,7 @@ localVariablesSwitch :: Locals -> LVar -> [SAlt] -> Locals
 localVariablesSwitch locals e alts
    = let newLocals = map localVariablesAlt alts in
        IntSet.unions (locals: newLocals)
-    
+
 localVariablesAlt :: SAlt -> Locals
 localVariablesAlt (SConstCase t exp) = localVariables IntSet.empty exp
 localVariablesAlt (SDefaultCase exp) = localVariables IntSet.empty exp
@@ -229,7 +232,7 @@ cgFun n args def = do
              , MaxStackAndLocal (-1) (-1)
              , MethodCodeEnd
              ]
-    
+
   where
     nArgs = length args
     localVars = localVariables (if nArgs == 0 then IntSet.empty else IntSet.singleton $ pred nArgs) def
@@ -245,6 +248,10 @@ cgFun n args def = do
                        , Iconst 0
                        , Istore tailRecVarIndex ] -- Base case for tailrec. Set the tailrec flag to false.
             else writeIns [ Astore resultVarIndex]
+    tcoLocalVarCount = nlocalVars + 2 -- Two additional: tailrec loop variable, tailrec continue boolean
+    tcoLocalVarTypes = replicate nlocalVars (quoted "java/lang/Object")
+                     ++ [ quoted "java/lang/Object", "Opcodes.INTEGER" ]
+    tcoFrame = Frame FFull tcoLocalVarCount tcoLocalVarTypes 0 []
     methBody =
       if shouldEliminateTco
         then do
@@ -252,7 +259,7 @@ cgFun n args def = do
                    , Istore tailRecVarIndex
                    , CreateLabel tailRecStartLabelName
                    , LabelStart tailRecStartLabelName
-                   , Frame FFull (nlocalVars + 2) (replicate nlocalVars (quoted "java/lang/Object") ++ [quoted "java/lang/Object", "Opcodes.INTEGER"]) 0 []
+                   , tcoFrame
                    , Iload tailRecVarIndex
                    , CreateLabel tailRecEndLabelName
                    , Ifeq tailRecEndLabelName
@@ -273,7 +280,7 @@ assignNull varIndex = [Aconstnull, Astore varIndex]
 
 returnObject :: Int -> DL.DList Asm
 returnObject varIndex = [Aload varIndex, Areturn]
-                   
+
 isTailCall :: SExp -> Maybe Name
 isTailCall (SApp isTailCall f _) = if isTailCall then Just f else Nothing
 isTailCall (SLet _ v sc) =  isTailCall v <|> isTailCall sc
@@ -294,17 +301,29 @@ assign from to              = [Aload from, Astore to]
 boxInt :: Asm
 boxInt = InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
 
+unboxInt :: Asm
+unboxInt = InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
+
 invokeError :: String -> Cg ()
 invokeError x
   = writeIns [ Ldc $ show x
              , InvokeMethod InvokeStatic (rtClassSig "Runtime") "error" "(Ljava/lang/Object;)Ljava/lang/Object;" False
              ]
-    
-sig :: Int -> String  
+
+sig :: Int -> String
 sig nArgs = "(" ++ concat (replicate nArgs "Ljava/lang/Object;") ++ ")Ljava/lang/Object;"
 
 metafactoryDesc :: Descriptor
-metafactoryDesc = "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
+metafactoryDesc =
+  join [ "("
+         , "Ljava/lang/invoke/MethodHandles$Lookup;"
+         , "Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+         , "Ljava/lang/invoke/MethodType;"
+         , "Ljava/lang/invoke/MethodHandle;"
+         , "Ljava/lang/invoke/MethodType;"
+         , ")"
+         , "Ljava/lang/invoke/CallSite;"
+         ]
 
 lambdaDesc :: Descriptor
 lambdaDesc = "([Ljava/lang/Object;)Ljava/lang/Object;"
@@ -317,7 +336,7 @@ invokeDynamic cname lambda = [ InvokeDynamic "apply" ("()" ++ rtFuncSig) metafac
                     , asmj $ GetType lambdaDesc
                     ]
   lambdaHandle = Handle HInvokeStatic cname lambda lambdaDesc False
-  
+
 createThunk :: MethodName -> MethodName -> [LVar] -> Cg ()
 createThunk caller fname args = do
   let nArgs = length args
@@ -331,8 +350,8 @@ createThunk caller fname args = do
       f :: (Int, Int) -> DL.DList Asm
       f (lhs, rhs) = [Dup, Iconst lhs, Aload rhs, Aastore]
   writeIns . join . fmap f . DL.fromList $ zip [0..] argNums
-  writeIns [InvokeMethod InvokeStatic (rtClassSig "Runtime") "createThunk" ("(" ++ rtFuncSig ++ "[Ljava/lang/Object;)" ++ rtThunkSig) False]
-  
+  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Runtime") "createThunk" createThunkSig False ]
+
 createLambda :: ClassName -> MethodName -> MethodName -> Int -> DL.DList Asm
 createLambda cname fname lambdaMethodName nArgs
   = DL.fromList [ CreateMethod [Private, Static, Synthetic] lambdaMethodName lambdaDesc Nothing Nothing
@@ -350,7 +369,7 @@ cgBody ret (SV (Glob n)) = do
   cname <- className <$> ask
   writeIns [ InvokeMethod InvokeStatic cname (jname n) (sig 0) False]
   ret
-                                                                                                                
+
 cgBody ret (SV (Loc i)) = writeIns [Aload i] >> ret
 
 cgBody ret (SApp True f args) = do
@@ -361,7 +380,7 @@ cgBody ret (SApp True f args) = do
               writeIns . join . DL.fromList $ zipWith g [0..] args
         else -- non-self tail call
           createThunk caller (jname f) args >> ret
-    
+
 cgBody ret (SApp False f args) = do
   cname <- className <$> ask
   writeIns $ (Aload . locIndex) <$> DL.fromList args
@@ -370,8 +389,6 @@ cgBody ret (SApp False f args) = do
            ]
   ret
 
---cgBody ret (SLet (Loc i) v@(SConst (Str s)) sc) = cgBody (writeIns [Astore i]) v >> cgBody ret sc
---cgBody ret (SLet (Loc i) v@(SConst c) sc) = cgBody (writeIns [ Astore i ]) v >> cgBody ret sc
 cgBody ret (SLet (Loc i) v sc) = cgBody (writeIns [Astore i]) v >> cgBody ret sc
 
 cgBody ret (SUpdate n e) = cgBody ret e
@@ -382,7 +399,7 @@ cgBody ret (SProj (Loc v) i)
              , Iconst $ succ i
              , Aaload
              ] >> ret
-    
+
 
 cgBody ret (SCon _ t n args) = do
     writeIns [ Iconst $ length args + 1
@@ -416,23 +433,57 @@ cgBody ret SNothing = writeIns [Iconst 0, boxInt] >> ret
 
 cgBody ret (SError x) = invokeError (show x) >> ret
 
-cgBody ret _ = invokeError "NOT IMPLEMENTED!!!!" >> ret
+cgBody ret (SForeign returns (FApp ffi [FStr clazz, FStr fn]) args)
+  | ffi == sUN "JStatic" = do
+    let descriptor = methDesc (fst <$> args) returns
+        argsWithTypes = first fdescSig <$> args
+    loadAndCast argsWithTypes
+    writeIns [ InvokeMethod InvokeStatic clazz fn descriptor False ]
+    boxIfNeeded $ fdescSig returns
+    ret
+
+cgBody ret _ = error "NOT IMPLEMENTED!!!!"
+
+loadAndCast :: [(String, LVar)] -> Cg ()
+loadAndCast = mapM_ f where
+  f (ty, v) = do
+    writeIns [ Aload $ locIndex v ]
+    case ty of
+      "I" -> writeIns [ Checkcast "java/lang/Integer", unboxInt ]
+      ('L':clazzWithSc) -> writeIns [ Checkcast $ init clazzWithSc ]
+      _ -> error $ "unknown type: " ++ ty
+
+boxIfNeeded :: String -> Cg ()
+boxIfNeeded "I" = writeIns [ boxInt ]
+boxIfNeeded _ = pure ()
+
+methDesc :: [FDesc] -> FDesc -> String
+methDesc args ret = within "(" argdesc ")" ++ retdesc where
+  argdesc = concat (fdescSig <$> args)
+  retdesc = fdescSig ret
+
+fdescSig :: FDesc -> String
+fdescSig (FApp intTy [_, FCon (UN "JVM_IntNative")]) | intTy == sUN "JVM_IntT" = "I"
+fdescSig (FCon (UN "JVM_Str")) = "Ljava/lang/String;"
+fdescSig (FIO t) = fdescSig t
+fdescSig (FApp jvmTy [FStr typeName]) | jvmTy == sUN "Class" = "L" ++ typeName ++ ";"
+fdescSig s = error $ "unknown ffidesc" ++ show s
 
 cgSwitch :: Cg () -> LVar -> [SAlt] -> Cg ()
 cgSwitch ret e alts = do
-    switchIndex <- freshSwitchIndex 
+    switchIndex <- freshSwitchIndex
     let switchEndLbl = switchEndLabel switchIndex
         switchDefaultLbl = if hasDefault then defaultLabel switchIndex else switchEndLbl
-        
+
     writeIns $ fmap (\(lbl, _, _) -> CreateLabel lbl) . DL.fromList $ csWithLbls switchIndex
     writeIns [ CreateLabel switchEndLbl ]
-    
+
     if isConstructorSwitch
       then switchConstructorExpr switchVar
       else if isStrCases
              then switchStringExpr switchIndex switchVar
              else switchIntExpr switchVar
-      
+
     writeIns [ LookupSwitch switchDefaultLbl (switchInsLabels switchIndex) (switchInsExprs switchIndex)]
 
     caseIns switchIndex
@@ -451,7 +502,7 @@ cgSwitch ret e alts = do
 
         switchInsLabels si = map (\(lbl, _, _) -> lbl) $ filter (\(_, _, alt) -> not (defaultCase alt)) $ csWithLbls si
         switchInsExprs si = map (\(_, e, _) -> fromMaybe 0 e) $ filter (\(_, _, alt) -> not (defaultCase alt)) $ csWithLbls si
-        
+
         Loc switchVar = e
 
         cs :: [(Maybe Int, SAlt)]
@@ -466,9 +517,9 @@ cgSwitch ret e alts = do
         g (_, Just c1, _) (_, Nothing, _) = LT
         g x@(_, Nothing, _) (_, Just c2, _) = GT
         g _ _ = EQ
-        
+
         csWithLbls si = sortBy g $ zipWith (f si) cs [0 .. pred (length alts)]
-        
+
         caseIns si = mapM_ (\(label, e, alt) -> cgAlt ret label si switchVar alt) (csWithLbls si)
 
 switchEndLabel :: Int -> String
@@ -534,25 +585,25 @@ addFrame = do
       writeIns [ Frame FFull (nlocalVars + 1) (replicate nlocalVars (quoted "java/lang/Object") ++ [quoted "java/lang/Object"]) 0 []]
       modify . updateShouldDescribeFrame $ const False
     else writeIns [ Frame FSame 0 [] 0 []]
-    
+
 cgAltNonConCase :: Cg () -> Label -> Int -> SExp -> Cg ()
 cgAltNonConCase ret label si exp = do
   writeIns [ LabelStart label ]
   addFrame
   cgBody ret exp
   writeIns [ Goto $ switchEndLabel si ]
-  
+
 cgAlt :: Cg () -> Label -> Int -> Int -> SAlt -> Cg ()
 cgAlt ret label si sv (SConstCase t exp) = cgAltNonConCase ret label si exp
-       
+
 cgAlt ret label si sv (SDefaultCase exp) = cgAltNonConCase ret label si exp
-    
+
 cgAlt ret label si sv (SConCase lv t n args exp) = do
     writeIns [ LabelStart label ]
     addFrame
     extractConParams
     cgBody ret exp
-  
+
     writeIns [ Goto $ switchEndLabel si ]
 
    where
@@ -563,18 +614,18 @@ cgAlt ret label si sv (SConCase lv t n args exp) = do
                 , Aaload
                 , Astore v
                 ]
-         
+
      extractConParams =
        mapM_ (uncurry project) $ zip [1..] [lv .. (lv + length args - 1)]
 
 cgVar :: LVar -> String
-cgVar (Loc i) = loc i 
+cgVar (Loc i) = loc i
 cgVar (Glob n) = var n
 
 cgConst :: Const -> Cg ()
 cgConst (I i) = writeIns [Iconst i, boxInt]
 cgConst (Ch c) = writeIns [ Iconst (ord c)
-                          , InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False] 
+                          , InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False]
 cgConst (BI i) = writeIns [Iconst $ fromIntegral i, boxInt] -- TODO: Handle BigInteger
 cgConst (Str s) = writeIns [Ldc $ show s]
 cgConst TheWorld = writeIns [Iconst 0, boxInt]
@@ -583,10 +634,10 @@ cgConst x = error $ "Constant " ++ show x ++ " not compilable yet"
 
 compareObj fn l r
   = writeIns [ Aload $ locIndex l
-           , Aload $ locIndex r
-           , InvokeMethod InvokeStatic (rtClassSig "Util") fn "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
-           ]
-    
+             , Aload $ locIndex r
+             , InvokeMethod InvokeStatic (rtClassSig "Util") fn "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
+             ]
+
 locIndex (Loc i) = i
 locIndex _ = error "Not a local variable"
 
@@ -594,35 +645,35 @@ loadLocalIntWithCast :: LVar -> DL.DList Asm
 loadLocalIntWithCast i = [ Aload $ locIndex i
                          , Checkcast "java/lang/Integer"
                          , InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False]
-    
+
 cgOp :: PrimFn -> [LVar] -> Cg ()
 cgOp (LPlus (ATInt _)) [l, r] = do
   writeIns $ loadLocalIntWithCast l
   writeIns $ loadLocalIntWithCast r
   writeIns [ Iadd ]
   writeIns [ boxInt ]
-  
+
 cgOp (LMinus (ATInt _)) [l, r] = do
   writeIns $ loadLocalIntWithCast l
   writeIns $ loadLocalIntWithCast r
   writeIns [ Isub ]
   writeIns [ boxInt ]
-  
+
 cgOp (LTimes (ATInt _)) [l, r] = do
   writeIns $ loadLocalIntWithCast l
   writeIns $ loadLocalIntWithCast r
   writeIns [ Imul ]
   writeIns [ boxInt ]
-  
+
 cgOp (LEq (ATInt _)) [l, r] = compareObj "objectEquals" l r
-                                                                                                  
+
 cgOp (LSLt (ATInt _)) [l, r] = compareObj "intLessThan" l r
 cgOp (LSLe (ATInt _)) [l, r] = compareObj "intLessThanOrEqualTo" l r
 cgOp (LSGt (ATInt _)) [l, r] = compareObj "intGreaterThan" l r
 cgOp (LSGe (ATInt _)) [l, r] = compareObj "intGreaterThanOrEqualTo" l r
 
 cgOp LStrEq [l,r] = compareObj "objectEquals" l r
-    
+
 cgOp LStrRev [x]
   = writeIns [ New "java/lang/StringBuilder"
              , Dup
@@ -632,14 +683,14 @@ cgOp LStrRev [x]
              , InvokeMethod InvokeVirtual "java/lang/StringBuilder" "reverse" "()Ljava/lang/StringBuilder;" False
              , InvokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
              ]
-    
+
 cgOp LStrLen [x]
   = writeIns [ Aload $ locIndex x
              , Checkcast "java/lang/String"
              , InvokeMethod InvokeVirtual "java/lang/String" "length" "()I" False
              , boxInt
              ]
-    
+
 cgOp LStrHead [x]
   = writeIns [ Aload $ locIndex x
              , Checkcast "java/lang/String"
@@ -647,7 +698,7 @@ cgOp LStrHead [x]
              , InvokeMethod InvokeVirtual "java/lang/String" "charAt" "(I)C" False
              , InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
              ]
-    
+
 cgOp LStrIndex [x, y]
   = writeIns [ Aload $ locIndex x
              , Checkcast "java/lang/String"
@@ -657,7 +708,7 @@ cgOp LStrIndex [x, y]
              , InvokeMethod InvokeVirtual "java/lang/String" "charAt" "(I)C" False
              , InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
              ]
-    
+
 cgOp LStrTail [x]
   = writeIns [ Aload $ locIndex x
              , Checkcast "java/lang/String"
@@ -672,7 +723,7 @@ cgOp (LZExt ITNative ITBig) [x]
              , I2l
              , InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
              ]
-    
+
 cgOp (LIntStr _) [x]
   = writeIns [ Aload $ locIndex x
              , InvokeMethod InvokeStatic "java/util/Objects" "toString" "(Ljava/lang/Object;)Ljava/lang/String;" False
@@ -684,7 +735,7 @@ cgOp (LChInt _) [x]
              , InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
              , InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
              ]
-    
+
 cgOp (LIntCh _) [x]
   = writeIns [ Aload $ locIndex x
              , Checkcast "java/lang/Integer"
@@ -692,7 +743,7 @@ cgOp (LIntCh _) [x]
              , I2c
              , InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
              ]
-    
+
 cgOp (LSExt _ _) [x] = writeIns [ Aload $ locIndex x]
 cgOp (LTrunc _ _) [x] = writeIns [ Aload $ locIndex x]
 
@@ -702,10 +753,10 @@ cgOp LWriteStr [_, str]
              , InvokeMethod InvokeVirtual "java/io/PrintStream" "print" "(Ljava/lang/Object;)V" False
              , Aconstnull
              ]
-    
+
 cgOp LReadStr [_]
   = writeIns [ InvokeMethod InvokeStatic (rtClassSig "Runtime") "readString" "()Ljava/lang/String;" False ]
-  
+
 cgOp LStrConcat [l,r]
   = writeIns [ New "java/lang/StringBuilder"
              , Dup
@@ -717,7 +768,7 @@ cgOp LStrConcat [l,r]
              , InvokeMethod InvokeVirtual "java/lang/StringBuilder" "append" "(Ljava/lang/Object;)Ljava/lang/StringBuilder;" False
              , InvokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
              ]
-    
+
 cgOp LStrCons [l,r]
   = writeIns [ New "java/lang/StringBuilder"
              , Dup
@@ -736,7 +787,6 @@ cgOp (LStrInt _) [x]
              , InvokeMethod InvokeStatic "java/lang/Integer" "parseInt" "(Ljava/lang/String;)I" False
              , InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
              ]
-    
+
 cgOp op exps = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
    -- error("Operator " ++ show op ++ " not implemented")
-

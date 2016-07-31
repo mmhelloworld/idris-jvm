@@ -434,7 +434,7 @@ cgBody ret SNothing = writeIns [Iconst 0, boxInt] >> ret
 cgBody ret (SError x) = invokeError (show x) >> ret
 
 cgBody ret (SForeign returns (FApp ffi [FStr clazz, FStr fn]) args)
-  | ffi == sUN "JStatic" = do
+  | ffi == sUN "Static" = do
     let descriptor = methDesc (fst <$> args) returns
         argsWithTypes = first fdescSig <$> args
     loadAndCast argsWithTypes

@@ -10,7 +10,7 @@ data JVMAnyTy = Primitive String
 data JVMAny   : JVMAnyTy -> Type where
   MkJVMAny : (ty : JVMAnyTy) -> JVMAny ty
 
-data JVMFfiFn = JStatic String String
+data JVMFfiFn = Static String String
 
 mutual
   data JVM_IntTypes : Type -> Type where

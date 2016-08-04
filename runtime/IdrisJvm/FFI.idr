@@ -2,15 +2,16 @@ module IdrisJvm.FFI
 
 %access public export
 
-data JVMAnyTy = Primitive String
-              | Class String
-              | Interface String
-              | Array JVMAnyTy
+data JVM_NativeTy = Primitive String
+                  | Class String
+                  | Interface String
+                  | Array JVM_NativeTy
 
-data JVMAny   : JVMAnyTy -> Type where
-  MkJVMAny : (ty : JVMAnyTy) -> JVMAny ty
+data JVM_Native  : JVM_NativeTy -> Type where
+  MkJVMNative : (ty : JVM_NativeTy) -> JVM_Native ty
 
-data JVMFfiFn = Static String String
+data JVM_FfiFn = Static JVM_NativeTy  String
+               | Constructor
 
 mutual
   data JVM_IntTypes : Type -> Type where
@@ -32,21 +33,39 @@ mutual
       JVM_Str   : JVM_Types String
       JVM_Float : JVM_Types Double
       JVM_Unit  : JVM_Types ()
-      JVM_Any   : JVM_Types (JVMAny a)
+      JVM_NativeT : JVM_Types (JVM_Native a)
       JVM_IntT  : JVM_IntTypes i -> JVM_Types i
 
   ||| A descriptor for the JVM FFI. See the constructors of `JVM_Types`
   ||| and `JVM_IntTypes` for the concrete types that are available.
   FFI_JVM : FFI
-  FFI_JVM = MkFFI JVM_Types JVMFfiFn String
+  FFI_JVM = MkFFI JVM_Types JVM_FfiFn String
 
 JVM_IO : Type -> Type
 JVM_IO = IO' FFI_JVM
 
+namespace Java.Lang.Object
+  ObjectClass : JVM_NativeTy
+  ObjectClass = Class "java/lang/Object"
+
+  Object : Type
+  Object = JVM_Native ObjectClass
+
+
+interface Inherits a b where {}
+
+Inherits Object Object where {}
+
+Inherits Object String where {}
+
 %inline
-javacall : (fname : JVMFfiFn) -> (ty : Type) ->
+javacall : (fname : JVM_FfiFn) -> (ty : Type) ->
            {auto fty : FTy FFI_JVM [] ty} -> ty
 javacall fname ty = foreign FFI_JVM fname ty
+
+%inline
+new : (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
+new ty = javacall Constructor ty
 
 printLn : Show a => a -> JVM_IO ()
 printLn = printLn'

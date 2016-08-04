@@ -1,7 +1,7 @@
 module IdrisJvm.CodegenJvmSpec where
 
 import           Control.Monad                  (forM_)
-import           Data.Char                      (toUpper)
+import           Data.Char                      (isSpace, toUpper)
 import           Data.List
 import           Data.Monoid                    ((<>))
 import           System.Directory
@@ -32,7 +32,9 @@ runTest dir = it ("can compile `" <> dir <> "`") $ do
 
 compileAndRun pgm = do
   let className = capitalize $ takeBaseName pgm
-  runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", className]
+  (_, stdout, stderr) <- runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", className]
+  putStrLnNonEmpty stdout
+  putStrLnNonEmpty stderr
   lib <- getEnv "IDRIS_JVM_LIB"
   (_, stdout, _) <- runProcess "java" ["-cp", lib ++ ":.", className]
   return stdout
@@ -44,5 +46,11 @@ runProcess proc args = do
     ExitFailure _ -> error $ proc <> " ERROR: " <> stdout <> stderr
     _             -> return res
 
+capitalize :: String -> String
 capitalize [] = []
 capitalize (x:xs) = toUpper x: xs
+
+putStrLnNonEmpty :: String -> IO ()
+putStrLnNonEmpty [] = pure ()
+putStrLnNonEmpty (x: xs) | isSpace x = putStrLnNonEmpty xs
+putStrLnNonEmpty xs = putStrLn xs

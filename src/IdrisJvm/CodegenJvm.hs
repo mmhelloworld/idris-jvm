@@ -179,25 +179,16 @@ doCodegen (n, SFun _ args i def) = cgFun n args def
 type Locals = IntSet.IntSet
 
 localVariables :: Locals -> SExp -> Locals
-localVariables locals (SV (Glob n)) = locals
-localVariables locals (SV (Loc i)) = locals
-localVariables locals SApp{} = locals
 localVariables locals (SLet (Loc i) v sc)
    = let newLocals = IntSet.insert i locals
          locals1 = localVariables newLocals v
          locals2 = localVariables locals sc in
        IntSet.union locals1 locals2
 localVariables locals (SUpdate n e) = localVariables locals e
-localVariables locals (SProj e i) = locals
-localVariables locals (SCon _ t n args) = locals
 localVariables locals (SCase _ e alts)
    = localVariablesSwitch locals e alts
 localVariables locals (SChkCase e alts)
    = localVariablesSwitch locals e alts
-localVariables locals (SConst c) = locals
-localVariables locals (SOp op args) = locals
-localVariables locals SNothing = locals
-localVariables locals (SError x) = locals
 localVariables locals _ = locals
 
 localVariablesSwitch :: Locals -> LVar -> [SAlt] -> Locals
@@ -433,16 +424,37 @@ cgBody ret SNothing = writeIns [Iconst 0, boxInt] >> ret
 
 cgBody ret (SError x) = invokeError (show x) >> ret
 
-cgBody ret (SForeign returns (FApp ffi [FStr clazz, FStr fn]) args)
-  | ffi == sUN "Static" = do
+cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fdesc args) where
+  cgForeign (JStatic clazz fn) = do
     let descriptor = methDesc (fst <$> args) returns
         argsWithTypes = first fdescSig <$> args
     loadAndCast argsWithTypes
     writeIns [ InvokeMethod InvokeStatic clazz fn descriptor False ]
     boxIfNeeded $ fdescSig returns
     ret
+  cgForeign (JConstructor clazz) = do
+    let argdesc = concat (fdescSig . fst <$> args)
+        descriptor = within "(" argdesc ")" ++ "V" -- Constructors return void in bytecode
+        argsWithTypes = first fdescSig <$> args
+    writeIns [ New clazz, Dup ]
+    loadAndCast argsWithTypes
+    writeIns [ InvokeMethod InvokeSpecial clazz "<init>" descriptor False ]
+    ret
 
 cgBody ret _ = error "NOT IMPLEMENTED!!!!"
+
+data JForeign = JStatic String String
+              | JConstructor String
+
+parseDescriptor :: FDesc -> FDesc -> [(FDesc, LVar)] -> JForeign
+parseDescriptor _ (FApp ffi [FApp nativeTy [FStr cname], FStr fn]) _
+  | ffi == sUN "Static" && nativeTy == sUN "Class" = JStatic cname fn
+
+parseDescriptor returns (FCon ffi) args
+ | ffi == sUN "Constructor" = JConstructor className where
+   ('L':clazzWithSc) = fdescSig returns
+   className = init clazzWithSc
+parseDescriptor _ fdesc _ = error $ "Unsupported descriptor: " ++ show fdesc
 
 loadAndCast :: [(String, LVar)] -> Cg ()
 loadAndCast = mapM_ f where
@@ -466,8 +478,9 @@ fdescSig :: FDesc -> String
 fdescSig (FApp intTy [_, FCon (UN "JVM_IntNative")]) | intTy == sUN "JVM_IntT" = "I"
 fdescSig (FCon (UN "JVM_Str")) = "Ljava/lang/String;"
 fdescSig (FIO t) = fdescSig t
-fdescSig (FApp jvmTy [FStr typeName]) | jvmTy == sUN "Class" = "L" ++ typeName ++ ";"
-fdescSig s = error $ "unknown ffidesc" ++ show s
+fdescSig (FApp jvmTy [FApp nativeTy [FStr typeName]])
+  | jvmTy == sUN "JVM_NativeT" && nativeTy == sUN "Class" = "L" ++ typeName ++ ";"
+fdescSig s = error $ "unknown ffidesc: " ++ show s
 
 cgSwitch :: Cg () -> LVar -> [SAlt] -> Cg ()
 cgSwitch ret e alts = do

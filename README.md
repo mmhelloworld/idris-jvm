@@ -15,7 +15,7 @@ Add the installed executable location to the `PATH` if it is not already on PATH
 Install Idris JVM runtime
 -------------------------
 ```
-cd runtime
+cd idris-jvm/runtime
 idris --install idris-jvm-runtime.ipkg
 ```
 
@@ -44,7 +44,7 @@ Status / Future improvements
 ============================
 
 * This is still work in progress so only basic primitive types (No BigIntegers, doubles) are supported at the moment.
-* FFI is still in progress. Currently only static Java methods that take `int` or `String` are supported but FFI is actively in development now.
+* FFI is still in progress. Currently static methods and constructors (respecting inheritance in function calls) are supported and other features are actively in development.
 * Tail recursion is eliminated using JVM's `GOTO`. For the following code, `sum 50000` wouldn't blow up the stack.
     ```idris
     sum : Nat -> Nat
@@ -69,7 +69,3 @@ Status / Future improvements
 * It compiles to Java 8 class files. Tail calls are delayed using Java 8 lambdas and use JVM's `invokedynamic`.
 * All case trees are compiled to JVM's `LookupSwitch` but small *range* case expressions can be optimized using `TableSwitch`
 * With a bit of local type inference, primitive boxing / unboxing can be reduced.
-
-Why ASM (Java assembler) and not hs-java (Haskell's JVM bytecode assembler)
-===========================================================================
-This is one thing I would love to do, to use hs-java instead of ASM as it eliminates the need for an external `java` process invocation during compilation, especially given JVM's startup time. Unfortunately hs-java doesn't yet support Java 8, specifically "invokedynamic" is missing and it doesn't provide nice API to specify "Stack map frames" and "Stack map frames" are mandatory in Java 8 class files. ASM does all this and it can actually calculate stack map frames by bytecode data flow analysis, calculate maximum stack size and number of local variables. ASM calculating stack map frames is not really useful here as ASM would need to load class dependencies in bytecode which mandates us to manage dependencies during idris code generation (Maven anyone? :)) so we are not letting ASM to calculate stack map frames here but ASM calculating maximum stack size is really useful.

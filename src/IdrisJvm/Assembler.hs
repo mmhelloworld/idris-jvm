@@ -46,6 +46,63 @@ data Asm = Aaload
          | Return
          | SourceInfo SourceFileName
 
+class Asmable a where
+  asm :: a -> String
+
+data ReferenceTypeDescriptor = ClassDesc ClassName
+                             | InterfaceDesc ClassName
+                               deriving (Eq, Show)
+
+instance Asmable ReferenceTypeDescriptor where
+  asm (ClassDesc c) = "L" ++ c ++ ";"
+  asm (InterfaceDesc c) = "L" ++ c ++ ";"
+
+refTyClassName :: ReferenceTypeDescriptor -> ClassName
+refTyClassName (ClassDesc c) = c
+refTyClassName (InterfaceDesc c) = c
+
+data FieldTypeDescriptor = FieldTyDescByte
+                         | FieldTyDescChar
+                         | FieldTyDescShort
+                         | FieldTyDescBoolean
+                         | FieldTyDescArray
+                         | FieldTyDescDouble
+                         | FieldTyDescFloat
+                         | FieldTyDescInt
+                         | FieldTyDescLong
+                         | FieldTyDescReference ReferenceTypeDescriptor
+                           deriving (Eq, Show)
+
+instance Asmable FieldTypeDescriptor where
+  asm FieldTyDescByte = "B"
+  asm FieldTyDescChar = "C"
+  asm FieldTyDescShort = "S"
+  asm FieldTyDescBoolean = "Z"
+  asm FieldTyDescArray = "["
+  asm FieldTyDescDouble = "D"
+  asm FieldTyDescFloat = "F"
+  asm FieldTyDescInt = "I"
+  asm FieldTyDescLong = "J"
+  asm (FieldTyDescReference f) = asm f
+
+data TypeDescriptor = FieldDescriptor FieldTypeDescriptor | VoidDescriptor
+
+instance Asmable TypeDescriptor where
+  asm (FieldDescriptor t) = asm t
+  asm VoidDescriptor = "V"
+
+data MethodDescriptor = MethodDescriptor [FieldTypeDescriptor] TypeDescriptor
+
+instance Asmable MethodDescriptor where
+  asm (MethodDescriptor args returns)
+    = within "(" as ")" ++ r
+      where as = concat $ asm <$> args
+            r = asm returns
+
+type ReferenceName = String
+
+data ReferenceType = RefTyClass | RefTyInterface
+
 type Label = String
 type Exception = String
 type ClassName = String
@@ -57,32 +114,40 @@ type SourceFileName = String
 type Arg = String
 
 data ClassOpts = ComputeMaxs | ComputeFrames
-classoptsj ComputeMaxs = "ClassWriter.COMPUTE_MAXS"
-classoptsj ComputeFrames = "ClassWriter.COMPUTE_FRAMES"
+
+instance Asmable ClassOpts where
+  asm ComputeMaxs = "ClassWriter.COMPUTE_MAXS"
+  asm ComputeFrames = "ClassWriter.COMPUTE_FRAMES"
 
 data InvocType = InvokeInterface | InvokeSpecial | InvokeStatic | InvokeVirtual
-invocTypej InvokeInterface = "Opcodes.INVOKEINTERFACE"
-invocTypej InvokeSpecial = "Opcodes.INVOKESPECIAL"
-invocTypej InvokeStatic = "Opcodes.INVOKESTATIC"
-invocTypej InvokeVirtual = "Opcodes.INVOKEVIRTUAL"
+
+instance Asmable InvocType where
+  asm InvokeInterface = "Opcodes.INVOKEINTERFACE"
+  asm InvokeSpecial = "Opcodes.INVOKESPECIAL"
+  asm InvokeStatic = "Opcodes.INVOKESTATIC"
+  asm InvokeVirtual = "Opcodes.INVOKEVIRTUAL"
 
 data FieldInsType = FGetStatic | FPutStatic | FGetField | FPutField
-fieldInsTypej FGetStatic = "Opcodes.GETSTATIC"
-fieldInsTypej FPutStatic = "Opcodes.PUTSTATIC"
-fieldInsTypej FGetField = "Opcodes.GETFIELD"
-fieldInsTypej FPutField = "Opcodes.PUTFIELD"
+
+instance Asmable FieldInsType where
+  asm FGetStatic = "Opcodes.GETSTATIC"
+  asm FPutStatic = "Opcodes.PUTSTATIC"
+  asm FGetField = "Opcodes.GETFIELD"
+  asm FPutField = "Opcodes.PUTFIELD"
 
 data FrameType = FFull | FSame | FAppend
-frameTypej FFull = "Opcodes.F_FULL"
-frameTypej FSame = "Opcodes.F_SAME"
-frameTypej FAppend = "Opcodes.F_APPEND"
+
+instance Asmable FrameType where
+  asm FFull = "Opcodes.F_FULL"
+  asm FSame = "Opcodes.F_SAME"
+  asm FAppend = "Opcodes.F_APPEND"
 
 data Access = Private | Public | Static | Synthetic
-
-accessj Private = "Opcodes.ACC_PRIVATE"
-accessj Public  = "Opcodes.ACC_PUBLIC"
-accessj Static  = "Opcodes.ACC_STATIC"
-accessj Synthetic  = "Opcodes.ACC_SYNTHETIC"
+instance Asmable Access where
+  asm Private = "Opcodes.ACC_PRIVATE"
+  asm Public  = "Opcodes.ACC_PUBLIC"
+  asm Static  = "Opcodes.ACC_STATIC"
+  asm Synthetic  = "Opcodes.ACC_SYNTHETIC"
 
 data HandleTag = HGetField
                | HGetStatic
@@ -93,16 +158,16 @@ data HandleTag = HGetField
                | HInvokeSpecial
                | HNewInvokeSpecial
                | HInvokeInterface
-
-handleTagj HGetField         = "Opcodes.H_GETFIELD"
-handleTagj HGetStatic        = "Opcodes.H_GETSTATIC"
-handleTagj HPutField         = "Opcodes.H_PUTFIELD"
-handleTagj HPutStatic        = "Opcodes.H_PUTSTATIC"
-handleTagj HInvokeVirtual    = "Opcodes.H_INVOKEVIRTUAL"
-handleTagj HInvokeStatic     = "Opcodes.H_INVOKESTATIC"
-handleTagj HInvokeSpecial    = "Opcodes.H_INVOKESPECIAL"
-handleTagj HNewInvokeSpecial = "Opcodes.H_NEWINVOKESPECIAL"
-handleTagj HInvokeInterface  = "Opcodes.H_INVOKEINTERFACE"
+instance Asmable HandleTag where
+  asm HGetField         = "Opcodes.H_GETFIELD"
+  asm HGetStatic        = "Opcodes.H_GETSTATIC"
+  asm HPutField         = "Opcodes.H_PUTFIELD"
+  asm HPutStatic        = "Opcodes.H_PUTSTATIC"
+  asm HInvokeVirtual    = "Opcodes.H_INVOKEVIRTUAL"
+  asm HInvokeStatic     = "Opcodes.H_INVOKESTATIC"
+  asm HInvokeSpecial    = "Opcodes.H_INVOKESPECIAL"
+  asm HNewInvokeSpecial = "Opcodes.H_NEWINVOKESPECIAL"
+  asm HInvokeInterface  = "Opcodes.H_INVOKEINTERFACE"
 
 data Handle = Handle { tag         :: HandleTag
                      , hClassName  :: ClassName
@@ -110,14 +175,126 @@ data Handle = Handle { tag         :: HandleTag
                      , descriptor  :: Descriptor
                      , isInterface :: Bool
                      }
+instance Asmable Handle where
+  asm (Handle tag cname mname desc isInterface)
+    = constructor "Handle" [ asm tag
+                            , quoted cname
+                            , quoted mname
+                            , quoted desc
+                            , asm isInterface
+                            ]
 
-handlej (Handle tag cname mname desc isInterface)
-  = constructor "Handle" [ handleTagj tag
+iconst i | i >= 0 && i <= 5            = call "mv" "visitInsn" ["Opcodes.ICONST_" ++ show i]
+         | i == (-1)                   = call "mv" "visitInsn" ["Opcodes.ICONST_M1"]
+         | i >= (-128) && i <= 127     = call "mv" "visitIntInsn" ["Opcodes.BIPUSH", show i]
+         | i >= (-32768) && i <= 32767 = call "mv" "visitIntInsn" ["Opcodes.SIPUSH", show i]
+         | otherwise                   = call "mv" "visitLdcInsn" [constructor "Integer" [show i]]
+
+
+instance Asmable Asm where
+  asm Aaload = call "mv" "visitInsn" ["Opcodes.AALOAD"]
+  asm Aastore = call "mv" "visitInsn" ["Opcodes.AASTORE"]
+  asm Aconstnull = call "mv" "visitInsn" ["Opcodes.ACONST_NULL"]
+  asm (Aload n) = call "mv" "visitVarInsn" ["Opcodes.ALOAD", show n]
+  asm (Anewarray desc) = call "mv" "visitTypeInsn" ["Opcodes.ANEWARRAY", quoted desc]
+  asm (Astore n) = call "mv" "visitVarInsn" ["Opcodes.ASTORE", show n]
+  asm Areturn = call "mv" "visitInsn" ["Opcodes.ARETURN"]
+  asm (Checkcast desc) = call "mv" "visitTypeInsn" ["Opcodes.CHECKCAST", quoted desc]
+
+  asm (ClassCodeEnd outFileName)
+   = sep "\n" [ call "cw" "visitEnd" []
+              , declVarAndAssign "out" $ constructor "FileOutputStream" [quoted outFileName]
+              , call "out" "write" ["cw.toByteArray()"]
+              , call "out" "close" []
+              , "}"
+              ]
+
+  asm (ClassCodeStart version acc cname sig super intf)
+      = call "cw" "visit" [ show version
+                          , asm acc
                           , quoted cname
-                          , quoted mname
-                          , quoted desc
-                          , boolj isInterface
-                          ]
+                          , sig
+                          , quoted super
+                          , "null"] -- TODO: Fix me. Currently the generated classes don't implement any interfaces
+  asm (CreateClass opts) = sep "\n" [ imports
+                                    , sep " " [withImports, "{"]
+                                    , declVarAndAssign "cw" $ constructor "ClassWriter" [asm opts]
+                                    , declVar "mv"
+                                    ]
+
+  asm (CreateLabel s) = declVarAndAssign s $ constructor "Label" []
+
+  asm (CreateMethod accs mname desc sig excs)
+   = let excsStr = maybe "null" f excs
+         f es = "new String[] {" ++ (commaSep . map quoted $ es) ++ "}" in
+     declVarAndAssign "mv" $ call "cw" "visitMethod" [ sep " + " (map asm accs)
+                                                     , quoted mname
+                                                     , quoted desc
+                                                     , maybe "null" quoted sig
+                                                     , excsStr
+                                                     ]
+  asm Dup = call "mv" "visitInsn" ["Opcodes.DUP"]
+  asm (Field ftype cname fname desc) = call "mv" "visitFieldInsn" [asm ftype, quoted cname, quoted fname, quoted desc ]
+  asm (Frame frameType nlocal local nstack stack)
+   = call "mv" "visitFrame" [ asm frameType
+                            , show nlocal
+                            , initializeArray "java.lang.Object[]" local
+                            , show nstack
+                            , initializeArray "java.lang.Object[]" stack]
+  asm (GetType desc) = call "Type" "getType" [quoted desc]
+  asm (Goto label) = call "mv" "visitJumpInsn" ["Opcodes.GOTO", label]
+  asm I2c = call "mv" "visitInsn" [ "Opcodes.I2C" ]
+  asm I2l = call "mv" "visitInsn" [ "Opcodes.I2L" ]
+  asm Iadd = call "mv" "visitInsn" ["Opcodes.IADD"]
+  asm (Iconst n) = iconst n
+  asm (Ifeq label) = call "mv" "visitJumpInsn" ["Opcodes.IFEQ", label]
+  asm (Ificmpge label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPGE", label]
+  asm (Ificmpgt label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPGT", label]
+  asm (Ificmple label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPLE", label]
+  asm (Ificmplt label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPLT", label]
+  asm (Iload n) = call "mv" "visitVarInsn" ["Opcodes.ILOAD", show n]
+  asm Imul = call "mv" "visitInsn" ["Opcodes.IMUL"]
+  asm (InvokeMethod invType cname mname desc isIntf)
+   = call "mv" "visitMethodInsn" [asm invType, quoted cname, quoted mname, quoted desc, asm isIntf]
+  asm Isub = call "mv" "visitInsn" ["Opcodes.ISUB"]
+  asm (InvokeDynamic mname desc handle args)
+     = call "mv" "visitInvokeDynamicInsn" invDynArgs
+   where
+     invDynArgs = [ quoted mname
+                  , quoted desc
+                  , asm handle
+                  , call "Java" "to" [within "[" (commaSep args) "]", quoted "java.lang.Object[]"]
+                  ]
+  asm (Istore n) = call "mv" "visitVarInsn" ["Opcodes.ISTORE", show n]
+  asm (LabelStart label) = call "mv" "visitLabel" [label]
+  asm (Ldc s) = call "mv" "visitLdcInsn" [s]
+  asm (LookupSwitch dflt lbls exprs)
+   = call "mv" "visitLookupSwitchInsn" [ dflt
+                                       , initializeArray "int[]" $ map show exprs
+                                       , initializeArray "mmhelloworld.idrisjvmruntime.org.objectweb.asm.Label[]" lbls
+                                       ]
+  asm (MaxStackAndLocal nstack nlocal) = call "mv" "visitMaxs" [show nstack, show nlocal]
+  asm MethodCodeEnd = call "mv" "visitEnd" []
+  asm MethodCodeStart  = call "mv" "visitCode" []
+  asm (New className) = call "mv" "visitTypeInsn" ["Opcodes.NEW", quoted className]
+  asm Pop = call "mv" "visitInsn" ["Opcodes.POP"]
+  asm Return = call "mv" "visitInsn" ["Opcodes.RETURN"]
+  asm (SourceInfo fileName)  = call "mv" "visitSource" [quoted fileName, "null"]
+
+instance Asmable Bool where
+  asm False = "false"
+  asm True = "true"
+
+imports = declVarAndAssign "imports" $ constructor "JavaImporter" packages where
+  packages = [ "java.lang"
+             , "java.io"
+             , "java.util"
+             , "java.nio"
+             , "Packages.mmhelloworld.idrisjvmruntime.org.objectweb.asm"
+             ]
+
+withImports :: String
+withImports = "with (imports)"
 
 within start str end = start ++ str ++ end
 quoted s = within "\"" s "\""
@@ -133,113 +310,3 @@ declVarAndAssign name value = sep " " ["var", assign name value]
 declVar v = sep " " ["var" , v]
 
 initializeArray typ xs = call "Java" "to" [within "[" (commaSep xs) "]", quoted typ]
-
-iconst i | i >= 0 && i <= 5            = call "mv" "visitInsn" ["Opcodes.ICONST_" ++ show i]
-         | i == (-1)                   = call "mv" "visitInsn" ["Opcodes.ICONST_M1"]
-         | i >= (-128) && i <= 127     = call "mv" "visitIntInsn" ["Opcodes.BIPUSH", show i]
-         | i >= (-32768) && i <= 32767 = call "mv" "visitIntInsn" ["Opcodes.SIPUSH", show i]
-         | otherwise                   = call "mv" "visitLdcInsn" [constructor "Integer" [show i]]
-
-boolj False = "false"
-boolj True = "true"
-
-imports = declVarAndAssign "imports" $ constructor "JavaImporter" packages where
-  packages = [ "java.lang"
-             , "java.io"
-             , "java.util"
-             , "java.nio"
-             , "Packages.mmhelloworld.idrisjvmruntime.org.objectweb.asm"
-             ]
-
-withImports :: String
-withImports = "with (imports)"
-
-asmj :: Asm -> String
-asmj Aaload = call "mv" "visitInsn" ["Opcodes.AALOAD"]
-asmj Aastore = call "mv" "visitInsn" ["Opcodes.AASTORE"]
-asmj Aconstnull = call "mv" "visitInsn" ["Opcodes.ACONST_NULL"]
-asmj (Aload n) = call "mv" "visitVarInsn" ["Opcodes.ALOAD", show n]
-asmj (Anewarray desc) = call "mv" "visitTypeInsn" ["Opcodes.ANEWARRAY", quoted desc]
-asmj (Astore n) = call "mv" "visitVarInsn" ["Opcodes.ASTORE", show n]
-asmj Areturn = call "mv" "visitInsn" ["Opcodes.ARETURN"]
-asmj (Checkcast desc) = call "mv" "visitTypeInsn" ["Opcodes.CHECKCAST", quoted desc]
-
-asmj (ClassCodeEnd outFileName)
-  = sep "\n" [ call "cw" "visitEnd" []
-             , declVarAndAssign "out" $ constructor "FileOutputStream" [quoted outFileName]
-             , call "out" "write" ["cw.toByteArray()"]
-             , call "out" "close" []
-             , "}"
-             ]
-
-asmj (ClassCodeStart version acc cname sig super intf)
-     = call "cw" "visit" [ show version
-                         , accessj acc
-                         , quoted cname
-                         , sig
-                         , quoted super
-                         , "null"] -- TODO: Fix me. Currently the generated classes don't implement any interfaces
-asmj (CreateClass opts) = sep "\n" [ imports
-                                   , sep " " [withImports, "{"]
-                                   , declVarAndAssign "cw" $ constructor "ClassWriter" [classoptsj opts]
-                                   , declVar "mv"
-                                   ]
-
-asmj (CreateLabel s) = declVarAndAssign s $ constructor "Label" []
-
-asmj (CreateMethod accs mname desc sig excs)
-  = let excsStr = maybe "null" f excs
-        f es = "new String[] {" ++ (commaSep . map quoted $ es) ++ "}" in
-    declVarAndAssign "mv" $ call "cw" "visitMethod" [ sep " + " (map accessj accs)
-                                                    , quoted mname
-                                                    , quoted desc
-                                                    , maybe "null" quoted sig
-                                                    , excsStr
-                                                    ]
-asmj Dup = call "mv" "visitInsn" ["Opcodes.DUP"]
-asmj (Field ftype cname fname desc) = call "mv" "visitFieldInsn" [fieldInsTypej ftype, quoted cname, quoted fname, quoted desc ]
-asmj (Frame frameType nlocal local nstack stack)
-  = call "mv" "visitFrame" [ frameTypej frameType
-                           , show nlocal
-                           , initializeArray "java.lang.Object[]" local
-                           , show nstack
-                           , initializeArray "java.lang.Object[]" stack]
-asmj (GetType desc) = call "Type" "getType" [quoted desc]
-asmj (Goto label) = call "mv" "visitJumpInsn" ["Opcodes.GOTO", label]
-asmj I2c = call "mv" "visitInsn" [ "Opcodes.I2C" ]
-asmj I2l = call "mv" "visitInsn" [ "Opcodes.I2L" ]
-asmj Iadd = call "mv" "visitInsn" ["Opcodes.IADD"]
-asmj (Iconst n) = iconst n
-asmj (Ifeq label) = call "mv" "visitJumpInsn" ["Opcodes.IFEQ", label]
-asmj (Ificmpge label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPGE", label]
-asmj (Ificmpgt label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPGT", label]
-asmj (Ificmple label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPLE", label]
-asmj (Ificmplt label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPLT", label]
-asmj (Iload n) = call "mv" "visitVarInsn" ["Opcodes.ILOAD", show n]
-asmj Imul = call "mv" "visitInsn" ["Opcodes.IMUL"]
-asmj (InvokeMethod invType cname mname desc isIntf)
-  = call "mv" "visitMethodInsn" [invocTypej invType, quoted cname, quoted mname, quoted desc, boolj isIntf]
-asmj Isub = call "mv" "visitInsn" ["Opcodes.ISUB"]
-asmj (InvokeDynamic mname desc handle args)
-    = call "mv" "visitInvokeDynamicInsn" invDynArgs
-  where
-    invDynArgs = [ quoted mname
-                 , quoted desc
-                 , handlej handle
-                 , call "Java" "to" [within "[" (commaSep args) "]", quoted "java.lang.Object[]"]
-                 ]
-asmj (Istore n) = call "mv" "visitVarInsn" ["Opcodes.ISTORE", show n]
-asmj (LabelStart label) = call "mv" "visitLabel" [label]
-asmj (Ldc s) = call "mv" "visitLdcInsn" [s]
-asmj (LookupSwitch dflt lbls exprs)
-  = call "mv" "visitLookupSwitchInsn" [ dflt
-                                      , initializeArray "int[]" $ map show exprs
-                                      , initializeArray "mmhelloworld.idrisjvmruntime.org.objectweb.asm.Label[]" lbls
-                                      ]
-asmj (MaxStackAndLocal nstack nlocal) = call "mv" "visitMaxs" [show nstack, show nlocal]
-asmj MethodCodeEnd = call "mv" "visitEnd" []
-asmj MethodCodeStart  = call "mv" "visitCode" []
-asmj (New className) = call "mv" "visitTypeInsn" ["Opcodes.NEW", quoted className]
-asmj Pop = call "mv" "visitInsn" ["Opcodes.POP"]
-asmj Return = call "mv" "visitInsn" ["Opcodes.RETURN"]
-asmj (SourceInfo fileName)  = call "mv" "visitSource" [quoted fileName, "null"]

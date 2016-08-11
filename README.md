@@ -43,8 +43,8 @@ Example
 Status / Future improvements
 ============================
 
-* This is still work in progress so only basic primitive types (No BigIntegers, doubles) are supported at the moment.
-* FFI is still in progress. Currently static methods and constructors (respecting inheritance in function calls) are supported and other features are actively in development.
+* This is still work in progress. Basic types, integers and strings are supported. BigIntegers and double are not supported yet.
+* FFI is still in progress. Currently static methods, instance methods, constructors are all supported. JVM arrays, extending classes, implementing interfaces are not supported yet.
 * Tail recursion is eliminated using JVM's `GOTO`. For the following code, `sum 50000` wouldn't blow up the stack.
     ```idris
     sum : Nat -> Nat
@@ -68,4 +68,4 @@ Status / Future improvements
 
 * It compiles to Java 8 class files. Tail calls are delayed using Java 8 lambdas and use JVM's `invokedynamic`.
 * All case trees are compiled to JVM's `LookupSwitch` but small *range* case expressions can be optimized using `TableSwitch`
-* With a bit of local type inference, primitive boxing / unboxing can be reduced.
+* With a bit of local type inference, primitive boxing / unboxing can be reduced. Currently all the primitives are boxed until the very last moment where a primitve operator needs to be invoked.

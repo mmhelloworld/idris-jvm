@@ -12,6 +12,7 @@ data JVM_Native  : JVM_NativeTy -> Type where
 
 data JVM_FfiFn = Static JVM_NativeTy  String
                | Constructor
+               | Instance String
 
 mutual
   data JVM_IntTypes : Type -> Type where

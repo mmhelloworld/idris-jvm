@@ -27,16 +27,16 @@ import           IdrisJvm.Assembler  hiding (assign)
 codegenJvm :: CodeGenerator
 codegenJvm ci = do
   let out = outputFile ci
-      asm = out ++ ".asm"
+      asmOut = out ++ ".asm"
       clazz = out ++ ".class"
       env = CgEnv out
       (_, _, writer) = runRWS (code ci) env initialCgState
-  writeFile asm . unlines . map asmj . DL.toList $ instructions writer <> deps writer <> [ ClassCodeEnd clazz ]
+  writeFile asmOut . unlines . map asm . DL.toList $ instructions writer <> deps writer <> [ ClassCodeEnd clazz ]
   java <- fromMaybe "java" <$> lookupEnv "IDRIS_JVM"
   let errMissingLib = error $  "Idris JVM runtime java library not found.\n"
                             <> "Please set IDRIS_JVM_LIB environment variable to idrisjvm-runtime-<version>.jar path"
   lib <- fromMaybe errMissingLib <$> lookupEnv "IDRIS_JVM_LIB"
-  runProcess java ["-cp", lib, asmrunner, asm] -- Interpret ASM code to create class file
+  runProcess java ["-cp", lib, asmrunner, asmOut] -- Interpret ASM code to create class file
 
 runProcess :: String -> [String] -> IO ()
 runProcess proc args = do
@@ -322,9 +322,9 @@ lambdaDesc = "([Ljava/lang/Object;)Ljava/lang/Object;"
 invokeDynamic :: ClassName -> MethodName -> DL.DList Asm
 invokeDynamic cname lambda = [ InvokeDynamic "apply" ("()" ++ rtFuncSig) metafactoryHandle metafactoryArgs] where
   metafactoryHandle = Handle HInvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory" metafactoryDesc False
-  metafactoryArgs = [ asmj $ GetType lambdaDesc
-                    , handlej lambdaHandle
-                    , asmj $ GetType lambdaDesc
+  metafactoryArgs = [ asm $ GetType lambdaDesc
+                    , asm lambdaHandle
+                    , asm $ GetType lambdaDesc
                     ]
   lambdaHandle = Handle HInvokeStatic cname lambda lambdaDesc False
 
@@ -425,62 +425,101 @@ cgBody ret SNothing = writeIns [Iconst 0, boxInt] >> ret
 cgBody ret (SError x) = invokeError (show x) >> ret
 
 cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fdesc args) where
+  descriptor returnDesc = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> args) returnDesc
+  argsWithTypes = first fdescFieldDescriptor <$> args
+
   cgForeign (JStatic clazz fn) = do
-    let descriptor = methDesc (fst <$> args) returns
-        argsWithTypes = first fdescSig <$> args
+    let returnDesc = fdescTypeDescriptor returns
     loadAndCast argsWithTypes
-    writeIns [ InvokeMethod InvokeStatic clazz fn descriptor False ]
-    boxIfNeeded $ fdescSig returns
+    writeIns [ InvokeMethod InvokeStatic clazz fn (descriptor returnDesc) False ]
+    boxIfNeeded returnDesc
+    ret
+  cgForeign (JVirtual clazz fn) = do
+    let returnDesc = fdescTypeDescriptor returns
+        descriptor = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
+    loadAndCast argsWithTypes -- drop first arg type as it is an implicit 'this'
+    writeIns [ InvokeMethod InvokeVirtual clazz fn descriptor False ]
+    boxIfNeeded returnDesc
+    ret
+  cgForeign (JInterface clazz fn) = do
+    let returnDesc = fdescTypeDescriptor returns
+        descriptor = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
+    loadAndCast argsWithTypes
+    writeIns [ InvokeMethod InvokeInterface clazz fn descriptor True ]
+    boxIfNeeded returnDesc
     ret
   cgForeign (JConstructor clazz) = do
-    let argdesc = concat (fdescSig . fst <$> args)
-        descriptor = within "(" argdesc ")" ++ "V" -- Constructors return void in bytecode
-        argsWithTypes = first fdescSig <$> args
+    let returnDesc = VoidDescriptor -- Constructors always return void.
     writeIns [ New clazz, Dup ]
     loadAndCast argsWithTypes
-    writeIns [ InvokeMethod InvokeSpecial clazz "<init>" descriptor False ]
+    writeIns [ InvokeMethod InvokeSpecial clazz "<init>" (descriptor returnDesc) False ]
     ret
 
 cgBody ret _ = error "NOT IMPLEMENTED!!!!"
 
 data JForeign = JStatic String String
+              | JVirtual String String
+              | JInterface String String
               | JConstructor String
 
 parseDescriptor :: FDesc -> FDesc -> [(FDesc, LVar)] -> JForeign
 parseDescriptor _ (FApp ffi [FApp nativeTy [FStr cname], FStr fn]) _
   | ffi == sUN "Static" && nativeTy == sUN "Class" = JStatic cname fn
 
+parseDescriptor _ (FApp ffi [FStr fn]) []
+  | ffi == sUN "Instance" = error "Instance methods should have atleast one argument"
+
+parseDescriptor _ (FApp ffi [FStr fn]) ((declClass, _):_)
+  | ffi == sUN "Instance" = case fdescRefDescriptor declClass of
+    ClassDesc className -> JVirtual className fn
+    InterfaceDesc className -> JInterface className fn
+
 parseDescriptor returns (FCon ffi) args
- | ffi == sUN "Constructor" = JConstructor className where
-   ('L':clazzWithSc) = fdescSig returns
-   className = init clazzWithSc
+ | ffi == sUN "Constructor" = case fdescRefDescriptor returns of
+   ClassDesc className -> JConstructor className
+   InterfaceDesc _ -> error $ "Invalid FFI descriptor for constructor. " ++
+                              "A constructor can't return an interface type. " ++
+                              show returns
+
 parseDescriptor _ fdesc _ = error $ "Unsupported descriptor: " ++ show fdesc
 
-loadAndCast :: [(String, LVar)] -> Cg ()
+loadAndCast :: [(FieldTypeDescriptor, LVar)] -> Cg ()
 loadAndCast = mapM_ f where
   f (ty, v) = do
     writeIns [ Aload $ locIndex v ]
     case ty of
-      "I" -> writeIns [ Checkcast "java/lang/Integer", unboxInt ]
-      ('L':clazzWithSc) -> writeIns [ Checkcast $ init clazzWithSc ]
-      _ -> error $ "unknown type: " ++ ty
+      FieldTyDescInt -> writeIns [ Checkcast "java/lang/Integer", unboxInt ]
+      FieldTyDescReference refTy -> writeIns [ Checkcast $ refTyClassName refTy]
+      _ -> error $ "unknown type: " ++ show ty
 
-boxIfNeeded :: String -> Cg ()
-boxIfNeeded "I" = writeIns [ boxInt ]
-boxIfNeeded _ = pure ()
+boxIfNeeded :: TypeDescriptor -> Cg ()
+boxIfNeeded (FieldDescriptor FieldTyDescInt) = writeIns [ boxInt ]
+boxIfNeeded _ = pure () -- TODO: implement for other types
 
-methDesc :: [FDesc] -> FDesc -> String
-methDesc args ret = within "(" argdesc ")" ++ retdesc where
-  argdesc = concat (fdescSig <$> args)
-  retdesc = fdescSig ret
+methDesc :: [FDesc] -> FDesc -> MethodDescriptor
+methDesc args ret = MethodDescriptor argdesc retdesc where
+  argdesc = fdescFieldDescriptor <$> args
+  retdesc = fdescTypeDescriptor ret
 
-fdescSig :: FDesc -> String
-fdescSig (FApp intTy [_, FCon (UN "JVM_IntNative")]) | intTy == sUN "JVM_IntT" = "I"
-fdescSig (FCon (UN "JVM_Str")) = "Ljava/lang/String;"
-fdescSig (FIO t) = fdescSig t
-fdescSig (FApp jvmTy [FApp nativeTy [FStr typeName]])
-  | jvmTy == sUN "JVM_NativeT" && nativeTy == sUN "Class" = "L" ++ typeName ++ ";"
-fdescSig s = error $ "unknown ffidesc: " ++ show s
+fdescTypeDescriptor :: FDesc -> TypeDescriptor
+fdescTypeDescriptor (FCon (UN "JVM_Unit")) = VoidDescriptor
+fdescTypeDescriptor (FIO t) = fdescTypeDescriptor t
+fdescTypeDescriptor fdesc = FieldDescriptor $ fdescFieldDescriptor fdesc
+
+fdescFieldDescriptor :: FDesc -> FieldTypeDescriptor
+fdescFieldDescriptor (FApp intTy [_, FCon (UN "JVM_IntNative")]) | intTy == sUN "JVM_IntT" = FieldTyDescInt
+fdescFieldDescriptor (FCon (UN "JVM_Str")) = FieldTyDescReference $ ClassDesc "java/lang/String"
+fdescFieldDescriptor (FCon (UN "JVM_Float")) = FieldTyDescFloat
+fdescFieldDescriptor fdesc = FieldTyDescReference $ fdescRefDescriptor fdesc
+
+fdescRefDescriptor :: FDesc -> ReferenceTypeDescriptor
+fdescRefDescriptor (FApp jvmTy [FApp nativeTy [FStr typeName]])
+  | jvmTy == sUN "JVM_NativeT" && nativeTy == sUN "Class"
+    = ClassDesc typeName
+  | jvmTy == sUN "JVM_NativeT" && nativeTy == sUN "Interface"
+    = InterfaceDesc typeName
+  | otherwise = error "Invalid reference type descriptor. Expected a class or interface descriptor."
+fdescRefDescriptor _ = error "Invalid reference type descriptor. Expected a class or interface descriptor."
 
 cgSwitch :: Cg () -> LVar -> [SAlt] -> Cg ()
 cgSwitch ret e alts = do

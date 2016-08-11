@@ -28,8 +28,8 @@ namespace Java.Util.Objects
 
   -- Respects inheritance so that this function can be called on all types
   -- that extend java.lang.Object, which is everything.
-  toString : Inherits Object that => that -> String
-  toString obj = unsafePerformIO $ javacall (Static ObjectsClass "toString") (Object -> JVM_IO String) (believe_me obj)
+  objToString : Inherits Object that => that -> String
+  objToString obj = unsafePerformIO $ javacall (Static ObjectsClass "toString") (Object -> JVM_IO String) (believe_me obj)
 
 
 namespace Java.Math.BigInteger
@@ -40,14 +40,51 @@ namespace Java.Math.BigInteger
   BigInteger = JVM_Native BigIntegerClass
 
   -- Constructor example
-  bigIntegerFromString : String -> JVM_IO BigInteger
-  bigIntegerFromString s = new (String -> JVM_IO BigInteger) s
+  fromString : String -> JVM_IO BigInteger
+  fromString s = new (String -> JVM_IO BigInteger) s
+
+  toString : BigInteger -> String
+  toString bigInt = unsafePerformIO $ javacall (Instance "toString") (BigInteger -> JVM_IO String) bigInt
+
+  add : BigInteger -> BigInteger -> BigInteger
+  add b1 b2 = unsafePerformIO $ javacall (Instance "add") (BigInteger -> BigInteger -> JVM_IO BigInteger) b1 b2
+
 
 Inherits Object BigInteger where {}
+
+
+namespace Java.Util.List
+  ListClass : JVM_NativeTy
+  ListClass = Interface "java/util/List"
+
+  JList : Type
+  JList = JVM_Native ListClass
+
+  size : Inherits JList list => list -> JVM_IO Nat
+  size list = cast <$> javacall (Instance "size") (JList -> JVM_IO Int) (believe_me list)
+
+Inherits Object JList where {}
+
+
+namespace Java.Util.ArrayList
+  ArrayListClass : JVM_NativeTy
+  ArrayListClass = Class "java/util/ArrayList"
+
+  ArrayList : Type
+  ArrayList = JVM_Native ArrayListClass
+
+  emptyArrayList : JVM_IO ArrayList
+  emptyArrayList = new (JVM_IO ArrayList)
+
+Inherits JList ArrayList where {}
+Inherits Object ArrayList where {}
 
 main : JVM_IO ()
 main = do
   printLn $ max 3 5
   printLn !(getProperty "idris_jvm_ffi_invalid_prop" "foo")
-  bigNum <- bigIntegerFromString "100000000000099999" -- Invokes BigInteger constructor
-  printLn $ toString bigNum -- Calling Objects.toString(Object) with BigInteger respecting inheritance
+  bigInt1 <- fromString "11111111111111111111" -- Invokes BigInteger constructor
+  bigInt2 <- fromString "11111111111111111111"
+  printLn $ toString $ add bigInt1 bigInt2 -- bigInt1.add(bigInt2).toString()
+  jlist <- emptyArrayList
+  printLn !(size jlist)

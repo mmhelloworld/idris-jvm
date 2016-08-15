@@ -29,14 +29,27 @@ library
                      , process
                      , transformers
   default-language:    Haskell2010
+  c-sources:
+      cbits/asm.cc
+  include-dirs:
+    include
+    ${jni_h}
+    ${jni_md_h}
+  includes: asm.h
+  install-includes: asm.h
+  extra-libraries: stdc++ jvm
+  extra-lib-dirs:
+    ${jvm_lib}
+
+  ghc-options: -Wall
 
 executable idris-codegen-jvm
   hs-source-dirs:      app
   main-is:             Main.hs
-  
+
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -funbox-strict-fields
   ghc-prof-options:    -auto-all -caf-all
-  
+
   build-depends:       idris
                      , base
                      , containers
@@ -45,7 +58,7 @@ executable idris-codegen-jvm
                      , haskeline >= 0.7
                      , mtl
                      , transformers
-                     , idris-jvm 
+                     , idris-jvm
   default-language:    Haskell2010
 
   if os(linux)
@@ -87,7 +100,7 @@ test-suite hlint
                   , hlint
   hs-source-dirs:   test
   main-is:          HLint.hs
-  
+
 source-repository head
   type:     git
   location: https://github.com/mmhelloworld/idris-jvm

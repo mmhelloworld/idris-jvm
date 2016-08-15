@@ -3,9 +3,9 @@
 
 module IdrisJvm.CodegenJvm (codegenJvm) where
 
-import           Control.Applicative ((<|>))
-import           Control.Arrow       (first)
-import           Control.Monad       (join)
+import           Control.Applicative   ((<|>))
+import           Control.Arrow         (first)
+import           Control.Monad         (join)
 import           Control.Monad.RWS
 import           Idris.Core.TT
 import           IRTS.CodegenCommon
@@ -13,37 +13,48 @@ import           IRTS.Lang
 import           IRTS.Simplified
 
 import           Data.Char
-import qualified Data.DList          as DL
-import qualified Data.IntSet         as IntSet
-import           Data.List           (find, foldl', sortBy)
+import qualified Data.DList            as DL
+import qualified Data.IntSet           as IntSet
+import           Data.List             (find, foldl', sortBy)
 import           Data.Maybe
 import           System.Environment
 import           System.Exit
-import           System.Process      (readProcessWithExitCode)
-import qualified Text.PrettyPrint    as PP
+import           System.Process        (readProcessWithExitCode)
+import qualified Text.PrettyPrint      as PP
 
-import           IdrisJvm.Assembler  hiding (assign)
+import           Foreign.C
+import           Foreign.Marshal.Alloc
+import           Foreign.Ptr           (Ptr)
+import           Foreign.Storable
+import           IdrisJvm.Assembler    hiding (assign)
 
 codegenJvm :: CodeGenerator
 codegenJvm ci = do
   let out = outputFile ci
-      asmOut = out ++ ".asm"
       clazz = out ++ ".class"
       env = CgEnv out
-      (_, _, writer) = runRWS (code ci) env initialCgState
-  writeFile asmOut . unlines . map asm . DL.toList $ instructions writer <> deps writer <> [ ClassCodeEnd clazz ]
-  java <- fromMaybe "java" <$> lookupEnv "IDRIS_JVM"
-  let errMissingLib = error $  "Idris JVM runtime java library not found.\n"
+      (_, _, asmWriter) = runRWS (code ci) env initialCgState
+      asmCode = unlines . map asm . DL.toList $ instructions asmWriter <> deps asmWriter <> [ ClassCodeEnd clazz ]
+      errMissingLib = error $  "Idris JVM runtime java library not found.\n"
                             <> "Please set IDRIS_JVM_LIB environment variable to idrisjvm-runtime-<version>.jar path"
   lib <- fromMaybe errMissingLib <$> lookupEnv "IDRIS_JVM_LIB"
-  runProcess java ["-cp", lib, asmrunner, asmOut] -- Interpret ASM code to create class file
+  generateBytecode lib asmCode
 
-runProcess :: String -> [String] -> IO ()
-runProcess proc args = do
-  (exitCode, stdout, stderr) <- readProcessWithExitCode proc args ""
-  case exitCode of
-    ExitFailure _ -> error $ proc <> " ERROR: " <> stdout <> stderr
-    _             -> return ()
+-- Invoke JVM via FFI to interpret ASM code and create bytecode
+generateBytecode :: String -> String -> IO ()
+generateBytecode lib asmCode =
+  alloca $ \jvmHandlePtr ->
+  alloca $ \jvmEnvHandlePtr ->
+  let optionStr = "-Djava.class.path=" ++ lib in
+  withCString optionStr $ \optionStrC -> do
+    createJvm jvmHandlePtr jvmEnvHandlePtr optionStrC
+    jvmHandle <- peek jvmHandlePtr
+    envHandle <- peek jvmEnvHandlePtr
+    alloca $ \argv ->
+      withCString asmCode $ \asmCodeC -> do
+        poke argv asmCodeC
+        assemble envHandle 1 argv
+        destroyJvm jvmHandle
 
 data CgEnv = CgEnv { className :: String } deriving Show
 
@@ -55,6 +66,15 @@ data CgState = CgState { cgStLambdaIndex     :: Int
                        , shouldDescribeFrame :: Bool
                        , cgStFunctionArgs    :: [Name]
                        } deriving Show
+data Jvm = Jvm
+type JvmHandle = Ptr Jvm
+
+data JvmEnv = JvmEnv
+type JvmEnvHandle = Ptr JvmEnv
+
+foreign import ccall "createJvm" createJvm :: Ptr JvmHandle -> Ptr JvmEnvHandle -> CString -> IO ()
+foreign import ccall "assemble" assemble :: JvmEnvHandle -> CInt -> Ptr CString -> IO ()
+foreign import ccall "destroyJvm" destroyJvm :: JvmHandle -> IO ()
 
 initialCgState :: CgState
 initialCgState = CgState 0 0 0 "" 0 True []

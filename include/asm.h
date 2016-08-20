@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-extern void createJvm(void** jvm, void** env, char* optionStr);
+extern void createJvm(void** jvm, void** env, int optionsLen, char** optionStr);
 extern void assemble(JNIEnv *env, int argc, char **argv);
 extern void destroyJvm(JavaVM *jvm);
 

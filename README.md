@@ -7,27 +7,19 @@ Install
 =======
 
 **Prerequisites:**
-1. JDK 8 (JDK is necessary because Idris code generator written in Haskell calls out to JVM via C to generate JVM bytecode using ASM Java library. It needs some C header files from JDK to interface with.). None of the Haskell's JVM bytecode assemblers are as good as ASM feature wise and keeping up to date.
+- Haskell Stack
+- JDK 8
+
+  JDK is necessary because we are installing from source and Idris code generator written in Haskell calls out to JVM via C to generate JVM bytecode using ASM Java library. It needs some C header files from JDK to interface with. Haskell's JVM bytecode assemblers would have been ideal for this but unfortunately Haskell assemblers are not up to date and not feature rich as ASM.
 
 **Steps:**
 
+1. Set environment variable `IDRIS_JAVA_HOME` or `JAVA_HOME` to point to JDK 8 root directory.
 1. git clone https://github.com/mmhelloworld/idris-jvm.git.
-1. Set environment variable `JDK_HOME` to point to JDK 8 root directory.
-1. `cd idris-jvm/setup`
-1. `stack build && stack exec setup-exe` At the end of this step, please add the path displayed at the end to the corresponding environment variable as shown in the terminal.
-1. Go back to the root. `cd ..` and `stack install`
-1. Get [Idris Runtime JAR](https://github.com/mmhelloworld/idrisjvm-runtime/releases/download/1.0-SNAPSHOT/idrisjvm-runtime-1.0-SNAPSHOT.jar) and set the environment variable `IDRIS_JVM_LIB` to the path to the JAR.
+1. `cd idris-jvm`
+1. `./install.sh`. (Windows setup coming up!)
 
 Stack installs the executable in some location and the location is displayed in the terminal once it is done. Add that location to PATH if it is not already on PATH.
-
-**Install Idris JVM runtime:**
-
-This is an Idris library that provides JVM FFI support and some other useful functions specific to JVM.
-
-```
-cd idris-jvm/runtime
-idris --install idris-jvm-runtime.ipkg
-```
 
 Example
 =======
@@ -44,10 +36,8 @@ Example
     main : IO ()
     main = print (pythag 50)
     ```
-
-* Make sure `java` is on your path. JDK is not necessary, Just JRE is enough but Java 8 is required. `java` can also be explicitly specified using `IDRIS_JVM` environment variable.
 * `$ idris pythag.idr --codegen jvm -o Pythag`
-* `$ java -cp $IDRIS_JVM_LIB:. Pythag`
+* `$ java -cp ~/.idris-jvm/*:. Pythag`
 
 Status / Future improvements
 ============================

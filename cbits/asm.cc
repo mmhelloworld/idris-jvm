@@ -2,13 +2,24 @@
 #include <jni.h>
 #include "asm.h"
 
-void createJvm(void** jvm, void** env, char* optionStr) {
+JavaVMOption* createOptions(int optionsLen, char** optionStrs) {
+  JavaVMOption* options = new JavaVMOption[optionsLen];
+  for (int i = 0; i < optionsLen; i++) {
+    options[i].optionString = optionStrs[i];
+  }
+  return options;
+}
+
+void createJvm(void** jvm, void** env, int optionsLen, char** optionStrs) {
   JavaVMInitArgs vm_args;
-  JavaVMOption* options = new JavaVMOption[1];
-  options[0].optionString = optionStr;
+
+  JavaVMOption* options = new JavaVMOption[optionsLen];
+  for (int i = 0; i < optionsLen; i++) {
+    options[i].optionString = optionStrs[i];
+  }
   vm_args.version = JNI_VERSION_1_8;
-  vm_args.nOptions = 1;
   vm_args.options = options;
+  vm_args.nOptions = optionsLen;
   vm_args.ignoreUnrecognized = false;
   JNI_CreateJavaVM((JavaVM**)jvm, env, &vm_args);
   delete options;

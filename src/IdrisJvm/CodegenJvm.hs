@@ -16,10 +16,12 @@ import qualified Data.DList            as DL
 import qualified Data.IntSet           as IntSet
 import           Data.List             (find, foldl', sortBy)
 import           Data.Maybe
-import           System.Environment
+import           System.Directory      (getAppUserDataDirectory)
+import           System.FilePath       ((</>))
 
 import           Foreign.C
 import           Foreign.Marshal.Alloc
+import           Foreign.Marshal.Array
 import           Foreign.Ptr           (Ptr)
 import           Foreign.Storable
 import           IdrisJvm.Assembler    hiding (assign)
@@ -31,26 +33,33 @@ codegenJvm ci = do
       env = CgEnv out
       (_, _, asmWriter) = runRWS (code ci) env initialCgState
       asmCode = unlines . map asm . DL.toList $ instructions asmWriter <> deps asmWriter <> [ ClassCodeEnd clazz ]
-      errMissingLib = error $  "Idris JVM runtime java library not found.\n"
-                            <> "Please set IDRIS_JVM_LIB environment variable to idrisjvm-runtime-<version>.jar path"
-  lib <- fromMaybe errMissingLib <$> lookupEnv "IDRIS_JVM_LIB"
-  generateBytecode lib asmCode
+  generateBytecode asmCode
 
 -- Invoke JVM via FFI to interpret ASM code and create bytecode
-generateBytecode :: String -> String -> IO ()
-generateBytecode lib asmCode =
+generateBytecode :: String -> IO ()
+generateBytecode asmCode =
   alloca $ \jvmHandlePtr ->
   alloca $ \jvmEnvHandlePtr ->
-  let optionStr = "-Djava.class.path=" ++ lib in
-  withCString optionStr $ \optionStrC -> do
-    createJvm jvmHandlePtr jvmEnvHandlePtr optionStrC
-    jvmHandle <- peek jvmHandlePtr
-    envHandle <- peek jvmEnvHandlePtr
-    alloca $ \argv ->
-      withCString asmCode $ \asmCodeC -> do
-        poke argv asmCodeC
-        assemble envHandle 1 argv
-        destroyJvm jvmHandle
+  withCString "-Xmx1g" $ \maxHeap -> do
+    cp <- rtClasspath
+    withCString ("-Djava.class.path=" ++ cp) $ \classpath -> do
+      let optionsList = [maxHeap, classpath]
+          optionsLen = fromIntegral $ length optionsList
+      options <- newArray optionsList
+      createJvm jvmHandlePtr jvmEnvHandlePtr optionsLen options
+      jvmHandle <- peek jvmHandlePtr
+      envHandle <- peek jvmEnvHandlePtr
+      alloca $ \argv ->
+        withCString asmCode $ \asmCodeC -> do
+          poke argv asmCodeC
+          assemble envHandle 1 argv
+          destroyJvm jvmHandle
+
+rtClasspath :: IO FilePath
+rtClasspath = do
+  home <- getAppUserDataDirectory "idrisjvm"
+  return (home </> "idrisjvm-runtime-1.0-SNAPSHOT.jar")
+
 
 data CgEnv = CgEnv { className :: String } deriving Show
 
@@ -68,7 +77,8 @@ type JvmHandle = Ptr Jvm
 data JvmEnv = JvmEnv
 type JvmEnvHandle = Ptr JvmEnv
 
-foreign import ccall "createJvm" createJvm :: Ptr JvmHandle -> Ptr JvmEnvHandle -> CString -> IO ()
+foreign import ccall "createJvm" createJvm :: Ptr JvmHandle -> Ptr JvmEnvHandle -> CInt -> Ptr CString -> IO ()
+
 foreign import ccall "assemble" assemble :: JvmEnvHandle -> CInt -> Ptr CString -> IO ()
 foreign import ccall "destroyJvm" destroyJvm :: JvmHandle -> IO ()
 

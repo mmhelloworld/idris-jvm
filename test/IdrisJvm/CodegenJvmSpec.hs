@@ -5,7 +5,6 @@ import           Data.Char                      (isSpace, toUpper)
 import           Data.List
 import           Data.Monoid                    ((<>))
 import           System.Directory
-import           System.Environment
 import           System.Exit
 import           System.FilePath
 import           System.Process                 (readProcessWithExitCode)
@@ -35,7 +34,8 @@ compileAndRun pgm = do
   (_, stdout, stderr) <- runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", className]
   putStrLnNonEmpty stdout
   putStrLnNonEmpty stderr
-  lib <- getEnv "IDRIS_JVM_LIB"
+  home <- getAppUserDataDirectory "idrisjvm"
+  let lib = home </> "idrisjvm-runtime-1.0-SNAPSHOT.jar"
   (_, stdout, _) <- runProcess "java" ["-cp", lib ++ ":.", className]
   return stdout
 

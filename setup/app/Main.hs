@@ -2,14 +2,15 @@
 
 module Main where
 
-import System.Environment (lookupEnv)
-import Data.Maybe (fromMaybe)
-import Control.Monad (forM)
-import System.Directory (doesDirectoryExist, getDirectoryContents, getCurrentDirectory)
-import System.FilePath ((</>), takeDirectory)
-import Data.List (find, foldl')
+import           Control.Monad      (forM)
+import           Data.List          (find, foldl')
+import           Data.Maybe         (fromMaybe)
+import           System.Directory   (doesDirectoryExist, getCurrentDirectory,
+                                     getDirectoryContents)
+import           System.Environment (lookupEnv)
+import           System.FilePath    (takeDirectory, (</>))
 
-data JvmPaths = JvmPaths { jniHPath :: FilePath
+data JvmPaths = JvmPaths { jniHPath   :: FilePath
                          , jniMdHPath :: FilePath
                          , jvmLibPath :: FilePath
                          } deriving (Eq, Show)
@@ -27,20 +28,20 @@ getRecursiveContents topdir = do
       else return [path]
   return (concat paths)
 
-missingJavaHome = error "Please set environment variable JDK_HOME"
-jniMissing = error "jni.h is missing under JDK. Please provide valid JDK_HOME."
-jniMdMissing = error "jni_md.h is missing under JDK. Please provide valid JDK_HOME."
+missingJavaHome = error "Please set environment variable IDRIS_JAVA_HOME"
+jniMissing = error "jni.h is missing under JDK. Please provide valid IDRIS_JAVA_HOME."
+jniMdMissing = error "jni_md.h is missing under JDK. Please provide valid IDRIS_JAVA_HOME."
 jvmLibMissing
   = error . concat $ ["jvm library is missing under JDK. ",
                       "Depending on your OS, One of ", show jvmLibs,
                       " is expected to be available under JDK. ",
-                      "Please provide valid JDK_HOME."]
+                      "Please provide valid IDRIS_JAVA_HOME."]
 
 jvmLibs = ["libjvm.so", "libjvm.dylib", "jvm.dll"]
 
 findJvmPaths :: IO JvmPaths
 findJvmPaths = do
-  javaHome <- fromMaybe missingJavaHome <$> lookupEnv "JDK_HOME"
+  javaHome <- fromMaybe missingJavaHome <$> lookupEnv "IDRIS_JAVA_HOME"
   fs <- getRecursiveContents javaHome
   let jni = takeDirectory $ fromMaybe jniMissing $ find (endsWith "jni.h") fs
       jniMd = takeDirectory $ fromMaybe jniMdMissing $ find (endsWith "jni_md.h") fs
@@ -50,8 +51,8 @@ findJvmPaths = do
 substEnv :: IO ()
 substEnv = do
   cwd <- getCurrentDirectory
-  let configIn = takeDirectory cwd </> "idris-jvm.cabal.template"
-      configOut = takeDirectory cwd </> "idris-jvm.cabal"
+  let configIn = cwd </> "idris-jvm.cabal.template"
+      configOut = cwd </> "idris-jvm.cabal"
   !stackConfig <- readFile configIn
   jvmPaths <- findJvmPaths
   let f config = foldl' (\acc f -> f acc) config [ replace "${jni_h}" (jniHPath jvmPaths)
@@ -59,9 +60,6 @@ substEnv = do
                  , replace "${jvm_lib}" (jvmLibPath jvmPaths)
                  ]
   length stackConfig `seq` writeFile configOut $ f stackConfig
-  print "************************"
-  putStrLn $ "Please add " ++ jvmLibPath jvmPaths ++ " to LD_LIBRARY_PATH (Linux) or DYLD_LIBRARY_PATH (OSX) or PATH (Windows)"
-  print "************************"
 
 endsWith :: String -> String -> Bool
 endsWith s1 s2 = end == s1 where

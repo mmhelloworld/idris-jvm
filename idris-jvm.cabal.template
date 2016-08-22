@@ -53,7 +53,7 @@ executable idris-codegen-jvm
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -funbox-strict-fields -optl-Wl,-rpath,${jvm_lib}
   ghc-prof-options:    -auto-all -caf-all
 
-  build-depends:       idris
+  build-depends:       idris >= 0.12.2
                      , base
                      , containers
                      , directory

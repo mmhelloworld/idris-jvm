@@ -27,9 +27,16 @@ installIdrisRuntime () {
 main () {
   ensureJavaHome
   downloadRuntimeJar
+
+  stack --stack-yaml setup/stack.yaml clean
+  stack --stack-yaml setup/stack.yaml setup
   stack --stack-yaml setup/stack.yaml build
   stack --stack-yaml setup/stack.yaml exec setup-exe
+
+  stack clean
+  stack setup
   stack install
+  
   installIdrisRuntime
 }
 

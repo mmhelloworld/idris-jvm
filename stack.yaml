@@ -8,7 +8,7 @@ resolver: lts-6.12
 packages:
 - '.'
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
-extra-deps: []
+extra-deps: [ idris-0.12.2, trifecta-1.6 ]
 
 # Override default flag values for local packages and extra-deps
 flags: {}

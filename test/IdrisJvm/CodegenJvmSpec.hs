@@ -5,6 +5,7 @@ import           Data.Char                      (isSpace, toUpper)
 import           Data.List
 import           Data.Monoid                    ((<>))
 import           System.Directory
+import           System.Environment
 import           System.Exit
 import           System.FilePath
 import           System.Process                 (readProcessWithExitCode)
@@ -36,7 +37,7 @@ compileAndRun pgm = do
   putStrLnNonEmpty stderr
   home <- getAppUserDataDirectory "idrisjvm"
   let lib = home </> "idrisjvm-runtime-1.0-SNAPSHOT.jar"
-  (_, stdout, _) <- runProcess "java" ["-cp", lib ++ ":.", className]
+  (_, stdout, _) <- runProcess "java" ["-cp", lib ++ (pathSeparator: "."), className]
   return stdout
 
 runProcess :: String -> [String] -> IO (ExitCode, String, String)

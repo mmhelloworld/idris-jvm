@@ -5,6 +5,7 @@ module IdrisJvm.CodegenJvm (codegenJvm) where
 
 import           Control.Applicative ((<|>))
 import           Control.Arrow       (first)
+import           Control.Lens        ((&), (.~), (^.))
 import           Control.Monad       (join)
 import           Control.Monad.RWS
 import           Idris.Core.TT
@@ -12,38 +13,39 @@ import           IRTS.CodegenCommon
 import           IRTS.Lang
 import           IRTS.Simplified
 
+import           Data.Aeson
+import           Data.Aeson.Types    (Parser, parseMaybe)
+import qualified Data.ByteString.Lazy as B
 import           Data.Char
 import qualified Data.DList          as DL
 import qualified Data.IntSet         as IntSet
 import           Data.List           (find, foldl', sortBy)
 import           Data.Maybe
+import           Network.Wreq        (defaults, header, responseBody)
+import qualified Network.Wreq        as W
 import           System.Environment
-import           System.Exit
 import           System.Process      (readProcessWithExitCode)
-import qualified Text.PrettyPrint    as PP
+import Data.Aeson.Encode.Pretty(encodePretty)
 
 import           IdrisJvm.Assembler  hiding (assign)
 
 codegenJvm :: CodeGenerator
 codegenJvm ci = do
   let out = outputFile ci
-      asmOut = out ++ ".asm"
       clazz = out ++ ".class"
       env = CgEnv out
       (_, _, writer) = runRWS (code ci) env initialCgState
-  writeFile asmOut . unlines . map asm . DL.toList $ instructions writer <> deps writer <> [ ClassCodeEnd clazz ]
-  java <- fromMaybe "java" <$> lookupEnv "IDRIS_JVM"
+      ins = DL.toList $ instructions writer <> deps writer <> [ ClassCodeEnd clazz ]
   let errMissingLib = error $  "Idris JVM runtime java library not found.\n"
                             <> "Please set IDRIS_JVM_LIB environment variable to idrisjvm-runtime-<version>.jar path"
   lib <- fromMaybe errMissingLib <$> lookupEnv "IDRIS_JVM_LIB"
-  runProcess java ["-cp", lib, asmrunner, asmOut] -- Interpret ASM code to create class file
+  --B.writeFile "test.json" (encodePretty $ assemblerRequest ins)
+  W.post "http://localhost:8080/assembler/assemble" $ assemblerRequest ins
+  return ()
+  --runProcess java ["-cp", lib, asmrunner, asmOut] -- Interpret ASM code to create class file
 
-runProcess :: String -> [String] -> IO ()
-runProcess proc args = do
-  (exitCode, stdout, stderr) <- readProcessWithExitCode proc args ""
-  case exitCode of
-    ExitFailure _ -> error $ proc <> " ERROR: " <> stdout <> stderr
-    _             -> return ()
+assemblerRequest ins = object ["instructions" .= toJSON ins]
+
 
 data CgEnv = CgEnv { className :: String } deriving Show
 
@@ -240,8 +242,8 @@ cgFun n args def = do
                        , Istore tailRecVarIndex ] -- Base case for tailrec. Set the tailrec flag to false.
             else writeIns [ Astore resultVarIndex]
     tcoLocalVarCount = nlocalVars + 2 -- Two additional: tailrec loop variable, tailrec continue boolean
-    tcoLocalVarTypes = replicate nlocalVars (quoted "java/lang/Object")
-                     ++ [ quoted "java/lang/Object", "Opcodes.INTEGER" ]
+    tcoLocalVarTypes = replicate nlocalVars "java/lang/Object"
+                     ++ [ "java/lang/Object", "Opcodes.INTEGER" ]
     tcoFrame = Frame FFull tcoLocalVarCount tcoLocalVarTypes 0 []
     methBody =
       if shouldEliminateTco
@@ -297,7 +299,7 @@ unboxInt = InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
 
 invokeError :: String -> Cg ()
 invokeError x
-  = writeIns [ Ldc $ show x
+  = writeIns [ Ldc $ StringConst x
              , InvokeMethod InvokeStatic (rtClassSig "Runtime") "error" "(Ljava/lang/Object;)Ljava/lang/Object;" False
              ]
 
@@ -322,9 +324,9 @@ lambdaDesc = "([Ljava/lang/Object;)Ljava/lang/Object;"
 invokeDynamic :: ClassName -> MethodName -> DL.DList Asm
 invokeDynamic cname lambda = [ InvokeDynamic "apply" ("()" ++ rtFuncSig) metafactoryHandle metafactoryArgs] where
   metafactoryHandle = Handle HInvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory" metafactoryDesc False
-  metafactoryArgs = [ asm $ GetType lambdaDesc
-                    , asm lambdaHandle
-                    , asm $ GetType lambdaDesc
+  metafactoryArgs = [ BsmArgGetType lambdaDesc
+                    , BsmArgHandle lambdaHandle
+                    , BsmArgGetType lambdaDesc
                     ]
   lambdaHandle = Handle HInvokeStatic cname lambda lambdaDesc False
 
@@ -634,7 +636,7 @@ addFrame = do
     then do
       args <- cgStFunctionArgs <$> get
       let nArgs = length args
-      writeIns [ Frame FFull (nlocalVars + 1) (replicate nlocalVars (quoted "java/lang/Object") ++ [quoted "java/lang/Object"]) 0 []]
+      writeIns [ Frame FFull (nlocalVars + 1) (replicate nlocalVars "java/lang/Object" ++ ["java/lang/Object"]) 0 []]
       modify . updateShouldDescribeFrame $ const False
     else writeIns [ Frame FSame 0 [] 0 []]
 
@@ -679,7 +681,7 @@ cgConst (I i) = writeIns [Iconst i, boxInt]
 cgConst (Ch c) = writeIns [ Iconst (ord c)
                           , InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False]
 cgConst (BI i) = writeIns [Iconst $ fromIntegral i, boxInt] -- TODO: Handle BigInteger
-cgConst (Str s) = writeIns [Ldc $ show s]
+cgConst (Str s) = writeIns [Ldc $ StringConst s]
 cgConst TheWorld = writeIns [Iconst 0, boxInt]
 cgConst x | isTypeConst x = writeIns [Iconst 0, boxInt]
 cgConst x = error $ "Constant " ++ show x ++ " not compilable yet"

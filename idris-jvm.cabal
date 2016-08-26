@@ -18,9 +18,7 @@ library
   exposed-modules:     IdrisJvm.CodegenJvm
                      , IdrisJvm.Assembler
   build-depends:       aeson
-                     , aeson-pretty
                      , base
-                     , bytestring
                      , containers
                      , directory
                      , dlist
@@ -28,7 +26,6 @@ library
                      , haskeline >= 0.7
                      , idris >= 0.12.2
                      , lens
-                     , lens-aeson
                      , mtl
                      , pretty
                      , process

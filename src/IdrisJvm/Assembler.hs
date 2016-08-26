@@ -85,9 +85,9 @@ instance ToJSON Asm where
     = object [ "type" .= String "ClassCodeEnd"
              , "out" .= toJSON out ]
 
-  toJSON (CreateClass opt)
+  toJSON (CreateClass flags)
     = object [ "type" .= String "CreateClass"
-             , "opt" .= toJSON opt ]
+             , "flags" .= toJSON flags ]
 
   toJSON (CreateLabel label)
     = object [ "type" .= String "CreateLabel"
@@ -306,10 +306,6 @@ instance ToJSON ClassOpts where
   toJSON ComputeMaxs = toJSON (1 :: Int)
   toJSON ComputeFrames = toJSON (2 :: Int)
 
-instance Asmable ClassOpts where
-  asm ComputeMaxs = "ClassWriter.COMPUTE_MAXS"
-  asm ComputeFrames = "ClassWriter.COMPUTE_FRAMES"
-
 data InvocType = InvokeInterface | InvokeSpecial | InvokeStatic | InvokeVirtual
 invocTypeNum :: InvocType -> Int
 invocTypeNum InvokeInterface = 185
@@ -320,11 +316,6 @@ invocTypeNum InvokeVirtual = 182
 instance ToJSON InvocType where
   toJSON = toJSON . invocTypeNum
 
-instance Asmable InvocType where
-  asm InvokeInterface = "Opcodes.INVOKEINTERFACE"
-  asm InvokeSpecial = "Opcodes.INVOKESPECIAL"
-  asm InvokeStatic = "Opcodes.INVOKESTATIC"
-  asm InvokeVirtual = "Opcodes.INVOKEVIRTUAL"
 
 data FieldInsType = FGetStatic | FPutStatic | FGetField | FPutField
 fieldInsTypeNum :: FieldInsType -> Int
@@ -336,12 +327,6 @@ fieldInsTypeNum FPutField = 181
 instance ToJSON FieldInsType where
   toJSON = toJSON . fieldInsTypeNum
 
-instance Asmable FieldInsType where
-  asm FGetStatic = "Opcodes.GETSTATIC"
-  asm FPutStatic = "Opcodes.PUTSTATIC"
-  asm FGetField = "Opcodes.GETFIELD"
-  asm FPutField = "Opcodes.PUTFIELD"
-
 data FrameType = FFull | FSame | FAppend
 frameTypeNum :: FrameType -> Int
 frameTypeNum FFull = 0
@@ -350,11 +335,6 @@ frameTypeNum FAppend = 1
 
 instance ToJSON FrameType where
   toJSON = toJSON . frameTypeNum
-
-instance Asmable FrameType where
-  asm FFull = "Opcodes.F_FULL"
-  asm FSame = "Opcodes.F_SAME"
-  asm FAppend = "Opcodes.F_APPEND"
 
 data Access = Private | Public | Static | Synthetic
 accessNum :: Access -> Int
@@ -365,12 +345,6 @@ accessNum Synthetic = 4096
 
 instance ToJSON Access where
   toJSON = toJSON . accessNum
-
-instance Asmable Access where
-  asm Private = "Opcodes.ACC_PRIVATE"
-  asm Public  = "Opcodes.ACC_PUBLIC"
-  asm Static  = "Opcodes.ACC_STATIC"
-  asm Synthetic  = "Opcodes.ACC_SYNTHETIC"
 
 data HandleTag = HGetField
                | HGetStatic
@@ -395,17 +369,6 @@ handleTagOpcode HInvokeInterface = 9
 instance ToJSON HandleTag where
   toJSON = toJSON . handleTagOpcode
 
-instance Asmable HandleTag where
-  asm HGetField         = "Opcodes.H_GETFIELD"
-  asm HGetStatic        = "Opcodes.H_GETSTATIC"
-  asm HPutField         = "Opcodes.H_PUTFIELD"
-  asm HPutStatic        = "Opcodes.H_PUTSTATIC"
-  asm HInvokeVirtual    = "Opcodes.H_INVOKEVIRTUAL"
-  asm HInvokeStatic     = "Opcodes.H_INVOKESTATIC"
-  asm HInvokeSpecial    = "Opcodes.H_INVOKESPECIAL"
-  asm HNewInvokeSpecial = "Opcodes.H_NEWINVOKESPECIAL"
-  asm HInvokeInterface  = "Opcodes.H_INVOKEINTERFACE"
-
 data Handle = Handle { tag         :: HandleTag
                      , hClassName  :: ClassName
                      , hMethodName :: MethodName
@@ -421,58 +384,20 @@ instance ToJSON Handle where
              , "desc" .= toJSON desc
              , "isIntf" .= toJSON isIntf ]
 
-instance Asmable Handle where
-  asm (Handle tag cname mname desc isInterface)
-    = constructor "Handle" [ asm tag
-                            , quoted cname
-                            , quoted mname
-                            , quoted desc
-                            , asm isInterface
-                            ]
-
-iconst i | i >= 0 && i <= 5            = call "mv" "visitInsn" ["Opcodes.ICONST_" ++ show i]
-         | i == (-1)                   = call "mv" "visitInsn" ["Opcodes.ICONST_M1"]
-         | i >= (-128) && i <= 127     = call "mv" "visitIntInsn" ["Opcodes.BIPUSH", show i]
-         | i >= (-32768) && i <= 32767 = call "mv" "visitIntInsn" ["Opcodes.SIPUSH", show i]
-         | otherwise                   = call "mv" "visitLdcInsn" [constructor "Integer" [show i]]
-
-
-
-
-instance Asmable Bool where
-  asm False = "false"
-  asm True = "true"
-
-imports = declVarAndAssign "imports" $ constructor "JavaImporter" packages where
-  packages = [ "java.lang"
-             , "java.io"
-             , "java.util"
-             , "java.nio"
-             , "Packages.mmhelloworld.idrisjvmruntime.org.objectweb.asm"
-             ]
-
-withImports :: String
-withImports = "with (imports)"
-
 within :: String -> String -> String -> String
 within start str end = start ++ str ++ end
 
 quoted :: String -> String
 quoted s = within "\"" s "\""
 
+braced :: String -> String
 braced s = within "(" s ")"
+
+sqrBracketed :: String -> String
 sqrBracketed s = within "[" s "]"
 
 sep :: String -> [String] -> String
 sep = intercalate
 
+commaSep :: [String] -> String
 commaSep = sep ","
-call qual meth args = qual ++ "." ++ callFn meth args
-callFn meth args = meth ++ braced (commaSep args)
-constructor className args = sep " " ["new", callFn className args]
-
-assign name value = sep " = " [name, value]
-declVarAndAssign name value = sep " " ["var", assign name value]
-declVar v = sep " " ["var" , v]
-
-initializeArray typ xs = call "Java" "to" [within "[" (commaSep xs) "]", quoted typ]

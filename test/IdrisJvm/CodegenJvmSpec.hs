@@ -20,27 +20,33 @@ spec = describe "idris-jvm" $ do
 
 tests :: IO [FilePath]
 tests = do
-  cwd <- getCurrentDirectory
-  let testRoot = cwd </> "test" </> "resources"
-  dirs <- pure [testRoot </> "helloworld"] --map (testRoot </>) <$> getDirectoryContents testRoot
-  let isSpecial d =  null baseName || baseName == "." where baseName = takeBaseName d
+  testRoot <- getTestRoot
+  dirs <- map (testRoot </>) <$> getDirectoryContents testRoot
+  let isSpecial d = null baseName || baseName == "."
+                  where baseName = takeBaseName d
   return $ sort . filter (not . isSpecial) $ dirs
 
 runTest :: String -> H.SpecWith ()
 runTest dir = it ("can compile `" <> dir <> "`") $ do
   expected <- readFile $ dir </> "expected"
-  actual <- compileAndRun (dir </> (takeBaseName dir ++ ".idr"))
+  actual <- compileAndRun dir (dir </> (takeBaseName dir ++ ".idr"))
   actual `shouldBe` expected
 
-compileAndRun :: String -> IO String
-compileAndRun pgm = do
+compileAndRun :: FilePath -> String -> IO String
+compileAndRun dir pgm = do
   let className = capitalize $ takeBaseName pgm
-  (_, stdout, stderr) <- runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", className]
-  putStrLnNonEmpty stdout
-  putStrLnNonEmpty stderr
+      classFile = dir </> className
+  (_, compilerOut, compilerErr) <- runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", classFile]
+  putStrLnNonEmpty compilerOut
+  putStrLnNonEmpty compilerErr
   lib <- getEnv "IDRIS_JVM_LIB"
-  (_, stdout, _) <- runProcess "java" ["-cp", lib ++ ":.", className]
+  (_, stdout, _) <- runProcess "java" ["-cp", lib ++ ":" ++ dir, className]
   return stdout
+
+getTestRoot :: IO FilePath
+getTestRoot = do
+  cwd <- getCurrentDirectory
+  return $ cwd </> "test" </> "resources"
 
 runProcess :: String -> [String] -> IO (ExitCode, String, String)
 runProcess proc args = do

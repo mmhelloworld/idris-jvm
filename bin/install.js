@@ -1,3 +1,4 @@
+var JString = Java.type('java.lang.String');
 var ZipInputStream = Java.type('java.util.zip.ZipInputStream');
 var FileInputStream = Java.type('java.io.FileInputStream');
 var Paths = Java.type('java.nio.file.Paths');
@@ -7,21 +8,25 @@ var URL = Java.type('java.net.URL');
 var System = Java.type('java.lang.System');
 var Files = Java.type('java.nio.file.Files');
 
-var dfltWorkingDir = System.getProperty('user.home') + File.separator + ".idrisjvm";
-var workingDir = System.getProperty('IDRIS_JVM_WORK_DIR', dfltWorkingDir);
+var RUNTIME_VERSION = '1.0-SNAPSHOT';
+var ASSEMBLER_VERSION = '1.0-SNAPSHOT';
+
+var dfltWorkingDir = System.getProperty('user.home') + File.separator + '.idrisjvm';
+var workingDir = System.getenv('IDRIS_JVM_WORK_DIR') || dfltWorkingDir;
 
 function downloadUrl(url, outFilePath) {
   url = new URL(url);
 
   if (!outFilePath) {
-    var path = Paths.get(url.getPath());
-    outFilePath = path.getName(path.getNameCount() - 1);
+    var urlPath = Paths.get(url.getPath());
+    var lastPart = urlPath.getName(urlPath.getNameCount() - 1).toString();
+    outFilePath = Paths.get(workingDir, lastPart).toString();
   }
 
   var connection = url.openConnection();
   var input = connection.getInputStream();
   Files.copy(input,
-    Paths.get(workingDir, outFilePath),
+    Paths.get(outFilePath),
     StandardCopyOption.REPLACE_EXISTING);
 }
 
@@ -39,7 +44,7 @@ function unzip(zipFilePath, destDirectory) {
           destPath.getParent().toFile().mkdirs();
           Files.copy(zipIn,
             destPath,
-            Java.to([StandardCopyOption.REPLACE_EXISTING], 'java.nio.file.CopyOption[]'));
+            StandardCopyOption.REPLACE_EXISTING);
       } else {
           var dir = new File(filePath);
           dir.mkdir();
@@ -50,12 +55,14 @@ function unzip(zipFilePath, destDirectory) {
 }
 
 function install() {
-  var runtimeLib = 'https://github.com/mmhelloworld/idrisjvm-runtime/releases/download/1.0-SNAPSHOT/idrisjvm-runtime-1.0-SNAPSHOT.jar';
-  var assemblerLib = 'https://github.com/mmhelloworld/jvm-assembler/releases/download/1.0-SNAPSHOT/jvm-assembler-server-1.0-SNAPSHOT.zip';
+  var assemblerZip = JString.format('jvm-assembler-server-%s.zip', ASSEMBLER_VERSION);
+  var runtimeLib = JString.format('https://github.com/mmhelloworld/idrisjvm-runtime/releases/download/%1$s/idrisjvm-runtime-%1$s.jar', RUNTIME_VERSION);
+  var assemblerLib = JString.format('https://github.com/mmhelloworld/jvm-assembler/releases/download/%s/%s', ASSEMBLER_VERSION, assemblerZip);
 
+  new File(workingDir).mkdirs();
   downloadUrl(runtimeLib);
   downloadUrl(assemblerLib);
-  unzip(workingDir + File.separator + 'jvm-assembler-server-1.0-SNAPSHOT.zip');
+  unzip(workingDir + File.separator + assemblerZip);
 }
 
 install();

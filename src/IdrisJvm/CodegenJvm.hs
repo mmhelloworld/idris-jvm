@@ -21,8 +21,9 @@ import qualified Data.IntSet         as IntSet
 import           Data.List           (find, foldl', sortBy)
 import           Data.Maybe
 import qualified Network.Wreq        as W
-import           System.FilePath     (takeBaseName)
-
+import System.Directory (getHomeDirectory)
+import           System.FilePath     (takeBaseName, (</>))
+import Text.Read (readMaybe)
 import           IdrisJvm.Assembler
 
 codegenJvm :: CodeGenerator
@@ -33,8 +34,18 @@ codegenJvm ci = do
       (_, _, writer) = runRWS (code ci) env initialCgState
       ins = DL.toList $ instructions writer <> deps writer <> [ ClassCodeEnd clazz ]
       assemblerRequest ins = object ["instructions" .= toJSON ins]
-  asmResponse <- W.post "http://localhost:8080/assembler/assemble" $ assemblerRequest ins
+  port <- getAsmPort
+  let asmUrl = "http://localhost:" ++ show port ++ "/assembler/assemble"
+  asmResponse <- W.post asmUrl $ assemblerRequest ins
   maybe (pure ()) putStrLn $ asmResponseMessage $ A.decode (asmResponse ^. W.responseBody)
+
+getAsmPort :: IO Int
+getAsmPort = do
+  home <- getHomeDirectory
+  asmPort <- readFile $ home </> ".jvm-assembler" </> ".assembler"
+  let err = "Could not get assembler server port. " <>
+            "Please check whether jvm-assembler server is running."
+  maybe (error err) pure $ readMaybe asmPort
 
 data AsmResponse = AsmResponse { isSuccess :: Bool, message :: String }
 

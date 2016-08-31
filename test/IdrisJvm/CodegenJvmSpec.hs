@@ -5,7 +5,6 @@ import           Data.Char                      (isSpace, toUpper)
 import           Data.List
 import           Data.Monoid                    ((<>))
 import           System.Directory
-import           System.Environment
 import           System.Exit
 import           System.FilePath
 import           System.Process                 (readProcessWithExitCode)
@@ -39,8 +38,7 @@ compileAndRun dir pgm = do
   (_, compilerOut, compilerErr) <- runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", classFile]
   putStrLnNonEmpty compilerOut
   putStrLnNonEmpty compilerErr
-  lib <- getEnv "IDRIS_JVM_LIB"
-  (_, stdout, _) <- runProcess "java" ["-cp", lib ++ ":" ++ dir, className]
+  (_, stdout, _) <- runProcess "java" ["-cp", "idris-jvm-runtime.jar:" ++ dir, className]
   return stdout
 
 getTestRoot :: IO FilePath

@@ -20,20 +20,21 @@ import qualified Data.DList          as DL
 import qualified Data.IntSet         as IntSet
 import           Data.List           (find, foldl', sortBy)
 import           Data.Maybe
-import qualified Network.Wreq        as W
-import System.Directory (getHomeDirectory)
-import           System.FilePath     (takeBaseName, (</>))
-import Text.Read (readMaybe)
 import           IdrisJvm.Assembler
+import qualified Network.Wreq        as W
+import           System.Directory    (getHomeDirectory)
+import           System.Environment  (lookupEnv)
+import           System.FilePath     (takeBaseName, (</>))
+import           Text.Read           (readMaybe)
 
 codegenJvm :: CodeGenerator
 codegenJvm ci = do
   let out = outputFile ci
       clazz = out ++ ".class"
       env = CgEnv $ takeBaseName out
-      (_, _, writer) = runRWS (code ci) env initialCgState
-      ins = DL.toList $ instructions writer <> deps writer <> [ ClassCodeEnd clazz ]
-      assemblerRequest ins = object ["instructions" .= toJSON ins]
+      (_, _, cgWriter) = runRWS (code ci) env initialCgState
+      ins = DL.toList $ instructions cgWriter <> deps cgWriter <> [ ClassCodeEnd clazz ]
+      assemblerRequest instrs = object ["instructions" .= toJSON instrs]
   port <- getAsmPort
   let asmUrl = "http://localhost:" ++ show port ++ "/assembler/assemble"
   asmResponse <- W.post asmUrl $ assemblerRequest ins
@@ -41,11 +42,16 @@ codegenJvm ci = do
 
 getAsmPort :: IO Int
 getAsmPort = do
-  home <- getHomeDirectory
-  asmPort <- readFile $ home </> ".jvm-assembler" </> ".assembler"
+  workingDir <- getWorkingDir
+  asmPort <- readFile $ workingDir </> ".assembler"
   let err = "Could not get assembler server port. " <>
             "Please check whether jvm-assembler server is running."
   maybe (error err) pure $ readMaybe asmPort
+
+getWorkingDir :: IO FilePath
+getWorkingDir = do
+  defaultWorkingDir <- (</> ".idrisjvm") <$> getHomeDirectory
+  fromMaybe defaultWorkingDir <$> lookupEnv "IDRIS_JVM_WORK_DIR"
 
 data AsmResponse = AsmResponse { isSuccess :: Bool, message :: String }
 

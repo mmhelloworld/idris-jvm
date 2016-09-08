@@ -3,8 +3,10 @@ module IdrisJvm.CodegenJvmSpec where
 import           Control.Monad                  (forM_)
 import           Data.Char                      (isSpace, toUpper)
 import           Data.List
+import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    ((<>))
 import           System.Directory
+import           System.Environment             (lookupEnv)
 import           System.Exit
 import           System.FilePath
 import           System.Process                 (readProcessWithExitCode)
@@ -38,7 +40,10 @@ compileAndRun dir pgm = do
   (_, compilerOut, compilerErr) <- runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", classFile]
   putStrLnNonEmpty compilerOut
   putStrLnNonEmpty compilerErr
-  (_, stdout, _) <- runProcess "java" ["-cp", "idris-jvm-runtime.jar:" ++ dir, className]
+  workingDir <- getWorkingDir
+  let runtimeJar = workingDir </> "idrisjvm-runtime-1.0-SNAPSHOT.jar"
+      args = ["-cp", runtimeJar ++ (classpathSep: dir), className]
+  (_, stdout, _) <- runProcess "java" args
   return stdout
 
 getTestRoot :: IO FilePath
@@ -46,12 +51,21 @@ getTestRoot = do
   cwd <- getCurrentDirectory
   return $ cwd </> "test" </> "resources"
 
+getWorkingDir :: IO FilePath
+getWorkingDir = do
+  defaultWorkingDir <- (</> ".idrisjvm") <$> getHomeDirectory
+  fromMaybe defaultWorkingDir <$> lookupEnv "IDRIS_JVM_WORK_DIR"
+
 runProcess :: String -> [String] -> IO (ExitCode, String, String)
 runProcess proc args = do
   res@(exitCode, stdout, stderr) <- readProcessWithExitCode proc args ""
   case exitCode of
     ExitFailure _ -> error $ proc <> " ERROR: " <> stdout <> stderr
     _             -> return res
+
+classpathSep :: Char
+classpathSep | pathSeparator == '/' = ':'
+             | otherwise = ';'
 
 capitalize :: String -> String
 capitalize [] = []

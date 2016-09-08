@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright Marimuthu Madasamy (c) 2016
 #
 # All rights reserved.
@@ -110,8 +110,12 @@ stack --stack-yaml $BASEDIR/stack.yaml setup
 
 stack --stack-yaml $BASEDIR/stack.yaml install
 
+pushd $BASEDIR/runtime > /dev/null
+stack exec idris -- --install idris-jvm-runtime.ipkg
+popd > /dev/null
+
 "$JAVACMD" $JAVA_OPTS -Xmx750m \
   jdk.nashorn.tools.Shell \
   -scripting \
   $BASEDIR/bin/install.js \
-  "$@"
+  -- "$@"

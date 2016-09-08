@@ -87,7 +87,11 @@ stack --stack-yaml %BASEDIR%\stack.yaml setup
 
 stack --stack-yaml %BASEDIR%\stack.yaml install
 
-%JAVACMD% %JAVA_OPTS% -Xmx750m jdk.nashorn.tools.Shell -scripting  %BASEDIR%\install.js %CMD_LINE_ARGS%
+pushd %BASEDIR%\runtime
+stack exec idris -- --install idris-jvm-runtime.ipkg
+popd
+
+%JAVACMD% %JAVA_OPTS% -Xmx750m jdk.nashorn.tools.Shell -scripting  %BASEDIR%\install.js -- %CMD_LINE_ARGS%
 if %ERRORLEVEL% NEQ 0 goto error
 goto end
 

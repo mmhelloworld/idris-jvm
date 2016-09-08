@@ -8,15 +8,8 @@ Install
 ```
 git clone https://github.com/mmhelloworld/idris-jvm.git
 cd idris-jvm
-stack install
-```
-Add the installed executable location to the `PATH` if it is not already on PATH.
-
-Install Idris JVM runtime
--------------------------
-```
-cd idris-jvm/runtime
-idris --install idris-jvm-runtime.ipkg
+cd bin
+setup
 ```
 
 Example

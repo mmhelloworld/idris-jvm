@@ -7,12 +7,16 @@ var File = Java.type('java.io.File');
 var URL = Java.type('java.net.URL');
 var System = Java.type('java.lang.System');
 var Files = Java.type('java.nio.file.Files');
+var ProcessBuilder = Java.type('java.lang.ProcessBuilder');
 
 var RUNTIME_VERSION = '1.0-SNAPSHOT';
 var ASSEMBLER_VERSION = '1.0-SNAPSHOT';
 
 var dfltWorkingDir = System.getProperty('user.home') + File.separator + '.idrisjvm';
 var workingDir = System.getenv('IDRIS_JVM_WORK_DIR') || dfltWorkingDir;
+var programArgs = arguments;
+
+var shouldUpdate = arguments.indexOf('-u') >= 0;
 
 function downloadUrl(url, outFilePath) {
   url = new URL(url);
@@ -45,6 +49,7 @@ function unzip(zipFilePath, destDirectory) {
           Files.copy(zipIn,
             destPath,
             StandardCopyOption.REPLACE_EXISTING);
+          new File(destPath).setExecutable(true);
       } else {
           var dir = new File(filePath);
           dir.mkdir();
@@ -55,14 +60,44 @@ function unzip(zipFilePath, destDirectory) {
 }
 
 function install() {
-  var assemblerZip = JString.format('jvm-assembler-server-%s.zip', ASSEMBLER_VERSION);
-  var runtimeLib = JString.format('https://github.com/mmhelloworld/idrisjvm-runtime/releases/download/%1$s/idrisjvm-runtime-%1$s.jar', RUNTIME_VERSION);
+  var assembler = JString.format('jvm-assembler-server-%s', ASSEMBLER_VERSION);
+  var runtime = JString.format('idrisjvm-runtime-%1$s.jar', RUNTIME_VERSION);
+  var assemblerZip = assembler + ".zip";
+  var runtimeLib = JString.format('https://github.com/mmhelloworld/idrisjvm-runtime/releases/download/%s/%s', RUNTIME_VERSION, runtime);
   var assemblerLib = JString.format('https://github.com/mmhelloworld/jvm-assembler/releases/download/%s/%s', ASSEMBLER_VERSION, assemblerZip);
 
   new File(workingDir).mkdirs();
-  downloadUrl(runtimeLib);
-  downloadUrl(assemblerLib);
+  if (!Paths.get(workingDir, runtime).toFile().exists() || shouldUpdate) {
+      print('Downloading runtime...');
+      downloadUrl(runtimeLib);
+      print('Downloading runtime done!');
+  }
+
+  if (!Paths.get(workingDir, assembler).toFile().exists() || shouldUpdate) {
+      print('Downloading assembler...');
+      downloadUrl(assemblerLib);
+      print('Downloading assembler done!');
+  }
+
   unzip(workingDir + File.separator + assemblerZip);
 }
 
-install();
+function startJvmAsm() {
+  var assembler = JString.format('jvm-assembler-server-%s', ASSEMBLER_VERSION);
+  var pb = new ProcessBuilder("jvmasm", "--work-dir", workingDir);
+  pb.directory(new File(new File(workingDir, assembler), "bin"));
+
+  var log = new File(workingDir, "jvmasm.log");
+  pb.redirectErrorStream(true);
+  pb.redirectOutput(ProcessBuilder.Redirect.appendTo(log));
+
+  pb.start();
+  print("JVM Assembler is running and the log is available at " + log);
+}
+
+function main() {
+  install();
+  startJvmAsm();
+}
+
+main();

@@ -22,18 +22,20 @@ import           Data.List           (find, foldl', sortBy)
 import           Data.Maybe
 import           IdrisJvm.Assembler
 import qualified Network.Wreq        as W
-import           System.Directory    (getHomeDirectory)
+import           System.Directory    (getHomeDirectory, getCurrentDirectory)
 import           System.Environment  (lookupEnv)
-import           System.FilePath     (takeBaseName, (</>))
+import           System.FilePath     (takeBaseName, isRelative,(</>))
 import           Text.Read           (readMaybe)
 
 codegenJvm :: CodeGenerator
 codegenJvm ci = do
+  cwd <- getCurrentDirectory
   let out = outputFile ci
-      clazz = out ++ ".class"
+      cname = out ++ ".class"
+      classFilePath = if isRelative cname then cwd </> cname else cname
       env = CgEnv $ takeBaseName out
       (_, _, cgWriter) = runRWS (code ci) env initialCgState
-      ins = DL.toList $ instructions cgWriter <> deps cgWriter <> [ ClassCodeEnd clazz ]
+      ins = DL.toList $ instructions cgWriter <> deps cgWriter <> [ ClassCodeEnd classFilePath ]
       assemblerRequest instrs = object ["instructions" .= toJSON instrs]
   port <- getAsmPort
   let asmUrl = "http://localhost:" ++ show port ++ "/assembler/assemble"

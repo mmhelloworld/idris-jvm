@@ -37,7 +37,7 @@ compileAndRun :: FilePath -> String -> IO String
 compileAndRun dir pgm = do
   let className = capitalize $ takeBaseName pgm
       classFile = dir </> className
-  (_, compilerOut, compilerErr) <- runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", classFile]
+  (_, compilerOut, compilerErr) <- runProcess "stack" [ "exec", "idris", "--",  "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", classFile]
   putStrLnNonEmpty compilerOut
   putStrLnNonEmpty compilerErr
   workingDir <- getWorkingDir

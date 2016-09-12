@@ -13,10 +13,16 @@ var RUNTIME_VERSION = '1.0-SNAPSHOT';
 var ASSEMBLER_VERSION = '1.0-SNAPSHOT';
 
 var dfltWorkingDir = System.getProperty('user.home') + File.separator + '.idrisjvm';
-var workingDir = System.getenv('IDRIS_JVM_WORK_DIR') || dfltWorkingDir;
 var programArgs = arguments;
 
 var shouldUpdate = arguments.indexOf('-u') >= 0;
+var workingDirIndex = function() {
+  var shortIndex = programArgs.indexOf('-w');
+  var index = shortIndex < 0 ? programArgs.indexOf('--work-dir') : shortIndex;
+  return (index >= 0 && programArgs.length > index + 1) ? index + 1 : -1;
+}();
+
+var workingDir = workingDirIndex > 0 ? arguments[workingDirIndex] : dfltWorkingDir;
 
 function downloadUrl(url, outFilePath) {
   url = new URL(url);
@@ -84,12 +90,12 @@ function install() {
 
 function startJvmAsm() {
   var assembler = JString.format('jvm-assembler-server-%s', ASSEMBLER_VERSION);
-  var pb = new ProcessBuilder("jvmasm", "--work-dir", workingDir);
+  var pb = new ProcessBuilder("jvmasm", "--non-interactive", "--work-dir", workingDir);
   pb.directory(new File(new File(workingDir, assembler), "bin"));
 
   var log = new File(workingDir, "jvmasm.log");
   pb.redirectErrorStream(true);
-  pb.redirectOutput(ProcessBuilder.Redirect.appendTo(log));
+  pb.redirectOutput(ProcessBuilder.Redirect.to(log));
 
   pb.start();
   print("JVM Assembler is running and the log is available at " + log);

@@ -11,6 +11,7 @@ cd idris-jvm
 bin/setup
 ```
 The `setup` script we are running here would do the following:
+
 1. Download [JVM Assembler](https://github.com/mmhelloworld/jvm-assembler/releases)
 1. Download [Idris JVM Runtime jar](https://github.com/mmhelloworld/idrisjvm-runtime/releases)
 1. Install Idris JVM code generator (this repository)

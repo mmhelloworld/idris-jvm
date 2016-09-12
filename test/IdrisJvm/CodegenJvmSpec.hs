@@ -3,9 +3,10 @@ module IdrisJvm.CodegenJvmSpec where
 import           Control.Monad                  (forM_)
 import           Data.Char                      (isSpace, toUpper)
 import           Data.List
+import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    ((<>))
 import           System.Directory
-import           System.Environment
+import           System.Environment             (lookupEnv)
 import           System.Exit
 import           System.FilePath
 import           System.Process                 (readProcessWithExitCode)
@@ -18,26 +19,42 @@ spec = describe "idris-jvm" $ do
   testcases <- H.runIO tests
   parallel $ forM_ testcases runTest
 
+tests :: IO [FilePath]
 tests = do
-  cwd <- getCurrentDirectory
-  let testRoot = cwd </> "test" </> "resources"
+  testRoot <- getTestRoot
   dirs <- map (testRoot </>) <$> getDirectoryContents testRoot
-  let isSpecial d =  null baseName || baseName == "." where baseName = takeBaseName d
+  let isSpecial d = null baseName || baseName == "."
+                  where baseName = takeBaseName d
   return $ sort . filter (not . isSpecial) $ dirs
 
+runTest :: String -> H.SpecWith ()
 runTest dir = it ("can compile `" <> dir <> "`") $ do
   expected <- readFile $ dir </> "expected"
-  actual <- compileAndRun (dir </> (takeBaseName dir ++ ".idr"))
+  actual <- compileAndRun dir (dir </> (takeBaseName dir ++ ".idr"))
   actual `shouldBe` expected
 
-compileAndRun pgm = do
+compileAndRun :: FilePath -> String -> IO String
+compileAndRun dir pgm = do
   let className = capitalize $ takeBaseName pgm
-  (_, stdout, stderr) <- runProcess "idris" [ "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", className]
-  putStrLnNonEmpty stdout
-  putStrLnNonEmpty stderr
-  lib <- getEnv "IDRIS_JVM_LIB"
-  (_, stdout, _) <- runProcess "java" ["-cp", lib ++ ":.", className]
+      classFile = dir </> className
+  (_, compilerOut, compilerErr) <- runProcess "stack" [ "exec", "idris", "--",  "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", classFile]
+  putStrLnNonEmpty compilerOut
+  putStrLnNonEmpty compilerErr
+  workingDir <- getWorkingDir
+  let runtimeJar = workingDir </> "idrisjvm-runtime-1.0-SNAPSHOT.jar"
+      args = ["-cp", runtimeJar ++ (classpathSep: dir), className]
+  (_, stdout, _) <- runProcess "java" args
   return stdout
+
+getTestRoot :: IO FilePath
+getTestRoot = do
+  cwd <- getCurrentDirectory
+  return $ cwd </> "test" </> "resources"
+
+getWorkingDir :: IO FilePath
+getWorkingDir = do
+  defaultWorkingDir <- (</> ".idrisjvm") <$> getHomeDirectory
+  fromMaybe defaultWorkingDir <$> lookupEnv "IDRIS_JVM_WORK_DIR"
 
 runProcess :: String -> [String] -> IO (ExitCode, String, String)
 runProcess proc args = do
@@ -45,6 +62,10 @@ runProcess proc args = do
   case exitCode of
     ExitFailure _ -> error $ proc <> " ERROR: " <> stdout <> stderr
     _             -> return res
+
+classpathSep :: Char
+classpathSep | pathSeparator == '/' = ':'
+             | otherwise = ';'
 
 capitalize :: String -> String
 capitalize [] = []

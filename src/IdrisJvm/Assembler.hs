@@ -1,6 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
 module IdrisJvm.Assembler where
 
-import           Data.List (intercalate)
+import           Data.Aeson
+import           Data.List  (intercalate)
 
 data Asm = Aaload
          | Aastore
@@ -18,7 +20,6 @@ data Asm = Aaload
          | Dup
          | Field FieldInsType ClassName FieldName Descriptor
          | Frame FrameType Int [Signature] Int [Signature]
-         | GetType Descriptor
          | Goto Label
          | I2c
          | I2l
@@ -32,11 +33,11 @@ data Asm = Aaload
          | Iload Int
          | Imul
          | InvokeMethod InvocType ClassName MethodName Descriptor Bool
-         | InvokeDynamic MethodName Descriptor Handle [Arg]
+         | InvokeDynamic MethodName Descriptor Handle [BsmArg]
          | Istore Int
          | Isub
          | LabelStart Label
-         | Ldc String
+         | Ldc Constant
          | LookupSwitch Label [Label] [Int]
          | MaxStackAndLocal Int Int
          | MethodCodeStart
@@ -45,6 +46,192 @@ data Asm = Aaload
          | Pop
          | Return
          | SourceInfo SourceFileName
+
+instance ToJSON Asm where
+  toJSON Aaload = object [ "type" .= String "Aaload" ]
+
+  toJSON Aastore = object [ "type" .= String "Aastore" ]
+
+  toJSON Aconstnull = object [ "type" .= String "Aconstnull" ]
+
+  toJSON (Aload index)
+    = object [ "type" .= String "Aload"
+             , "index" .= toJSON index ]
+
+  toJSON (Anewarray desc)
+    = object [ "type" .= String "Anewarray"
+             , "desc" .= toJSON desc ]
+
+  toJSON (Astore index)
+    = object [ "type" .= String "Astore"
+             , "index" .= toJSON index ]
+
+  toJSON Areturn = object [ "type" .= String "Areturn" ]
+
+  toJSON (Checkcast desc)
+    = object [ "type" .= String "Checkcast"
+             , "desc" .= toJSON desc ]
+
+  toJSON (ClassCodeStart version acc cname sig super intf)
+    = object [ "type" .= String "ClassCodeStart"
+             , "version" .= toJSON version
+             , "acc" .= toJSON acc
+             , "name" .= toJSON cname
+             , "sig" .= if sig == "null" then Null else toJSON sig
+             , "parent" .= toJSON super
+             , "interfaces" .= toJSON intf]
+
+  toJSON (ClassCodeEnd out)
+    = object [ "type" .= String "ClassCodeEnd"
+             , "out" .= toJSON out ]
+
+  toJSON (CreateClass flags)
+    = object [ "type" .= String "CreateClass"
+             , "flags" .= toJSON flags ]
+
+  toJSON (CreateLabel label)
+    = object [ "type" .= String "CreateLabel"
+             , "name" .= toJSON label ]
+
+  toJSON (CreateMethod accs mname desc sig excs)
+    = object [ "type" .= String "CreateMethod"
+             , "acc" .= toJSON (sum $ accessNum <$> accs)
+             , "name" .= toJSON mname
+             , "desc" .= toJSON desc
+             , "sig" .= maybe Null toJSON sig
+             , "excs" .= toJSON excs ]
+
+  toJSON Dup = object [ "type" .= String "Dup" ]
+
+  toJSON (Field ftype cname fname desc)
+    = object [ "type" .= String "Field"
+             , "ftype" .= toJSON ftype
+             , "cname" .= toJSON cname
+             , "fname" .= toJSON fname
+             , "desc" .= toJSON desc ]
+
+  toJSON (Frame frameType nlocal local nstack stack)
+    = object [ "type" .= String "Frame"
+             , "ftype" .= toJSON frameType
+             , "nlocal" .= toJSON nlocal
+             , "local" .= toJSON local
+             , "nstack" .= toJSON nstack
+             , "stack" .= toJSON stack ]
+
+  toJSON (Goto label)
+    = object [ "type" .= String "Goto"
+             , "label" .= toJSON label ]
+
+  toJSON I2c = object [ "type" .= String "I2c" ]
+
+  toJSON I2l = object [ "type" .= String "I2l" ]
+
+  toJSON Iadd = object [ "type" .= String "Iadd" ]
+
+  toJSON (Iconst n)
+    = object [ "type" .= String "Iconst"
+             , "n" .= toJSON n ]
+
+  toJSON (Ifeq label)
+    = object [ "type" .= String "Ifeq"
+             , "label" .= toJSON label ]
+
+  toJSON (Ificmpge label)
+    = object [ "type" .= String "Ificmpge"
+             , "label" .= toJSON label ]
+
+  toJSON (Ificmpgt label)
+    = object [ "type" .= String "Ificmpgt"
+             , "label" .= toJSON label ]
+
+  toJSON (Ificmple label)
+    = object [ "type" .= String "Ificmple"
+             , "label" .= toJSON label ]
+
+  toJSON (Ificmplt label)
+    = object [ "type" .= String "Ificmplt"
+             , "label" .= toJSON label ]
+
+  toJSON (Iload n)
+    = object [ "type" .= String "Iload"
+             , "n" .= toJSON n ]
+
+  toJSON Imul = object [ "type" .= String "Imul" ]
+
+  toJSON (InvokeMethod invType cname mname desc isIntf)
+    = object [ "type" .= String "InvokeMethod"
+             , "invType" .= toJSON invType
+             , "cname" .= toJSON cname
+             , "mname" .= toJSON mname
+             , "desc" .= toJSON desc
+             , "isIntf" .= toJSON isIntf ]
+
+  toJSON (InvokeDynamic name desc handle args)
+    = object [ "type" .= String "InvokeDynamic"
+             , "name" .= toJSON name
+             , "desc" .= toJSON desc
+             , "handle" .= toJSON handle
+             , "args" .= toJSON args ]
+
+  toJSON (Istore n)
+    = object [ "type" .= String "Istore"
+             , "n" .= toJSON n ]
+
+  toJSON Isub = object [ "type" .= String "Isub" ]
+
+  toJSON (LabelStart label)
+    = object [ "type" .= String "LabelStart"
+             , "label" .= toJSON label ]
+
+  toJSON (Ldc c)
+    = toJSON c
+
+  toJSON (LookupSwitch dlabel clabels vals)
+    = object [ "type" .= String "LookupSwitch"
+             , "dlabel" .= toJSON dlabel
+             , "clabels" .= toJSON clabels
+             , "vals" .= toJSON vals ]
+
+  toJSON (MaxStackAndLocal nstack nlocal)
+    = object [ "type" .= String "MaxStackAndLocal"
+             , "nstack" .= toJSON nstack
+             , "nlocal" .= toJSON nlocal ]
+
+  toJSON MethodCodeStart = object [ "type" .= String "MethodCodeStart" ]
+
+  toJSON MethodCodeEnd = object [ "type" .= String "MethodCodeEnd" ]
+
+  toJSON (New name)
+    = object [ "type" .= String "New"
+             , "name" .= toJSON name ]
+
+  toJSON Pop = object [ "type" .= String "Pop" ]
+
+  toJSON Return = object [ "type" .= String "Return" ]
+
+  toJSON (SourceInfo name)
+    = object [ "type" .= String "SourceInfo"
+             , "name" .= toJSON name ]
+
+data BsmArg = BsmArgGetType Descriptor | BsmArgHandle Handle
+
+instance ToJSON BsmArg where
+  toJSON (BsmArgGetType desc) = object ["type" .= String "BsmArgGetType"
+                                    , "desc" .= toJSON desc ]
+  toJSON (BsmArgHandle h) = object ["type" .= String "BsmArgHandle"
+                                    , "handle" .= toJSON h ]
+
+data Constant = IntegerConst Int | StringConst String
+
+instance ToJSON Constant where
+  toJSON (IntegerConst n)
+    = object [ "type" .= String "Ldc"
+             , "constType" .= String "IntegerConst"
+             , "val" .= toJSON n ]
+  toJSON (StringConst s)
+    = object [ "type" .= String "Ldc"
+             , "constType" .= String "StringConst"
+             , "val" .= toJSON s ]
 
 class Asmable a where
   asm :: a -> String
@@ -115,39 +302,49 @@ type Arg = String
 
 data ClassOpts = ComputeMaxs | ComputeFrames
 
-instance Asmable ClassOpts where
-  asm ComputeMaxs = "ClassWriter.COMPUTE_MAXS"
-  asm ComputeFrames = "ClassWriter.COMPUTE_FRAMES"
+instance ToJSON ClassOpts where
+  toJSON ComputeMaxs = toJSON (1 :: Int)
+  toJSON ComputeFrames = toJSON (2 :: Int)
 
 data InvocType = InvokeInterface | InvokeSpecial | InvokeStatic | InvokeVirtual
+invocTypeNum :: InvocType -> Int
+invocTypeNum InvokeInterface = 185
+invocTypeNum InvokeSpecial = 183
+invocTypeNum InvokeStatic = 184
+invocTypeNum InvokeVirtual = 182
 
-instance Asmable InvocType where
-  asm InvokeInterface = "Opcodes.INVOKEINTERFACE"
-  asm InvokeSpecial = "Opcodes.INVOKESPECIAL"
-  asm InvokeStatic = "Opcodes.INVOKESTATIC"
-  asm InvokeVirtual = "Opcodes.INVOKEVIRTUAL"
+instance ToJSON InvocType where
+  toJSON = toJSON . invocTypeNum
+
 
 data FieldInsType = FGetStatic | FPutStatic | FGetField | FPutField
+fieldInsTypeNum :: FieldInsType -> Int
+fieldInsTypeNum FGetStatic = 178
+fieldInsTypeNum FPutStatic = 179
+fieldInsTypeNum FGetField = 180
+fieldInsTypeNum FPutField = 181
 
-instance Asmable FieldInsType where
-  asm FGetStatic = "Opcodes.GETSTATIC"
-  asm FPutStatic = "Opcodes.PUTSTATIC"
-  asm FGetField = "Opcodes.GETFIELD"
-  asm FPutField = "Opcodes.PUTFIELD"
+instance ToJSON FieldInsType where
+  toJSON = toJSON . fieldInsTypeNum
 
 data FrameType = FFull | FSame | FAppend
+frameTypeNum :: FrameType -> Int
+frameTypeNum FFull = 0
+frameTypeNum FSame = 3
+frameTypeNum FAppend = 1
 
-instance Asmable FrameType where
-  asm FFull = "Opcodes.F_FULL"
-  asm FSame = "Opcodes.F_SAME"
-  asm FAppend = "Opcodes.F_APPEND"
+instance ToJSON FrameType where
+  toJSON = toJSON . frameTypeNum
 
 data Access = Private | Public | Static | Synthetic
-instance Asmable Access where
-  asm Private = "Opcodes.ACC_PRIVATE"
-  asm Public  = "Opcodes.ACC_PUBLIC"
-  asm Static  = "Opcodes.ACC_STATIC"
-  asm Synthetic  = "Opcodes.ACC_SYNTHETIC"
+accessNum :: Access -> Int
+accessNum Private = 2
+accessNum Public = 1
+accessNum Static = 8
+accessNum Synthetic = 4096
+
+instance ToJSON Access where
+  toJSON = toJSON . accessNum
 
 data HandleTag = HGetField
                | HGetStatic
@@ -158,16 +355,19 @@ data HandleTag = HGetField
                | HInvokeSpecial
                | HNewInvokeSpecial
                | HInvokeInterface
-instance Asmable HandleTag where
-  asm HGetField         = "Opcodes.H_GETFIELD"
-  asm HGetStatic        = "Opcodes.H_GETSTATIC"
-  asm HPutField         = "Opcodes.H_PUTFIELD"
-  asm HPutStatic        = "Opcodes.H_PUTSTATIC"
-  asm HInvokeVirtual    = "Opcodes.H_INVOKEVIRTUAL"
-  asm HInvokeStatic     = "Opcodes.H_INVOKESTATIC"
-  asm HInvokeSpecial    = "Opcodes.H_INVOKESPECIAL"
-  asm HNewInvokeSpecial = "Opcodes.H_NEWINVOKESPECIAL"
-  asm HInvokeInterface  = "Opcodes.H_INVOKEINTERFACE"
+handleTagOpcode :: HandleTag -> Int
+handleTagOpcode HGetField = 1
+handleTagOpcode HGetStatic = 2
+handleTagOpcode HPutField = 3
+handleTagOpcode HPutStatic = 4
+handleTagOpcode HInvokeVirtual = 5
+handleTagOpcode HInvokeStatic = 6
+handleTagOpcode HInvokeSpecial = 7
+handleTagOpcode HNewInvokeSpecial = 8
+handleTagOpcode HInvokeInterface = 9
+
+instance ToJSON HandleTag where
+  toJSON = toJSON . handleTagOpcode
 
 data Handle = Handle { tag         :: HandleTag
                      , hClassName  :: ClassName
@@ -175,138 +375,29 @@ data Handle = Handle { tag         :: HandleTag
                      , descriptor  :: Descriptor
                      , isInterface :: Bool
                      }
-instance Asmable Handle where
-  asm (Handle tag cname mname desc isInterface)
-    = constructor "Handle" [ asm tag
-                            , quoted cname
-                            , quoted mname
-                            , quoted desc
-                            , asm isInterface
-                            ]
 
-iconst i | i >= 0 && i <= 5            = call "mv" "visitInsn" ["Opcodes.ICONST_" ++ show i]
-         | i == (-1)                   = call "mv" "visitInsn" ["Opcodes.ICONST_M1"]
-         | i >= (-128) && i <= 127     = call "mv" "visitIntInsn" ["Opcodes.BIPUSH", show i]
-         | i >= (-32768) && i <= 32767 = call "mv" "visitIntInsn" ["Opcodes.SIPUSH", show i]
-         | otherwise                   = call "mv" "visitLdcInsn" [constructor "Integer" [show i]]
+instance ToJSON Handle where
+  toJSON (Handle t cname mname desc isIntf)
+    = object [ "tag" .= toJSON t
+             , "cname" .= toJSON cname
+             , "mname" .= toJSON mname
+             , "desc" .= toJSON desc
+             , "isIntf" .= toJSON isIntf ]
 
-
-instance Asmable Asm where
-  asm Aaload = call "mv" "visitInsn" ["Opcodes.AALOAD"]
-  asm Aastore = call "mv" "visitInsn" ["Opcodes.AASTORE"]
-  asm Aconstnull = call "mv" "visitInsn" ["Opcodes.ACONST_NULL"]
-  asm (Aload n) = call "mv" "visitVarInsn" ["Opcodes.ALOAD", show n]
-  asm (Anewarray desc) = call "mv" "visitTypeInsn" ["Opcodes.ANEWARRAY", quoted desc]
-  asm (Astore n) = call "mv" "visitVarInsn" ["Opcodes.ASTORE", show n]
-  asm Areturn = call "mv" "visitInsn" ["Opcodes.ARETURN"]
-  asm (Checkcast desc) = call "mv" "visitTypeInsn" ["Opcodes.CHECKCAST", quoted desc]
-
-  asm (ClassCodeEnd outFileName)
-   = sep "\n" [ call "cw" "visitEnd" []
-              , declVarAndAssign "out" $ constructor "FileOutputStream" [quoted outFileName]
-              , call "out" "write" ["cw.toByteArray()"]
-              , call "out" "close" []
-              , "}"
-              ]
-
-  asm (ClassCodeStart version acc cname sig super intf)
-      = call "cw" "visit" [ show version
-                          , asm acc
-                          , quoted cname
-                          , sig
-                          , quoted super
-                          , "null"] -- TODO: Fix me. Currently the generated classes don't implement any interfaces
-  asm (CreateClass opts) = sep "\n" [ imports
-                                    , sep " " [withImports, "{"]
-                                    , declVarAndAssign "cw" $ constructor "ClassWriter" [asm opts]
-                                    , declVar "mv"
-                                    ]
-
-  asm (CreateLabel s) = declVarAndAssign s $ constructor "Label" []
-
-  asm (CreateMethod accs mname desc sig excs)
-   = let excsStr = maybe "null" f excs
-         f es = "new String[] {" ++ (commaSep . map quoted $ es) ++ "}" in
-     declVarAndAssign "mv" $ call "cw" "visitMethod" [ sep " + " (map asm accs)
-                                                     , quoted mname
-                                                     , quoted desc
-                                                     , maybe "null" quoted sig
-                                                     , excsStr
-                                                     ]
-  asm Dup = call "mv" "visitInsn" ["Opcodes.DUP"]
-  asm (Field ftype cname fname desc) = call "mv" "visitFieldInsn" [asm ftype, quoted cname, quoted fname, quoted desc ]
-  asm (Frame frameType nlocal local nstack stack)
-   = call "mv" "visitFrame" [ asm frameType
-                            , show nlocal
-                            , initializeArray "java.lang.Object[]" local
-                            , show nstack
-                            , initializeArray "java.lang.Object[]" stack]
-  asm (GetType desc) = call "Type" "getType" [quoted desc]
-  asm (Goto label) = call "mv" "visitJumpInsn" ["Opcodes.GOTO", label]
-  asm I2c = call "mv" "visitInsn" [ "Opcodes.I2C" ]
-  asm I2l = call "mv" "visitInsn" [ "Opcodes.I2L" ]
-  asm Iadd = call "mv" "visitInsn" ["Opcodes.IADD"]
-  asm (Iconst n) = iconst n
-  asm (Ifeq label) = call "mv" "visitJumpInsn" ["Opcodes.IFEQ", label]
-  asm (Ificmpge label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPGE", label]
-  asm (Ificmpgt label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPGT", label]
-  asm (Ificmple label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPLE", label]
-  asm (Ificmplt label) = call "mv" "visitJumpInsn" ["Opcodes.IF_ICMPLT", label]
-  asm (Iload n) = call "mv" "visitVarInsn" ["Opcodes.ILOAD", show n]
-  asm Imul = call "mv" "visitInsn" ["Opcodes.IMUL"]
-  asm (InvokeMethod invType cname mname desc isIntf)
-   = call "mv" "visitMethodInsn" [asm invType, quoted cname, quoted mname, quoted desc, asm isIntf]
-  asm Isub = call "mv" "visitInsn" ["Opcodes.ISUB"]
-  asm (InvokeDynamic mname desc handle args)
-     = call "mv" "visitInvokeDynamicInsn" invDynArgs
-   where
-     invDynArgs = [ quoted mname
-                  , quoted desc
-                  , asm handle
-                  , call "Java" "to" [within "[" (commaSep args) "]", quoted "java.lang.Object[]"]
-                  ]
-  asm (Istore n) = call "mv" "visitVarInsn" ["Opcodes.ISTORE", show n]
-  asm (LabelStart label) = call "mv" "visitLabel" [label]
-  asm (Ldc s) = call "mv" "visitLdcInsn" [s]
-  asm (LookupSwitch dflt lbls exprs)
-   = call "mv" "visitLookupSwitchInsn" [ dflt
-                                       , initializeArray "int[]" $ map show exprs
-                                       , initializeArray "mmhelloworld.idrisjvmruntime.org.objectweb.asm.Label[]" lbls
-                                       ]
-  asm (MaxStackAndLocal nstack nlocal) = call "mv" "visitMaxs" [show nstack, show nlocal]
-  asm MethodCodeEnd = call "mv" "visitEnd" []
-  asm MethodCodeStart  = call "mv" "visitCode" []
-  asm (New className) = call "mv" "visitTypeInsn" ["Opcodes.NEW", quoted className]
-  asm Pop = call "mv" "visitInsn" ["Opcodes.POP"]
-  asm Return = call "mv" "visitInsn" ["Opcodes.RETURN"]
-  asm (SourceInfo fileName)  = call "mv" "visitSource" [quoted fileName, "null"]
-
-instance Asmable Bool where
-  asm False = "false"
-  asm True = "true"
-
-imports = declVarAndAssign "imports" $ constructor "JavaImporter" packages where
-  packages = [ "java.lang"
-             , "java.io"
-             , "java.util"
-             , "java.nio"
-             , "Packages.mmhelloworld.idrisjvmruntime.org.objectweb.asm"
-             ]
-
-withImports :: String
-withImports = "with (imports)"
-
+within :: String -> String -> String -> String
 within start str end = start ++ str ++ end
-quoted s = within "\"" s "\""
-braced s = within "(" s ")"
-sqrBracketed s = within "[" s "]"
-sep = intercalate
-commaSep = sep ","
-call qual meth args = qual ++ "." ++ callFn meth args
-callFn meth args = meth ++ braced (commaSep args)
-constructor className args = sep " " ["new", callFn className args]
-assign name value = sep " = " [name, value]
-declVarAndAssign name value = sep " " ["var", assign name value]
-declVar v = sep " " ["var" , v]
 
-initializeArray typ xs = call "Java" "to" [within "[" (commaSep xs) "]", quoted typ]
+quoted :: String -> String
+quoted s = within "\"" s "\""
+
+braced :: String -> String
+braced s = within "(" s ")"
+
+sqrBracketed :: String -> String
+sqrBracketed s = within "[" s "]"
+
+sep :: String -> [String] -> String
+sep = intercalate
+
+commaSep :: [String] -> String
+commaSep = sep ","

@@ -8,16 +8,16 @@ Install
 ```
 git clone https://github.com/mmhelloworld/idris-jvm.git
 cd idris-jvm
-stack install
+bin/setup
 ```
-Add the installed executable location to the `PATH` if it is not already on PATH.
+The `setup` script we are running here would do the following:
+1. Download [JVM Assembler](https://github.com/mmhelloworld/jvm-assembler/releases)
+1. Download [Idris JVM Runtime jar](https://github.com/mmhelloworld/idrisjvm-runtime/releases)
+1. Install Idris JVM code generator (this repository)
+1. install JVM runtime Idris package (`runtime` directory in this repository)
+1. Start JVM assemler server
 
-Install Idris JVM runtime
--------------------------
-```
-cd idris-jvm/runtime
-idris --install idris-jvm-runtime.ipkg
-```
+The files will be downloaded into `$USER_HOME/.idrisjvm` by default but it can be overridden by specifying a directory for the `setup` script like `bin/setup --work-dir path/to/directory`.
 
 Example
 =======
@@ -35,16 +35,15 @@ Example
     main = print (pythag 50)
     ```
 
-* Get [Idris Runtime JAR](https://github.com/mmhelloworld/idrisjvm-runtime/releases/download/1.0-SNAPSHOT/idrisjvm-runtime-1.0-SNAPSHOT.jar) and set the environment variable `IDRIS_JVM_LIB` to the path to the JAR.
-* Make sure `java` is on your path. JDK is not necessary, Just JRE is enough but Java 8 is required. `java` can also be explicitly specified using `IDRIS_JVM` environment variable.
-* `$ idris pythag.idr --codegen jvm -o Pythag`
-* `$ java -cp $IDRIS_JVM_LIB:. Pythag`
+* Make sure `java` (from Java 8 JDK or JRE) is on your path.
+* `$ bin/idris pythag.idr --codegen jvm -o Pythag`
+* `$ java -cp ~/.idrisjvm/idrisjvm-runtime-1.0-SNAPSHOT.jar:. Pythag`
 
 Status / Future improvements
 ============================
 
 * This is still work in progress. Basic types, integers and strings are supported. BigIntegers and double are not supported yet.
-* FFI is still in progress. Currently static methods, instance methods, constructors are all supported. JVM arrays, extending classes, implementing interfaces are not supported yet.
+* FFI is still in progress. Currently Java static methods, instance methods, constructors are all supported. JVM arrays, extending classes, implementing interfaces, exporting idris functions are not supported yet.
 * Tail recursion is eliminated using JVM's `GOTO`. For the following code, `sum 50000` wouldn't blow up the stack.
     ```idris
     sum : Nat -> Nat
@@ -67,5 +66,3 @@ Status / Future improvements
     ```
 
 * It compiles to Java 8 class files. Tail calls are delayed using Java 8 lambdas and use JVM's `invokedynamic`.
-* All case trees are compiled to JVM's `LookupSwitch` but small *range* case expressions can be optimized using `TableSwitch`
-* With a bit of local type inference, primitive boxing / unboxing can be reduced. Currently all the primitives are boxed until the very last moment where a primitve operator needs to be invoked.

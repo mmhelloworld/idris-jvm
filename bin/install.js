@@ -90,8 +90,12 @@ function install() {
 
 function startJvmAsm() {
   var assembler = JString.format('jvm-assembler-server-%s', ASSEMBLER_VERSION);
-  var pb = new ProcessBuilder("./jvmasm", "--non-interactive", "--work-dir", workingDir);
-  pb.directory(new File(new File(workingDir, assembler), "bin"));
+  var asmRoot = new File(new File(workingDir, assembler), "bin");
+  var isWindows = System.getProperty('os.name', '').toLowerCase().contains('win');
+  var ext = isWindows ? ".bat" : "";
+  var exe = asmRoot + File.separator + "jvmasm" + ext;
+  var pb = new ProcessBuilder(exe, "--non-interactive", "--work-dir", workingDir);
+  pb.directory(asmRoot);
 
   var log = new File(workingDir, "jvmasm.log");
   pb.redirectErrorStream(true);

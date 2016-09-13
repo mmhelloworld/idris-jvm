@@ -5,20 +5,12 @@ JVM bytecode backend for Idris
 
 Install
 =======
-```
-git clone https://github.com/mmhelloworld/idris-jvm.git
-cd idris-jvm
-bin/setup
-```
-The `setup` script we are running here would do the following:
 
-1. Download [JVM Assembler](https://github.com/mmhelloworld/jvm-assembler/releases)
-1. Download [Idris JVM Runtime jar](https://github.com/mmhelloworld/idrisjvm-runtime/releases)
-1. Install Idris JVM code generator (this repository)
-1. install JVM runtime Idris package (`runtime` directory in this repository)
-1. Start JVM assemler server
+1. `git clone https://github.com/mmhelloworld/idris-jvm.git`
+1. `cd idris-jvm`
+1. `bin/setup`. Windows users, follow the instructions [here](docs/windows.md) before running this.
 
-The files will be downloaded into `$USER_HOME/.idrisjvm` by default but it can be overridden by specifying a directory for the `setup` script like `bin/setup --work-dir path/to/directory`.
+For details on what the `setup` script does, please see [here](docs/setup.md).
 
 Example
 =======

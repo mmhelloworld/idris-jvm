@@ -21,6 +21,6 @@ rm -f idris_rts.o idris_heap.o idris_gc.o idris_gmp.o idris_bitstring.o idris_op
 
 /usr/bin/rm: missing operand
 ```
-This is due to multiple msys2 installations (one that is also installed by stack) as explained [here](https://github.com/commercialhaskell/stack/issues/1482#issuecomment-176941036). If you get this issue, just remove the msys2 installation under stack:
+This is due to multiple msys2 installations (one that is also installed by stack) as explained [here](https://github.com/commercialhaskell/stack/issues/1482#issuecomment-176941036). If you get this issue, just remove the msys2 installation under stack and try running the `bin\setup` script again:
 
 `rm -rf  /c/Users/USERNAME/AppData/Local/Programs/stack/x86_64-windows/msys2-20150512`

@@ -1,10 +1,13 @@
-idris-jvm
-=========
+# idris-jvm
 
 JVM bytecode backend for Idris
 
-Install
-=======
+## Prerequisites
+
+1. [Haskell Stack](https://docs.haskellstack.org/en/stable/README/)
+2. Java 8
+
+## Install
 
 1. `git clone https://github.com/mmhelloworld/idris-jvm.git`
 1. `cd idris-jvm`
@@ -12,8 +15,7 @@ Install
 
 For details on what the `setup` script does, please see [here](docs/setup.md).
 
-Example
-=======
+## Example
 
 * pythag.idr
 
@@ -28,12 +30,10 @@ Example
     main = print (pythag 50)
     ```
 
-* Make sure `java` (from Java 8 JDK or JRE) is on your path.
 * `$ bin/idris pythag.idr --codegen jvm -o Pythag`
 * `$ java -cp ~/.idrisjvm/idrisjvm-runtime-1.0-SNAPSHOT.jar:. Pythag`
 
-Status / Future improvements
-============================
+## Status / Future improvements
 
 * This is still work in progress. Basic types, integers and strings are supported. BigIntegers and double are not supported yet.
 * FFI is still in progress. Currently Java static methods, instance methods, constructors are all supported. JVM arrays, extending classes, implementing interfaces, exporting idris functions are not supported yet.

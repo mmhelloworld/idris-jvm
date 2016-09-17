@@ -372,7 +372,7 @@ instance ToJSON HandleTag where
 data Handle = Handle { tag         :: HandleTag
                      , hClassName  :: ClassName
                      , hMethodName :: MethodName
-                     , descriptor  :: Descriptor
+                     , hDescriptor :: Descriptor
                      , isInterface :: Bool
                      }
 

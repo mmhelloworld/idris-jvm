@@ -55,7 +55,7 @@ getWorkingDir = do
   defaultWorkingDir <- (</> ".idrisjvm") <$> getHomeDirectory
   fromMaybe defaultWorkingDir <$> lookupEnv "IDRIS_JVM_WORK_DIR"
 
-data AsmResponse = AsmResponse { isSuccess :: Bool, message :: String }
+data AsmResponse = AsmResponse {-isSuccess ::-}Bool {-message ::-}String
 
 instance FromJSON AsmResponse where
   parseJSON (Object v) = AsmResponse <$>
@@ -84,11 +84,13 @@ initialCgState = CgState 0 0 "" 0 True []
 rtClassSig :: String -> String
 rtClassSig c = "mmhelloworld/idrisjvmruntime/" ++ c
 
+rtFuncSig :: String
 rtFuncSig = "L" ++ rtClassSig "Function" ++ ";"
-rtThunkSig = "L" ++ rtClassSig "Thunk" ++ ";"
-rtRuntimeSig = "L" ++ rtClassSig "Runtime" ++ ";"
-rtUtilSig = "L" ++ rtClassSig "Util" ++ ";"
 
+rtThunkSig :: String
+rtThunkSig = "L" ++ rtClassSig "Thunk" ++ ";"
+
+createThunkSig :: String
 createThunkSig = "(" ++ rtFuncSig ++ "[Ljava/lang/Object;)" ++ rtThunkSig
 
 freshLambdaIndex :: Cg Int
@@ -177,12 +179,6 @@ jname n = "idris_" ++ concatMap jchar idrisName
     idrisName = showCG n
     jchar x | isAlpha x || isDigit x = [x]
             | otherwise = "_" ++ show (fromEnum x) ++ "_"
-
-var :: Name -> String
-var n = "$" ++ jname n
-
-loc :: Int -> String
-loc i = "$loc" ++ show i
 
 doCodegen :: (Name, SDecl) -> Cg ()
 doCodegen (n, SFun _ args _ def) = cgFun n args def
@@ -437,11 +433,11 @@ cgBody ret SNothing = writeIns [Iconst 0, boxInt] >> ret
 cgBody ret (SError x) = invokeError (show x) >> ret
 
 cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fdesc args) where
-  descriptor returnDesc = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> args) returnDesc
   argsWithTypes = first fdescFieldDescriptor <$> args
 
   cgForeign (JStatic clazz fn) = do
     let returnDesc = fdescTypeDescriptor returns
+        descriptor r = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> args) r
     loadAndCast argsWithTypes
     writeIns [ InvokeMethod InvokeStatic clazz fn (descriptor returnDesc) False ]
     boxIfNeeded returnDesc
@@ -462,6 +458,7 @@ cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fd
     ret
   cgForeign (JConstructor clazz) = do
     let returnDesc = VoidDescriptor -- Constructors always return void.
+        descriptor r = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> args) r
     writeIns [ New clazz, Dup ]
     loadAndCast argsWithTypes
     writeIns [ InvokeMethod InvokeSpecial clazz "<init>" (descriptor returnDesc) False ]
@@ -560,7 +557,7 @@ cgSwitch ret e alts = do
         isConstructorSwitch = any conCase alts
 
         switchInsLabels si = map (\(lbl, _, _) -> lbl) $ filter (\(_, _, alt) -> not (defaultCase alt)) $ csWithLbls si
-        switchInsExprs si = map (\(_, e, _) -> fromMaybe 0 e) $ filter (\(_, _, alt) -> not (defaultCase alt)) $ csWithLbls si
+        switchInsExprs si = map (\(_, expr, _) -> fromMaybe 0 expr) $ filter (\(_, _, alt) -> not (defaultCase alt)) $ csWithLbls si
 
         Loc switchVar = e
 
@@ -569,17 +566,17 @@ cgSwitch ret e alts = do
 
         isStrCases = any isStrSwitch alts
 
-        f si (Just e, alt) i = (labelIndex si i, Just e, alt)
+        f si (Just expr, alt) i = (labelIndex si i, Just expr, alt)
         f si (Nothing, alt) _ = (defaultLabel si, Nothing, alt)
 
         g (_, Just c1, _) (_, Just c2, _) = compare c1 c2
-        g (_, Just c1, _) (_, Nothing, _) = LT
-        g x@(_, Nothing, _) (_, Just c2, _) = GT
+        g (_, Just _, _) (_, Nothing, _) = LT
+        g (_, Nothing, _) (_, Just _, _) = GT
         g _ _ = EQ
 
         csWithLbls si = sortBy g $ zipWith (f si) cs [0 .. pred (length alts)]
 
-        caseIns si = mapM_ (\(label, e, alt) -> cgAlt ret label si switchVar alt) (csWithLbls si)
+        caseIns si = mapM_ (\(label, _, alt) -> cgAlt ret label si switchVar alt) (csWithLbls si)
 
 switchEndLabel :: Int -> String
 switchEndLabel switchIndex = "$switch" ++ show switchIndex ++ "$end"
@@ -640,28 +637,27 @@ addFrame = do
   nlocalVars <- cgStLocalVarCount <$> get
   if needFrame
     then do
-      args <- cgStFunctionArgs <$> get
       writeIns [ Frame FFull (nlocalVars + 1) (replicate nlocalVars "java/lang/Object" ++ ["java/lang/Object"]) 0 []]
       modify . updateShouldDescribeFrame $ const False
     else writeIns [ Frame FSame 0 [] 0 []]
 
 cgAltNonConCase :: Cg () -> Label -> Int -> SExp -> Cg ()
-cgAltNonConCase ret label si exp = do
+cgAltNonConCase ret label si expr = do
   writeIns [ LabelStart label ]
   addFrame
-  cgBody ret exp
+  cgBody ret expr
   writeIns [ Goto $ switchEndLabel si ]
 
 cgAlt :: Cg () -> Label -> Int -> Int -> SAlt -> Cg ()
-cgAlt ret label si sv (SConstCase t exp) = cgAltNonConCase ret label si exp
+cgAlt ret label si _ (SConstCase _ expr) = cgAltNonConCase ret label si expr
 
-cgAlt ret label si sv (SDefaultCase exp) = cgAltNonConCase ret label si exp
+cgAlt ret label si _ (SDefaultCase expr) = cgAltNonConCase ret label si expr
 
-cgAlt ret label si sv (SConCase lv t n args exp) = do
+cgAlt ret label si sv (SConCase lv _ _ args expr) = do
     writeIns [ LabelStart label ]
     addFrame
     extractConParams
-    cgBody ret exp
+    cgBody ret expr
 
     writeIns [ Goto $ switchEndLabel si ]
 
@@ -804,9 +800,9 @@ cgOp (LIntCh _) [x]
 cgOp (LSExt _ _) [x] = writeIns [ Aload $ locIndex x]
 cgOp (LTrunc _ _) [x] = writeIns [ Aload $ locIndex x]
 
-cgOp LWriteStr [_, str]
+cgOp LWriteStr [_, s]
   = writeIns [ Field FGetStatic "java/lang/System" "out" "Ljava/io/PrintStream;"
-             , Aload $ locIndex str
+             , Aload $ locIndex s
              , InvokeMethod InvokeVirtual "java/io/PrintStream" "print" "(Ljava/lang/Object;)V" False
              , Aconstnull
              ]

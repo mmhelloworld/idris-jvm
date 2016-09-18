@@ -67,9 +67,9 @@ function unzip(zipFilePath, destDirectory) {
 
 function install() {
   var assembler = JString.format('jvm-assembler-server-%s', ASSEMBLER_VERSION);
-  var runtime = JString.format('idrisjvm-runtime-%1$s.jar', RUNTIME_VERSION);
+  var runtime = JString.format('idris-jvm-runtime-%1$s.jar', RUNTIME_VERSION);
   var assemblerZip = assembler + ".zip";
-  var runtimeLib = JString.format('https://github.com/mmhelloworld/idrisjvm-runtime/releases/download/%s/%s', RUNTIME_VERSION, runtime);
+  var runtimeLib = JString.format('https://github.com/mmhelloworld/idris-jvm-runtime/releases/download/%s/%s', RUNTIME_VERSION, runtime);
   var assemblerLib = JString.format('https://github.com/mmhelloworld/jvm-assembler/releases/download/%s/%s', ASSEMBLER_VERSION, assemblerZip);
 
   new File(workingDir).mkdirs();

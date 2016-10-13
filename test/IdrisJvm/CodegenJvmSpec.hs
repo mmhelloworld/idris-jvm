@@ -41,7 +41,7 @@ compileAndRun dir pgm = do
   putStrLnNonEmpty compilerOut
   putStrLnNonEmpty compilerErr
   workingDir <- getWorkingDir
-  let runtimeJar = workingDir </> "idrisjvm-runtime-1.0-SNAPSHOT.jar"
+  let runtimeJar = workingDir </> "idris-jvm-runtime-1.0-SNAPSHOT.jar"
       args = ["-cp", runtimeJar ++ (classpathSep: dir), className]
   (_, stdout, _) <- runProcess "java" args
   return stdout

@@ -1,8 +1,13 @@
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
-module IdrisJvm.Assembler where
 
+module IdrisJvm.Codegen.Assembler where
+
+import           Control.Monad (join)
 import           Data.Aeson
-import           Data.List  (intercalate)
+import qualified Data.DList    as DL
+import           Data.Int      (Int32)
+import           Data.List     (intercalate)
 
 data Asm = Aaload
          | Aastore
@@ -25,6 +30,7 @@ data Asm = Aaload
          | I2l
          | Iadd
          | Iconst Int
+         | Idiv
          | Ifeq Label
          | Ificmpge Label
          | Ificmpgt Label
@@ -38,7 +44,7 @@ data Asm = Aaload
          | Isub
          | LabelStart Label
          | Ldc Constant
-         | LookupSwitch Label [Label] [Int]
+         | LookupSwitch Label [Label] [Int32]
          | MaxStackAndLocal Int Int
          | MethodCodeStart
          | MethodCodeEnd
@@ -72,12 +78,12 @@ instance ToJSON Asm where
     = object [ "type" .= String "Checkcast"
              , "desc" .= toJSON desc ]
 
-  toJSON (ClassCodeStart version acc cname sig super intf)
+  toJSON (ClassCodeStart version acc cname s super intf)
     = object [ "type" .= String "ClassCodeStart"
              , "version" .= toJSON version
              , "acc" .= toJSON acc
              , "name" .= toJSON cname
-             , "sig" .= if sig == "null" then Null else toJSON sig
+             , "sig" .= if s == "null" then Null else toJSON s
              , "parent" .= toJSON super
              , "interfaces" .= toJSON intf]
 
@@ -93,12 +99,12 @@ instance ToJSON Asm where
     = object [ "type" .= String "CreateLabel"
              , "name" .= toJSON label ]
 
-  toJSON (CreateMethod accs mname desc sig excs)
+  toJSON (CreateMethod accs mname desc s excs)
     = object [ "type" .= String "CreateMethod"
              , "acc" .= toJSON (sum $ accessNum <$> accs)
              , "name" .= toJSON mname
              , "desc" .= toJSON desc
-             , "sig" .= maybe Null toJSON sig
+             , "sig" .= maybe Null toJSON s
              , "excs" .= toJSON excs ]
 
   toJSON Dup = object [ "type" .= String "Dup" ]
@@ -131,6 +137,8 @@ instance ToJSON Asm where
   toJSON (Iconst n)
     = object [ "type" .= String "Iconst"
              , "n" .= toJSON n ]
+
+  toJSON Idiv = object [ "type" .= String "Idiv" ]
 
   toJSON (Ifeq label)
     = object [ "type" .= String "Ifeq"
@@ -221,9 +229,13 @@ instance ToJSON BsmArg where
   toJSON (BsmArgHandle h) = object ["type" .= String "BsmArgHandle"
                                     , "handle" .= toJSON h ]
 
-data Constant = IntegerConst Int | StringConst String
+data Constant = DoubleConst Double | IntegerConst Int | StringConst String
 
 instance ToJSON Constant where
+  toJSON (DoubleConst n)
+    = object [ "type" .= String "Ldc"
+             , "constType" .= String "DoubleConst"
+             , "val" .= toJSON n ]
   toJSON (IntegerConst n)
     = object [ "type" .= String "Ldc"
              , "constType" .= String "IntegerConst"
@@ -383,6 +395,34 @@ instance ToJSON Handle where
              , "mname" .= toJSON mname
              , "desc" .= toJSON desc
              , "isIntf" .= toJSON isIntf ]
+
+assign :: Int -> Int -> DL.DList Asm
+assign from to | from == to = []
+assign from to              = [Aload from, Astore to]
+
+boxInt :: Asm
+boxInt = InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
+
+unboxInt :: Asm
+unboxInt = InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
+
+sig :: Int -> String
+sig nArgs = "(" ++ concat (replicate nArgs "Ljava/lang/Object;") ++ ")Ljava/lang/Object;"
+
+metafactoryDesc :: Descriptor
+metafactoryDesc =
+  join [ "("
+         , "Ljava/lang/invoke/MethodHandles$Lookup;"
+         , "Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+         , "Ljava/lang/invoke/MethodType;"
+         , "Ljava/lang/invoke/MethodHandle;"
+         , "Ljava/lang/invoke/MethodType;"
+         , ")"
+         , "Ljava/lang/invoke/CallSite;"
+         ]
+
+lambdaDesc :: Descriptor
+lambdaDesc = "([Ljava/lang/Object;)Ljava/lang/Object;"
 
 within :: String -> String -> String -> String
 within start str end = start ++ str ++ end

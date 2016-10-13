@@ -16,7 +16,15 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     IdrisJvm.CodegenJvm
-                     , IdrisJvm.Assembler
+  exposed-modules:     IdrisJvm.AssemblerService
+                     , IdrisJvm.Codegen.Assembler
+                     , IdrisJvm.Codegen.Common
+                     , IdrisJvm.Codegen.Constant
+                     , IdrisJvm.Codegen.ControlFlow
+                     , IdrisJvm.Codegen.Foreign
+                     , IdrisJvm.Codegen.Function
+                     , IdrisJvm.Codegen.Operator
+                     , IdrisJvm.Codegen.Types
   build-depends:       aeson
                      , base
                      , containers

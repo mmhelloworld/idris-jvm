@@ -8,6 +8,7 @@ import           Data.Aeson
 import qualified Data.DList    as DL
 import           Data.Int      (Int32)
 import           Data.List     (intercalate)
+import           Data.Word     (Word64)
 
 data Asm = Aaload
          | Aastore
@@ -29,6 +30,7 @@ data Asm = Aaload
          | I2c
          | I2l
          | Iadd
+         | Iand
          | Iconst Int
          | Idiv
          | Ifeq Label
@@ -40,11 +42,25 @@ data Asm = Aaload
          | Imul
          | InvokeMethod InvocType ClassName MethodName Descriptor Bool
          | InvokeDynamic MethodName Descriptor Handle [BsmArg]
+         | Irem
+         | Ishl
+         | Ishr
          | Istore Int
          | Isub
+         | Iushr
+         | L2i
          | LabelStart Label
+         | Ladd
+         | Land
          | Ldc Constant
+         | Ldiv
+         | Lmul
          | LookupSwitch Label [Label] [Int32]
+         | Lrem
+         | Lshl
+         | Lshr
+         | Lsub
+         | Lushr
          | MaxStackAndLocal Int Int
          | MethodCodeStart
          | MethodCodeEnd
@@ -134,6 +150,8 @@ instance ToJSON Asm where
 
   toJSON Iadd = object [ "type" .= String "Iadd" ]
 
+  toJSON Iand = object [ "type" .= String "Iand" ]
+
   toJSON (Iconst n)
     = object [ "type" .= String "Iconst"
              , "n" .= toJSON n ]
@@ -166,6 +184,14 @@ instance ToJSON Asm where
 
   toJSON Imul = object [ "type" .= String "Imul" ]
 
+  toJSON Irem = object [ "type" .= String "Irem" ]
+
+  toJSON Ishl = object [ "type" .= String "Ishl" ]
+
+  toJSON Ishr = object [ "type" .= String "Ishr" ]
+
+  toJSON Iushr = object [ "type" .= String "Iushr" ]
+
   toJSON (InvokeMethod invType cname mname desc isIntf)
     = object [ "type" .= String "InvokeMethod"
              , "invType" .= toJSON invType
@@ -187,18 +213,37 @@ instance ToJSON Asm where
 
   toJSON Isub = object [ "type" .= String "Isub" ]
 
+  toJSON L2i = object [ "type" .= String "L2i" ]
+
   toJSON (LabelStart label)
     = object [ "type" .= String "LabelStart"
              , "label" .= toJSON label ]
 
-  toJSON (Ldc c)
-    = toJSON c
+  toJSON Ladd = object [ "type" .= String "Ladd" ]
+
+  toJSON Land = object [ "type" .= String "Land" ]
+
+  toJSON (Ldc c) = toJSON c
+
+  toJSON Ldiv = object [ "type" .= String "Ldiv" ]
+
+  toJSON Lmul = object [ "type" .= String "Lmul" ]
 
   toJSON (LookupSwitch dlabel clabels vals)
     = object [ "type" .= String "LookupSwitch"
              , "dlabel" .= toJSON dlabel
              , "clabels" .= toJSON clabels
              , "vals" .= toJSON vals ]
+
+  toJSON Lrem = object [ "type" .= String "Lrem" ]
+
+  toJSON Lshl = object [ "type" .= String "Lshl" ]
+
+  toJSON Lshr = object [ "type" .= String "Lshr" ]
+
+  toJSON Lsub = object [ "type" .= String "Lsub" ]
+
+  toJSON Lushr = object [ "type" .= String "Lushr" ]
 
   toJSON (MaxStackAndLocal nstack nlocal)
     = object [ "type" .= String "MaxStackAndLocal"
@@ -229,7 +274,10 @@ instance ToJSON BsmArg where
   toJSON (BsmArgHandle h) = object ["type" .= String "BsmArgHandle"
                                     , "handle" .= toJSON h ]
 
-data Constant = DoubleConst Double | IntegerConst Int | StringConst String
+data Constant = DoubleConst Double
+              | IntegerConst Int
+              | LongConst Word64
+              | StringConst String
 
 instance ToJSON Constant where
   toJSON (DoubleConst n)
@@ -239,6 +287,10 @@ instance ToJSON Constant where
   toJSON (IntegerConst n)
     = object [ "type" .= String "Ldc"
              , "constType" .= String "IntegerConst"
+             , "val" .= toJSON n ]
+  toJSON (LongConst n)
+    = object [ "type" .= String "Ldc"
+             , "constType" .= String "LongConst"
              , "val" .= toJSON n ]
   toJSON (StringConst s)
     = object [ "type" .= String "Ldc"
@@ -403,8 +455,14 @@ assign from to              = [Aload from, Astore to]
 boxInt :: Asm
 boxInt = InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
 
+boxLong :: Asm
+boxLong = InvokeMethod InvokeStatic "java/lang/Long" "valueOf" "(J)Ljava/lang/Long;" False
+
 unboxInt :: Asm
 unboxInt = InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
+
+unboxLong :: Asm
+unboxLong = InvokeMethod InvokeVirtual "java/lang/Long" "longValue" "()J" False
 
 sig :: Int -> String
 sig nArgs = "(" ++ concat (replicate nArgs "Ljava/lang/Object;") ++ ")Ljava/lang/Object;"

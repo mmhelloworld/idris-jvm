@@ -10,8 +10,10 @@ import           IdrisJvm.Codegen.Types
 import           IdrisJvm.Codegen.Common
 
 cgConst :: Const -> Cg ()
-cgConst (B8 i) = writeIns [Iconst $ fromIntegral i, boxInt]
-cgConst (B16 i) = writeIns [Iconst $ fromIntegral i, boxInt]
+cgConst (B8 i) = writeIns [ Iconst $ fromIntegral i, boxInt ]
+cgConst (B16 i) = writeIns [ Iconst $ fromIntegral i, boxInt ]
+cgConst (B32 i) = writeIns [ Iconst $ fromIntegral i, boxInt ]
+cgConst (B64 i) = writeIns [ Ldc $ LongConst i, boxLong ]
 cgConst (I i) = writeIns [Iconst i, boxInt]
 cgConst (Fl d) = writeIns [Ldc $ DoubleConst d]
 cgConst (Ch c) = writeIns [ Iconst (ord c)

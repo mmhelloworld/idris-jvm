@@ -31,7 +31,7 @@ assemble cwd ci = DL.toList $ instructions cgWriter <> deps cgWriter <> [ ClassC
   cname = out ++ ".class"
   classFilePath = if isRelative cname then cwd </> cname else cname
 
-  env = CgEnv $ takeBaseName (outputFile ci)
+  env = CgEnv $ takeBaseName out
   (_, _, cgWriter) = runRWS (code ci) env initialCgState
 
 code :: CodegenInfo -> Cg ()
@@ -39,6 +39,7 @@ code ci = do
   cname <- className <$> ask
   writeIns [ CreateClass ComputeMaxs
            , ClassCodeStart 52 Public cname "null" "java/lang/Object" []
+           , SourceInfo $ cname ++ ".idr"
            ]
   defaultConstructor
   functions ci

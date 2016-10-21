@@ -83,15 +83,8 @@ if "%JAVACMD%"=="" set JAVACMD=java
 @REM Reaching here means variables are defined and arguments have been captured
 :endInit
 
-stack --stack-yaml %BASEDIR%\stack.yaml setup
+stack --stack-yaml %BASEDIR%\stack.yaml exec idris -- --codegen jvm -p idrsjvmruntime %CMD_LINE_ARGS%
 
-stack --stack-yaml %BASEDIR%\stack.yaml install
-
-pushd %BASEDIR%\runtime
-stack exec idris -- --install idris-jvm-runtime.ipkg
-popd
-
-%JAVACMD% %JAVA_OPTS% -Xmx750m jdk.nashorn.tools.Shell -scripting  %BASEDIR%\install.js -- %CMD_LINE_ARGS%
 if %ERRORLEVEL% NEQ 0 goto error
 goto end
 

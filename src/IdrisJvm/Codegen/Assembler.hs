@@ -23,6 +23,11 @@ data Asm = Aaload
          | CreateClass ClassOpts
          | CreateLabel String
          | CreateMethod [Access] MethodName Descriptor (Maybe Signature) (Maybe [Exception])
+         | Dadd
+         | Ddiv
+         | Dmul
+         | Drem
+         | Dsub
          | Dup
          | Field FieldInsType ClassName FieldName Descriptor
          | Frame FrameType Int [Signature] Int [Signature]
@@ -123,6 +128,11 @@ instance ToJSON Asm where
              , "sig" .= maybe Null toJSON s
              , "excs" .= toJSON excs ]
 
+  toJSON Dadd = object [ "type" .= String "Dadd" ]
+  toJSON Ddiv = object [ "type" .= String "Ddiv" ]
+  toJSON Dmul = object [ "type" .= String "Dmul" ]
+  toJSON Drem = object [ "type" .= String "Drem" ]
+  toJSON Dsub = object [ "type" .= String "Dsub" ]
   toJSON Dup = object [ "type" .= String "Dup" ]
 
   toJSON (Field ftype cname fname desc)
@@ -281,20 +291,16 @@ data Constant = DoubleConst Double
 
 instance ToJSON Constant where
   toJSON (DoubleConst n)
-    = object [ "type" .= String "Ldc"
-             , "constType" .= String "DoubleConst"
+    = object [ "type" .= String "LdcDouble"
              , "val" .= toJSON n ]
   toJSON (IntegerConst n)
-    = object [ "type" .= String "Ldc"
-             , "constType" .= String "IntegerConst"
+    = object [ "type" .= String "LdcInteger"
              , "val" .= toJSON n ]
   toJSON (LongConst n)
-    = object [ "type" .= String "Ldc"
-             , "constType" .= String "LongConst"
+    = object [ "type" .= String "LdcLong"
              , "val" .= toJSON n ]
   toJSON (StringConst s)
-    = object [ "type" .= String "Ldc"
-             , "constType" .= String "StringConst"
+    = object [ "type" .= String "LdcString"
              , "val" .= toJSON s ]
 
 class Asmable a where
@@ -452,6 +458,9 @@ assign :: Int -> Int -> DL.DList Asm
 assign from to | from == to = []
 assign from to              = [Aload from, Astore to]
 
+boxDouble :: Asm
+boxDouble = InvokeMethod InvokeStatic "java/lang/Double" "valueOf" "(D)Ljava/lang/Double;" False
+
 boxInt :: Asm
 boxInt = InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
 
@@ -463,6 +472,9 @@ unboxInt = InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
 
 unboxLong :: Asm
 unboxLong = InvokeMethod InvokeVirtual "java/lang/Long" "longValue" "()J" False
+
+unboxDouble :: Asm
+unboxDouble = InvokeMethod InvokeVirtual "java/lang/Double" "doubleValue" "()D" False
 
 sig :: Int -> String
 sig nArgs = "(" ++ concat (replicate nArgs "Ljava/lang/Object;") ++ ")Ljava/lang/Object;"

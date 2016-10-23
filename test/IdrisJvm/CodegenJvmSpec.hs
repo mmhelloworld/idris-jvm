@@ -22,7 +22,9 @@ spec = describe "idris-jvm" $ do
 tests :: IO [FilePath]
 tests = do
   testRoot <- getTestRoot
-  dirs <- map (testRoot </>) <$> getDirectoryContents testRoot
+  testToRun <- lookupEnv "IDRIS_JVM_TEST"
+  let allTests = map (testRoot </>) <$> getDirectoryContents testRoot
+  dirs <- maybe allTests (pure . (:[]) . (testRoot </>)) testToRun
   let isSpecial d = null baseName || baseName == "."
                   where baseName = takeBaseName d
   return $ sort . filter (not . isSpecial) $ dirs

@@ -27,6 +27,11 @@ loadLocalLongWithCast i = [ Aload $ locIndex i
                           , Checkcast "java/lang/Long"
                           , unboxLong ]
 
+loadLocalDoubleWithCast :: LVar -> DL.DList Asm
+loadLocalDoubleWithCast i = [ Aload $ locIndex i
+                            , Checkcast "java/lang/Double"
+                            , unboxDouble ]
+
 binaryIntOp :: DL.DList Asm -> LVar -> LVar -> Cg ()
 binaryIntOp ops l r = do
   writeIns $ loadLocalIntWithCast l
@@ -41,10 +46,46 @@ binaryLongOp ops l r = do
   writeIns ops
   writeIns [ boxLong ]
 
+binaryDoubleOp :: DL.DList Asm -> LVar -> LVar -> Cg ()
+binaryDoubleOp ops l r = do
+  writeIns $ loadLocalDoubleWithCast l
+  writeIns $ loadLocalDoubleWithCast r
+  writeIns ops
+  writeIns [ boxDouble ]
+
 cgOp :: PrimFn -> [LVar] -> Cg ()
 cgOp (LAnd (ITFixed IT64)) [l, r] = binaryLongOp [Land] l r
 cgOp (LAnd (ITFixed _)) [l, r] = binaryIntOp [Iand] l r
 
+cgOp (LLt ITBig) [l, r] = cgOp (LSLt (ATInt ITBig)) [l, r]
+cgOp (LLt ITNative) [l, r] = compareObj "uintLessThan" l r
+cgOp (LLt (ITFixed IT8)) [l, r] = compareObj "uintLessThan" l r
+cgOp (LLt (ITFixed IT16)) [l, r] = compareObj "uintLessThan" l r
+cgOp (LLt (ITFixed IT32)) [l, r] = compareObj "uintLessThan" l r
+cgOp (LLt (ITFixed IT64)) [l, r] = compareObj "ulongLessThan" l r
+
+cgOp (LLe ITBig) [l, r] = cgOp (LSLe (ATInt ITBig)) [l, r]
+cgOp (LLe ITNative) [l, r] = compareObj "uintLessThanOrEqualTo" l r
+cgOp (LLe (ITFixed IT8)) [l, r] = compareObj "uintLessThanOrEqualTo" l r
+cgOp (LLe (ITFixed IT16)) [l, r] = compareObj "uintLessThanOrEqualTo" l r
+cgOp (LLe (ITFixed IT32)) [l, r] = compareObj "uintLessThanOrEqualTo" l r
+cgOp (LLe (ITFixed IT64)) [l, r] = compareObj "ulongLessThanOrEqualTo" l r
+
+cgOp (LGt ITBig) [l, r] = cgOp (LSGt (ATInt ITBig)) [l, r]
+cgOp (LGt ITNative) [l, r] = compareObj "uintGreaterThan" l r
+cgOp (LGt (ITFixed IT8)) [l, r] = compareObj "uintGreaterThan" l r
+cgOp (LGt (ITFixed IT16)) [l, r] = compareObj "uintGreaterThan" l r
+cgOp (LGt (ITFixed IT32)) [l, r] = compareObj "uintGreaterThan" l r
+cgOp (LGt (ITFixed IT64)) [l, r] = compareObj "ulongGreaterThan" l r
+
+cgOp (LGe ITBig) [l, r] = cgOp (LSGe (ATInt ITBig)) [l, r]
+cgOp (LGe ITNative) [l, r] = compareObj "uintGreaterThanOrEqualTo" l r
+cgOp (LGe (ITFixed IT8)) [l, r] = compareObj "uintGreaterThanOrEqualTo" l r
+cgOp (LGe (ITFixed IT16)) [l, r] = compareObj "uintGreaterThanOrEqualTo" l r
+cgOp (LGe (ITFixed IT32)) [l, r] = compareObj "uintGreaterThanOrEqualTo" l r
+cgOp (LGe (ITFixed IT64)) [l, r] = compareObj "ulongGreaterThanOrTo" l r
+
+cgOp (LPlus ATFloat) [l, r] = binaryDoubleOp [Dadd] l r
 cgOp (LPlus (ATInt ITBig)) [l, r]
   = writeIns [ Aload $ locIndex l
              , InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
@@ -69,6 +110,7 @@ cgOp (LPlus (ATInt (ITFixed IT64))) [l, r] = binaryLongOp [Ladd] l r
 cgOp (LPlus (ATInt (ITFixed IT8))) [l, r] = binaryIntOp [Iadd, Iconst 256, Irem] l r
 cgOp (LPlus (ATInt (ITFixed _))) [l, r] = binaryIntOp [Iadd] l r
 
+cgOp (LMinus ATFloat) [l, r] = binaryDoubleOp [Dsub] l r
 cgOp (LMinus (ATInt ITBig)) [l, r]
   = writeIns [ Aload $ locIndex l
              , InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
@@ -80,6 +122,7 @@ cgOp (LMinus (ATInt ITNative)) [l, r] = binaryIntOp [Isub] l r
 cgOp (LMinus (ATInt (ITFixed IT64))) [l, r] = binaryLongOp [Lsub] l r
 cgOp (LMinus (ATInt (ITFixed _))) [l, r] = binaryIntOp [Isub] l r
 
+cgOp (LTimes ATFloat) [l, r] = binaryDoubleOp [Dmul] l r
 cgOp (LTimes (ATInt ITBig)) [l, r]
   = writeIns [ Aload $ locIndex l
              , InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
@@ -93,6 +136,7 @@ cgOp (LTimes (ATInt (ITFixed IT8))) [l, r]
  = binaryIntOp [Imul, Iconst 256, Irem] l r
 cgOp (LTimes (ATInt (ITFixed _))) [l, r] = binaryIntOp [Imul] l r
 
+cgOp (LSDiv ATFloat) [l, r] = binaryDoubleOp [Ddiv] l r
 cgOp (LSDiv (ATInt ITBig)) [l, r]
   = writeIns [ Aload $ locIndex l
              , InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
@@ -105,6 +149,7 @@ cgOp (LSDiv (ATInt ITNative)) [l, r] = binaryIntOp [Idiv] l r
 cgOp (LSDiv (ATInt (ITFixed IT64))) [l, r] = binaryLongOp [Ldiv] l r
 cgOp (LSDiv (ATInt (ITFixed _))) [l, r] = binaryIntOp [Idiv] l r
 
+cgOp (LSRem ATFloat) [l, r] = binaryDoubleOp [Drem] l r
 cgOp (LSRem (ATInt ITBig)) [l, r]
   = writeIns [ Aload $ locIndex l
              , InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
@@ -117,26 +162,31 @@ cgOp (LSRem (ATInt ITNative)) [l, r] = binaryIntOp [Irem] l r
 cgOp (LSRem (ATInt (ITFixed IT64))) [l, r] = binaryLongOp [Lrem] l r
 cgOp (LSRem (ATInt (ITFixed _))) [l, r] = binaryIntOp [Irem] l r
 
+cgOp (LEq ATFloat) [l, r] = compareObj "objectEquals" l r
 cgOp (LEq (ATInt _)) [l, r] = compareObj "objectEquals" l r
 
+cgOp (LSLt ATFloat) [l, r] = compareObj "doubleLessThan" l r
 cgOp (LSLt (ATInt ITNative)) [l, r] = compareObj "intLessThan" l r
 cgOp (LSLt (ATInt ITBig)) [l, r] = compareObj "bigIntegerLessThan" l r
 cgOp (LSLt (ATInt ITChar)) [l, r] = compareObj "charLessThan" l r
 cgOp (LSLt (ATInt (ITFixed IT64))) [l, r] = compareObj "longLessThan" l r
 cgOp (LSLt (ATInt (ITFixed _))) [l, r] = compareObj "intLessThan" l r
 
+cgOp (LSLe ATFloat) [l, r] = compareObj "doubleLessThanOrEqualTo" l r
 cgOp (LSLe (ATInt ITNative)) [l, r] = compareObj "intLessThanOrEqualTo" l r
 cgOp (LSLe (ATInt ITBig)) [l, r] = compareObj "bigIntegerLessThanOrEqualTo" l r
 cgOp (LSLe (ATInt ITChar)) [l, r] = compareObj "charLessThanOrEqualTo" l r
 cgOp (LSLe (ATInt (ITFixed IT64))) [l, r] = compareObj "longLessThanOrEqualTo" l r
 cgOp (LSLe (ATInt (ITFixed _))) [l, r] = compareObj "intLessThanOrEqualTo" l r
 
+cgOp (LSGt ATFloat) [l, r] = compareObj "doubleGreaterThan" l r
 cgOp (LSGt (ATInt ITNative)) [l, r] = compareObj "intGreaterThan" l r
 cgOp (LSGt (ATInt ITBig)) [l, r] = compareObj "bigIntegerGreaterThan" l r
 cgOp (LSGt (ATInt ITChar)) [l, r] = compareObj "charGreaterThan" l r
 cgOp (LSGt (ATInt (ITFixed IT64))) [l, r] = compareObj "longGreaterThan" l r
 cgOp (LSGt (ATInt (ITFixed _))) [l, r] = compareObj "intGreaterThan" l r
 
+cgOp (LSGe ATFloat) [l, r] = compareObj "doubleGreaterThanOrEqualTo" l r
 cgOp (LSGe (ATInt ITNative)) [l, r] = compareObj "intGreaterThanOrEqualTo" l r
 cgOp (LSGe (ATInt ITBig)) [l, r] = compareObj "bigIntegerGreaterThanOrEqualTo" l r
 cgOp (LSGe (ATInt ITChar)) [l, r] = compareObj "charGreaterThanOrEqualTo" l r
@@ -198,7 +248,23 @@ cgOp (LZExt (ITFixed IT8) ITNative) [x] = writeIns [ Aload $ locIndex x ]
 cgOp (LZExt (ITFixed IT16) ITNative) [x] = writeIns [ Aload $ locIndex x ]
 cgOp (LZExt (ITFixed IT32) ITNative) [x] = writeIns [ Aload $ locIndex x ]
 
+cgOp (LIntStr (ITFixed IT32)) [x]
+  = writeIns [ Aload $ locIndex x
+             , Checkcast "java/lang/Integer"
+             , InvokeMethod InvokeStatic "java/lang/Integer" "toUnsignedString" "(I)Ljava/lang/String;" False
+             ]
+
+cgOp (LIntStr (ITFixed IT64)) [x]
+  = writeIns [ Aload $ locIndex x
+             , Checkcast "java/lang/Long"
+             , InvokeMethod InvokeStatic "java/lang/Long" "toUnsignedString" "(J)Ljava/lang/String;" False
+             ]
+
 cgOp (LIntStr _) [x]
+  = writeIns [ Aload $ locIndex x
+             , InvokeMethod InvokeStatic "java/util/Objects" "toString" "(Ljava/lang/Object;)Ljava/lang/String;" False
+             ]
+cgOp LFloatStr [x]
   = writeIns [ Aload $ locIndex x
              , InvokeMethod InvokeStatic "java/util/Objects" "toString" "(Ljava/lang/Object;)Ljava/lang/String;" False
              ]
@@ -244,6 +310,13 @@ cgOp (LIntCh _) [x]
              ]
 
 cgOp (LSExt _ _) [x] = writeIns [ Aload $ locIndex x]
+
+cgOp (LTrunc (ITFixed IT64) (ITFixed IT32)) [x]
+  = writeIns [ Aload $ locIndex x
+             , Checkcast "java/lang/Long"
+             , InvokeMethod InvokeVirtual "java/lang/Long" "intValue" "()I" False
+             , boxInt
+             ]
 cgOp (LTrunc _ _) [x] = writeIns [ Aload $ locIndex x]
 
 cgOp LWriteStr [_, s]
@@ -299,6 +372,13 @@ cgOp (LStrInt _) [x]
              , Checkcast "java/lang/String"
              , InvokeMethod InvokeStatic "java/lang/Integer" "parseInt" "(Ljava/lang/String;)I" False
              , boxInt
+             ]
+
+cgOp LStrFloat [x]
+  = writeIns [ Aload $ locIndex x
+             , Checkcast "java/lang/String"
+             , InvokeMethod InvokeStatic "java/lang/Double" "parseDouble" "(Ljava/lang/String;)D" False
+             , boxDouble
              ]
 
 cgOp (LSHL (ITFixed IT64)) [x, y] = binaryLongOp [L2i, Lshl] x y

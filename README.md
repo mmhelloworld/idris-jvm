@@ -30,13 +30,16 @@ For details on what the `setup` script does, please see [here](docs/setup.md).
     main = print (pythag 50)
     ```
 
-* `$ bin/idris pythag.idr --codegen jvm -o Pythag`
-* `$ java -cp ~/.idrisjvm/idrisjvm-runtime-1.0-SNAPSHOT.jar:. Pythag`
+* `$ bin/idrisjvm pythag.idr -o Pythag`
+* `$ java -cp ~/.idrisjvm/idris-jvm-runtime-1.0-SNAPSHOT.jar:. Pythag`
 
 ## Status / Future improvements
 
-* This is still work in progress. Basic types, integers and strings are supported. BigIntegers and double are not supported yet.
-* FFI is still in progress. Currently Java static methods, instance methods, constructors are all supported. JVM arrays, extending classes, implementing interfaces, exporting idris functions are not supported yet.
+* This is still work in progress.
+* All Idris types are supported. Idris `Integer` is represented as Java `BigInteger`.
+Idris `Double` is mapped to Java `double`. Idris `Bits8`, `Bits16`, `Bits32` are mapped to Java `int`.
+Idris `Bits64` is mapped to Java `long`. Operations on `Bits8`, `Bits16`, `Bits32`, `Bits64` are unsigned of course and implemented using Java 8's unsigned api (For example, via `java.lang.Integer.compareUnsigned`).
+* FFI: Currently Java static methods, instance methods, constructors are all supported. JVM arrays, extending classes, implementing interfaces, exporting idris functions are not supported yet.
 * Tail recursion is eliminated using JVM's `GOTO`. For the following code, `sum 50000` wouldn't blow up the stack.
     ```idris
     sum : Nat -> Nat

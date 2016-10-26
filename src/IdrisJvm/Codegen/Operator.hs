@@ -149,6 +149,15 @@ cgOp (LSDiv (ATInt ITNative)) [l, r] = binaryIntOp [Idiv] l r
 cgOp (LSDiv (ATInt (ITFixed IT64))) [l, r] = binaryLongOp [Ldiv] l r
 cgOp (LSDiv (ATInt (ITFixed _))) [l, r] = binaryIntOp [Idiv] l r
 
+cgOp (LUDiv ITNative) [l, r] = binaryIntOp [udiv] l r where
+  udiv = InvokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
+cgOp (LUDiv (ITFixed IT32)) [l, r] = binaryIntOp [udiv] l r where
+  udiv = InvokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
+cgOp (LUDiv (ITFixed IT64)) [l, r] = binaryLongOp [udiv] l r where
+  udiv = InvokeMethod InvokeStatic "java/lang/Long" "divideUnsigned" "(JJ)J" False
+cgOp (LUDiv ITBig) args = cgOp (LSDiv (ATInt ITBig)) args
+cgOp (LUDiv (ITFixed _)) [l, r] = binaryIntOp [Idiv] l r
+
 cgOp (LSRem ATFloat) [l, r] = binaryDoubleOp [Drem] l r
 cgOp (LSRem (ATInt ITBig)) [l, r]
   = writeIns [ Aload $ locIndex l
@@ -161,6 +170,15 @@ cgOp (LSRem (ATInt ITBig)) [l, r]
 cgOp (LSRem (ATInt ITNative)) [l, r] = binaryIntOp [Irem] l r
 cgOp (LSRem (ATInt (ITFixed IT64))) [l, r] = binaryLongOp [Lrem] l r
 cgOp (LSRem (ATInt (ITFixed _))) [l, r] = binaryIntOp [Irem] l r
+
+cgOp (LURem (ITFixed IT64)) [l, r] = binaryLongOp [urem] l r where
+  urem = InvokeMethod InvokeStatic "java/lang/Long" "remainderUnsigned" "(JJ)J" False
+cgOp (LURem ITNative) [l, r] = binaryIntOp [urem] l r where
+  urem = InvokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
+cgOp (LURem (ITFixed IT32)) [l, r] = binaryIntOp [urem] l r where
+  urem = InvokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
+cgOp (LURem ITBig) args = cgOp (LSRem (ATInt ITBig)) args
+cgOp (LURem (ITFixed _)) [l, r] = binaryIntOp [Irem] l r
 
 cgOp (LEq ATFloat) [l, r] = compareObj "objectEquals" l r
 cgOp (LEq (ATInt _)) [l, r] = compareObj "objectEquals" l r

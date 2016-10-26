@@ -2,7 +2,8 @@ module Main where
 
 import           Idris.AbsSyntax
 import           Idris.ElabDecls
-import           Idris.REPL
+import           Idris.Main          (runMain)
+import           Idris.ModeCommon    (loadInputs)
 
 import           IdrisJvm.CodegenJvm
 import           IRTS.Compiler
@@ -24,8 +25,8 @@ getOpts = do xs <- getArgs
              return $ process (Opts [] "main") xs
   where
     process opts ("-o":o:xs) = process (opts { output = o }) xs
-    process opts (x:xs) = process (opts { inputs = x:inputs opts }) xs
-    process opts [] = opts
+    process opts (x:xs)      = process (opts { inputs = x:inputs opts }) xs
+    process opts []          = opts
 
 cgMain :: Opts -> Idris ()
 cgMain opts = do elabPrims

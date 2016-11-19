@@ -62,3 +62,4 @@ Idris `Bits64` is mapped to Java `long`. Operations on `Bits8`, `Bits16`, `Bits3
     ```
 
 * It compiles to Java 8 class files. Tail calls are delayed using Java 8 lambdas and use JVM's `invokedynamic`.
+* Idris primitives `par` and `fork` for running in parallel and creating threads are supported using Java's `ForkJoin` and `ExecutorService`. See [here](https://github.com/mmhelloworld/idris-jvm/blob/d91a36a7f2e874633f1b424d1929be4d4593d40f/test/resources/forkpar/forkpar.idr) for an example.

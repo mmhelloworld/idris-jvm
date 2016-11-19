@@ -33,7 +33,9 @@ runTest :: String -> H.SpecWith ()
 runTest dir = it ("can compile `" <> dir <> "`") $ do
   expected <- readFile $ dir </> "expected"
   actual <- compileAndRun dir (dir </> (takeBaseName dir ++ ".idr"))
-  actual `shouldBe` expected
+  let stripRes = stripPrefix "--any order\n" expected
+      stripCompare stripped = (stripped \\ actual) `shouldBe` []
+  maybe (actual `shouldBe` expected) stripCompare stripRes
 
 compileAndRun :: FilePath -> String -> IO String
 compileAndRun dir pgm = do
@@ -70,10 +72,10 @@ classpathSep | pathSeparator == '/' = ':'
              | otherwise = ';'
 
 capitalize :: String -> String
-capitalize [] = []
+capitalize []     = []
 capitalize (x:xs) = toUpper x: xs
 
 putStrLnNonEmpty :: String -> IO ()
-putStrLnNonEmpty [] = pure ()
+putStrLnNonEmpty []      = pure ()
 putStrLnNonEmpty (x: xs) | isSpace x = putStrLnNonEmpty xs
-putStrLnNonEmpty xs = putStrLn xs
+putStrLnNonEmpty xs      = putStrLn xs

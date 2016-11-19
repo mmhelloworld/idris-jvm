@@ -122,8 +122,8 @@ isTailCall (SChkCase _ alts) = join . find isJust . map isTailCallSwitch $ alts
 isTailCall _ = Nothing
 
 isTailCallSwitch :: SAlt -> Maybe Name
-isTailCallSwitch (SConstCase _ e) = isTailCall e
-isTailCallSwitch (SDefaultCase e) = isTailCall e
+isTailCallSwitch (SConstCase _ e)     = isTailCall e
+isTailCallSwitch (SDefaultCase e)     = isTailCall e
 isTailCallSwitch (SConCase _ _ _ _ e) = isTailCall e
 
 cgBody :: Cg () -> SExp -> Cg ()
@@ -230,43 +230,6 @@ cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fd
     ret
 
 cgBody _ _ = error "NOT IMPLEMENTED!!!!"
-
-createThunk :: MethodName -> MethodName -> [LVar] -> Cg ()
-createThunk caller fname args = do
-  let nArgs = length args
-  cname <- className <$> ask
-  lambdaIndex <- freshLambdaIndex
-  let lambdaMethodName = sep "$" ["lambda", caller, show lambdaIndex]
-  writeIns $ invokeDynamic cname lambdaMethodName
-  writeDeps $ createLambda cname fname lambdaMethodName nArgs
-  writeIns [Iconst nArgs, Anewarray "java/lang/Object"]
-  let argNums = map (\(Loc i) -> i) args
-      f :: (Int, Int) -> DL.DList Asm
-      f (lhs, rhs) = [Dup, Iconst lhs, Aload rhs, Aastore]
-  writeIns . join . fmap f . DL.fromList $ zip [0..] argNums
-  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Runtime") "createThunk" createThunkSig False ]
-
-invokeDynamic :: ClassName -> MethodName -> DL.DList Asm
-invokeDynamic cname lambda = [ InvokeDynamic "apply" ("()" ++ rtFuncSig) metafactoryHandle metafactoryArgs] where
-  metafactoryHandle = Handle HInvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory" metafactoryDesc False
-  metafactoryArgs = [ BsmArgGetType lambdaDesc
-                    , BsmArgHandle lambdaHandle
-                    , BsmArgGetType lambdaDesc
-                    ]
-  lambdaHandle = Handle HInvokeStatic cname lambda lambdaDesc False
-
-
-createLambda :: ClassName -> MethodName -> MethodName -> Int -> DL.DList Asm
-createLambda cname fname lambdaMethodName nArgs
-  = DL.fromList [ CreateMethod [Private, Static, Synthetic] lambdaMethodName lambdaDesc Nothing Nothing
-                , MethodCodeStart
-                ] <>
-                join (fmap (\i -> [Aload 0, Iconst i, Aaload]) [0 .. (nArgs - 1)]) <> -- Retrieve lambda args
-                [ InvokeMethod InvokeStatic cname fname (sig nArgs) False -- invoke the target method
-                , Areturn
-                , MaxStackAndLocal (-1) (-1)
-                , MethodCodeEnd
-                ]
 
 defaultConstructor :: Cg ()
 defaultConstructor

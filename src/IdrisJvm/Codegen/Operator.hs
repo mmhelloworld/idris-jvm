@@ -3,6 +3,7 @@
 
 module IdrisJvm.Codegen.Operator where
 
+import           Control.Monad.RWS
 import qualified Data.DList                 as DL
 import           Idris.Core.TT
 import           IdrisJvm.Codegen.Assembler
@@ -301,15 +302,6 @@ cgOp (LChInt _) [x]
              , InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
              , InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
              ]
-{-
-cgOp (LChInt _) [x]
-  = writeIns [ Aload $ locIndex x
-             , Checkcast "java/lang/Character"
-             , InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
-             , InvokeMethod InvokeStatic "java/lang/Character" "getNumericValue" "(C)I" False
-             , boxInt
-             ]
--}
 
 cgOp (LIntCh ITBig) [x]
   = writeIns [ Aload $ locIndex x
@@ -338,10 +330,8 @@ cgOp (LTrunc (ITFixed IT64) (ITFixed IT32)) [x]
 cgOp (LTrunc _ _) [x] = writeIns [ Aload $ locIndex x]
 
 cgOp LWriteStr [_, s]
-  = writeIns [ Field FGetStatic "java/lang/System" "out" "Ljava/io/PrintStream;"
-             , Aload $ locIndex s
-             , InvokeMethod InvokeVirtual "java/io/PrintStream" "print" "(Ljava/lang/Object;)V" False
-             , Aconstnull
+  = writeIns [ Aload $ locIndex s
+             , InvokeMethod InvokeStatic (rtClassSig "Runtime") "writeString" "(Ljava/lang/Object;)Ljava/lang/Integer;" False
              ]
 
 cgOp LReadStr [_]
@@ -372,7 +362,9 @@ cgOp LStrCons [l,r]
              ]
 
 cgOp (LStrInt ITBig) [x]
-  = writeIns [ Aload $ locIndex x
+  = writeIns [ New "java/math/BigInteger"
+             , Dup
+             , Aload $ locIndex x
              , Checkcast "java/lang/String"
              , InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
              ]
@@ -412,6 +404,16 @@ cgOp (LLSHR (ITFixed _)) [x, y] = binaryIntOp [Iushr] x y
 cgOp (LASHR (ITFixed IT64)) [x, y] = binaryLongOp [L2i, Lshr] x y
 
 cgOp (LASHR (ITFixed _)) [x, y] = binaryIntOp [Ishr] x y
+
+cgOp LFork [x] = do
+  caller <- cgStFunctionName <$> get
+  createThunk caller (jname (sMN 0 "EVAL")) [x]
+  writeIns [InvokeMethod InvokeStatic (rtClassSig "Concurrent") "fork" "(Lmmhelloworld/idrisjvmruntime/Thunk;)Ljava/lang/Object;" False]
+
+cgOp LPar [x] = do
+  caller <- cgStFunctionName <$> get
+  createParThunk caller (jname (sMN 0 "EVAL")) [x]
+  writeIns [InvokeMethod InvokeStatic (rtClassSig "Concurrent") "par" "(Lmmhelloworld/idrisjvmruntime/Thunk;)Ljava/lang/Object;" False]
 
 cgOp op _ = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
    -- error("Operator " ++ show op ++ " not implemented")

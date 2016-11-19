@@ -48,6 +48,5 @@ code ci = do
 functions :: CodegenInfo -> Cg ()
 functions ci = mapM_ doCodegen (simpleDecls ci)
 
-
 doCodegen :: (Name, SDecl) -> Cg ()
 doCodegen (n, SFun _ args _ def) = cgFun n args def

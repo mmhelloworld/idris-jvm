@@ -30,3 +30,6 @@ cabal.project.local
 \#*\#
 .\#*
 .projectile
+
+# Intellij
+*.iml

@@ -23,7 +23,7 @@ parseDescriptor _ (FApp ffi [FStr _]) []
 
 parseDescriptor _ (FApp ffi [FStr fn]) ((declClass, _):_)
   | ffi == sUN "Instance" = case fdescRefDescriptor declClass of
-    ClassDesc cname -> JVirtual cname fn
+    ClassDesc cname     -> JVirtual cname fn
     InterfaceDesc cname -> JInterface cname fn
 
 parseDescriptor returns (FCon ffi) _
@@ -46,7 +46,8 @@ loadAndCast = mapM_ f where
 
 boxIfNeeded :: TypeDescriptor -> Cg ()
 boxIfNeeded (FieldDescriptor FieldTyDescInt) = writeIns [ boxInt ]
-boxIfNeeded _ = pure () -- TODO: implement for other types
+boxIfNeeded VoidDescriptor                   = writeIns [Aconstnull]
+boxIfNeeded _                                = pure () -- TODO: implement for other types
 
 fdescTypeDescriptor :: FDesc -> TypeDescriptor
 fdescTypeDescriptor (FCon (UN "JVM_Unit")) = VoidDescriptor

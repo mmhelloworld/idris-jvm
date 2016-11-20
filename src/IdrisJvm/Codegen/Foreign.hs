@@ -35,19 +35,47 @@ parseDescriptor returns (FCon ffi) _
 
 parseDescriptor _ fdesc _ = error $ "Unsupported descriptor: " ++ show fdesc
 
-loadAndCast :: [(FieldTypeDescriptor, LVar)] -> Cg ()
-loadAndCast = mapM_ f where
+idrisToJava :: [(FieldTypeDescriptor, LVar)] -> Cg ()
+idrisToJava = mapM_ f where
   f (ty, v) = do
     writeIns [ Aload $ locIndex v ]
     case ty of
+      FieldTyDescBoolean ->
+        writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util")
+                     "idrisBoolToBool"
+                     "(Ljava/lang/Object;)Z" False ]
+      FieldTyDescByte ->
+        writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util")
+                     "idrisBits8ToByte"
+                     "(Ljava/lang/Object;)B" False ]
+      FieldTyDescShort ->
+        writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util")
+                     "idrisBits16ToShort"
+                     "(Ljava/lang/Object;)S" False ]
       FieldTyDescInt -> writeIns [ Checkcast "java/lang/Integer", unboxInt ]
+      FieldTyDescChar -> writeIns [ Checkcast "java/lang/Character", unboxChar ]
+      FieldTyDescLong -> writeIns [ Checkcast "java/lang/Long", unboxLong ]
       FieldTyDescReference refTy -> writeIns [ Checkcast $ refTyClassName refTy]
       _ -> error $ "unknown type: " ++ show ty
 
-boxIfNeeded :: TypeDescriptor -> Cg ()
-boxIfNeeded (FieldDescriptor FieldTyDescInt) = writeIns [ boxInt ]
-boxIfNeeded VoidDescriptor                   = writeIns [Aconstnull]
-boxIfNeeded _                                = pure () -- TODO: implement for other types
+javaToIdris :: TypeDescriptor -> Cg ()
+javaToIdris (FieldDescriptor FieldTyDescBoolean) =
+  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util")
+               "boolToIdrisBool"
+               "(Z)Ljava/lang/Object;" False ]
+javaToIdris (FieldDescriptor FieldTyDescByte) =
+  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util")
+               "byteToIdrisBits8"
+               "(B)Ljava/lang/Object;" False ]
+javaToIdris (FieldDescriptor FieldTyDescShort) =
+  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util")
+               "shortToIdrisBits16"
+               "(S)Ljava/lang/Object;" False ]
+javaToIdris (FieldDescriptor FieldTyDescInt)     = writeIns [ boxInt ]
+javaToIdris (FieldDescriptor FieldTyDescChar)    = writeIns [ boxChar ]
+javaToIdris (FieldDescriptor FieldTyDescLong)    = writeIns [ boxLong ]
+javaToIdris VoidDescriptor                       = writeIns [Aconstnull]
+javaToIdris _                                    = pure () -- TODO: implement for other types
 
 fdescTypeDescriptor :: FDesc -> TypeDescriptor
 fdescTypeDescriptor (FCon (UN "JVM_Unit")) = VoidDescriptor
@@ -56,15 +84,24 @@ fdescTypeDescriptor fdesc = FieldDescriptor $ fdescFieldDescriptor fdesc
 
 fdescFieldDescriptor :: FDesc -> FieldTypeDescriptor
 fdescFieldDescriptor (FApp intTy [_, FCon (UN "JVM_IntNative")]) | intTy == sUN "JVM_IntT" = FieldTyDescInt
+fdescFieldDescriptor (FApp intTy [_, FCon (UN "JVM_IntChar")]) | intTy == sUN "JVM_IntT" = FieldTyDescChar
+fdescFieldDescriptor (FApp intTy [_, FCon (UN "JVM_IntBits8")]) | intTy == sUN "JVM_IntT" = FieldTyDescByte
+fdescFieldDescriptor (FApp intTy [_, FCon (UN "JVM_IntBits16")]) | intTy == sUN "JVM_IntT" = FieldTyDescShort
+fdescFieldDescriptor (FApp intTy [_, FCon (UN "JVM_IntBits32")]) | intTy == sUN "JVM_IntT" = FieldTyDescInt
+fdescFieldDescriptor (FApp intTy [_, FCon (UN "JVM_IntBits64")]) | intTy == sUN "JVM_IntT" = FieldTyDescLong
 fdescFieldDescriptor (FCon (UN "JVM_Str")) = FieldTyDescReference $ ClassDesc "java/lang/String"
 fdescFieldDescriptor (FCon (UN "JVM_Float")) = FieldTyDescFloat
+fdescFieldDescriptor (FCon (UN "JVM_Bool")) = FieldTyDescBoolean
 fdescFieldDescriptor fdesc = FieldTyDescReference $ fdescRefDescriptor fdesc
 
 fdescRefDescriptor :: FDesc -> ReferenceTypeDescriptor
-fdescRefDescriptor (FApp jvmTy [FApp nativeTy [FStr typeName]])
+fdescRefDescriptor desc@(FApp jvmTy [FApp nativeTy [FStr typeName]])
   | jvmTy == sUN "JVM_NativeT" && nativeTy == sUN "Class"
     = ClassDesc typeName
   | jvmTy == sUN "JVM_NativeT" && nativeTy == sUN "Interface"
     = InterfaceDesc typeName
-  | otherwise = error "Invalid reference type descriptor. Expected a class or interface descriptor."
-fdescRefDescriptor _ = error "Invalid reference type descriptor. Expected a class or interface descriptor."
+  | otherwise = error $ "Expected a class or interface descriptor. " ++
+                  "Invalid reference type descriptor: " ++ show desc
+fdescRefDescriptor (FCon (UN "JVM_Str")) = ClassDesc "java/lang/String"
+fdescRefDescriptor desc = error $ "Expected a class or interface descriptor. " ++
+  "Invalid reference type descriptor: " ++ show desc

@@ -31,11 +31,12 @@ mutual
 
   ||| Supported JVM foreign types
   data JVM_Types : Type -> Type where
-      JVM_Str   : JVM_Types String
-      JVM_Float : JVM_Types Double
-      JVM_Unit  : JVM_Types ()
+      JVM_Bool    : JVM_Types Bool
+      JVM_Str     : JVM_Types String
+      JVM_Float   : JVM_Types Double
+      JVM_Unit    : JVM_Types ()
       JVM_NativeT : JVM_Types (JVM_Native a)
-      JVM_IntT  : JVM_IntTypes i -> JVM_Types i
+      JVM_IntT    : JVM_IntTypes i -> JVM_Types i
 
   ||| A descriptor for the JVM FFI. See the constructors of `JVM_Types`
   ||| and `JVM_IntTypes` for the concrete types that are available.

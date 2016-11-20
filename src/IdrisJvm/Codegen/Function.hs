@@ -203,29 +203,29 @@ cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fd
   cgForeign (JStatic clazz fn) = do
     let returnDesc = fdescTypeDescriptor returns
         descriptor r = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> args) r
-    loadAndCast argsWithTypes
+    idrisToJava argsWithTypes
     writeIns [ InvokeMethod InvokeStatic clazz fn (descriptor returnDesc) False ]
-    boxIfNeeded returnDesc
+    javaToIdris returnDesc
     ret
   cgForeign (JVirtual clazz fn) = do
     let returnDesc = fdescTypeDescriptor returns
         descriptor = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
-    loadAndCast argsWithTypes -- drop first arg type as it is an implicit 'this'
+    idrisToJava argsWithTypes -- drop first arg type as it is an implicit 'this'
     writeIns [ InvokeMethod InvokeVirtual clazz fn descriptor False ]
-    boxIfNeeded returnDesc
+    javaToIdris returnDesc
     ret
   cgForeign (JInterface clazz fn) = do
     let returnDesc = fdescTypeDescriptor returns
         descriptor = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
-    loadAndCast argsWithTypes
+    idrisToJava argsWithTypes
     writeIns [ InvokeMethod InvokeInterface clazz fn descriptor True ]
-    boxIfNeeded returnDesc
+    javaToIdris returnDesc
     ret
   cgForeign (JConstructor clazz) = do
     let returnDesc = VoidDescriptor -- Constructors always return void.
         descriptor r = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> args) r
     writeIns [ New clazz, Dup ]
-    loadAndCast argsWithTypes
+    idrisToJava argsWithTypes
     writeIns [ InvokeMethod InvokeSpecial clazz "<init>" (descriptor returnDesc) False ]
     ret
 

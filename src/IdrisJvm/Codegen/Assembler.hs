@@ -461,14 +461,26 @@ assign from to              = [Aload from, Astore to]
 boxDouble :: Asm
 boxDouble = InvokeMethod InvokeStatic "java/lang/Double" "valueOf" "(D)Ljava/lang/Double;" False
 
+boxBool :: Asm
+boxBool = InvokeMethod InvokeStatic "java/lang/Boolean" "valueOf" "(Z)Ljava/lang/Boolean;" False
+
+boxChar :: Asm
+boxChar = InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+
 boxInt :: Asm
 boxInt = InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
 
 boxLong :: Asm
 boxLong = InvokeMethod InvokeStatic "java/lang/Long" "valueOf" "(J)Ljava/lang/Long;" False
 
+unboxBool :: Asm
+unboxBool = InvokeMethod InvokeVirtual "java/lang/Boolean" "booleanValue" "()Z" False
+
 unboxInt :: Asm
 unboxInt = InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
+
+unboxChar :: Asm
+unboxChar = InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
 
 unboxLong :: Asm
 unboxLong = InvokeMethod InvokeVirtual "java/lang/Long" "longValue" "()J" False

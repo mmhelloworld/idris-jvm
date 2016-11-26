@@ -28,7 +28,7 @@ codegenJvm ci = do
 assemble :: FilePath -> CodegenInfo -> [Asm]
 assemble cwd ci = DL.toList $ instructions cgWriter <> deps cgWriter <> [ ClassCodeEnd classFilePath ] where
   out = outputFile ci
-  cname = out ++ ".class"
+  cname = out
   classFilePath = if isRelative cname then cwd </> cname else cname
 
   env = CgEnv $ takeBaseName out
@@ -36,12 +36,6 @@ assemble cwd ci = DL.toList $ instructions cgWriter <> deps cgWriter <> [ ClassC
 
 code :: CodegenInfo -> Cg ()
 code ci = do
-  cname <- className <$> ask
-  writeIns [ CreateClass ComputeMaxs
-           , ClassCodeStart 52 Public cname "null" "java/lang/Object" []
-           , SourceInfo $ cname ++ ".idr"
-           ]
-  defaultConstructor
   functions ci
   mainMethod
 

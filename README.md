@@ -30,8 +30,8 @@ For details on what the `setup` script does, please see [here](docs/setup.md).
     main = print (pythag 50)
     ```
 
-* `$ bin/idrisjvm pythag.idr -o Pythag`
-* `$ java -cp ~/.idrisjvm/idris-jvm-runtime-1.0-SNAPSHOT.jar:. Pythag`
+* `$ bin/idrisjvm pythag.idr -o pythag`
+* `$ java -cp ~/.idrisjvm/idris-jvm-runtime-1.0-SNAPSHOT.jar:pythag main.Main`
 
 ## Status / Future improvements
 

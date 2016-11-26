@@ -3,7 +3,7 @@
 
 module IdrisJvm.AssemblerService where
 
-import           Control.Lens        ((^.))
+import           Control.Lens               ((^.))
 import           Data.Aeson
 import qualified Data.Aeson                 as A (decode)
 import           Data.Aeson.Types           (typeMismatch)

@@ -4,7 +4,7 @@
 module IdrisJvm.Codegen.Types where
 
 import           Control.Monad.RWS
-import qualified Data.DList         as DL
+import qualified Data.DList                 as DL
 import           Idris.Core.TT
 import           IdrisJvm.Codegen.Assembler
 
@@ -21,7 +21,7 @@ data CgState = CgState { cgStLambdaIndex     :: Int
 
 data JMethodName =
   JMethodName { jmethClsName :: String
-              , jmethName :: String
+              , jmethName    :: String
               } deriving (Eq, Show)
 
 initialCgState :: CgState

@@ -6,12 +6,12 @@ module IdrisJvm.Codegen.Common where
 import           Control.Monad.RWS
 import           Data.Char                  (isAlpha, isDigit)
 import qualified Data.DList                 as DL
+import           Data.List                  (elem, intercalate)
+import           Data.List.Split            (splitOn)
 import           Idris.Core.TT
 import           IdrisJvm.Codegen.Assembler
 import           IdrisJvm.Codegen.Types
 import           IRTS.Lang
-import Data.List.Split (splitOn)
-import Data.List (intercalate, elem)
 
 createThunkForLambda :: JMethodName -> [LVar] -> (MethodName -> DL.DList Asm) -> Cg ()
 createThunkForLambda caller args lambdaCode = do

@@ -312,11 +312,11 @@ data ReferenceTypeDescriptor = ClassDesc ClassName
                                deriving (Eq, Show)
 
 instance Asmable ReferenceTypeDescriptor where
-  asm (ClassDesc c) = "L" ++ c ++ ";"
+  asm (ClassDesc c)     = "L" ++ c ++ ";"
   asm (InterfaceDesc c) = "L" ++ c ++ ";"
 
 refTyClassName :: ReferenceTypeDescriptor -> ClassName
-refTyClassName (ClassDesc c) = c
+refTyClassName (ClassDesc c)     = c
 refTyClassName (InterfaceDesc c) = c
 
 data FieldTypeDescriptor = FieldTyDescByte
@@ -332,22 +332,22 @@ data FieldTypeDescriptor = FieldTyDescByte
                            deriving (Eq, Show)
 
 instance Asmable FieldTypeDescriptor where
-  asm FieldTyDescByte = "B"
-  asm FieldTyDescChar = "C"
-  asm FieldTyDescShort = "S"
-  asm FieldTyDescBoolean = "Z"
-  asm FieldTyDescArray = "["
-  asm FieldTyDescDouble = "D"
-  asm FieldTyDescFloat = "F"
-  asm FieldTyDescInt = "I"
-  asm FieldTyDescLong = "J"
+  asm FieldTyDescByte          = "B"
+  asm FieldTyDescChar          = "C"
+  asm FieldTyDescShort         = "S"
+  asm FieldTyDescBoolean       = "Z"
+  asm FieldTyDescArray         = "["
+  asm FieldTyDescDouble        = "D"
+  asm FieldTyDescFloat         = "F"
+  asm FieldTyDescInt           = "I"
+  asm FieldTyDescLong          = "J"
   asm (FieldTyDescReference f) = asm f
 
 data TypeDescriptor = FieldDescriptor FieldTypeDescriptor | VoidDescriptor
 
 instance Asmable TypeDescriptor where
   asm (FieldDescriptor t) = asm t
-  asm VoidDescriptor = "V"
+  asm VoidDescriptor      = "V"
 
 data MethodDescriptor = MethodDescriptor [FieldTypeDescriptor] TypeDescriptor
 
@@ -374,15 +374,15 @@ type Arg = String
 data ClassOpts = ComputeMaxs | ComputeFrames
 
 instance ToJSON ClassOpts where
-  toJSON ComputeMaxs = toJSON (1 :: Int)
+  toJSON ComputeMaxs   = toJSON (1 :: Int)
   toJSON ComputeFrames = toJSON (2 :: Int)
 
 data InvocType = InvokeInterface | InvokeSpecial | InvokeStatic | InvokeVirtual
 invocTypeNum :: InvocType -> Int
 invocTypeNum InvokeInterface = 185
-invocTypeNum InvokeSpecial = 183
-invocTypeNum InvokeStatic = 184
-invocTypeNum InvokeVirtual = 182
+invocTypeNum InvokeSpecial   = 183
+invocTypeNum InvokeStatic    = 184
+invocTypeNum InvokeVirtual   = 182
 
 instance ToJSON InvocType where
   toJSON = toJSON . invocTypeNum
@@ -392,16 +392,16 @@ data FieldInsType = FGetStatic | FPutStatic | FGetField | FPutField
 fieldInsTypeNum :: FieldInsType -> Int
 fieldInsTypeNum FGetStatic = 178
 fieldInsTypeNum FPutStatic = 179
-fieldInsTypeNum FGetField = 180
-fieldInsTypeNum FPutField = 181
+fieldInsTypeNum FGetField  = 180
+fieldInsTypeNum FPutField  = 181
 
 instance ToJSON FieldInsType where
   toJSON = toJSON . fieldInsTypeNum
 
 data FrameType = FFull | FSame | FAppend
 frameTypeNum :: FrameType -> Int
-frameTypeNum FFull = 0
-frameTypeNum FSame = 3
+frameTypeNum FFull   = 0
+frameTypeNum FSame   = 3
 frameTypeNum FAppend = 1
 
 instance ToJSON FrameType where
@@ -409,9 +409,9 @@ instance ToJSON FrameType where
 
 data Access = Private | Public | Static | Synthetic
 accessNum :: Access -> Int
-accessNum Private = 2
-accessNum Public = 1
-accessNum Static = 8
+accessNum Private   = 2
+accessNum Public    = 1
+accessNum Static    = 8
 accessNum Synthetic = 4096
 
 instance ToJSON Access where
@@ -427,15 +427,15 @@ data HandleTag = HGetField
                | HNewInvokeSpecial
                | HInvokeInterface
 handleTagOpcode :: HandleTag -> Int
-handleTagOpcode HGetField = 1
-handleTagOpcode HGetStatic = 2
-handleTagOpcode HPutField = 3
-handleTagOpcode HPutStatic = 4
-handleTagOpcode HInvokeVirtual = 5
-handleTagOpcode HInvokeStatic = 6
-handleTagOpcode HInvokeSpecial = 7
+handleTagOpcode HGetField         = 1
+handleTagOpcode HGetStatic        = 2
+handleTagOpcode HPutField         = 3
+handleTagOpcode HPutStatic        = 4
+handleTagOpcode HInvokeVirtual    = 5
+handleTagOpcode HInvokeStatic     = 6
+handleTagOpcode HInvokeSpecial    = 7
 handleTagOpcode HNewInvokeSpecial = 8
-handleTagOpcode HInvokeInterface = 9
+handleTagOpcode HInvokeInterface  = 9
 
 instance ToJSON HandleTag where
   toJSON = toJSON . handleTagOpcode
@@ -457,7 +457,7 @@ instance ToJSON Handle where
 
 assign :: Int -> Int -> DL.DList Asm
 assign from to | from == to = []
-assign from to              = [Aload from, Astore to]
+assign from to = [Aload from, Astore to]
 
 boxDouble :: Asm
 boxDouble = InvokeMethod InvokeStatic "java/lang/Double" "valueOf" "(D)Ljava/lang/Double;" False

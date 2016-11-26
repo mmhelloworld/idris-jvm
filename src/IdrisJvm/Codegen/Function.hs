@@ -130,8 +130,8 @@ isTailCallSwitch (SConCase _ _ _ _ e) = isTailCall e
 
 cgBody :: Cg () -> SExp -> Cg ()
 cgBody ret (SV (Glob n)) = do
-  let javaName = jname n
-  writeIns [ InvokeMethod InvokeStatic (jmethClsName javaName) (jmethName javaName) (sig 0) False]
+  let JMethodName cname mname = jname n
+  writeIns [ InvokeMethod InvokeStatic cname mname (sig 0) False]
   ret
 
 cgBody ret (SV (Loc i)) = writeIns [Aload i] >> ret

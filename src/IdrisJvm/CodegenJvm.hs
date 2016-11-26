@@ -28,8 +28,7 @@ codegenJvm ci = do
 assemble :: FilePath -> CodegenInfo -> [Asm]
 assemble cwd ci = DL.toList $ instructions cgWriter <> deps cgWriter <> [ ClassCodeEnd classFilePath ] where
   out = outputFile ci
-  cname = out
-  classFilePath = if isRelative cname then cwd </> cname else cname
+  classFilePath = if isRelative out then cwd </> out else out
 
   env = CgEnv $ takeBaseName out
   (_, _, cgWriter) = runRWS (code ci) env initialCgState

@@ -6,7 +6,7 @@ module IdrisJvm.Codegen.ControlFlow where
 import           Data.Char                  (ord)
 import qualified Data.DList                 as DL
 import           Data.Int
-import           Data.List                  (sortBy, nubBy)
+import           Data.List                  (nubBy, sortBy)
 import           Data.Maybe
 import           Idris.Core.TT
 import           IdrisJvm.Codegen.Assembler
@@ -44,7 +44,7 @@ cgSwitch ret cgBody e alts | all isIntCase alts = do
 cgSwitch ret cgBody e alts = cgIf ret cgBody e nalts where
   nalts = nubBy f alts
   f SDefaultCase{} SDefaultCase{} = True
-  f _ _ = False
+  f _ _                           = False
 
 cgIf :: Cg () -> (Cg () -> SExp -> Cg ()) -> LVar -> [SAlt] -> Cg ()
 cgIf ret cgBody e alts = do
@@ -113,11 +113,11 @@ cgAlt ret cgBody label si sv (SConCase lv _ _ args expr) = do
 
 conCase :: SAlt -> Bool
 conCase SConCase {} = True
-conCase _ = False
+conCase _           = False
 
 defaultCase :: SAlt -> Bool
 defaultCase (SDefaultCase _) = True
-defaultCase _ = False
+defaultCase _                = False
 
 csWithLbls :: Int -> [SAlt] -> [(String, Maybe Int32, SAlt)]
 csWithLbls si alts = sortBy g $ zipWith f cs [0..] where
@@ -127,12 +127,12 @@ csWithLbls si alts = sortBy g $ zipWith f cs [0..] where
 
   f :: (Maybe Int32, SAlt) -> Int -> (String, Maybe Int32, SAlt)
   f (Just expr, alt) i = (labelName si i, Just expr, alt)
-  f (Nothing, alt) _ = (defaultLabel si, Nothing, alt)
+  f (Nothing, alt) _   = (defaultLabel si, Nothing, alt)
 
   g (_, Just c1, _) (_, Just c2, _) = compare c1 c2
-  g (_, Just _, _) (_, Nothing, _) = LT
-  g (_, Nothing, _) (_, Just _, _) = GT
-  g _ _ = EQ
+  g (_, Just _, _) (_, Nothing, _)  = LT
+  g (_, Nothing, _) (_, Just _, _)  = GT
+  g _ _                             = EQ
 
 ifCasesWithLbls :: Int -> [SAlt] -> [(String, Maybe (Cg ()), SAlt)]
 ifCasesWithLbls si alts = sortBy g $ zipWith f cs [0..] where
@@ -142,11 +142,11 @@ ifCasesWithLbls si alts = sortBy g $ zipWith f cs [0..] where
 
   f :: (Maybe (Cg ()), SAlt) -> Int -> (String, Maybe (Cg ()), SAlt)
   f (Just expr, alt) i = (ifLabelName si i, Just expr, alt)
-  f (Nothing, alt) _ = (ifDefaultLabel si, Nothing, alt)
+  f (Nothing, alt) _   = (ifDefaultLabel si, Nothing, alt)
 
   g (_, Just _, _) (_, Nothing, _) = LT
   g (_, Nothing, _) (_, Just _, _) = GT
-  g _ _ = EQ
+  g _ _                            = EQ
 
 switchEndLabel :: Int -> String
 switchEndLabel switchIndex = "$switch" ++ show switchIndex ++ "$end"
@@ -186,15 +186,15 @@ switchIntExpr varIndex
              ]
 
 isIntCase :: SAlt -> Bool
-isIntCase SConCase{} = True
-isIntCase SDefaultCase{} = True
-isIntCase (SConstCase (I _) _) = True
-isIntCase (SConstCase (B8 _) _) = True
-isIntCase (SConstCase (B16 _) _) = True
-isIntCase (SConstCase (Ch _) _) = True
+isIntCase SConCase{}              = True
+isIntCase SDefaultCase{}          = True
+isIntCase (SConstCase (I _) _)    = True
+isIntCase (SConstCase (B8 _) _)   = True
+isIntCase (SConstCase (B16 _) _)  = True
+isIntCase (SConstCase (Ch _) _)   = True
 isIntCase (SConstCase TheWorld _) = True
-isIntCase (SConstCase x _) | isTypeConst x = True
-isIntCase _ = False
+isIntCase (SConstCase x _)        | isTypeConst x = True
+isIntCase _                       = False
 
 caseExpr :: SAlt -> Maybe Int32
 caseExpr (SConstCase t _) = Just $ constCaseExpr t where

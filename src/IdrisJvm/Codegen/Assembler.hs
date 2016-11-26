@@ -22,7 +22,7 @@ data Asm = Aaload
          | ClassCodeEnd String
          | CreateClass ClassOpts
          | CreateLabel String
-         | CreateMethod [Access] MethodName Descriptor (Maybe Signature) (Maybe [Exception])
+         | CreateMethod [Access] ClassName MethodName Descriptor (Maybe Signature) (Maybe [Exception])
          | Dadd
          | Ddiv
          | Dmul
@@ -120,10 +120,11 @@ instance ToJSON Asm where
     = object [ "type" .= String "CreateLabel"
              , "name" .= toJSON label ]
 
-  toJSON (CreateMethod accs mname desc s excs)
+  toJSON (CreateMethod accs cname mname desc s excs)
     = object [ "type" .= String "CreateMethod"
              , "acc" .= toJSON (sum $ accessNum <$> accs)
-             , "name" .= toJSON mname
+             , "cname" .= toJSON cname
+             , "fname" .= toJSON mname
              , "desc" .= toJSON desc
              , "sig" .= maybe Null toJSON s
              , "excs" .= toJSON excs ]

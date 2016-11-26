@@ -53,7 +53,9 @@ cgFun n args def = do
     modify . updateFunctionArgs $ const args
     modify . updateFunctionName $ const functionName
     modify . updateShouldDescribeFrame $ const True
-    writeIns [ CreateMethod [Private, Static] functionName (sig nArgs) Nothing Nothing
+    let clsName = jmethClsName functionName
+        fname = jmethName functionName
+    writeIns [ CreateMethod [Public, Static] clsName fname (sig nArgs) Nothing Nothing
              , MethodCodeStart
              ]
     modify . updateLocalVarCount $ const nLocalVars
@@ -128,8 +130,8 @@ isTailCallSwitch (SConCase _ _ _ _ e) = isTailCall e
 
 cgBody :: Cg () -> SExp -> Cg ()
 cgBody ret (SV (Glob n)) = do
-  cname <- className <$> ask
-  writeIns [ InvokeMethod InvokeStatic cname (jname n) (sig 0) False]
+  let javaName = jname n
+  writeIns [ InvokeMethod InvokeStatic (jmethClsName javaName) (jmethName javaName) (sig 0) False]
   ret
 
 cgBody ret (SV (Loc i)) = writeIns [Aload i] >> ret
@@ -145,9 +147,9 @@ cgBody ret (SApp True f args) = do
           createThunk caller (jname f) args >> ret
 
 cgBody ret (SApp False f args) = do
-  cname <- className <$> ask
   writeIns $ (Aload . locIndex) <$> DL.fromList args
-  writeIns [ InvokeMethod InvokeStatic cname (jname f) (sig $ length  args) False
+  let JMethodName cname mname = jname f
+  writeIns [ InvokeMethod InvokeStatic cname mname (sig $ length  args) False
            , InvokeMethod InvokeStatic (rtClassSig "Runtime") "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
            ]
   ret
@@ -231,9 +233,9 @@ cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fd
 
 cgBody _ _ = error "NOT IMPLEMENTED!!!!"
 
-defaultConstructor :: Cg ()
-defaultConstructor
-  = writeIns [ CreateMethod [Public] "<init>" "()V" Nothing Nothing
+defaultConstructor :: ClassName -> Cg ()
+defaultConstructor cname
+  = writeIns [ CreateMethod [Public] cname "<init>" "()V" Nothing Nothing
              , MethodCodeStart
              , Aload 0
              , InvokeMethod InvokeSpecial "java/lang/Object" "<init>" "()V" False
@@ -244,10 +246,10 @@ defaultConstructor
 
 mainMethod :: Cg ()
 mainMethod = do
-  cname <- className <$> ask
-  writeIns [ CreateMethod [Public, Static] "main" "([Ljava/lang/String;)V" Nothing Nothing
+  let JMethodName cname mname = jname $ MN 0 "runMain"
+  writeIns [ CreateMethod [Public, Static] cname "main" "([Ljava/lang/String;)V" Nothing Nothing
            , MethodCodeStart
-           , InvokeMethod InvokeStatic cname (jname $ MN 0 "runMain") "()Ljava/lang/Object;" False
+           , InvokeMethod InvokeStatic cname mname "()Ljava/lang/Object;" False
            , Pop
            , Return
            , MaxStackAndLocal (-1) (-1)

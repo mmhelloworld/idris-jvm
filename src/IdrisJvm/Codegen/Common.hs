@@ -10,13 +10,15 @@ import           Idris.Core.TT
 import           IdrisJvm.Codegen.Assembler
 import           IdrisJvm.Codegen.Types
 import           IRTS.Lang
+import Data.List.Split (splitOn)
+import Data.List (intercalate, elem)
 
-createThunkForLambda :: MethodName -> [LVar] -> (MethodName -> DL.DList Asm) -> Cg ()
+createThunkForLambda :: JMethodName -> [LVar] -> (MethodName -> DL.DList Asm) -> Cg ()
 createThunkForLambda caller args lambdaCode = do
   let nArgs = length args
-  cname <- className <$> ask
   lambdaIndex <- freshLambdaIndex
-  let lambdaMethodName = sep "$" ["lambda", caller, show lambdaIndex]
+  let cname = jmethClsName caller
+  let lambdaMethodName = sep "$" ["lambda", jmethName caller, show lambdaIndex]
   writeIns $ invokeDynamic cname lambdaMethodName
   writeDeps $ lambdaCode lambdaMethodName
   writeIns [Iconst nArgs, Anewarray "java/lang/Object"]
@@ -26,18 +28,16 @@ createThunkForLambda caller args lambdaCode = do
   writeIns . join . fmap f . DL.fromList $ zip [0..] argNums
   writeIns [ InvokeMethod InvokeStatic (rtClassSig "Runtime") "thunk" createThunkSig False ]
 
-createThunk :: MethodName -> MethodName -> [LVar] -> Cg ()
-createThunk caller fname args = do
+createThunk :: JMethodName -> JMethodName -> [LVar] -> Cg ()
+createThunk caller@(JMethodName callerCname _) fname args = do
   let nArgs = length args
-  cname <- className <$> ask
-  let lambdaCode lambdaMethodName = createLambda cname fname lambdaMethodName nArgs
+      lambdaCode lambdaMethodName = createLambda fname callerCname lambdaMethodName nArgs
   createThunkForLambda caller args lambdaCode
 
-createParThunk :: MethodName -> MethodName -> [LVar] -> Cg ()
-createParThunk caller fname args = do
+createParThunk :: JMethodName -> JMethodName -> [LVar] -> Cg ()
+createParThunk caller@(JMethodName callerCname _) fname args = do
   let nArgs = length args
-  cname <- className <$> ask
-  let lambdaCode lambdaMethodName = createParLambda cname fname lambdaMethodName nArgs
+      lambdaCode lambdaMethodName = createParLambda fname callerCname lambdaMethodName nArgs
   createThunkForLambda caller args lambdaCode
 
 invokeDynamic :: ClassName -> MethodName -> DL.DList Asm
@@ -50,21 +50,21 @@ invokeDynamic cname lambda = [ InvokeDynamic "apply" ("()" ++ rtFuncSig) metafac
   lambdaHandle = Handle HInvokeStatic cname lambda lambdaDesc False
 
 
-createLambda :: ClassName -> MethodName -> MethodName -> Int -> DL.DList Asm
-createLambda cname fname lambdaMethodName nArgs
-  = DL.fromList [ CreateMethod [Private, Static, Synthetic] lambdaMethodName lambdaDesc Nothing Nothing
-                , MethodCodeStart
-                ] <>
-                join (fmap (\i -> [Aload 0, Iconst i, Aaload]) [0 .. (nArgs - 1)]) <> -- Retrieve lambda args
-                [ InvokeMethod InvokeStatic cname fname (sig nArgs) False -- invoke the target method
-                , Areturn
-                , MaxStackAndLocal (-1) (-1)
-                , MethodCodeEnd
-                ]
+createLambda :: JMethodName -> ClassName -> MethodName -> Int -> DL.DList Asm
+createLambda (JMethodName cname fname) callerCname lambdaMethodName nArgs
+  = DL.fromList [ CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName lambdaDesc Nothing Nothing
+                  , MethodCodeStart
+                  ] <>
+                  join (fmap (\i -> [Aload 0, Iconst i, Aaload]) [0 .. (nArgs - 1)]) <> -- Retrieve lambda args
+                  [ InvokeMethod InvokeStatic cname fname (sig nArgs) False -- invoke the target method
+                  , Areturn
+                  , MaxStackAndLocal (-1) (-1)
+                  , MethodCodeEnd
+                  ]
 
-createParLambda :: ClassName -> MethodName -> MethodName -> Int -> DL.DList Asm
-createParLambda cname fname lambdaMethodName nArgs
-  = DL.fromList [ CreateMethod [Private, Static, Synthetic] lambdaMethodName lambdaDesc Nothing Nothing
+createParLambda :: JMethodName -> ClassName -> MethodName -> Int -> DL.DList Asm
+createParLambda (JMethodName cname fname) callerCname lambdaMethodName nArgs
+  = DL.fromList [ CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName lambdaDesc Nothing Nothing
                 , MethodCodeStart
                 ] <>
                 join (fmap (\i -> [Aload 0, Iconst i, Aaload]) [0 .. (nArgs - 1)]) <> -- Retrieve lambda args
@@ -106,11 +106,23 @@ locIndex :: LVar -> Int
 locIndex (Loc i) = i
 locIndex _       = error "Unexpected global variable"
 
-jname :: Name -> String
-jname n = "idris_" ++ concatMap jchar idrisName
+jname :: Name -> JMethodName
+jname n = JMethodName cname methName
   where
     idrisName = showCG n
-    jchar x | isAlpha x || isDigit x = [x]
+    names = splitOn "." $ concatMap jchar idrisName
+    (cname, methName) = f [] names
+
+    f [] []     = ("main/Main", "main")
+    f [] [x]    = ("main/Main", x)
+    f [] [x, y] = ("main/" ++ x, y)
+    f p []      = (intercalate "/" $ reverse p, "main")
+    f p [x, y]  = (intercalate "/" $ reverse (x:p), y)
+    f p (x:xs)  = f (x:p) xs
+
+    allowed x = x `elem` ("._$" :: String)
+
+    jchar x | isAlpha x || isDigit x || allowed x = [x]
             | otherwise = "_" ++ show (fromEnum x) ++ "_"
 
 

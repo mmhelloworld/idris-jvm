@@ -39,14 +39,15 @@ runTest dir = it ("can compile `" <> dir <> "`") $ do
 
 compileAndRun :: FilePath -> String -> IO String
 compileAndRun dir pgm = do
-  let className = capitalize $ takeBaseName pgm
-      classFile = dir </> className
-  (_, compilerOut, compilerErr) <- runProcess "stack" [ "exec", "idris", "--",  "--codegen", "jvm", "-p", "idrisjvmruntime", pgm, "-o", classFile]
+  let out = dir </> takeBaseName pgm
+  (_, compilerOut, compilerErr) <-
+    runProcess "stack" [ "exec", "idris", "--",  "--codegen", "jvm",
+      "-p", "idrisjvmruntime", pgm, "-o", out]
   putStrLnNonEmpty compilerOut
   putStrLnNonEmpty compilerErr
   workingDir <- getWorkingDir
   let runtimeJar = workingDir </> "idris-jvm-runtime-1.0-SNAPSHOT.jar"
-      args = ["-cp", runtimeJar ++ (classpathSep: dir), className]
+      args = ["-cp", runtimeJar ++ (classpathSep: out), "main.Main"]
   (_, stdout, _) <- runProcess "java" args
   return stdout
 

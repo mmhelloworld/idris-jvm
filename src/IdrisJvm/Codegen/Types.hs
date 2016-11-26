@@ -13,14 +13,19 @@ data CgEnv = CgEnv { className :: String } deriving Show
 data CgState = CgState { cgStLambdaIndex     :: Int
                        , cgStSwitchIndex     :: Int
                        , cgStIfIndex         :: Int
-                       , cgStFunctionName    :: String
+                       , cgStFunctionName    :: JMethodName
                        , cgStLocalVarCount   :: Int
                        , shouldDescribeFrame :: Bool
                        , cgStFunctionArgs    :: [Name]
                        } deriving Show
 
+data JMethodName =
+  JMethodName { jmethClsName :: String
+              , jmethName :: String
+              } deriving (Eq, Show)
+
 initialCgState :: CgState
-initialCgState = CgState 0 0 0 "" 0 True []
+initialCgState = CgState 0 0 0 (JMethodName "" "") 0 True []
 
 rtClassSig :: String -> String
 rtClassSig c = "mmhelloworld/idrisjvmruntime/" ++ c
@@ -52,7 +57,7 @@ freshIfIndex = do
   modify (updateIfIndex succ)
   return ifIndex
 
-updateFunctionName :: (String -> String) -> CgState -> CgState
+updateFunctionName :: (JMethodName -> JMethodName) -> CgState -> CgState
 updateFunctionName f cgState = cgState { cgStFunctionName = f (cgStFunctionName cgState)}
 
 updateLocalVarCount :: (Int -> Int) -> CgState -> CgState

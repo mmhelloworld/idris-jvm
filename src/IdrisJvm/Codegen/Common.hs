@@ -4,10 +4,11 @@
 module IdrisJvm.Codegen.Common where
 
 import           Control.Monad.RWS
-import           Data.Char                  (isAlpha, isDigit)
+import           Data.Char                  (isAlpha, isDigit, isLetter)
 import qualified Data.DList                 as DL
-import           Data.List                  (elem, intercalate)
-import           Data.List.Split            (splitOn)
+import           Data.List                  (elem, intercalate, uncons)
+import qualified Data.Map                   as Map
+import qualified Data.Text                  as T
 import           Idris.Core.TT
 import           IdrisJvm.Codegen.Assembler
 import           IdrisJvm.Codegen.Types
@@ -16,8 +17,8 @@ import           IRTS.Lang
 createThunkForLambda :: JMethodName -> [LVar] -> (MethodName -> DL.DList Asm) -> Cg ()
 createThunkForLambda caller args lambdaCode = do
   let nArgs = length args
-  lambdaIndex <- freshLambdaIndex
-  let cname = jmethClsName caller
+      cname = jmethClsName caller
+  lambdaIndex <- freshLambdaIndex cname
   let lambdaMethodName = sep "$" ["lambda", jmethName caller, show lambdaIndex]
   writeIns $ invokeDynamic cname lambdaMethodName
   writeDeps $ lambdaCode lambdaMethodName
@@ -48,7 +49,6 @@ invokeDynamic cname lambda = [ InvokeDynamic "apply" ("()" ++ rtFuncSig) metafac
                     , BsmArgGetType lambdaDesc
                     ]
   lambdaHandle = Handle HInvokeStatic cname lambda lambdaDesc False
-
 
 createLambda :: JMethodName -> ClassName -> MethodName -> Int -> DL.DList Asm
 createLambda (JMethodName cname fname) callerCname lambdaMethodName nArgs
@@ -106,11 +106,41 @@ locIndex :: LVar -> Int
 locIndex (Loc i) = i
 locIndex _       = error "Unexpected global variable"
 
+javaName :: Name -> [String]
+javaName (UN n) = [T.unpack n]
+javaName (NS n s) = map T.unpack (reverse s) ++ [showSep "." $ javaName n]
+javaName (MN _ u) | u == txt "underscore" = ["_"]
+javaName (MN i s) = ["$" ++ T.unpack s ++ show i ++ "$"]
+javaName (SN special) = javaName' special
+  where javaName' :: SpecialName -> [String]
+        javaName' (WhereN i p c) = appendToLast ("$whr$" ++ showSep "$" (javaName c) ++ ":" ++ show i) (javaName p)
+        javaName' (WithN i n) = appendToLast ("$with$" ++ show i) $ javaName n
+        javaName' (ImplementationN cl impl) = ["@" ++ showSep "." (javaName cl) ++ "$impl$" ++ showSep "$" (map T.unpack impl)]
+        javaName' (MethodN m) = appendToLast "$meth$" $ javaName m
+        javaName' (ParentN p c) = appendToLast ("$parent$" ++ show c) $ javaName p
+        javaName' (CaseN fc c) = appendToLast (showFC' fc ++ "$case$") $ javaName c
+        javaName' (ElimN sn) = appendToLast "$elim$" $ javaName sn
+        javaName' (ImplementationCtorN n) = appendToLast "$implctor$" $ javaName n
+        javaName' (MetaN parent meta) = appendToLast ("$meta$" ++ showSep "$" (javaName meta)) $ javaName parent
+        showFC' (FC' NoFC) = ""
+        showFC' (FC' (FileFC f)) = "_" ++ cgFN f
+        showFC' (FC' (FC f s e))
+          | s == e = "_" ++ cgFN f ++
+                     "_" ++ show (fst s) ++ "_" ++ show (snd s)
+          | otherwise = "_" ++ cgFN f ++
+                        "_" ++ show (fst s) ++ "_" ++ show (snd s) ++
+                        "_" ++ show (fst e) ++ "_" ++ show (snd e)
+        cgFN = concatMap (\c -> if not (isDigit c || isLetter c) then "__" else [c])
+javaName (SymRef i) = error $ "can't do codegen for a symbol reference: " ++ show i
+
+appendToLast :: String -> [String] -> [String]
+appendToLast x xs
+  = maybe [x] (\(h, t) -> reverse $ (h ++ x) : t) $ uncons $ reverse xs
+
 jname :: Name -> JMethodName
 jname n = JMethodName cname methName
   where
-    idrisName = showCG n
-    names = splitOn "." $ concatMap jchar idrisName
+    names = concatMap jchar <$> javaName n
     (cname, methName) = f [] names
 
     f [] []     = ("main/Main", "main")
@@ -120,9 +150,43 @@ jname n = JMethodName cname methName
     f p [x, y]  = (intercalate "/" $ reverse (x:p), y)
     f p (x:xs)  = f (x:p) xs
 
-    allowed x = x `elem` ("._$" :: String)
+    allowed x = x `elem` ("_$" :: String)
+
+    knownOperators :: Map.Map Char String
+    knownOperators
+      = Map.fromList [ (' ', "space")
+                     , ('!', "excl")
+                     , ('"', "dquot")
+                     , ('#', "hash")
+                     , ('$', "dollar")
+                     , ('%', "percent")
+                     , ('&', "amper")
+                     , ('\'', "squot")
+                     , ('(', "lpar")
+                     , (')', "rpar")
+                     , ('*', "asterisk")
+                     , ('+', "plus")
+                     , (',', "comma")
+                     , ('-', "hyphen")
+                     , ('.', "dot")
+                     , ('/', "slash")
+                     , (':', "colon")
+                     , (';', "semicol")
+                     , ('<', "lt")
+                     , ('=', "eq")
+                     , ('>', "gt")
+                     , ('?', "ques")
+                     , ('@', "at")
+                     , ('^', "caret")
+                     , ('`', "grave")
+                     , ('{', "lbrace")
+                     , ('|', "pipe")
+                     , ('}', "rbrace")
+                     , ('~', "tilde")
+                     ]
 
     jchar x | isAlpha x || isDigit x || allowed x = [x]
+            | Just name <- Map.lookup x knownOperators = "$" ++ name ++ "$"
             | otherwise = "_" ++ show (fromEnum x) ++ "_"
 
 

@@ -5,12 +5,13 @@ module IdrisJvm.Codegen.Types where
 
 import           Control.Monad.RWS
 import qualified Data.DList                 as DL
+import qualified Data.Map                   as Map
 import           Idris.Core.TT
 import           IdrisJvm.Codegen.Assembler
 
 data CgEnv = CgEnv { className :: String } deriving Show
 
-data CgState = CgState { cgStLambdaIndex     :: Int
+data CgState = CgState { cgStLambdaIndex     :: Map.Map ClassName Int
                        , cgStSwitchIndex     :: Int
                        , cgStIfIndex         :: Int
                        , cgStFunctionName    :: JMethodName
@@ -25,7 +26,7 @@ data JMethodName =
               } deriving (Eq, Show)
 
 initialCgState :: CgState
-initialCgState = CgState 0 0 0 (JMethodName "" "") 0 True []
+initialCgState = CgState Map.empty 0 0 (JMethodName "" "") 0 True []
 
 rtClassSig :: String -> String
 rtClassSig c = "mmhelloworld/idrisjvmruntime/" ++ c
@@ -39,10 +40,11 @@ rtThunkSig = "L" ++ rtClassSig "Thunk" ++ ";"
 createThunkSig :: String
 createThunkSig = "(" ++ rtFuncSig ++ "[Ljava/lang/Object;)" ++ rtThunkSig
 
-freshLambdaIndex :: Cg Int
-freshLambdaIndex = do
-  li <- cgStLambdaIndex <$> get
-  modify . updateLambdaIndex $ succ
+freshLambdaIndex :: ClassName -> Cg Int
+freshLambdaIndex clazz = do
+  classLambdaMap <- cgStLambdaIndex <$> get
+  let li = Map.findWithDefault 0 clazz classLambdaMap
+  modify . updateLambdaIndex $ Map.alter (Just . maybe 1 succ) clazz
   return li
 
 freshSwitchIndex :: Cg Int
@@ -69,7 +71,7 @@ updateSwitchIndex f cgState = cgState { cgStSwitchIndex = f (cgStSwitchIndex cgS
 updateIfIndex :: (Int -> Int) -> CgState -> CgState
 updateIfIndex f cgState = cgState { cgStIfIndex = f (cgStIfIndex cgState)}
 
-updateLambdaIndex :: (Int -> Int) -> CgState -> CgState
+updateLambdaIndex :: (Map.Map ClassName Int -> Map.Map ClassName Int) -> CgState -> CgState
 updateLambdaIndex f cgState = cgState { cgStLambdaIndex = f (cgStLambdaIndex cgState)}
 
 updateShouldDescribeFrame :: (Bool -> Bool) -> CgState -> CgState

@@ -47,4 +47,4 @@ done
 PRGDIR=`dirname "$PRG"`
 BASEDIR=`cd "$PRGDIR/.." >/dev/null; pwd`
 
-stack --stack-yaml $BASEDIR/stack.yaml exec idris -- --codegen jvm -p idrsjvmruntime "$@"
+stack --stack-yaml $BASEDIR/stack.yaml exec idris -- --codegen jvm -p idrisjvmruntime "$@"

@@ -48,14 +48,85 @@ localVariablesAlt (SConCase lv _ _ args e) = max assignmentLocals bodyLocals
    where assignmentLocals = if null args then 0 else lv + length args - 1
          bodyLocals = localVariables 0 e
 
-cgFun :: Name -> [Name] -> SExp -> Cg ()
-cgFun n args def = do
+
+data ExportCall = ExportCallInstance | ExportCallStatic | ExportCallSuper deriving (Eq, Show)
+
+cgExport :: ClassName -> ClassName -> Export -> Cg ()
+cgExport cname parent (ExportFun n (FApp ffi [FStr superMethodName]) returns args)
+  | ffi == sUN "Super"
+    = export cname mname parent superMethodName ExportCallSuper returns args where
+      JMethodName _ mname = jname n
+
+cgExport cname _ (ExportFun n (FApp ffi [FStr mname]) returns args)
+  | ffi == sUN "ExportStatic"
+    = export cname mname sourceCname sourceMname ExportCallStatic returns args where
+      JMethodName sourceCname sourceMname = jname n
+
+cgExport cname _ (ExportFun n (FCon (UN "ExportDefault")) returns args)
+  = export cname sourceMname sourceCname sourceMname ExportCallInstance returns args where
+    JMethodName sourceCname sourceMname = jname n
+
+cgExport cname _ (ExportFun n (FApp ffi [FStr mname]) returns args)
+  | ffi == sUN "ExportInstance"
+    = export cname mname sourceCname sourceMname ExportCallInstance returns args where
+      JMethodName sourceCname sourceMname = jname n
+
+cgExport _ _ exportDef = error $ "Unsupported export definition: " <> show exportDef
+
+export :: ClassName -> MethodName -> ClassName -> MethodName -> ExportCall -> FDesc -> [FDesc] -> Cg ()
+export targetCname targetMethName sourceCname sourceMname exportCall returns args = do
+  let argDescs = fdescFieldDescriptor <$> (if isStatic then args else drop 1 args) -- for instance method, drop `this`
+      returnDesc = fdescTypeDescriptor returns
+      isStatic = exportCall == ExportCallStatic
+      isSuperExport = exportCall == ExportCallSuper
+      argStartIndex = if isStatic then 0 else 1 -- drop `this` for instance methods
+      loadArgs = zipWithM_ f argDescs [argStartIndex..]
+      invType = if isSuperExport then InvokeSpecial else InvokeStatic
+      sourceMdesc | isSuperExport = asm $ MethodDescriptor argDescs returnDesc
+                  | otherwise = sig $ length args
+      f desc index = do
+        loadJavaVar index desc
+        javaToIdris $ FieldDescriptor desc
+      mdesc = asm $ MethodDescriptor argDescs returnDesc
+      accessMods = if isStatic then [Public,Static] else [Public]
+
+  writeIns [ CreateMethod accessMods targetCname targetMethName mdesc Nothing Nothing
+           , MethodCodeStart
+           ]
+  when (not isSuperExport && isExportIO returns) $
+    writeIns [ Aconstnull -- Setup the 2 null args for "call__IO"
+             , Dup
+             ]
+  unless isStatic $ writeIns [ Aload 0 ] -- load `this`
+  loadArgs
+  writeIns [ InvokeMethod invType sourceCname sourceMname sourceMdesc False ]
+  unless isSuperExport $
+    writeIns [ InvokeMethod InvokeStatic (rtClassSig "Runtime") "unwrap" (sig 1) False ]
+  when (not isSuperExport && isExportIO returns) unwrapExportedIO
+  returnExport exportCall returnDesc
+
+unwrapExportedIO :: Cg ()
+unwrapExportedIO
+  = writeIns [ InvokeMethod InvokeStatic "main/Main" "call__IO" (sig 3) False
+             , InvokeMethod InvokeStatic (rtClassSig "Runtime") "unwrap" (sig 1) False ]
+
+exportCode :: ExportIFace -> Cg ()
+exportCode (Export (NS (UN "FFI_JVM") _) exportedClassName exportItems) = do
+    let (cls, optParent, intf) = parseExportedClassName exportedClassName
+        parent = fromMaybe "java/lang/Object" optParent
+    writeIns [ CreateClass ComputeMaxs
+             , ClassCodeStart 52 Public cls Nothing parent intf
+             , SourceInfo "IdrisExported.idr" ]
+    defaultConstructor cls parent
+    mapM_ (cgExport cls parent) exportItems
+exportCode e = error $ "Unsupported Export: " <> show e
+
+cgFun :: [Access] -> ClassName -> MethodName -> [Name] -> SExp -> Cg ()
+cgFun access clsName fname args def = do
     modify . updateFunctionArgs $ const args
-    modify . updateFunctionName $ const functionName
+    modify . updateFunctionName $ const $ JMethodName clsName fname
     modify . updateShouldDescribeFrame $ const True
-    let clsName = jmethClsName functionName
-        fname = jmethName functionName
-    writeIns [ CreateMethod [Public, Static] clsName fname (sig nArgs) Nothing Nothing
+    writeIns [ CreateMethod access clsName fname signature Nothing Nothing
              , MethodCodeStart
              ]
     modify . updateLocalVarCount $ const nLocalVars
@@ -71,12 +142,15 @@ cgFun n args def = do
 
   where
     nArgs = length args
+    signature = if static then sig nArgs else sig (pred nArgs)
+    static = Static `elem` access
     nLocalVars = localVariables nArgs def
     resultVarIndex = nLocalVars
     tailRecVarIndex = succ resultVarIndex
     totalVars = nLocalVars + 2
-    functionName = jname n
-    shouldEliminateTco = maybe False ((==) functionName . jname) $ isTailCall def
+    eqThisMethod that = thatClassName == clsName && thatFname == fname where
+      JMethodName thatClassName thatFname = jname that
+    shouldEliminateTco = maybe False eqThisMethod $ isTailCall def
     ret = if shouldEliminateTco
             then
               writeIns [ Astore resultVarIndex -- Store the result
@@ -105,6 +179,14 @@ cgFun n args def = do
                    , Frame FSame 0 [] 0 []
                    ]
         else cgBody ret def
+
+returnExport :: ExportCall -> TypeDescriptor -> Cg ()
+returnExport exportCall returnDesc = do
+  unless (exportCall == ExportCallSuper) $ idrisDescToJava returnDesc
+  javaReturn returnDesc
+  writeIns [ MaxStackAndLocal (-1) (-1)
+           , MethodCodeEnd
+           ]
 
 tailRecStartLabelName :: String
 tailRecStartLabelName = "$tailRecStartLabel"
@@ -140,7 +222,8 @@ cgBody ret (SApp True f args) = do
   caller <- cgStFunctionName <$> get
   if jname f == caller -- self tail call, use goto
        then do
-              let g toIndex (Loc fromIndex) = assign fromIndex toIndex
+              let g toIndex (Loc fromIndex)
+                    = assign fromIndex toIndex
                   g _ _ = error "Unexpected global variable"
               writeIns . join . DL.fromList $ zipWith g [0..] args
         else -- non-self tail call
@@ -232,26 +315,3 @@ cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fd
     ret
 
 cgBody _ _ = error "NOT IMPLEMENTED!!!!"
-
-defaultConstructor :: ClassName -> Cg ()
-defaultConstructor cname
-  = writeIns [ CreateMethod [Public] cname "<init>" "()V" Nothing Nothing
-             , MethodCodeStart
-             , Aload 0
-             , InvokeMethod InvokeSpecial "java/lang/Object" "<init>" "()V" False
-             , Return
-             , MaxStackAndLocal (-1) (-1) -- Let the asm calculate
-             , MethodCodeEnd
-             ]
-
-mainMethod :: Cg ()
-mainMethod = do
-  let JMethodName cname mname = jname $ MN 0 "runMain"
-  writeIns [ CreateMethod [Public, Static] cname "main" "([Ljava/lang/String;)V" Nothing Nothing
-           , MethodCodeStart
-           , InvokeMethod InvokeStatic cname mname "()Ljava/lang/Object;" False
-           , Pop
-           , Return
-           , MaxStackAndLocal (-1) (-1)
-           , MethodCodeEnd
-           ]

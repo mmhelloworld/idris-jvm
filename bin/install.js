@@ -15,7 +15,7 @@ var ASSEMBLER_VERSION = '1.0-SNAPSHOT';
 var dfltWorkingDir = System.getProperty('user.home') + File.separator + '.idrisjvm';
 var programArgs = arguments;
 
-var shouldUpdate = arguments.indexOf('-u') >= 0;
+var noUpdate = arguments.indexOf('--no-update') >= 0;
 var workingDirIndex = function() {
   var shortIndex = programArgs.indexOf('-w');
   var index = shortIndex < 0 ? programArgs.indexOf('--work-dir') : shortIndex;
@@ -73,13 +73,13 @@ function install() {
   var assemblerLib = JString.format('https://github.com/mmhelloworld/jvm-assembler/releases/download/%s/%s', ASSEMBLER_VERSION, assemblerZip);
 
   new File(workingDir).mkdirs();
-  if (!Paths.get(workingDir, runtime).toFile().exists() || shouldUpdate) {
+  if (!noUpdate) {
       print('Downloading runtime...');
       downloadUrl(runtimeLib);
       print('Downloading runtime done!');
   }
 
-  if (!Paths.get(workingDir, assembler).toFile().exists() || shouldUpdate) {
+  if (!noUpdate) {
       print('Downloading assembler...');
       downloadUrl(assemblerLib);
       print('Downloading assembler done!');

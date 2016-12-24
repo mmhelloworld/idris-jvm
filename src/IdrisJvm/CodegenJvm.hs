@@ -11,13 +11,13 @@ import           IRTS.Simplified
 
 import qualified Data.DList                 as DL
 import           IdrisJvm.Codegen.Assembler
+import           IdrisJvm.Codegen.Common
 import           IdrisJvm.Codegen.Function
 
 import           IdrisJvm.AssemblerService
 import           IdrisJvm.Codegen.Types
 import           System.Directory           (getCurrentDirectory)
 import           System.FilePath            (isRelative, takeBaseName, (</>))
-
 
 codegenJvm :: CodeGenerator
 codegenJvm ci = do
@@ -37,9 +37,11 @@ code :: CodegenInfo -> Cg ()
 code ci = do
   functions ci
   mainMethod
+  mapM_ exportCode (exportDecls ci)
 
 functions :: CodegenInfo -> Cg ()
 functions ci = mapM_ doCodegen (simpleDecls ci)
 
 doCodegen :: (Name, SDecl) -> Cg ()
-doCodegen (n, SFun _ args _ def) = cgFun n args def
+doCodegen (n, SFun _ args _ def) = cgFun [Public, Static] clsName fname args def where
+  JMethodName clsName fname = jname n

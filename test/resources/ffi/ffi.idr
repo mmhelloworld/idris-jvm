@@ -1,137 +1,95 @@
 module Main
 
 import IdrisJvm.FFI
+import IdrisJvm.IO
+import Java.Lang
+import Java.Util
+import Java.Math
 
-namespace Java.Lang.Math
-  MathClass : JVM_NativeTy
-  MathClass = Class "java/lang/Math"
+IdrisThreadClass : JVM_NativeTy
+IdrisThreadClass = Class "hello/IdrisThread"
 
-  mathMax : Int -> Int -> Int
-  mathMax a b = unsafePerformIO $ javacall (Static MathClass "max") (Int -> Int -> JVM_IO Int) a b
+IdrisThread : Type
+IdrisThread = JVM_Native IdrisThreadClass
 
-namespace Java.Lang.System
+add : IdrisThread -> Int -> Int -> Int
+add _ x y = x + y
 
-  SystemClass : JVM_NativeTy
-  SystemClass = Class "java/lang/System"
+exportedBoolToString : Bool -> String
+exportedBoolToString = show
 
-  -- Takes a property name and a default value and returns the property value
-  -- if it exists otherwise returns the default value
-  getProperty : String -> String -> JVM_IO String
-  getProperty key default = javacall (Static SystemClass "getProperty") (String -> String -> JVM_IO String) key default
+helloFromIdris : IdrisThread -> String -> JVM_IO String
+helloFromIdris this name = do
+  printLn "Hi "
+  pure $ "Hello " ++ name
 
-namespace Java.Util.Objects
+Inherits Thread IdrisThread where {}
 
-  ObjectsClass : JVM_NativeTy
-  ObjectsClass = Class "java/util/Objects"
+setName : IdrisThread -> String -> JVM_IO ()
+setName this name = invokeInstance "setName" (IdrisThread -> String -> JVM_IO ()) this name
 
-  -- Respects inheritance so that this function can be called on all types
-  -- that extend java.lang.Object, which is everything.
-  objToString : Inherits Object that => that -> String
-  objToString obj = unsafePerformIO $ javacall (Static ObjectsClass "toString") (Object -> JVM_IO String) (believe_me obj)
+getThreadName : IdrisThread -> JVM_IO String
+getThreadName = invokeInstance "getThreadName" (IdrisThread -> JVM_IO String)
 
-namespace Java.Math.BigInteger
-  BigIntegerClass : JVM_NativeTy
-  BigIntegerClass = Class "java/math/BigInteger"
+run : IdrisThread -> JVM_IO ()
+run this = do
+  printLn "Hello from Idris"
+  printLn !(helloFromIdris this "inside thread")
+  setName this "idris-thread"
+  printLn !(getThreadName this)
 
-  BigInteger : Type
-  BigInteger = JVM_Native BigIntegerClass
+jmain : StringArray -> JVM_IO ()
+jmain args = do
+  printLn $ exportedBoolToString True
+  Arrays.toString args >>= printLn
 
-  -- Constructor example
-  fromString : String -> JVM_IO BigInteger
-  fromString s = new (String -> JVM_IO BigInteger) s
+newIdrisThread : JVM_IO IdrisThread
+newIdrisThread = FFI.new (JVM_IO IdrisThread)
 
-  toString : BigInteger -> String
-  toString bigInt = unsafePerformIO $ javacall (Instance "toString") (BigInteger -> JVM_IO String) bigInt
+startIdrisThread : IdrisThread -> JVM_IO ()
+startIdrisThread thread = invokeInstance "start" (IdrisThread -> JVM_IO ()) thread
 
-  add : BigInteger -> BigInteger -> BigInteger
-  add b1 b2 = unsafePerformIO $ javacall (Instance "add") (BigInteger -> BigInteger -> JVM_IO BigInteger) b1 b2
+jadd : IdrisThread -> Int -> Int -> Int
+jadd thread x y = unsafePerformIO $ invokeInstance "jadd" (IdrisThread -> Int -> Int -> JVM_IO Int) thread x y
 
-Inherits Object BigInteger where {}
+jboolToString : Bool -> String
+jboolToString b = unsafePerformIO $ invokeStatic IdrisThreadClass "boolToString" (Bool -> JVM_IO String) b
 
-namespace Java.Util.List
-  ListClass : JVM_NativeTy
-  ListClass = Interface "java/util/List"
-
-  JList : Type
-  JList = JVM_Native ListClass
-
-  size : Inherits JList list => list -> JVM_IO Nat
-  size list = cast <$> javacall (Instance "size") (JList -> JVM_IO Int) (believe_me list)
-
-Inherits Object JList where {}
-
-namespace Java.Util.ArrayList
-  ArrayListClass : JVM_NativeTy
-  ArrayListClass = Class "java/util/ArrayList"
-
-  ArrayList : Type
-  ArrayList = JVM_Native ArrayListClass
-
-  emptyArrayList : JVM_IO ArrayList
-  emptyArrayList = new (JVM_IO ArrayList)
-
-Inherits JList ArrayList where {}
-Inherits Object ArrayList where {}
-
-BooleanClass : JVM_NativeTy
-BooleanClass = Class "java/lang/Boolean"
-
-ByteClass : JVM_NativeTy
-ByteClass = Class "java/lang/Byte"
-
-CharacterClass : JVM_NativeTy
-CharacterClass = Class "java/lang/Character"
-
-StringClass : JVM_NativeTy
-StringClass = Class "java/lang/String"
-
-ShortClass : JVM_NativeTy
-ShortClass = Class "java/lang/Short"
-
-LongClass : JVM_NativeTy
-LongClass = Class "java/lang/Long"
-
-parseBool : String -> Bool
-parseBool s = unsafePerformIO $ javacall (Static BooleanClass "parseBoolean") (String -> JVM_IO Bool) s
-
-boolToString : Bool -> String
-boolToString b = unsafePerformIO $ javacall (Static StringClass "valueOf") (Bool -> JVM_IO String) b
-
-charAt : String -> Int -> Char
-charAt str index = unsafePerformIO $ javacall (Instance "charAt") (String -> Int -> JVM_IO Char) str index
-
-charToString : Char -> String
-charToString b = unsafePerformIO $ javacall (Static StringClass "valueOf") (Char -> JVM_IO String) b
-
-parseByte : String -> Bits8
-parseByte s = unsafePerformIO $ javacall (Static ByteClass "parseByte") (String -> JVM_IO Bits8) s
-
-byteToString : Bits8 -> String
-byteToString b = unsafePerformIO $ javacall (Static ByteClass "toString") (Bits8 -> JVM_IO String) b
-
-parseShort : String -> Bits16
-parseShort s = unsafePerformIO $ javacall (Static ShortClass "parseShort") (String -> JVM_IO Bits16) s
-
-shortToString : Bits16 -> String
-shortToString b = unsafePerformIO $ javacall (Static ShortClass "toString") (Bits16 -> JVM_IO String) b
-
-parseLong : String -> Bits64
-parseLong s = unsafePerformIO $ javacall (Static LongClass "parseLong") (String -> JVM_IO Bits64) s
-
-longToString : Bits64 -> String
-longToString b = unsafePerformIO $ javacall (Static LongClass "toString") (Bits64 -> JVM_IO String) b
+jhelloFromIdris : IdrisThread -> String -> JVM_IO String
+jhelloFromIdris thread str = invokeInstance "helloFromIdris" (IdrisThread -> String -> JVM_IO String) thread str
 
 main : JVM_IO ()
 main = do
-  printLn $ max 3 5
+  -- Test ffi calls
+  printLn $ maxInt 3 5
+  printLn $ maxFloat (Float 3.2) (Float 6.4)
+  printLn $ maxDouble 7.5 6.8
   printLn $ boolToString $ parseBool "true"
   printLn $ charToString $ charAt "foobarbaz" 3
   printLn $ byteToString $ parseByte "127"
   printLn $ shortToString $ parseShort "32767"
   printLn $ longToString $ parseLong "9223372036854775807"
   printLn !(getProperty "idris_jvm_ffi_invalid_prop" "foo")
-  bigInt1 <- fromString "11111111111111111111" -- Invokes BigInteger constructor
-  bigInt2 <- fromString "11111111111111111111"
-  printLn $ toString $ add bigInt1 bigInt2 -- bigInt1.add(bigInt2).toString()
-  jlist <- emptyArrayList
+  bigInt1 <- BigInteger.new "11111111111111111111"
+  bigInt2 <- BigInteger.new "11111111111111111111"
+  printLn $ BigInteger.toString $ BigInteger.add bigInt1 bigInt2
+  jlist <- ArrayList.new
   printLn !(size jlist)
+
+  -- Test exports
+  thread <- newIdrisThread
+  startIdrisThread thread
+  printLn $ Main.add thread 2 3
+  printLn $ jadd thread 3 5
+  printLn $ jboolToString True
+  printLn $ !(jhelloFromIdris thread "from idris")
+
+exports : FFI_Export FFI_JVM "hello/IdrisThread extends java/lang/Thread implements java/lang/Runnable" []
+exports =
+  Fun exportedBoolToString (ExportStatic "boolToString") $
+  Fun Main.add (ExportInstance "jadd") $
+  Fun helloFromIdris ExportDefault $
+  Fun run ExportDefault $
+  Fun getThreadName (Super "getName") $
+  Fun Main.jmain (ExportStatic "main") $
+  End

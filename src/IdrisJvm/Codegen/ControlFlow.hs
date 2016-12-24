@@ -19,6 +19,7 @@ cgSwitch :: Cg () -> (Cg () -> SExp -> Cg ()) -> LVar -> [SAlt] -> Cg ()
 cgSwitch ret cgBody e alts | all isIntCase alts = do
     switchIndex <- freshSwitchIndex
     let switch = csWithLbls switchIndex alts
+        switchVar = locIndex e
         nonDefaultCases = filter (\(_, _, alt) -> not (defaultCase alt)) switch
         labels = (\(lbl, _, _) -> lbl) <$> nonDefaultCases
         exprs = catMaybes $ (\(_, expr, _) -> expr) <$> nonDefaultCases
@@ -27,7 +28,6 @@ cgSwitch ret cgBody e alts | all isIntCase alts = do
         switchDefaultLbl = if hasDefault then defaultLabel switchIndex else switchEndLbl
         hasDefault = any defaultCase alts
         isConstructorSwitch = any conCase alts
-        switchVar = locIndex e
 
     writeIns $ DL.fromList (CreateLabel . (\(lbl, _, _) -> lbl) <$> switch)
     writeIns [ CreateLabel switchEndLbl ]
@@ -61,7 +61,7 @@ cgIfCase :: Int -> Cg () -> (Cg () -> SExp -> Cg ()) -> LVar -> String -> (Strin
 cgIfCase ifIndex ret cgBody e nextLabel (label, Just ifExpr, SConstCase _ expr) = do
   writeIns [ LabelStart label ]
   addFrame
-  writeIns [Aload $ locIndex e]
+  writeIns [Aload $ locIndex e ]
   ifExpr
   writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util") "equals" "(Ljava/lang/Object;Ljava/lang/Object;)Z" False
            , Ifeq nextLabel

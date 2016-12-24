@@ -38,8 +38,8 @@ For details on what the `setup` script does, please see [here](docs/setup.md).
 * This is still work in progress.
 * All Idris types are supported. Idris `Integer` is represented as Java `BigInteger`.
 Idris `Double` is mapped to Java `double`. Idris `Bits8`, `Bits16`, `Bits32` are mapped to Java `int`.
-Idris `Bits64` is mapped to Java `long`. Operations on `Bits8`, `Bits16`, `Bits32`, `Bits64` are unsigned of course and implemented using Java 8's unsigned api (For example, via `java.lang.Integer.compareUnsigned`).
-* FFI: Currently Java static methods, instance methods, constructors are all supported. JVM arrays, extending classes, implementing interfaces, exporting idris functions are not supported yet.
+Idris `Bits64` is mapped to Java `long`.
+* FFI: Currently from Idris, invoking Java static methods, instance methods, constructors are all supported. Idris functions can also be exported as Java instance methods, static methods. The exported class with Idris implementations can also extend a Java class and implement interfaces. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/test/resources/ffi/ffi.idr#L87) for an example. JVM arrays, exporting Idris `data`, exporting an idris function as a Java constructor are in progress. 
 * Tail recursion is eliminated using JVM's `GOTO`. For the following code, `sum 50000` wouldn't blow up the stack.
     ```idris
     sum : Nat -> Nat

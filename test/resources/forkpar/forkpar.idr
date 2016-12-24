@@ -1,6 +1,7 @@
 module Main
 
 import IdrisJvm.FFI
+import IdrisJvm.IO
 
 -- Returning an additional Nat to test that `par` returns a complex type correctly
 fibonacci : Integer -> (Nat, Integer)

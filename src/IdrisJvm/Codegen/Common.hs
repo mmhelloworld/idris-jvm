@@ -96,6 +96,29 @@ addFrame = do
       modify . updateShouldDescribeFrame $ const False
     else writeIns [ Frame FSame 0 [] 0 []]
 
+defaultConstructor :: ClassName -> ClassName -> Cg ()
+defaultConstructor cname parent
+  = writeIns [ CreateMethod [Public] cname "<init>" "()V" Nothing Nothing
+             , MethodCodeStart
+             , Aload 0
+             , InvokeMethod InvokeSpecial parent "<init>" "()V" False
+             , Return
+             , MaxStackAndLocal (-1) (-1) -- Let the asm calculate
+             , MethodCodeEnd
+             ]
+
+mainMethod :: Cg ()
+mainMethod = do
+  let JMethodName cname mname = jname $ MN 0 "runMain"
+  writeIns [ CreateMethod [Public, Static] cname "main" "([Ljava/lang/String;)V" Nothing Nothing
+           , MethodCodeStart
+           , InvokeMethod InvokeStatic cname mname "()Ljava/lang/Object;" False
+           , Pop
+           , Return
+           , MaxStackAndLocal (-1) (-1)
+           , MethodCodeEnd
+           ]
+
 invokeError :: String -> Cg ()
 invokeError x
   = writeIns [ Ldc $ StringConst x

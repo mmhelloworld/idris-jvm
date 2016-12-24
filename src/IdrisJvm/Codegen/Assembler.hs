@@ -18,19 +18,24 @@ data Asm = Aaload
          | Astore Int
          | Areturn
          | Checkcast Descriptor
-         | ClassCodeStart Int Access ClassName Signature ClassName [ClassName]
+         | ClassCodeStart Int Access ClassName (Maybe Signature) ClassName [ClassName]
          | ClassCodeEnd String
          | CreateClass ClassOpts
          | CreateLabel String
          | CreateMethod [Access] ClassName MethodName Descriptor (Maybe Signature) (Maybe [Exception])
          | Dadd
          | Ddiv
+         | Dload Int
          | Dmul
          | Drem
+         | Dreturn
          | Dsub
          | Dup
+         | F2d
          | Field FieldInsType ClassName FieldName Descriptor
+         | Fload Int
          | Frame FrameType Int [Signature] Int [Signature]
+         | Freturn
          | Goto Label
          | I2c
          | I2l
@@ -48,6 +53,7 @@ data Asm = Aaload
          | InvokeMethod InvocType ClassName MethodName Descriptor Bool
          | InvokeDynamic MethodName Descriptor Handle [BsmArg]
          | Irem
+         | Ireturn
          | Ishl
          | Ishr
          | Istore Int
@@ -59,9 +65,11 @@ data Asm = Aaload
          | Land
          | Ldc Constant
          | Ldiv
+         | Lload Int
          | Lmul
          | LookupSwitch Label [Label] [Int32]
          | Lrem
+         | Lreturn
          | Lshl
          | Lshr
          | Lsub
@@ -71,8 +79,12 @@ data Asm = Aaload
          | MethodCodeEnd
          | New ClassName
          | Pop
+         | Pop2
          | Return
          | SourceInfo SourceFileName
+
+instance Show Asm where
+  show = show . toJSON
 
 instance ToJSON Asm where
   toJSON Aaload = object [ "type" .= String "Aaload" ]
@@ -104,7 +116,7 @@ instance ToJSON Asm where
              , "version" .= toJSON version
              , "acc" .= toJSON acc
              , "name" .= toJSON cname
-             , "sig" .= if s == "null" then Null else toJSON s
+             , "sig" .= maybe Null toJSON s
              , "parent" .= toJSON super
              , "interfaces" .= toJSON intf]
 
@@ -131,10 +143,17 @@ instance ToJSON Asm where
 
   toJSON Dadd = object [ "type" .= String "Dadd" ]
   toJSON Ddiv = object [ "type" .= String "Ddiv" ]
+
+  toJSON (Dload n)
+    = object [ "type" .= String "Dload"
+             , "n" .= toJSON n ]
+
   toJSON Dmul = object [ "type" .= String "Dmul" ]
   toJSON Drem = object [ "type" .= String "Drem" ]
+  toJSON Dreturn = object [ "type" .= String "Dreturn" ]
   toJSON Dsub = object [ "type" .= String "Dsub" ]
   toJSON Dup = object [ "type" .= String "Dup" ]
+  toJSON F2d = object [ "type" .= String "F2d" ]
 
   toJSON (Field ftype cname fname desc)
     = object [ "type" .= String "Field"
@@ -143,6 +162,10 @@ instance ToJSON Asm where
              , "fname" .= toJSON fname
              , "desc" .= toJSON desc ]
 
+  toJSON (Fload n)
+    = object [ "type" .= String "Fload"
+             , "n" .= toJSON n ]
+
   toJSON (Frame frameType nlocal local nstack stack)
     = object [ "type" .= String "Frame"
              , "ftype" .= toJSON frameType
@@ -150,6 +173,8 @@ instance ToJSON Asm where
              , "local" .= toJSON local
              , "nstack" .= toJSON nstack
              , "stack" .= toJSON stack ]
+
+  toJSON Freturn = object [ "type" .= String "Freturn" ]
 
   toJSON (Goto label)
     = object [ "type" .= String "Goto"
@@ -197,6 +222,8 @@ instance ToJSON Asm where
 
   toJSON Irem = object [ "type" .= String "Irem" ]
 
+  toJSON Ireturn = object [ "type" .= String "Ireturn" ]
+
   toJSON Ishl = object [ "type" .= String "Ishl" ]
 
   toJSON Ishr = object [ "type" .= String "Ishr" ]
@@ -238,6 +265,10 @@ instance ToJSON Asm where
 
   toJSON Ldiv = object [ "type" .= String "Ldiv" ]
 
+  toJSON (Lload n)
+    = object [ "type" .= String "Lload"
+             , "n" .= toJSON n ]
+
   toJSON Lmul = object [ "type" .= String "Lmul" ]
 
   toJSON (LookupSwitch dlabel clabels vals)
@@ -247,6 +278,8 @@ instance ToJSON Asm where
              , "vals" .= toJSON vals ]
 
   toJSON Lrem = object [ "type" .= String "Lrem" ]
+
+  toJSON Lreturn = object [ "type" .= String "Lreturn" ]
 
   toJSON Lshl = object [ "type" .= String "Lshl" ]
 
@@ -270,6 +303,8 @@ instance ToJSON Asm where
              , "name" .= toJSON name ]
 
   toJSON Pop = object [ "type" .= String "Pop" ]
+
+  toJSON Pop2 = object [ "type" .= String "Pop2" ]
 
   toJSON Return = object [ "type" .= String "Return" ]
 
@@ -309,15 +344,18 @@ class Asmable a where
 
 data ReferenceTypeDescriptor = ClassDesc ClassName
                              | InterfaceDesc ClassName
+                             | ArrayDesc ReferenceTypeDescriptor
                                deriving (Eq, Show)
 
 instance Asmable ReferenceTypeDescriptor where
   asm (ClassDesc c)     = "L" ++ c ++ ";"
   asm (InterfaceDesc c) = "L" ++ c ++ ";"
+  asm (ArrayDesc refTy) = "[" ++ asm refTy
 
 refTyClassName :: ReferenceTypeDescriptor -> ClassName
 refTyClassName (ClassDesc c)     = c
 refTyClassName (InterfaceDesc c) = c
+refTyClassName arr               = asm arr
 
 data FieldTypeDescriptor = FieldTyDescByte
                          | FieldTyDescChar
@@ -343,7 +381,7 @@ instance Asmable FieldTypeDescriptor where
   asm FieldTyDescLong          = "J"
   asm (FieldTyDescReference f) = asm f
 
-data TypeDescriptor = FieldDescriptor FieldTypeDescriptor | VoidDescriptor
+data TypeDescriptor = FieldDescriptor FieldTypeDescriptor | VoidDescriptor deriving (Eq, Show)
 
 instance Asmable TypeDescriptor where
   asm (FieldDescriptor t) = asm t
@@ -407,7 +445,8 @@ frameTypeNum FAppend = 1
 instance ToJSON FrameType where
   toJSON = toJSON . frameTypeNum
 
-data Access = Private | Public | Static | Synthetic
+data Access = Private | Public | Static | Synthetic deriving (Eq, Show)
+
 accessNum :: Access -> Int
 accessNum Private   = 2
 accessNum Public    = 1
@@ -488,6 +527,9 @@ unboxLong = InvokeMethod InvokeVirtual "java/lang/Long" "longValue" "()J" False
 
 unboxDouble :: Asm
 unboxDouble = InvokeMethod InvokeVirtual "java/lang/Double" "doubleValue" "()D" False
+
+unboxFloat :: Asm
+unboxFloat = InvokeMethod InvokeVirtual "java/lang/Float" "floatValue" "()F" False
 
 sig :: Int -> String
 sig nArgs = "(" ++ concat (replicate nArgs "Ljava/lang/Object;") ++ ")Ljava/lang/Object;"

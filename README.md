@@ -1,5 +1,7 @@
 # idris-jvm
 
+[![Join the chat at https://gitter.im/mmhelloworld/idris-jvm](https://badges.gitter.im/mmhelloworld/idris-jvm.svg)](https://gitter.im/mmhelloworld/idris-jvm?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 JVM bytecode backend for Idris
 
 ## Prerequisites

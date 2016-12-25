@@ -83,7 +83,7 @@ if "%JAVACMD%"=="" set JAVACMD=java
 @REM Reaching here means variables are defined and arguments have been captured
 :endInit
 
-stack --stack-yaml %BASEDIR%\stack.yaml exec idris -- --codegen jvm -p idrsjvmruntime %CMD_LINE_ARGS%
+stack --stack-yaml %BASEDIR%\stack.yaml exec idris -- --codegen jvm -p idrisjvmruntime %CMD_LINE_ARGS%
 
 if %ERRORLEVEL% NEQ 0 goto error
 goto end

@@ -10,12 +10,11 @@
 "foo"
 "22222222222222222222"
 0
-Hello from Idris
 Hi
-Hello inside thread
-idris-thread
+Hello idris-thread
 5
 8
 True
+hello from constructor with name: idris-thread-2
 Hi
-Hello from idris
+Hello idris-thread-2

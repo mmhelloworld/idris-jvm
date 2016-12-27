@@ -33,18 +33,25 @@ getThreadName = invokeInstance "getThreadName" (IdrisThread -> JVM_IO String)
 
 run : IdrisThread -> JVM_IO ()
 run this = do
-  printLn "Hello from Idris"
-  printLn !(helloFromIdris this "inside thread")
-  setName this "idris-thread"
-  printLn !(getThreadName this)
+  threadName <- getThreadName this
+  printLn !(helloFromIdris this threadName)
 
 jmain : StringArray -> JVM_IO ()
 jmain args = do
   printLn $ exportedBoolToString True
   Arrays.toString args >>= printLn
 
+idrisThreadConstructor : IdrisThread -> JVM_IO ()
+idrisThreadConstructor thread = printLn "hello from constructor"
+
+idrisThreadWithNameConstructor : IdrisThread -> String -> JVM_IO ()
+idrisThreadWithNameConstructor thread name = printLn $ "hello from constructor with name: " ++ name
+
 newIdrisThread : JVM_IO IdrisThread
 newIdrisThread = FFI.new (JVM_IO IdrisThread)
+
+newIdrisThreadWithName : String -> JVM_IO IdrisThread
+newIdrisThreadWithName = FFI.new (String -> JVM_IO IdrisThread)
 
 startIdrisThread : IdrisThread -> JVM_IO ()
 startIdrisThread thread = invokeInstance "start" (IdrisThread -> JVM_IO ()) thread
@@ -77,18 +84,24 @@ main = do
   printLn !(size jlist)
 
   -- Test exports
-  thread <- newIdrisThread
-  startIdrisThread thread
-  printLn $ Main.add thread 2 3
-  printLn $ jadd thread 3 5
+  thread1 <- newIdrisThread
+  setName thread1 "idris-thread"
+  startIdrisThread thread1
+  printLn $ Main.add thread1 2 3
+  printLn $ jadd thread1 3 5
   printLn $ jboolToString True
-  printLn $ !(jhelloFromIdris thread "from idris")
+  printLn $ !(jhelloFromIdris thread1 "from idris")
+
+  thread2 <- newIdrisThreadWithName "idris-thread-2"
+  startIdrisThread thread2
 
 exports : FFI_Export FFI_JVM "hello/IdrisThread extends java/lang/Thread implements java/lang/Runnable" []
 exports =
   Fun exportedBoolToString (ExportStatic "boolToString") $
   Fun Main.add (ExportInstance "jadd") $
   Fun helloFromIdris ExportDefault $
+  Fun idrisThreadConstructor Constructor $
+  Fun idrisThreadWithNameConstructor Constructor $
   Fun run ExportDefault $
   Fun getThreadName (Super "getName") $
   Fun Main.jmain (ExportStatic "main") $

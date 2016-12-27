@@ -14,7 +14,7 @@ import           IRTS.Lang
 data JForeign = JStatic String String
               | JVirtual String String
               | JInterface String String
-              | JConstructor String
+              | JNew String
 
 parseDescriptor :: FDesc -> FDesc -> [(FDesc, LVar)] -> JForeign
 parseDescriptor _ (FApp ffi [FApp nativeTy [FStr cname], FStr fn]) _
@@ -31,8 +31,8 @@ parseDescriptor _ (FApp ffi [FStr fn]) ((declClass, _):_)
     ArrayDesc _         -> error "No instance methods on an array"
 
 parseDescriptor returns (FCon ffi) _
- | ffi == sUN "Constructor" = case fdescRefDescriptor returns of
-    ClassDesc cname -> JConstructor cname
+ | ffi == sUN "New" = case fdescRefDescriptor returns of
+    ClassDesc cname -> JNew cname
     InterfaceDesc _ -> error $ "Invalid FFI descriptor for constructor. " <>
                               "A constructor can't return an interface type. " <>
                               show returns

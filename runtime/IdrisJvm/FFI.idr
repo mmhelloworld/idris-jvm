@@ -12,6 +12,7 @@ data JVM_Native  : JVM_NativeTy -> Type where
 
 data JVM_FfiFn = Static JVM_NativeTy  String
                | Constructor
+               | New
                | Instance String
                | Super String
                | ExportStatic String
@@ -56,7 +57,7 @@ mutual
 
 Show JFloat where
   show (Float d) = show d
-  
+
 JVM_IO : Type -> Type
 JVM_IO = IO' FFI_JVM
 
@@ -73,7 +74,7 @@ javaInterface = JVM_Native . Interface
 
 %inline
 new : (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
-new ty = javacall Constructor ty
+new ty = javacall New ty
 
 %inline
 invokeInstance : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty

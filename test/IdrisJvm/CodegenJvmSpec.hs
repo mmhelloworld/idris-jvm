@@ -39,7 +39,7 @@ runTest dir = it ("can compile `" <> dir <> "`") $ do
 
 compileAndRun :: FilePath -> String -> IO String
 compileAndRun dir pgm = do
-  let out = dir </> takeBaseName pgm
+  let out = dir </> "target"
   (_, compilerOut, compilerErr) <-
     runProcess "stack" [ "exec", "idris", "--",  "--codegen", "jvm",
       "-p", "idrisjvmruntime", pgm, "-o", out]

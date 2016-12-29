@@ -8,6 +8,6 @@ mutual
   oddT : Nat -> IO Bool
   oddT Z = pure False
   oddT (S k) = evenT k
-  
+
 main : IO ()
-main = evenT 99999999 >>= printLn
+main = evenT 99999 >>= printLn

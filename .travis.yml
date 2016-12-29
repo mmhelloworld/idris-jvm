@@ -1,0 +1,30 @@
+sudo: false
+
+language: java
+
+jdk:
+  - oraclejdk8
+
+# Caching so the next build will be fast too.
+cache:
+  directories:
+    - $HOME/.stack
+    - $HOME/.local
+
+# Ensure necessary system libraries are present
+addons:
+  apt:
+    packages:
+      - libgmp-dev
+
+before_install:
+  - mkdir -p ~/.local/bin ~/.idrisjvm
+  - export PATH=$HOME/.local/bin:$PATH
+  - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+  - jjs -scripting bin/install.js; cat ~/.idrisjvm/jvmasm.log
+
+script:
+  - stack --no-terminal --skip-ghc-check setup
+  - bin/travis_long stack --no-terminal --skip-ghc-check install idris
+  - pushd runtime > /dev/null; stack --no-terminal --skip-ghc-check exec idris -- --install idris-jvm-runtime.ipkg; popd > /dev/null
+  - bin/travis_long stack --no-terminal --skip-ghc-check test

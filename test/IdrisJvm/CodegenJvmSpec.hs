@@ -54,7 +54,7 @@ compileAndRun dir pgm = do
 getTestRoot :: IO FilePath
 getTestRoot = do
   cwd <- getCurrentDirectory
-  return $ cwd </> "test" </> "resources"
+  return $ cwd </> "test" </> "tests"
 
 getWorkingDir :: IO FilePath
 getWorkingDir = do

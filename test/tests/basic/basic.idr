@@ -75,6 +75,9 @@ printHeader header = do
   putStrLn header
   putStrLn $ concat $ replicate (length header) "="
 
+pythag : Int -> List (Int, Int, Int)
+pythag max = [(x, y, z) | z <- [1..max], y <- [1..z], x <- [1..y],
+                          x * x + y * y == z * z]
 main : IO ()
 main = do
   print "Hello "
@@ -141,3 +144,6 @@ main = do
 
   printHeader "ordTest on Double"
   ordTest double1 double2
+
+  putStrLn ""
+  printLn $ pythag 50

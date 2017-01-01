@@ -29,6 +29,7 @@ parseDescriptor _ (FApp ffi [FStr fn]) ((declClass, _):_)
     ClassDesc cname     -> JVirtual cname fn
     InterfaceDesc cname -> JInterface cname fn
     ArrayDesc _         -> error "No instance methods on an array"
+    IdrisExportDesc _ -> error "No instance methods on an Idris exported type"
 
 parseDescriptor returns (FCon ffi) _
  | ffi == sUN "New" = case fdescRefDescriptor returns of
@@ -37,6 +38,7 @@ parseDescriptor returns (FCon ffi) _
                               "A constructor can't return an interface type. " <>
                               show returns
     ArrayDesc _ -> error "Array construction is not yet supported"
+    IdrisExportDesc _ -> error "Cannot invoke constructor of Idris exported type"
 
 parseDescriptor _ fdesc _ = error $ "Unsupported descriptor: " ++ show fdesc
 
@@ -76,6 +78,9 @@ loadJavaVar index FieldTyDescChar    = writeIns [ Iload index ]
 loadJavaVar index FieldTyDescLong    = writeIns [ Lload index ]
 loadJavaVar index FieldTyDescFloat   = writeIns [ Fload index ]
 loadJavaVar index FieldTyDescDouble  = writeIns [ Dload index ]
+loadJavaVar index (FieldTyDescReference (IdrisExportDesc cname))
+  = writeIns [ Aload index
+             , InvokeMethod InvokeVirtual cname "getValue" "()Ljava/lang/Object;" False ]
 loadJavaVar index _                  = writeIns [ Aload index ]
 
 javaReturn :: TypeDescriptor -> Cg ()
@@ -88,6 +93,10 @@ javaReturn (FieldDescriptor FieldTyDescChar)    = writeIns [ Ireturn ]
 javaReturn (FieldDescriptor FieldTyDescLong)    = writeIns [ Lreturn ]
 javaReturn (FieldDescriptor FieldTyDescFloat)   = writeIns [ Freturn ]
 javaReturn (FieldDescriptor FieldTyDescDouble)  = writeIns [ Dreturn ]
+javaReturn (FieldDescriptor (FieldTyDescReference (IdrisExportDesc cname)))
+ = writeIns [ InvokeMethod InvokeStatic cname "create" desc False
+            , Areturn ]
+   where desc = "(Ljava/lang/Object;)L" ++ cname ++ ";"
 javaReturn _                                    = writeIns [ Areturn ]
 
 idrisDescToJava :: TypeDescriptor -> Cg ()
@@ -110,6 +119,7 @@ idrisDescToJava (FieldDescriptor FieldTyDescFloat)
   = writeIns [ Checkcast "java/lang/Double"
              , InvokeMethod InvokeVirtual "java/lang/Double" "floatValue" "()F" False ]
 idrisDescToJava (FieldDescriptor FieldTyDescDouble) = writeIns [ Checkcast "java/lang/Double", unboxDouble ]
+idrisDescToJava (FieldDescriptor (FieldTyDescReference (IdrisExportDesc _))) = pure () -- converted using factory method on the exported type
 idrisDescToJava (FieldDescriptor (FieldTyDescReference refTy)) = writeIns [ Checkcast $ refTyClassName refTy]
 idrisDescToJava VoidDescriptor = pure ()
 idrisDescToJava ty = error $ "unknown type: " ++ show ty
@@ -144,6 +154,7 @@ fdescRefDescriptor (FApp jvmTy [FApp nativeTy [FApp descTy [FStr typeName]]])
   | jvmTy == sUN "JVM_NativeT" && nativeTy == sUN "Array" && descTy == sUN "Class"
     = ArrayDesc (ClassDesc typeName)
 fdescRefDescriptor (FCon (UN "JVM_Str")) = ClassDesc "java/lang/String"
+fdescRefDescriptor (FStr exportedType) = IdrisExportDesc exportedType
 
 fdescRefDescriptor desc = error $ "Expected a class or interface descriptor. " ++
   "Invalid reference type descriptor: " ++ show desc

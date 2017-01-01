@@ -7,7 +7,6 @@ import           Control.Applicative          ((<|>))
 import           Control.Arrow                (first)
 import           Control.Monad.RWS
 import qualified Data.DList                   as DL
-import qualified Data.IntSet                  as IntSet
 import           Data.List                    (find)
 import           Data.Maybe
 import           Idris.Core.TT
@@ -138,40 +137,48 @@ exportCode (Export (NS (UN "FFI_JVM") _) exportedClassName exportItems) = do
     let (cls, optParent, intf) = parseExportedClassName exportedClassName
         parent = fromMaybe "java/lang/Object" optParent
     writeIns [ CreateClass ComputeMaxs
-             , ClassCodeStart 52 Public cls Nothing parent intf
-             , SourceInfo "IdrisExported.idr" ]
+             , ClassCodeStart 52 Public cls Nothing parent intf ]
     unless (hasConstructorExport exportItems) $ defaultConstructor cls parent
     mapM_ (cgExport cls parent) exportItems
 exportCode e = error $ "Unsupported Export: " <> show e
 
 cgExport :: ClassName -> ClassName -> Export -> Cg ()
+cgExport _ _ (ExportData (FStr exportedType)) = createClassForIdrisType exportedType
 cgExport cname parent (ExportFun n (FApp ffi [FStr superMethodName]) returns args)
   | ffi == sUN "Super"
-    = export cname mname parent superMethodName ExportCallSuper parent returns args where
+    = exportFun cname mname parent superMethodName ExportCallSuper parent returns args where
       JMethodName _ mname = jname n
 
 cgExport cname parent (ExportFun n (FApp ffi [FStr mname]) returns args)
   | ffi == sUN "ExportStatic"
-    = export cname mname sourceCname sourceMname ExportCallStatic parent returns args where
+    = exportFun cname mname sourceCname sourceMname ExportCallStatic parent returns args where
       JMethodName sourceCname sourceMname = jname n
 
 cgExport cname parent (ExportFun n (FCon (UN "ExportDefault")) returns args)
-  = export cname sourceMname sourceCname sourceMname ExportCallInstance parent returns args where
+  = exportFun cname sourceMname sourceCname sourceMname ExportCallInstance parent returns args where
     JMethodName sourceCname sourceMname = jname n
 
 cgExport cname parent (ExportFun n (FCon (UN "Constructor")) returns args)
-  = export cname "<init>" sourceCname sourceMname ExportCallConstructor parent returns args where
+  = exportFun cname "<init>" sourceCname sourceMname ExportCallConstructor parent returns args where
     JMethodName sourceCname sourceMname = jname n
 
 cgExport cname parent (ExportFun n (FApp ffi [FStr mname]) returns args)
   | ffi == sUN "ExportInstance"
-    = export cname mname sourceCname sourceMname ExportCallInstance parent returns args where
+    = exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args where
       JMethodName sourceCname sourceMname = jname n
 
 cgExport _ _ exportDef = error $ "Unsupported export definition: " <> show exportDef
 
-export :: ClassName -> MethodName -> ClassName -> MethodName -> ExportCall -> ClassName -> FDesc -> [FDesc] -> Cg ()
-export targetCname targetMethName sourceCname sourceMname exportCall parent returns args = do
+exportFun :: ClassName
+             -> MethodName
+             -> ClassName
+             -> MethodName
+             -> ExportCall
+             -> ClassName
+             -> FDesc
+             -> [FDesc]
+             -> Cg ()
+exportFun targetCname targetMethName sourceCname sourceMname exportCall parent returns args = do
   let argDescs = fdescFieldDescriptor <$> (if isStatic then args else drop 1 args) -- for instance method, drop `this`
       returnDesc = if isConstructor then VoidDescriptor else fdescTypeDescriptor returns
       isStatic = exportCall == ExportCallStatic
@@ -285,6 +292,46 @@ returnExport exportCall returnDesc = do
            , MethodCodeEnd
            ]
 
+createClassForIdrisType :: String -> Cg ()
+createClassForIdrisType idrisType = do
+    writeIns [ CreateClass ComputeMaxs
+           , ClassCodeStart 52 Public idrisType Nothing "java/lang/Object" []
+           , CreateField [Private, Final] "value" "Ljava/lang/Object;" Nothing Nothing
+           , FieldEnd ]
+    constructor
+    getter
+    createDef
+  where
+    constructor
+      = writeIns [ CreateMethod [Public] idrisType "<init>" "(Ljava/lang/Object;)V" Nothing Nothing
+                 , MethodCodeStart
+                 , Aload 0
+                 , InvokeMethod InvokeSpecial "java/lang/Object" "<init>" "()V" False
+                 , Aload 0
+                 , Aload 1
+                 , Field FPutField idrisType "value" "Ljava/lang/Object;"
+                 , Return
+                 , MaxStackAndLocal (-1) (-1)
+                 , MethodCodeEnd ]
+    getter
+      = writeIns [ CreateMethod [Public] idrisType "getValue" "()Ljava/lang/Object;" Nothing Nothing
+                 , MethodCodeStart
+                 , Aload 0
+                 , Field FGetField idrisType "value" "Ljava/lang/Object;"
+                 , Areturn
+                 , MaxStackAndLocal (-1) (-1)
+                 , MethodCodeEnd ]
+    createDesc = "(Ljava/lang/Object;)L" ++ idrisType ++ ";"
+    createDef
+      = writeIns [ CreateMethod [Public, Static] idrisType "create" createDesc Nothing Nothing
+                 , New idrisType
+                 , Dup
+                 , Aload 0
+                 , InvokeMethod InvokeSpecial idrisType "<init>"  "(Ljava/lang/Object;)V" False
+                 , Areturn
+                 , MaxStackAndLocal (-1) (-1)
+                 , MethodCodeEnd ]
+
 tailRecStartLabelName :: String
 tailRecStartLabelName = "$tailRecStartLabel"
 
@@ -306,8 +353,6 @@ isTailCallSwitch :: SAlt -> Maybe Name
 isTailCallSwitch (SConstCase _ e)     = isTailCall e
 isTailCallSwitch (SDefaultCase e)     = isTailCall e
 isTailCallSwitch (SConCase _ _ _ _ e) = isTailCall e
-
-type Locals = IntSet.IntSet
 
 localVariables :: Int -> SExp -> Int
 localVariables n (SLet (Loc i) v sc)

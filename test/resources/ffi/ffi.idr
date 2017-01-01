@@ -65,6 +65,42 @@ jboolToString b = unsafePerformIO $ invokeStatic IdrisThreadClass "boolToString"
 jhelloFromIdris : IdrisThread -> String -> JVM_IO String
 jhelloFromIdris thread str = invokeInstance "helloFromIdris" (IdrisThread -> String -> JVM_IO String) thread str
 
+emptyList : List Int
+emptyList = []
+
+cons : Int -> List Int -> List Int
+cons x xs = x :: xs
+
+append : List Int -> List Int -> List Int
+append xs ys = xs ++ ys
+
+showList : List Int -> String
+showList = show
+
+ListIntClass : JVM_NativeTy
+ListIntClass = Class "hello/ListInt"
+
+ListInt : Type
+ListInt = JVM_Native ListIntClass
+
+JExportTestClass : JVM_NativeTy
+JExportTestClass = Class "hello/JExportTest"
+
+JExportTest : Type
+JExportTest = JVM_Native JExportTestClass
+
+jappend : ListInt -> ListInt -> ListInt
+jappend xs ys = unsafePerformIO $ invokeStatic JExportTestClass "append" (ListInt -> ListInt -> JVM_IO ListInt) xs ys
+
+jcons : Int -> ListInt -> ListInt
+jcons x xs = unsafePerformIO $ invokeStatic JExportTestClass "cons" (Int -> ListInt -> JVM_IO ListInt) x xs
+
+jemptyList : ListInt
+jemptyList = unsafePerformIO $ invokeStatic JExportTestClass "emptyList" (JVM_IO ListInt)
+
+jshowList : ListInt -> String
+jshowList xs = unsafePerformIO $ invokeStatic JExportTestClass "showList" (ListInt -> JVM_IO String) xs
+
 main : JVM_IO ()
 main = do
   -- Test ffi calls
@@ -95,8 +131,10 @@ main = do
   thread2 <- newIdrisThreadWithName "idris-thread-2"
   startIdrisThread thread2
 
-exports : FFI_Export FFI_JVM "hello/IdrisThread extends java/lang/Thread implements java/lang/Runnable" []
-exports =
+  printLn $ jshowList $ jappend (jcons 3 (jcons 4 jemptyList)) (jcons 5 (jcons 6 jemptyList))
+
+exports1 : FFI_Export FFI_JVM "hello/IdrisThread extends java/lang/Thread implements java/lang/Runnable" []
+exports1 =
   Fun exportedBoolToString (ExportStatic "boolToString") $
   Fun Main.add (ExportInstance "jadd") $
   Fun helloFromIdris ExportDefault $
@@ -105,4 +143,13 @@ exports =
   Fun run ExportDefault $
   Fun getThreadName (Super "getName") $
   Fun Main.jmain (ExportStatic "main") $
+  End
+
+exports2 : FFI_Export FFI_JVM "hello/JExportTest" []
+exports2 =
+  Data (List Int) "hello/ListInt" $
+  Fun cons (ExportStatic "cons") $
+  Fun emptyList (ExportStatic "emptyList") $
+  Fun showList (ExportStatic "showList") $
+  Fun append (ExportStatic "append") $
   End

@@ -21,6 +21,7 @@ data Asm = Aaload
          | ClassCodeStart Int Access ClassName (Maybe Signature) ClassName [ClassName]
          | ClassCodeEnd String
          | CreateClass ClassOpts
+         | CreateField [Access] FieldName Descriptor (Maybe Signature) (Maybe FieldInitialValue)
          | CreateLabel String
          | CreateMethod [Access] ClassName MethodName Descriptor (Maybe Signature) (Maybe [Exception])
          | Dadd
@@ -33,6 +34,7 @@ data Asm = Aaload
          | Dup
          | F2d
          | Field FieldInsType ClassName FieldName Descriptor
+         | FieldEnd
          | Fload Int
          | Frame FrameType Int [Signature] Int [Signature]
          | Freturn
@@ -128,6 +130,14 @@ instance ToJSON Asm where
     = object [ "type" .= String "CreateClass"
              , "flags" .= toJSON flags ]
 
+  toJSON (CreateField access fieldName desc fsig initialValue)
+    = object [ "type" .= String "CreateField"
+             , "acc" .= toJSON (sum $ accessNum <$> access)
+             , "name" .= toJSON fieldName
+             , "desc" .= toJSON desc
+             , "sig" .= maybe Null toJSON fsig
+             , "initVal" .= maybe Null toJSON initialValue ]
+
   toJSON (CreateLabel label)
     = object [ "type" .= String "CreateLabel"
              , "name" .= toJSON label ]
@@ -161,6 +171,8 @@ instance ToJSON Asm where
              , "cname" .= toJSON cname
              , "fname" .= toJSON fname
              , "desc" .= toJSON desc ]
+
+  toJSON FieldEnd = object [ "type" .= String "FieldEnd" ]
 
   toJSON (Fload n)
     = object [ "type" .= String "Fload"
@@ -312,6 +324,13 @@ instance ToJSON Asm where
     = object [ "type" .= String "SourceInfo"
              , "name" .= toJSON name ]
 
+data FieldInitialValue = IntField Int | StringField String | DoubleField Double
+
+instance ToJSON FieldInitialValue where
+  toJSON (IntField n)    = toJSON n
+  toJSON (StringField s) = toJSON s
+  toJSON (DoubleField d) = toJSON d
+
 data BsmArg = BsmArgGetType Descriptor | BsmArgHandle Handle
 
 instance ToJSON BsmArg where
@@ -345,17 +364,20 @@ class Asmable a where
 data ReferenceTypeDescriptor = ClassDesc ClassName
                              | InterfaceDesc ClassName
                              | ArrayDesc ReferenceTypeDescriptor
+                             | IdrisExportDesc ClassName
                                deriving (Eq, Show)
 
 instance Asmable ReferenceTypeDescriptor where
-  asm (ClassDesc c)     = "L" ++ c ++ ";"
-  asm (InterfaceDesc c) = "L" ++ c ++ ";"
-  asm (ArrayDesc refTy) = "[" ++ asm refTy
+  asm (ClassDesc c)       = "L" ++ c ++ ";"
+  asm (IdrisExportDesc c) = "L" ++ c ++ ";"
+  asm (InterfaceDesc c)   = "L" ++ c ++ ";"
+  asm (ArrayDesc refTy)   = "[" ++ asm refTy
 
 refTyClassName :: ReferenceTypeDescriptor -> ClassName
-refTyClassName (ClassDesc c)     = c
-refTyClassName (InterfaceDesc c) = c
-refTyClassName arr               = asm arr
+refTyClassName (ClassDesc c)       = c
+refTyClassName (InterfaceDesc c)   = c
+refTyClassName (IdrisExportDesc c) = c
+refTyClassName arr@ArrayDesc{}     = asm arr
 
 data FieldTypeDescriptor = FieldTyDescByte
                          | FieldTyDescChar
@@ -407,7 +429,6 @@ type MethodName = String
 type Descriptor = String
 type Signature = String
 type SourceFileName = String
-type Arg = String
 
 data ClassOpts = ComputeMaxs | ComputeFrames
 
@@ -445,9 +466,10 @@ frameTypeNum FAppend = 1
 instance ToJSON FrameType where
   toJSON = toJSON . frameTypeNum
 
-data Access = Private | Public | Static | Synthetic deriving (Eq, Show)
+data Access = Private | Public | Static | Synthetic | Final deriving (Eq, Show)
 
 accessNum :: Access -> Int
+accessNum Final     = 16
 accessNum Private   = 2
 accessNum Public    = 1
 accessNum Static    = 8

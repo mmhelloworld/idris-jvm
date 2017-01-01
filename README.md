@@ -41,7 +41,7 @@ For details on what the `setup` script does, please see [here](docs/setup.md).
 Idris `Double` is mapped to Java `double`. Idris `Bits8`, `Bits16`, `Bits32` are mapped to Java `int`.
 Idris `Bits64` is mapped to Java `long`.
 * **FFI - Calling Java from Idris:** Currently from Idris, invoking Java static methods, instance methods, constructors are all supported.
-* **FFI: Calling Idris from Java:** Idris functions can also be exported as Java instance methods, static methods and constructors. The exported class with Idris implementations can also extend a Java class and implement interfaces. Idris types (monomorphic, ex: `List Int`) can also be exported as a Java class. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/test/resources/ffi/ffi.idr#L87) for an example. JVM arrays are not yet supported.
+* **FFI: Calling Idris from Java:** Idris functions can also be exported as Java instance methods, static methods and constructors. The exported class with Idris implementations can also extend a Java class and implement interfaces. Idris types (monomorphic, ex: `List Int`) can also be exported as a Java class. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/test/resources/ffi/ffi.idr) for an example. JVM arrays are not yet supported.
 * **Tail recursion** is eliminated using JVM's `GOTO`. For the following code, `sum 50000` wouldn't blow up the stack.
     ```idris
     sum : Nat -> Nat

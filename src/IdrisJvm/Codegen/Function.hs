@@ -102,13 +102,47 @@ cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fd
     writeIns [ InvokeMethod InvokeStatic clazz fn (descriptor returnDesc) False ]
     javaToIdris returnDesc
     ret
+
+  cgForeign (JGetStaticField clazz fieldName) = do
+    let returnDesc = fdescTypeDescriptor returns
+    writeIns [ Field FGetStatic clazz fieldName (asm returnDesc) ]
+    javaToIdris returnDesc
+    ret
+
+  cgForeign (JSetStaticField clazz fieldName)
+    | [ty] <- args = do
+      idrisToJava argsWithTypes
+      let desc = asm $ fdescFieldDescriptor . fst $ ty
+      writeIns [ Field FPutStatic clazz fieldName desc ]
+      javaToIdris (fdescTypeDescriptor returns)
+      ret
+    | otherwise = error $ "There can be only one argument for setting a static field: " <> clazz <> "." <> fieldName
+
   cgForeign (JVirtual clazz fn) = do
     let returnDesc = fdescTypeDescriptor returns
+        -- drop first arg type as it is an implicit 'this'
         descriptor = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
-    idrisToJava argsWithTypes -- drop first arg type as it is an implicit 'this'
+    idrisToJava argsWithTypes
     writeIns [ InvokeMethod InvokeVirtual clazz fn descriptor False ]
     javaToIdris returnDesc
     ret
+
+  cgForeign (JGetInstanceField clazz fieldName) = do
+    let returnDesc = fdescTypeDescriptor returns
+    idrisToJava argsWithTypes
+    writeIns [ Field FGetField clazz fieldName (asm returnDesc) ]
+    javaToIdris returnDesc
+    ret
+
+  cgForeign (JSetInstanceField clazz fieldName)
+    | [_, arg] <- args = do
+      idrisToJava argsWithTypes
+      let desc = asm . fdescTypeDescriptor . fst $ arg
+      writeIns [ Field FPutField clazz fieldName desc ]
+      javaToIdris (fdescTypeDescriptor returns)
+      ret
+    | otherwise = error "Setting an instance field must take 2 arguments: the instance and the field value"
+
   cgForeign (JInterface clazz fn) = do
     let returnDesc = fdescTypeDescriptor returns
         descriptor = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
@@ -116,6 +150,7 @@ cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fd
     writeIns [ InvokeMethod InvokeInterface clazz fn descriptor True ]
     javaToIdris returnDesc
     ret
+
   cgForeign (JNew clazz) = do
     let returnDesc = VoidDescriptor -- Constructors always return void.
         descriptor r = asm $ MethodDescriptor (fdescFieldDescriptor . fst <$> args) r
@@ -143,7 +178,15 @@ exportCode (Export (NS (UN "FFI_JVM") _) exportedClassName exportItems) = do
 exportCode e = error $ "Unsupported Export: " <> show e
 
 cgExport :: ClassName -> ClassName -> Export -> Cg ()
+
 cgExport _ _ (ExportData (FStr exportedType)) = createClassForIdrisType exportedType
+
+cgExport cname _ (ExportFun _ (FApp ffi [FStr fieldName]) typeDesc _)
+  | ffi == sUN "ExportInstanceField" = createField [Public] cname fieldName typeDesc
+
+cgExport cname _ (ExportFun _ (FApp ffi [FStr fieldName]) typeDesc _)
+  | ffi == sUN "ExportStaticField" = createField [Public, Static] cname fieldName typeDesc
+
 cgExport cname parent (ExportFun n (FApp ffi [FStr superMethodName]) returns args)
   | ffi == sUN "Super"
     = exportFun cname mname parent superMethodName ExportCallSuper parent returns args where
@@ -296,7 +339,7 @@ createClassForIdrisType :: String -> Cg ()
 createClassForIdrisType idrisType = do
     writeIns [ CreateClass ComputeMaxs
            , ClassCodeStart 52 Public idrisType Nothing "java/lang/Object" []
-           , CreateField [Private, Final] "value" "Ljava/lang/Object;" Nothing Nothing
+           , CreateField [Private, Final] idrisType "value" "Ljava/lang/Object;" Nothing Nothing
            , FieldEnd ]
     constructor
     getter
@@ -331,6 +374,12 @@ createClassForIdrisType idrisType = do
                  , Areturn
                  , MaxStackAndLocal (-1) (-1)
                  , MethodCodeEnd ]
+
+createField :: [Access] -> ClassName -> FieldName -> FDesc -> Cg ()
+createField access cname fieldName typeDesc
+  = writeIns [ CreateField access cname fieldName desc Nothing Nothing
+             , FieldEnd ] where
+               desc = asm $ fdescTypeDescriptor typeDesc
 
 tailRecStartLabelName :: String
 tailRecStartLabelName = "$tailRecStartLabel"

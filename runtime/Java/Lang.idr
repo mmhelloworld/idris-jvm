@@ -22,6 +22,13 @@ namespace Character
   CharacterClass : JVM_NativeTy
   CharacterClass = Class "java/lang/Character"
 
+namespace JInteger
+  IntegerClass : JVM_NativeTy
+  IntegerClass = Class "java/lang/Integer"
+
+  parseInt : String -> Int
+  parseInt s = unsafePerformIO $ invokeStatic IntegerClass "parseInt" (String -> JVM_IO Int) s
+
 namespace Short
   ShortClass : JVM_NativeTy
   ShortClass = Class "java/lang/Short"

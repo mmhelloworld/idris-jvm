@@ -101,6 +101,32 @@ jemptyList = unsafePerformIO $ invokeStatic JExportTestClass "emptyList" (JVM_IO
 jshowList : ListInt -> String
 jshowList xs = unsafePerformIO $ invokeStatic JExportTestClass "showList" (ListInt -> JVM_IO String) xs
 
+joneToTen : ListInt
+joneToTen = unsafePerformIO $ invokeStatic JExportTestClass "oneToTen" (JVM_IO ListInt)
+
+Show ListInt where
+  show = jshowList
+
+setNumbers : IdrisThread -> ListInt -> JVM_IO ()
+setNumbers thread nums = setInstanceField "numbers" (IdrisThread -> ListInt ->  JVM_IO ()) thread nums
+
+getNumbers : IdrisThread -> JVM_IO (ListInt)
+getNumbers = getInstanceField "numbers" (IdrisThread -> JVM_IO (ListInt))
+
+setStaticNumbers : ListInt -> JVM_IO ()
+setStaticNumbers nums = setStaticField IdrisThreadClass "numbersStatic" (ListInt ->  JVM_IO ()) nums
+
+getStaticNumbers : JVM_IO (ListInt)
+getStaticNumbers = getStaticField IdrisThreadClass "numbersStatic" (JVM_IO (ListInt))
+
+oneToTen : List Int
+oneToTen = [1..10]
+
+-- currently only null is allowed for field initialization but the value can be set later using `setInstanceField`
+-- and `setStaticField` functions. See above for the usage of those functions.
+numbersField : List Int
+numbersField = believe_me prim__null
+
 main : JVM_IO ()
 main = do
   -- Test ffi calls
@@ -133,8 +159,17 @@ main = do
 
   printLn $ jshowList $ jappend (jcons 3 (jcons 4 jemptyList)) (jcons 5 (jcons 6 jemptyList))
 
+  setNumbers thread1 joneToTen  -- Test setting an instance field
+  printLn !(getNumbers thread1) -- Test getting an instance field
+
+  setStaticNumbers joneToTen -- Test setting a static field
+  printLn !getStaticNumbers -- Test getting a static field
+
 exports1 : FFI_Export FFI_JVM "hello/IdrisThread extends java/lang/Thread implements java/lang/Runnable" []
 exports1 =
+  Data (List Int) "hello/ListInt" $
+  Fun numbersField (ExportInstanceField "numbers") $
+  Fun numbersField (ExportStaticField "numbersStatic") $
   Fun exportedBoolToString (ExportStatic "boolToString") $
   Fun Main.add (ExportInstance "jadd") $
   Fun helloFromIdris ExportDefault $
@@ -152,4 +187,5 @@ exports2 =
   Fun emptyList (ExportStatic "emptyList") $
   Fun showList (ExportStatic "showList") $
   Fun append (ExportStatic "append") $
+  Fun oneToTen (ExportStatic "oneToTen") $
   End

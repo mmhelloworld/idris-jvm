@@ -21,7 +21,7 @@ data Asm = Aaload
          | ClassCodeStart Int Access ClassName (Maybe Signature) ClassName [ClassName]
          | ClassCodeEnd String
          | CreateClass ClassOpts
-         | CreateField [Access] FieldName Descriptor (Maybe Signature) (Maybe FieldInitialValue)
+         | CreateField [Access] ClassName FieldName Descriptor (Maybe Signature) (Maybe FieldInitialValue)
          | CreateLabel String
          | CreateMethod [Access] ClassName MethodName Descriptor (Maybe Signature) (Maybe [Exception])
          | Dadd
@@ -130,9 +130,10 @@ instance ToJSON Asm where
     = object [ "type" .= String "CreateClass"
              , "flags" .= toJSON flags ]
 
-  toJSON (CreateField access fieldName desc fsig initialValue)
+  toJSON (CreateField access className fieldName desc fsig initialValue)
     = object [ "type" .= String "CreateField"
              , "acc" .= toJSON (sum $ accessNum <$> access)
+             , "cname" .= toJSON className
              , "name" .= toJSON fieldName
              , "desc" .= toJSON desc
              , "sig" .= maybe Null toJSON fsig

@@ -11,10 +11,16 @@ data JVM_Native  : JVM_NativeTy -> Type where
   MkJVMNative : (ty : JVM_NativeTy) -> JVM_Native ty
 
 data JVM_FfiFn = Static JVM_NativeTy  String
+               | GetStaticField JVM_NativeTy String
+               | SetStaticField JVM_NativeTy String
                | Constructor
                | New
                | Instance String
+               | GetInstanceField String
+               | SetInstanceField String
                | Super String
+               | ExportStaticField String
+               | ExportInstanceField String
                | ExportStatic String
                | ExportInstance String
                | ExportDefault -- Export an instance method with idris function name
@@ -81,7 +87,23 @@ invokeInstance : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 invokeInstance method = javacall (Instance method)
 
 %inline
+getInstanceField : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
+getInstanceField fieldName = javacall (GetInstanceField fieldName)
+
+%inline
+setInstanceField : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
+setInstanceField fieldName = javacall (SetInstanceField fieldName)
+
+%inline
 invokeStatic : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 invokeStatic klass method = javacall (Static klass method)
+
+%inline
+getStaticField : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
+getStaticField klass fieldName = javacall (GetStaticField klass fieldName)
+
+%inline
+setStaticField : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
+setStaticField klass fieldName = javacall (SetStaticField klass fieldName)
 
 interface Inherits a b where {}

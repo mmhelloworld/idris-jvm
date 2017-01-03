@@ -418,5 +418,10 @@ cgOp LPar [x] = do
   createParThunk caller (jname (sMN 0 "EVAL")) [x]
   writeIns [InvokeMethod InvokeStatic (rtClassSig "Concurrent") "par" "(Lmmhelloworld/idrisjvmruntime/Thunk;)Ljava/lang/Object;" False]
 
+cgOp (LExternal externalOp) args = cgExternalOp externalOp args
+
 cgOp op _ = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
-   -- error("Operator " ++ show op ++ " not implemented")
+
+cgExternalOp :: Name -> [LVar] -> Cg ()
+cgExternalOp op _ | op == sUN "prim__null" = writeIns [ Aconstnull ]
+cgExternalOp op _ = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"

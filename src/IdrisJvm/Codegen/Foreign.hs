@@ -12,13 +12,23 @@ import           IdrisJvm.Codegen.Types
 import           IRTS.Lang
 
 data JForeign = JStatic String String
+              | JGetStaticField String String
+              | JSetStaticField String String
               | JVirtual String String
+              | JGetInstanceField String String
+              | JSetInstanceField String String
               | JInterface String String
               | JNew String
 
 parseDescriptor :: FDesc -> FDesc -> [(FDesc, LVar)] -> JForeign
 parseDescriptor _ (FApp ffi [FApp nativeTy [FStr cname], FStr fn]) _
   | ffi == sUN "Static" && nativeTy == sUN "Class" = JStatic cname fn
+
+parseDescriptor _ (FApp ffi [FApp nativeTy [FStr cname], FStr fieldName]) _
+  | ffi == sUN "GetStaticField" && nativeTy == sUN "Class" = JGetStaticField cname fieldName
+
+parseDescriptor _ (FApp ffi [FApp nativeTy [FStr cname], FStr fieldName]) _
+  | ffi == sUN "SetStaticField" && nativeTy == sUN "Class" = JSetStaticField cname fieldName
 
 parseDescriptor _ (FApp ffi [FStr _]) []
   | ffi == sUN "Instance"
@@ -30,6 +40,16 @@ parseDescriptor _ (FApp ffi [FStr fn]) ((declClass, _):_)
     InterfaceDesc cname -> JInterface cname fn
     ArrayDesc _         -> error "No instance methods on an array"
     IdrisExportDesc _ -> error "No instance methods on an Idris exported type"
+
+parseDescriptor _ (FApp ffi [FStr fieldName]) ((declClass, _):_)
+  | ffi == sUN "GetInstanceField" = case fdescRefDescriptor declClass of
+    ClassDesc cname     -> JGetInstanceField cname fieldName
+    _ -> error "Fields can be accessed only from classes"
+
+parseDescriptor _ (FApp ffi [FStr fieldName]) ((declClass, _):_)
+  | ffi == sUN "SetInstanceField" = case fdescRefDescriptor declClass of
+    ClassDesc cname     -> JSetInstanceField cname fieldName
+    _ -> error "Fields can be set only from classes"
 
 parseDescriptor returns (FCon ffi) _
  | ffi == sUN "New" = case fdescRefDescriptor returns of
@@ -67,7 +87,7 @@ javaToIdris (FieldDescriptor FieldTyDescLong)    = writeIns [ boxLong ]
 javaToIdris (FieldDescriptor FieldTyDescFloat)   = writeIns [ F2d, boxDouble ]
 javaToIdris (FieldDescriptor FieldTyDescDouble)  = writeIns [ boxDouble ]
 javaToIdris VoidDescriptor                       = writeIns [ Aconstnull ]
-javaToIdris _                                    = pure () -- TODO: implement for other types
+javaToIdris _                                    = pure ()
 
 loadJavaVar :: Int -> FieldTypeDescriptor -> Cg ()
 loadJavaVar index FieldTyDescBoolean = writeIns [ Iload index ]

@@ -16,6 +16,9 @@ namespace BigInteger
   new : String -> JVM_IO BigInteger
   new s = FFI.new (String -> JVM_IO BigInteger) s
 
+  one : BigInteger
+  one = unsafePerformIO $ getStaticField BigIntegerClass "ONE" (JVM_IO BigInteger)
+
   toString : BigInteger -> String
   toString bigInt = unsafePerformIO $ invokeInstance "toString" (BigInteger -> JVM_IO String) bigInt
 
@@ -23,3 +26,6 @@ namespace BigInteger
   add b1 b2 = unsafePerformIO $ invokeInstance "add" (BigInteger -> BigInteger -> JVM_IO BigInteger) b1 b2
 
 Inherits Object BigInteger where {}
+
+Show BigInteger where
+  show = BigInteger.toString

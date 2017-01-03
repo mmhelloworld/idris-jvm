@@ -35,13 +35,14 @@ For details on what the `setup` script does, please see [here](docs/setup.md).
 * `$ bin/idrisjvm pythag.idr -o pythag`
 * `$ java -cp ~/.idrisjvm/idris-jvm-runtime-1.0-SNAPSHOT.jar:pythag main.Main`
 
-## Status / Future improvements
+## Status
 
-* All Idris types are supported. Idris `Integer` is represented as Java `BigInteger`.
+* All Idris types are supported. Idris `Int` is mapped to Java primitive `int`. Idris `String` is mapped to Java `String`. Idris `Integer` is represented as Java `BigInteger`.
 Idris `Double` is mapped to Java `double`. Idris `Bits8`, `Bits16`, `Bits32` are mapped to Java `int`.
 Idris `Bits64` is mapped to Java `long`.
-* **FFI - Calling Java from Idris:** Currently from Idris, invoking Java static methods, instance methods, constructors are all supported.
-* **FFI: Calling Idris from Java:** Idris functions can also be exported as Java instance methods, static methods and constructors. The exported class with Idris implementations can also extend a Java class and implement interfaces. Idris types (monomorphic, ex: `List Int`) can also be exported as a Java class. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/test/tests/ffi/ffi.idr) for an example. JVM arrays are not yet supported.
+* **FFI - Calling Java from Idris:** From Idris, invoking Java static methods, instance methods, constructors are all supported.
+See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/test/tests/ffi/ffi.idr) for an example.
+* **FFI: Calling Idris from Java:** Idris functions can be exported as Java instance methods, static methods and constructors. The exported class with Idris implementations can also extend a Java class and implement interfaces. It can also have static and instance fields and the field values can be set from Idris. Idris types (monomorphic, for example, `List Int`) can also be exported as a Java class. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/test/tests/ffi/ffi.idr) for an example.
 * **Tail recursion** is eliminated using JVM's `GOTO`. For the following code, `sum 50000` wouldn't blow up the stack.
     ```idris
     sum : Nat -> Nat
@@ -51,7 +52,7 @@ Idris `Bits64` is mapped to Java `long`.
       go acc n@(S k) = go (acc + n) k
     ```
 
-* **Non-recursive tail call** is handled using Trampolines. For the following code, `evenT 10909000007` would work just fine and return the result after few seconds. `IO` is used here as otherwise Idris inlines the function calls and the functions end up being tail recursive instead of mutually recursive.
+* **Non-recursive tail call** is handled using trampolines. For the following code, `evenT 10909000007` would work just fine and return the result after few seconds. `IO` is used here as otherwise Idris inlines the function calls and the functions end up being tail recursive instead of mutually recursive.
     ```idris
     mutual
       evenT : Nat -> IO Bool

@@ -1,6 +1,6 @@
 module IdrisJvm.IO
 
-import IdrisJvm.FFI
+import public IdrisJvm.FFI
 
 %access public export
 

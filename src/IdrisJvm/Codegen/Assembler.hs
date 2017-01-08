@@ -366,18 +366,24 @@ data ReferenceTypeDescriptor = ClassDesc ClassName
                              | InterfaceDesc ClassName
                              | ArrayDesc ReferenceTypeDescriptor
                              | IdrisExportDesc ClassName
+                             | NullableStrDesc
+                             | NullableRefDesc ClassName
                                deriving (Eq, Show)
 
 instance Asmable ReferenceTypeDescriptor where
   asm (ClassDesc c)       = "L" ++ c ++ ";"
   asm (IdrisExportDesc c) = "L" ++ c ++ ";"
   asm (InterfaceDesc c)   = "L" ++ c ++ ";"
+  asm (NullableRefDesc c) = "L" ++ c ++ ";"
+  asm NullableStrDesc     = "Ljava/lang/String;"
   asm (ArrayDesc refTy)   = "[" ++ asm refTy
 
 refTyClassName :: ReferenceTypeDescriptor -> ClassName
 refTyClassName (ClassDesc c)       = c
 refTyClassName (InterfaceDesc c)   = c
 refTyClassName (IdrisExportDesc c) = c
+refTyClassName (NullableRefDesc c) = c
+refTyClassName NullableStrDesc     = "java/lang/String"
 refTyClassName arr@ArrayDesc{}     = asm arr
 
 data FieldTypeDescriptor = FieldTyDescByte

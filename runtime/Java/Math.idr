@@ -25,7 +25,5 @@ namespace BigInteger
   add : BigInteger -> BigInteger -> BigInteger
   add b1 b2 = unsafePerformIO $ invokeInstance "add" (BigInteger -> BigInteger -> JVM_IO BigInteger) b1 b2
 
-Inherits Object BigInteger where {}
-
 Show BigInteger where
   show = BigInteger.toString

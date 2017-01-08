@@ -172,11 +172,7 @@ ifDefaultLabel ifIndex = "$if" ++ show ifIndex ++ "$defaultLabel"
 switchConstructorExpr :: Int -> Cg ()
 switchConstructorExpr varIndex
  = writeIns [ Aload varIndex
-            , Checkcast "[Ljava/lang/Object;"
-            , Iconst 0
-            , Aaload
-            , Checkcast "java/lang/Integer"
-            , InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
+            , InvokeMethod InvokeStatic (rtClassSig "Runtime") "constructorIndex" "(Ljava/lang/Object;)I" False
             ]
 
 switchIntExpr :: Int -> Cg ()

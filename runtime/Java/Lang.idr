@@ -81,17 +81,24 @@ namespace Object
   ObjectArray : Type
   ObjectArray = JVM_Native (Array ObjectClass)
 
-Inherits Object Object where {}
+  toString : Object -> JVM_IO String
+  toString obj = invokeInstance "toString" (Object -> JVM_IO String) obj
 
 namespace System
 
   SystemClass : JVM_NativeTy
   SystemClass = Class "java/lang/System"
 
+  getProperty : String -> JVM_IO (Maybe String)
+  getProperty = invokeStatic SystemClass "getProperty" (String -> JVM_IO (Maybe String))
+
+  setProperty : String -> String -> JVM_IO (Maybe String)
+  setProperty = invokeStatic SystemClass "setProperty" (String -> String -> JVM_IO (Maybe String))
+
   -- Takes a property name and a default value and returns the property value
   -- if it exists otherwise returns the default value
-  getProperty : String -> String -> JVM_IO String
-  getProperty = invokeStatic SystemClass "getProperty" (String -> String -> JVM_IO String)
+  getPropertyWithDefault : String -> String -> JVM_IO String
+  getPropertyWithDefault = invokeStatic SystemClass "getProperty" (String -> String -> JVM_IO String)
 
 namespace Thread
 
@@ -128,5 +135,9 @@ namespace JavaString
   longToString b = unsafePerformIO $ invokeStatic LongClass "toString" (Bits64 -> JVM_IO String) b
 
 Inherits Object String where {}
+Inherits Object (Maybe String) where {}
+
+Inherits Object (JVM_Native t) where {}
+Inherits Object (Maybe (JVM_Native t)) where {}
 
 Inherits ObjectArray StringArray where {}

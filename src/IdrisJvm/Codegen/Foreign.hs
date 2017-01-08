@@ -38,18 +38,20 @@ parseDescriptor _ (FApp ffi [FStr fn]) ((declClass, _):_)
   | ffi == sUN "Instance" = case fdescRefDescriptor declClass of
     ClassDesc cname     -> JVirtual cname fn
     InterfaceDesc cname -> JInterface cname fn
+    NullableStrDesc     -> error "Instance method cannot have the first argument as nullable string"
+    NullableRefDesc _     -> error "Instance method cannot have the first argument as nullable reference"
     ArrayDesc _         -> error "No instance methods on an array"
     IdrisExportDesc _ -> error "No instance methods on an Idris exported type"
 
 parseDescriptor _ (FApp ffi [FStr fieldName]) ((declClass, _):_)
   | ffi == sUN "GetInstanceField" = case fdescRefDescriptor declClass of
-    ClassDesc cname     -> JGetInstanceField cname fieldName
-    _ -> error "Fields can be accessed only from classes"
+    ClassDesc cname -> JGetInstanceField cname fieldName
+    _               -> error "Fields can be accessed only from classes"
 
 parseDescriptor _ (FApp ffi [FStr fieldName]) ((declClass, _):_)
   | ffi == sUN "SetInstanceField" = case fdescRefDescriptor declClass of
-    ClassDesc cname     -> JSetInstanceField cname fieldName
-    _ -> error "Fields can be set only from classes"
+    ClassDesc cname -> JSetInstanceField cname fieldName
+    _               -> error "Fields can be set only from classes"
 
 parseDescriptor returns (FCon ffi) _
  | ffi == sUN "New" = case fdescRefDescriptor returns of
@@ -59,6 +61,8 @@ parseDescriptor returns (FCon ffi) _
                               show returns
     ArrayDesc _ -> error "Array construction is not yet supported"
     IdrisExportDesc _ -> error "Cannot invoke constructor of Idris exported type"
+    NullableStrDesc     -> error "A constructor cannot return a nullable string"
+    NullableRefDesc _     -> error "A constructor cannot return a nullable reference"
 
 parseDescriptor _ fdesc _ = error $ "Unsupported descriptor: " ++ show fdesc
 
@@ -87,6 +91,10 @@ javaToIdris (FieldDescriptor FieldTyDescLong)    = writeIns [ boxLong ]
 javaToIdris (FieldDescriptor FieldTyDescFloat)   = writeIns [ F2d, boxDouble ]
 javaToIdris (FieldDescriptor FieldTyDescDouble)  = writeIns [ boxDouble ]
 javaToIdris VoidDescriptor                       = writeIns [ Aconstnull ]
+javaToIdris (FieldDescriptor (FieldTyDescReference NullableStrDesc)) =
+  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util") "nullableRefToMaybe" "(Ljava/lang/Object;)Ljava/lang/Object;" False ]
+javaToIdris (FieldDescriptor (FieldTyDescReference (NullableRefDesc _))) =
+  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util") "nullableRefToMaybe" "(Ljava/lang/Object;)Ljava/lang/Object;" False ]
 javaToIdris _                                    = pure ()
 
 loadJavaVar :: Int -> FieldTypeDescriptor -> Cg ()
@@ -140,9 +148,19 @@ idrisDescToJava (FieldDescriptor FieldTyDescFloat)
              , InvokeMethod InvokeVirtual "java/lang/Double" "floatValue" "()F" False ]
 idrisDescToJava (FieldDescriptor FieldTyDescDouble) = writeIns [ Checkcast "java/lang/Double", unboxDouble ]
 idrisDescToJava (FieldDescriptor (FieldTyDescReference (IdrisExportDesc _))) = pure () -- converted using factory method on the exported type
-idrisDescToJava (FieldDescriptor (FieldTyDescReference refTy)) = writeIns [ Checkcast $ refTyClassName refTy]
+idrisDescToJava (FieldDescriptor (FieldTyDescReference NullableStrDesc)) =
+  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util") "maybeToNullableRef" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+           , Checkcast "java/lang/String"]
+idrisDescToJava (FieldDescriptor (FieldTyDescReference (NullableRefDesc cname))) = do
+  writeIns [ InvokeMethod InvokeStatic (rtClassSig "Util") "maybeToNullableRef" "(Ljava/lang/Object;)Ljava/lang/Object;" False ]
+  cast cname
+idrisDescToJava (FieldDescriptor (FieldTyDescReference refTy)) = cast $ refTyClassName refTy
 idrisDescToJava VoidDescriptor = pure ()
 idrisDescToJava ty = error $ "unknown type: " ++ show ty
+
+cast :: String -> Cg ()
+cast "java/lang/Object" = pure ()
+cast cname              = writeIns [ Checkcast cname ]
 
 fdescTypeDescriptor :: FDesc -> TypeDescriptor
 fdescTypeDescriptor (FCon (UN "JVM_Unit")) = VoidDescriptor
@@ -168,6 +186,10 @@ fdescRefDescriptor desc@(FApp jvmTy [FApp nativeTy [FStr typeName]])
     = ClassDesc typeName
   | jvmTy == sUN "JVM_NativeT" && nativeTy == sUN "Interface"
     = InterfaceDesc typeName
+  | jvmTy == sUN "JVM_Nullable" && nativeTy == sUN "Class"
+    = NullableRefDesc typeName
+  | jvmTy == sUN "JVM_Nullable" && nativeTy == sUN "Interface"
+    = NullableRefDesc typeName
   | otherwise = error $ "Expected a class or interface descriptor. " ++
                   "Invalid reference type descriptor: " ++ show desc
 fdescRefDescriptor (FApp jvmTy [FApp nativeTy [FApp descTy [FStr typeName]]])
@@ -175,7 +197,7 @@ fdescRefDescriptor (FApp jvmTy [FApp nativeTy [FApp descTy [FStr typeName]]])
     = ArrayDesc (ClassDesc typeName)
 fdescRefDescriptor (FCon (UN "JVM_Str")) = ClassDesc "java/lang/String"
 fdescRefDescriptor (FStr exportedType) = IdrisExportDesc exportedType
-
+fdescRefDescriptor (FCon (UN "JVM_NullableStr")) = NullableStrDesc
 fdescRefDescriptor desc = error $ "Expected a class or interface descriptor. " ++
   "Invalid reference type descriptor: " ++ show desc
 

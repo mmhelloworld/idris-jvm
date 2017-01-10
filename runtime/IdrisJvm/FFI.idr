@@ -49,6 +49,8 @@ mutual
       JVM_Double  : JVM_Types Double
       JVM_Float   : JVM_Types JFloat
       JVM_Unit    : JVM_Types ()
+      JVM_NullableStr: JVM_Types (Maybe String)
+      JVM_Nullable : JVM_Types (Maybe (JVM_Native t))
       JVM_NativeT : JVM_Types (JVM_Native a)
       JVM_IntT    : JVM_IntTypes i -> JVM_Types i
       JVM_ArrayT  : JVM_Types (JVM_Array t)

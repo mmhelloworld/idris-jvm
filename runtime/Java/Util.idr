@@ -23,8 +23,6 @@ namespace List
   size : Inherits JList list => list -> JVM_IO Nat
   size list = cast <$> invokeInstance "size" (JList -> JVM_IO Int) (believe_me list)
 
-Inherits Object JList where {}
-
 namespace ArrayList
 
   ArrayList : Type
@@ -34,7 +32,20 @@ namespace ArrayList
   new = FFI.new (JVM_IO ArrayList)
 
 Inherits JList ArrayList where {}
-Inherits Object ArrayList where {}
+
+namespace HashMap
+  HashMap : Type
+  HashMap = JVM_Native $ Class "java/util/HashMap"
+
+  new : JVM_IO HashMap
+  new = FFI.new (JVM_IO HashMap)
+
+  get : Inherits Object key => HashMap -> key -> JVM_IO (Maybe Object)
+  get this key = invokeInstance "get" (HashMap -> Object -> JVM_IO (Maybe Object)) this (believe_me key)
+
+  put : (Inherits Object key, Inherits Object value) => HashMap -> Maybe key -> Maybe value -> JVM_IO (Maybe Object)
+  put this key value = invokeInstance "put" (HashMap -> Maybe Object -> Maybe Object -> JVM_IO (Maybe Object)) this (believe_me key) (believe_me value)
+
 
 namespace Objects
 
@@ -45,3 +56,6 @@ namespace Objects
   -- that extend java.lang.Object, which is everything.
   toString : Inherits Object that => that -> String
   toString obj = unsafePerformIO $ invokeStatic ObjectsClass "toString" (Object -> JVM_IO String) (believe_me obj)
+
+  isNull : Inherits Object that => that -> Bool
+  isNull obj = unsafePerformIO $ invokeStatic ObjectsClass "isNull" (Object -> JVM_IO Bool) (believe_me obj)

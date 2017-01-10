@@ -127,6 +127,14 @@ oneToTen = [1..10]
 numbersField : List Int
 numbersField = believe_me prim__null
 
+-- To test passing nulls to Java using Maybe
+nullableToString : Inherits Object that => Maybe that -> String
+nullableToString obj = unsafePerformIO $ invokeStatic ObjectsClass "toString" (Maybe Object -> JVM_IO String) (believe_me obj)
+
+-- To test passing null to Java for String using Maybe
+equalsIgnoreCase : String -> Maybe String -> Bool
+equalsIgnoreCase str1 str2 = unsafePerformIO $ invokeInstance "equalsIgnoreCase" (String -> Maybe String -> JVM_IO Bool) str1 str2
+
 main : JVM_IO ()
 main = do
   -- Test ffi calls
@@ -138,7 +146,20 @@ main = do
   printLn $ byteToString $ parseByte "127"
   printLn $ shortToString $ parseShort "32767"
   printLn $ longToString $ parseLong "9223372036854775807"
-  printLn !(getProperty "idris_jvm_ffi_invalid_prop" "foo")
+
+  printLn !(getProperty "foo")  -- Test returning null string from FFI call
+  System.setProperty "foo" "fooval"
+  printLn !(getProperty "foo")  -- Test returning a non-null string from FFI call
+  hashMap <- HashMap.new
+  printLn $ Objects.toString <$> !(HashMap.get hashMap "bar") -- Test returning null object as Nothing
+  HashMap.put hashMap (Just "foo") (Just "fooval")
+  printLn $ Objects.toString <$> !(HashMap.get hashMap "foo") -- Test returning a non-null object as Just
+
+  printLn $ nullableToString (the (Maybe BigInteger) Nothing) -- Test passing Nothing as a null to FFI call
+  bigOne <- BigInteger.new "1"
+  printLn $ nullableToString (Just bigOne) -- Test passing a `Just` as a non null value to FFI call
+  printLn $ equalsIgnoreCase "foo" (Just "foo") -- Test passing a `Just` as a non null String to FFI call
+  printLn $ equalsIgnoreCase "foo" (the (Maybe String) Nothing) -- Test passing nothing as a null String to FFI call
   bigInt1 <- BigInteger.new "11111111111111111111"
   bigInt2 <- BigInteger.new "11111111111111111111"
   printLn $ BigInteger.toString $ BigInteger.add bigInt1 bigInt2

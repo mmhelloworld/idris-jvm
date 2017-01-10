@@ -7,7 +7,14 @@
 "127"
 "32767"
 "9223372036854775807"
-"foo"
+Nothing
+Just "fooval"
+Nothing
+Just "fooval"
+"null"
+"1"
+True
+False
 "22222222222222222222"
 0
 Hi

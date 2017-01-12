@@ -84,6 +84,17 @@ namespace Object
   toString : Object -> JVM_IO String
   toString obj = invokeInstance "toString" (Object -> JVM_IO String) obj
 
+namespace PrintStream
+
+  PrintStream : Type
+  PrintStream = JVM_Native $ Class "java/io/PrintStream"
+
+  println : PrintStream -> String -> JVM_IO ()
+  println = invokeInstance "println" (PrintStream -> String -> JVM_IO ())
+
+  printCh : PrintStream -> Char -> JVM_IO ()
+  printCh = invokeInstance "print" (PrintStream -> Char -> JVM_IO ())
+  
 namespace System
 
   SystemClass : JVM_NativeTy
@@ -99,6 +110,9 @@ namespace System
   -- if it exists otherwise returns the default value
   getPropertyWithDefault : String -> String -> JVM_IO String
   getPropertyWithDefault = invokeStatic SystemClass "getProperty" (String -> String -> JVM_IO String)
+
+  out : JVM_IO PrintStream
+  out = getStaticField SystemClass "out" (JVM_IO PrintStream)
 
 namespace Thread
 

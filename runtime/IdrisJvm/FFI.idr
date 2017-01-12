@@ -109,3 +109,6 @@ setStaticField : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JV
 setStaticField klass fieldName = javacall (SetStaticField klass fieldName)
 
 interface Inherits a b where {}
+
+RuntimeClass : JVM_NativeTy
+RuntimeClass = Class "mmhelloworld/idrisjvmruntime/Runtime"

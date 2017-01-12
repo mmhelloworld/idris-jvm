@@ -42,7 +42,7 @@ compileAndRun dir pgm = do
   let out = dir </> "target"
   (_, compilerOut, compilerErr) <-
     runProcess "stack" [ "exec", "idris", "--",  "--codegen", "jvm",
-      "-p", "idrisjvmruntime", pgm, "-o", out]
+      "-p", "idrisjvmruntime", "-p", "effects", pgm, "-o", out]
   putStrLnNonEmpty compilerOut
   putStrLnNonEmpty compilerErr
   workingDir <- getWorkingDir

@@ -1,7 +1,10 @@
 package idrisjvmruntime
 
+pkgs = effects
+
 modules = IdrisJvm.FFI
         , IdrisJvm.IO
+        , IdrisJvm.Effects
         , Java.Lang
         , Java.Util
         , Java.Math

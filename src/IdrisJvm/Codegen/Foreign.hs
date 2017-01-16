@@ -19,6 +19,7 @@ data JForeign = JStatic String String
               | JSetInstanceField String String
               | JInterface String String
               | JNew String
+              | JClassLiteral String
 
 parseDescriptor :: FDesc -> FDesc -> [(FDesc, LVar)] -> JForeign
 parseDescriptor _ (FApp ffi [FApp nativeTy [FStr cname], FStr fn]) _
@@ -63,6 +64,9 @@ parseDescriptor returns (FCon ffi) _
     IdrisExportDesc _ -> error "Cannot invoke constructor of Idris exported type"
     NullableStrDesc     -> error "A constructor cannot return a nullable string"
     NullableRefDesc _     -> error "A constructor cannot return a nullable reference"
+
+parseDescriptor _ (FApp ffi [FStr cname]) _
+ | ffi == sUN "ClassLiteral" = JClassLiteral cname
 
 parseDescriptor _ fdesc _ = error $ "Unsupported descriptor: " ++ show fdesc
 

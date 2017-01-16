@@ -15,6 +15,7 @@ data JVM_FfiFn = Static JVM_NativeTy  String
                | SetStaticField JVM_NativeTy String
                | Constructor
                | New
+               | ClassLiteral String
                | Instance String
                | GetInstanceField String
                | SetInstanceField String
@@ -109,6 +110,21 @@ setStaticField : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JV
 setStaticField klass fieldName = javacall (SetStaticField klass fieldName)
 
 interface Inherits a b where {}
+
+namespace Class
+
+  ClassClass : JVM_NativeTy
+  ClassClass = Class "java/lang/Class"
+
+  Class : Type
+  Class = JVM_Native ClassClass
+
+  forName : String -> Class
+  forName className = unsafePerformIO $ invokeStatic ClassClass "forName" (String -> JVM_IO Class) className
+
+%inline
+classLit : String -> Class.Class
+classLit s = unsafePerformIO $ javacall (ClassLiteral s) (JVM_IO Class.Class)
 
 RuntimeClass : JVM_NativeTy
 RuntimeClass = Class "mmhelloworld/idrisjvmruntime/Runtime"

@@ -220,3 +220,6 @@ newBigInteger i
              , Ldc $ StringConst (show i)
              , InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
              ]
+
+getPrimitiveClass :: String -> Asm
+getPrimitiveClass clazz = Field FGetStatic clazz "TYPE" "Ljava/lang/Class;"

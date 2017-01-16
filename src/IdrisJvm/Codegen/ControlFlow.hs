@@ -120,33 +120,33 @@ defaultCase (SDefaultCase _) = True
 defaultCase _                = False
 
 csWithLbls :: Int -> [SAlt] -> [(String, Maybe Int32, SAlt)]
-csWithLbls si alts = sortBy g $ zipWith f cs [0..] where
+csWithLbls si alts = sortBy compareCase $ zipWith label cs [0..] where
 
   cs :: [(Maybe Int32, SAlt)]
   cs = zip (caseExpr <$> alts) alts
 
-  f :: (Maybe Int32, SAlt) -> Int -> (String, Maybe Int32, SAlt)
-  f (Just expr, alt) i = (labelName si i, Just expr, alt)
-  f (Nothing, alt) _   = (defaultLabel si, Nothing, alt)
+  label :: (Maybe Int32, SAlt) -> Int -> (String, Maybe Int32, SAlt)
+  label (Just expr, alt) i = (labelName si i, Just expr, alt)
+  label (Nothing, alt) _   = (defaultLabel si, Nothing, alt)
 
-  g (_, Just c1, _) (_, Just c2, _) = compare c1 c2
-  g (_, Just _, _) (_, Nothing, _)  = LT
-  g (_, Nothing, _) (_, Just _, _)  = GT
-  g _ _                             = EQ
+  compareCase (_, Just c1, _) (_, Just c2, _) = compare c1 c2
+  compareCase (_, Just _, _) (_, Nothing, _)  = LT
+  compareCase (_, Nothing, _) (_, Just _, _)  = GT
+  compareCase _ _                             = EQ
 
 ifCasesWithLbls :: Int -> [SAlt] -> [(String, Maybe (Cg ()), SAlt)]
-ifCasesWithLbls si alts = sortBy g $ zipWith f cs [0..] where
+ifCasesWithLbls si alts = sortBy compareCase $ zipWith label cs [0..] where
 
   cs :: [(Maybe (Cg ()), SAlt)]
   cs = zip (ifCaseExpr <$> alts) alts
 
-  f :: (Maybe (Cg ()), SAlt) -> Int -> (String, Maybe (Cg ()), SAlt)
-  f (Just expr, alt) i = (ifLabelName si i, Just expr, alt)
-  f (Nothing, alt) _   = (ifDefaultLabel si, Nothing, alt)
+  label :: (Maybe (Cg ()), SAlt) -> Int -> (String, Maybe (Cg ()), SAlt)
+  label (Just expr, alt) i = (ifLabelName si i, Just expr, alt)
+  label (Nothing, alt) _   = (ifDefaultLabel si, Nothing, alt)
 
-  g (_, Just _, _) (_, Nothing, _) = LT
-  g (_, Nothing, _) (_, Just _, _) = GT
-  g _ _                            = EQ
+  compareCase (_, Just _, _) (_, Nothing, _) = LT
+  compareCase (_, Nothing, _) (_, Just _, _) = GT
+  compareCase _ _                            = EQ
 
 switchEndLabel :: Int -> String
 switchEndLabel switchIndex = "$switch" ++ show switchIndex ++ "$end"

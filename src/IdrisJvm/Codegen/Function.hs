@@ -159,6 +159,16 @@ cgBody ret (SForeign returns fdesc args) = cgForeign (parseDescriptor returns fd
     writeIns [ InvokeMethod InvokeSpecial clazz "<init>" (descriptor returnDesc) False ]
     ret
 
+  cgForeign (JClassLiteral "int") = writeIns [ getPrimitiveClass "java/lang/Integer" ] >> ret
+  cgForeign (JClassLiteral "byte") = writeIns [ getPrimitiveClass "java/lang/Byte" ] >> ret
+  cgForeign (JClassLiteral "char") = writeIns [ getPrimitiveClass "java/lang/Character" ] >> ret
+  cgForeign (JClassLiteral "short") = writeIns [ getPrimitiveClass "java/lang/Short" ] >> ret
+  cgForeign (JClassLiteral "boolean") = writeIns [ getPrimitiveClass "java/lang/Boolean" ] >> ret
+  cgForeign (JClassLiteral "long") = writeIns [ getPrimitiveClass "java/lang/Long" ] >> ret
+  cgForeign (JClassLiteral "float") = writeIns [ getPrimitiveClass "java/lang/Float" ] >> ret
+  cgForeign (JClassLiteral "double") = writeIns [ getPrimitiveClass "java/lang/Double" ] >> ret
+  cgForeign (JClassLiteral clazz) = writeIns [Ldc $ TypeConst $ "L" ++ clazz ++ ";"] >> ret
+
 cgBody _ _ = error "NOT IMPLEMENTED!!!!"
 
 data ExportCall = ExportCallConstructor

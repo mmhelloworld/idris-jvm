@@ -43,17 +43,6 @@ namespace Long
   parseLong : String -> Bits64
   parseLong s = unsafePerformIO $ invokeStatic LongClass "parseLong" (String -> JVM_IO Bits64) s
 
-namespace Class
-
-  ClassClass : JVM_NativeTy
-  ClassClass = Class "java/lang/Class"
-
-  Class : Type
-  Class = JVM_Native ClassClass
-
-  forName : String -> Class
-  forName className = unsafePerformIO $ invokeStatic ClassClass "forName" (String -> JVM_IO Class) className
-
 namespace Math
 
   MathClass : JVM_NativeTy
@@ -94,7 +83,7 @@ namespace PrintStream
 
   printCh : PrintStream -> Char -> JVM_IO ()
   printCh = invokeInstance "print" (PrintStream -> Char -> JVM_IO ())
-  
+
 namespace System
 
   SystemClass : JVM_NativeTy

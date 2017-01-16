@@ -135,6 +135,36 @@ nullableToString obj = unsafePerformIO $ invokeStatic ObjectsClass "toString" (M
 equalsIgnoreCase : String -> Maybe String -> Bool
 equalsIgnoreCase str1 str2 = unsafePerformIO $ invokeInstance "equalsIgnoreCase" (String -> Maybe String -> JVM_IO Bool) str1 str2
 
+getName : Class -> String
+getName clazz = unsafePerformIO $ invokeInstance "getName" (Class -> JVM_IO String) clazz
+
+stringClassLit : Class
+stringClassLit = classLit "java/lang/String"
+
+intClassLit : Class
+intClassLit = classLit "int"
+
+booleanClassLit : Class
+booleanClassLit = classLit "boolean"
+
+byteClassLit : Class
+byteClassLit = classLit "byte"
+
+charClassLit : Class
+charClassLit = classLit "char"
+
+shortClassLit : Class
+shortClassLit = classLit "short"
+
+longClassLit : Class
+longClassLit = classLit "long"
+
+floatClassLit : Class
+floatClassLit = classLit "float"
+
+doubleClassLit : Class
+doubleClassLit = classLit "double"
+
 main : JVM_IO ()
 main = do
   -- Test ffi calls
@@ -165,7 +195,6 @@ main = do
   printLn $ BigInteger.toString $ BigInteger.add bigInt1 bigInt2
   jlist <- ArrayList.new
   printLn !(size jlist)
-
   -- Test exports
   thread1 <- newIdrisThread
   setName thread1 "idris-thread"
@@ -185,6 +214,9 @@ main = do
 
   setStaticNumbers joneToTen -- Test setting a static field
   printLn !getStaticNumbers -- Test getting a static field
+
+  printLn $ getName <$> [ stringClassLit, intClassLit, byteClassLit, charClassLit, shortClassLit, booleanClassLit
+                        , longClassLit, floatClassLit, doubleClassLit ]
 
 exports1 : FFI_Export FFI_JVM "hello/IdrisThread extends java/lang/Thread implements java/lang/Runnable" []
 exports1 =

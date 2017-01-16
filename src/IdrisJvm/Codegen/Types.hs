@@ -84,7 +84,7 @@ data CgWriter = CgWriter { instructions :: DL.DList Asm, deps :: DL.DList Asm }
 
 instance Monoid CgWriter where
   mempty = CgWriter mempty mempty
-  mappend (CgWriter ins1 deps1) (CgWriter ins2 deps2) = CgWriter (mappend ins1 ins2) (mappend deps1 deps2)
+  mappend (CgWriter ins1 deps1) (CgWriter ins2 deps2) = CgWriter (ins1 <> ins2) (deps1 <> deps2)
 
 writeIns :: DL.DList Asm -> Cg ()
 writeIns ins = tell $ CgWriter ins []

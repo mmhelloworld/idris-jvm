@@ -344,6 +344,7 @@ data Constant = DoubleConst Double
               | IntegerConst Int
               | LongConst Word64
               | StringConst String
+              | TypeConst String
 
 instance ToJSON Constant where
   toJSON (DoubleConst n)
@@ -357,6 +358,9 @@ instance ToJSON Constant where
              , "val" .= toJSON n ]
   toJSON (StringConst s)
     = object [ "type" .= String "LdcString"
+             , "val" .= toJSON s ]
+  toJSON (TypeConst s)
+    = object [ "type" .= String "LdcType"
              , "val" .= toJSON s ]
 
 class Asmable a where

@@ -181,10 +181,11 @@ exportCode :: ExportIFace -> Cg ()
 exportCode (Export (NS (UN "FFI_JVM") _) exportedClassName exportItems) = do
     let (cls, optParent, intf) = parseExportedClassName exportedClassName
         parent = fromMaybe "java/lang/Object" optParent
+        (classAnns, otherExports) = parseClassAnnotations exportItems
     writeIns [ CreateClass ComputeMaxs
-             , ClassCodeStart 52 Public cls Nothing parent intf ]
+             , ClassCodeStart 52 Public cls Nothing parent intf classAnns]
     unless (hasConstructorExport exportItems) $ defaultConstructor cls parent
-    mapM_ (cgExport cls parent) exportItems
+    mapM_ (cgExport cls parent) otherExports
 exportCode e = error $ "Unsupported Export: " <> show e
 
 cgExport :: ClassName -> ClassName -> Export -> Cg ()
@@ -199,28 +200,41 @@ cgExport cname _ (ExportFun _ (FApp ffi [FStr fieldName]) typeDesc _)
 
 cgExport cname parent (ExportFun n (FApp ffi [FStr superMethodName]) returns args)
   | ffi == sUN "Super"
-    = exportFun cname mname parent superMethodName ExportCallSuper parent returns args where
+    = exportFun cname mname parent superMethodName ExportCallSuper parent returns args [] [] where
       JMethodName _ mname = jname n
 
 cgExport cname parent (ExportFun n (FApp ffi [FStr mname]) returns args)
   | ffi == sUN "ExportStatic"
-    = exportFun cname mname sourceCname sourceMname ExportCallStatic parent returns args where
+    = exportFun cname mname sourceCname sourceMname ExportCallStatic parent returns args [] [] where
       JMethodName sourceCname sourceMname = jname n
 
 cgExport cname parent (ExportFun n (FCon (UN "ExportDefault")) returns args)
-  = exportFun cname sourceMname sourceCname sourceMname ExportCallInstance parent returns args where
+  = exportFun cname sourceMname sourceCname sourceMname ExportCallInstance parent returns args [] [] where
     JMethodName sourceCname sourceMname = jname n
 
 cgExport cname parent (ExportFun n (FCon (UN "Constructor")) returns args)
-  = exportFun cname "<init>" sourceCname sourceMname ExportCallConstructor parent returns args where
+  = exportFun cname "<init>" sourceCname sourceMname ExportCallConstructor parent returns args [] [] where
     JMethodName sourceCname sourceMname = jname n
 
 cgExport cname parent (ExportFun n (FApp ffi [FStr mname]) returns args)
   | ffi == sUN "ExportInstance"
-    = exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args where
+    = exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args [] [] where
       JMethodName sourceCname sourceMname = jname n
 
+cgExport cname parent (ExportFun n (FApp ffi [FStr mname, FApp cons annDescs]) returns args)
+  | ffi == sUN "ExportInstanceWithAnn"
+  && cons == sUN "::"
+    = exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args anns [] where
+      JMethodName sourceCname sourceMname = jname n
+      anns = join $ parseAnnotations <$> annDescs
+
 cgExport _ _ exportDef = error $ "Unsupported export definition: " <> show exportDef
+
+parseClassAnnotations :: [Export] -> ([Annotation], [Export])
+parseClassAnnotations (ExportFun n (FApp ffi desc) _ _: rest)
+  | ffi == sUN "Anns" && jmethName (jname n) == "classWith"
+    = (join $ parseAnnotations <$> desc, rest)
+parseClassAnnotations nonClassAnnotations = ([], nonClassAnnotations)
 
 exportFun :: ClassName
              -> MethodName
@@ -230,8 +244,10 @@ exportFun :: ClassName
              -> ClassName
              -> FDesc
              -> [FDesc]
+             -> [Annotation]
+             -> [[Annotation]]
              -> Cg ()
-exportFun targetCname targetMethName sourceCname sourceMname exportCall parent returns args = do
+exportFun targetCname targetMethName sourceCname sourceMname exportCall parent returns args anns paramAnns = do
   let argDescs = fdescFieldDescriptor <$> (if isStatic then args else drop 1 args) -- for instance method, drop `this`
       returnDesc = if isConstructor then VoidDescriptor else fdescTypeDescriptor returns
       isStatic = exportCall == ExportCallStatic
@@ -248,7 +264,7 @@ exportFun targetCname targetMethName sourceCname sourceMname exportCall parent r
       mdesc = asm $ MethodDescriptor argDescs returnDesc
       accessMods = if isStatic then [Public,Static] else [Public]
 
-  writeIns [ CreateMethod accessMods targetCname targetMethName mdesc Nothing Nothing
+  writeIns [ CreateMethod accessMods targetCname targetMethName mdesc Nothing Nothing anns paramAnns
            , MethodCodeStart
            ]
   when (not isSuperExport && isExportIO returns) $
@@ -283,7 +299,7 @@ cgFun access clsName fname args def = do
     modify . updateFunctionArgs $ const args
     modify . updateFunctionName $ const $ JMethodName clsName fname
     modify . updateShouldDescribeFrame $ const True
-    writeIns [ CreateMethod access clsName fname signature Nothing Nothing
+    writeIns [ CreateMethod access clsName fname signature Nothing Nothing [] []
              , MethodCodeStart
              ]
     modify . updateLocalVarCount $ const nLocalVars
@@ -348,7 +364,7 @@ returnExport exportCall returnDesc = do
 createClassForIdrisType :: String -> Cg ()
 createClassForIdrisType idrisType = do
     writeIns [ CreateClass ComputeMaxs
-           , ClassCodeStart 52 Public idrisType Nothing "java/lang/Object" []
+           , ClassCodeStart 52 Public idrisType Nothing "java/lang/Object" [] []
            , CreateField [Private, Final] idrisType "value" "Ljava/lang/Object;" Nothing Nothing
            , FieldEnd ]
     constructor
@@ -356,7 +372,7 @@ createClassForIdrisType idrisType = do
     createDef
   where
     constructor
-      = writeIns [ CreateMethod [Public] idrisType "<init>" "(Ljava/lang/Object;)V" Nothing Nothing
+      = writeIns [ CreateMethod [Public] idrisType "<init>" "(Ljava/lang/Object;)V" Nothing Nothing [] []
                  , MethodCodeStart
                  , Aload 0
                  , InvokeMethod InvokeSpecial "java/lang/Object" "<init>" "()V" False
@@ -367,7 +383,7 @@ createClassForIdrisType idrisType = do
                  , MaxStackAndLocal (-1) (-1)
                  , MethodCodeEnd ]
     getter
-      = writeIns [ CreateMethod [Public] idrisType "getValue" "()Ljava/lang/Object;" Nothing Nothing
+      = writeIns [ CreateMethod [Public] idrisType "getValue" "()Ljava/lang/Object;" Nothing Nothing [] []
                  , MethodCodeStart
                  , Aload 0
                  , Field FGetField idrisType "value" "Ljava/lang/Object;"
@@ -376,7 +392,7 @@ createClassForIdrisType idrisType = do
                  , MethodCodeEnd ]
     createDesc = "(Ljava/lang/Object;)L" ++ idrisType ++ ";"
     createDef
-      = writeIns [ CreateMethod [Public, Static] idrisType "create" createDesc Nothing Nothing
+      = writeIns [ CreateMethod [Public, Static] idrisType "create" createDesc Nothing Nothing [] []
                  , New idrisType
                  , Dup
                  , Aload 0
@@ -390,6 +406,43 @@ createField access cname fieldName typeDesc
   = writeIns [ CreateField access cname fieldName desc Nothing Nothing
              , FieldEnd ] where
                desc = asm $ fdescTypeDescriptor typeDesc
+
+parseAnnotations :: FDesc -> [Annotation]
+parseAnnotations (FApp cons [FCon (UN "Annotation"), FApp ann [FStr annTypeName, attr], rest])
+  | cons == sUN "::"
+  && ann == sUN "Ann" = Annotation typeDesc (parseAnnotationAttr attr) : parseAnnotations rest where
+    typeDesc = "L" ++ annTypeName ++ ";"
+parseAnnotations (FApp ann [FStr annTypeName, attr])
+  | ann == sUN "Ann" = [Annotation typeDesc (parseAnnotationAttr attr)] where
+    typeDesc = "L" ++ annTypeName ++ ";"
+parseAnnotations (FApp nil [FCon (UN "Annotation")])
+  | nil == sUN "Nil" = []
+parseAnnotations (FCon (UN "Annotation")) = []
+parseAnnotations desc = error $ "parseAnnotation: not implemented: " ++ show desc
+
+parseAnnotationAttr :: FDesc -> [AnnotationProperty]
+parseAnnotationAttr (FApp cons [ FApp pair [ FUnknown, FCon (UN "AnnotationValue") ]
+                               , FApp mkPair [ FUnknown
+                                             , FCon (UN "AnnotationValue")
+                                             , FStr attrName
+                                             , annValueDesc
+                                             ]
+                                , rest
+                                ])
+  | cons == sUN "::"
+  && pair == sUN "Pair"
+  && mkPair == sUN "MkPair" = (attrName, parseAnnotationValue annValueDesc) : parseAnnotationAttr rest
+parseAnnotationAttr (FApp nil [ FApp pair [ FUnknown , FCon (UN "AnnotationValue")]])
+  | nil == sUN "Nil"
+  && pair == sUN "Pair" = []
+parseAnnotationAttr (FApp nil [ FCon (UN "AnnotationNameValuePair") ])
+  | nil == sUN "Nil" = []
+parseAnnotationAttr desc = error $ "Annotation attribute value not yet supported: " ++ show desc
+
+parseAnnotationValue :: FDesc -> AnnotationValue
+parseAnnotationValue (FApp annString [ FStr value])
+  | annString == sUN "AnnString" = AnnString value
+parseAnnotationValue desc = error $ "Annotation value not yet supported: " ++ show desc
 
 tailRecStartLabelName :: String
 tailRecStartLabelName = "$tailRecStartLabel"

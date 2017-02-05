@@ -52,7 +52,7 @@ invokeDynamic cname lambda = [ InvokeDynamic "apply" ("()" ++ rtFuncSig) metafac
 
 createLambda :: JMethodName -> ClassName -> MethodName -> Int -> DL.DList Asm
 createLambda (JMethodName cname fname) callerCname lambdaMethodName nArgs
-  = DL.fromList [ CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName lambdaDesc Nothing Nothing
+  = DL.fromList [ CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName lambdaDesc Nothing Nothing [] []
                   , MethodCodeStart
                   ] <>
                   join (fmap (\i -> [Aload 0, Iconst i, Aaload]) [0 .. (nArgs - 1)]) <> -- Retrieve lambda args
@@ -64,7 +64,7 @@ createLambda (JMethodName cname fname) callerCname lambdaMethodName nArgs
 
 createParLambda :: JMethodName -> ClassName -> MethodName -> Int -> DL.DList Asm
 createParLambda (JMethodName cname fname) callerCname lambdaMethodName nArgs
-  = DL.fromList [ CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName lambdaDesc Nothing Nothing
+  = DL.fromList [ CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName lambdaDesc Nothing Nothing [] []
                 , MethodCodeStart
                 ] <>
                 join (fmap (\i -> [Aload 0, Iconst i, Aaload]) [0 .. (nArgs - 1)]) <> -- Retrieve lambda args
@@ -98,7 +98,7 @@ addFrame = do
 
 defaultConstructor :: ClassName -> ClassName -> Cg ()
 defaultConstructor cname parent
-  = writeIns [ CreateMethod [Public] cname "<init>" "()V" Nothing Nothing
+  = writeIns [ CreateMethod [Public] cname "<init>" "()V" Nothing Nothing [] []
              , MethodCodeStart
              , Aload 0
              , InvokeMethod InvokeSpecial parent "<init>" "()V" False
@@ -110,7 +110,7 @@ defaultConstructor cname parent
 mainMethod :: Cg ()
 mainMethod = do
   let JMethodName cname mname = jname $ MN 0 "runMain"
-  writeIns [ CreateMethod [Public, Static] cname "main" "([Ljava/lang/String;)V" Nothing Nothing
+  writeIns [ CreateMethod [Public, Static] cname "main" "([Ljava/lang/String;)V" Nothing Nothing [] []
            , MethodCodeStart
            , InvokeMethod InvokeStatic cname mname "()Ljava/lang/Object;" False
            , Pop

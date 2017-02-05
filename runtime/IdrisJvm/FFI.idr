@@ -2,6 +2,18 @@ module IdrisJvm.FFI
 
 %access public export
 
+AnnotationTypeName : Type
+AnnotationTypeName = String
+
+data AnnotationValue = AnnInt Int
+                     | AnnString String
+                     | AnnArray (List AnnotationValue)
+
+AnnotationNameValuePair : Type
+AnnotationNameValuePair = (String, AnnotationValue)
+
+data Annotation = Ann AnnotationTypeName (List AnnotationNameValuePair)
+
 data JVM_NativeTy = Class String
                   | Interface String
                   | Primitive String
@@ -25,6 +37,8 @@ data JVM_FfiFn = Static JVM_NativeTy  String
                | ExportStatic String
                | ExportInstance String
                | ExportDefault -- Export an instance method with idris function name
+               | Anns (List Annotation)
+               | ExportInstanceWithAnn String (List Annotation)
 
 mutual
   data JVM_IntTypes : Type -> Type where

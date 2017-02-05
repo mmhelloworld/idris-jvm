@@ -9,6 +9,7 @@ import qualified Data.DList    as DL
 import           Data.Int      (Int32)
 import           Data.List     (intercalate)
 import           Data.Word     (Word64)
+import qualified Data.Vector as V
 
 data Asm = Aaload
          | Aastore
@@ -18,12 +19,12 @@ data Asm = Aaload
          | Astore Int
          | Areturn
          | Checkcast Descriptor
-         | ClassCodeStart Int Access ClassName (Maybe Signature) ClassName [ClassName]
+         | ClassCodeStart Int Access ClassName (Maybe Signature) ClassName [ClassName] [Annotation]
          | ClassCodeEnd String
          | CreateClass ClassOpts
          | CreateField [Access] ClassName FieldName Descriptor (Maybe Signature) (Maybe FieldInitialValue)
          | CreateLabel String
-         | CreateMethod [Access] ClassName MethodName Descriptor (Maybe Signature) (Maybe [Exception])
+         | CreateMethod [Access] ClassName MethodName Descriptor (Maybe Signature) (Maybe [Exception]) [Annotation] [[Annotation]]
          | Dadd
          | Ddiv
          | Dload Int
@@ -85,6 +86,38 @@ data Asm = Aaload
          | Return
          | SourceInfo SourceFileName
 
+data AnnotationValue = AnnInt Int
+                     | AnnString String
+                     | AnnArray [AnnotationValue] deriving (Show)
+
+instance ToJSON AnnotationValue where
+  toJSON (AnnInt n)
+    = object [ "type" .= String "AnnInt"
+             , "value" .= toJSON n ]
+  toJSON (AnnString s)
+    = object [ "type" .= String "AnnString"
+             , "value" .= toJSON s ]
+  toJSON (AnnArray values)
+    = object [ "type" .= String "AnnArray"
+             , "value" .= toJSON values ]
+
+type AnnotationProperty = (String, AnnotationValue)
+
+type AnnotationTypeName = String
+
+data Annotation = Annotation AnnotationTypeName [ AnnotationProperty ] deriving (Show)
+
+toJSONAnnotationProperty :: String -> AnnotationValue -> Value
+toJSONAnnotationProperty name value
+  = object [ "name" .= toJSON name
+           , "value" .= toJSON value ]
+
+instance ToJSON Annotation where
+  toJSON (Annotation typeName properties)
+    = object [ "type" .= String "Annotation"
+             , "name" .= toJSON typeName
+             , "props" .= (Array $ V.fromList $ uncurry toJSONAnnotationProperty <$> properties) ]
+
 instance Show Asm where
   show = show . toJSON
 
@@ -113,14 +146,15 @@ instance ToJSON Asm where
     = object [ "type" .= String "Checkcast"
              , "desc" .= toJSON desc ]
 
-  toJSON (ClassCodeStart version acc cname s super intf)
+  toJSON (ClassCodeStart version acc cname s super intf annotations)
     = object [ "type" .= String "ClassCodeStart"
              , "version" .= toJSON version
              , "acc" .= toJSON acc
              , "name" .= toJSON cname
              , "sig" .= maybe Null toJSON s
              , "parent" .= toJSON super
-             , "interfaces" .= toJSON intf]
+             , "interfaces" .= toJSON intf
+             , "annotations" .= toJSON annotations ]
 
   toJSON (ClassCodeEnd out)
     = object [ "type" .= String "ClassCodeEnd"
@@ -143,14 +177,16 @@ instance ToJSON Asm where
     = object [ "type" .= String "CreateLabel"
              , "name" .= toJSON label ]
 
-  toJSON (CreateMethod accs cname mname desc s excs)
+  toJSON (CreateMethod accs cname mname desc s excs anns paramAnns)
     = object [ "type" .= String "CreateMethod"
              , "acc" .= toJSON (sum $ accessNum <$> accs)
              , "cname" .= toJSON cname
              , "fname" .= toJSON mname
              , "desc" .= toJSON desc
              , "sig" .= maybe Null toJSON s
-             , "excs" .= toJSON excs ]
+             , "excs" .= toJSON excs
+             , "anns" .= toJSON anns
+             , "paramAnns" .= toJSON paramAnns ]
 
   toJSON Dadd = object [ "type" .= String "Dadd" ]
   toJSON Ddiv = object [ "type" .= String "Ddiv" ]

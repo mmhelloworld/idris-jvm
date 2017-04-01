@@ -26,8 +26,14 @@ namespace JInteger
   IntegerClass : JVM_NativeTy
   IntegerClass = Class "java/lang/Integer"
 
+  JInteger : Type
+  JInteger = JVM_Native IntegerClass
+
   parseInt : String -> Int
   parseInt s = unsafePerformIO $ invokeStatic IntegerClass "parseInt" (String -> JVM_IO Int) s
+
+  valueOf : Int -> JInteger
+  valueOf n = unsafePerformIO $ invokeStatic IntegerClass "valueOf" (Int -> JVM_IO JInteger) n
 
 namespace Short
   ShortClass : JVM_NativeTy
@@ -42,6 +48,19 @@ namespace Long
 
   parseLong : String -> Bits64
   parseLong s = unsafePerformIO $ invokeStatic LongClass "parseLong" (String -> JVM_IO Bits64) s
+
+namespace JDouble
+  DoubleClass : JVM_NativeTy
+  DoubleClass = Class "java/lang/Double"
+
+  JDouble : Type
+  JDouble = JVM_Native DoubleClass
+
+  parseDouble : String -> Double
+  parseDouble s = unsafePerformIO $ invokeStatic DoubleClass "parseDouble" (String -> JVM_IO Double) s
+
+  valueOf : Double -> JDouble
+  valueOf n = unsafePerformIO $ invokeStatic DoubleClass "valueOf" (Double -> JVM_IO JDouble) n
 
 namespace Math
 

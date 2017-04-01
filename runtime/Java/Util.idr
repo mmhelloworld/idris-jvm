@@ -1,6 +1,6 @@
 module Java.Util
 
-import IdrisJvm.FFI
+import IdrisJvm.IO
 import Java.Lang
 
 %access public export
@@ -16,22 +16,64 @@ namespace Arrays
   toString : Inherits ObjectArray that => that -> JVM_IO String
   toString arr = invokeStatic ArraysClass "toString" (ObjectArray -> JVM_IO String) (believe_me arr)
 
-namespace List
+namespace Iterator
+
+  Iterator : Type
+  Iterator = javaInterface "java/util/Iterator"
+
+  Inherits Iterator Iterator where {}
+
+  hasNext : Inherits Iterator that => that -> JVM_IO Bool
+  hasNext itr = invokeInstance "hasNext" (Iterator -> JVM_IO Bool) (believe_me itr)
+
+  next : Inherits Iterator that => that -> JVM_IO Object
+  next itr = invokeInstance "next" (Iterator -> JVM_IO Object) (believe_me itr)
+
+  toList : Inherits Iterator itr => itr -> JVM_IO (List a)
+  toList itr = do
+    hasNext' <- hasNext itr
+    if hasNext'
+      then do
+        item <- next itr
+        rest <- toList itr
+        pure (believe_me item :: rest)
+      else pure []
+
+namespace JList
   JList : Type
   JList = javaInterface "java/util/List"
 
+  Inherits JList JList where {}
+
+  add : Inherits JList list => list -> a -> JVM_IO Bool
+  add list item = invokeInstance "add" (JList -> Object -> JVM_IO Bool) (believe_me list) (believe_me item)
+
   size : Inherits JList list => list -> JVM_IO Nat
   size list = cast <$> invokeInstance "size" (JList -> JVM_IO Int) (believe_me list)
+
+  iterator : Inherits JList list => list -> JVM_IO Iterator
+  iterator list = invokeInstance "iterator" (JList -> JVM_IO Iterator) (believe_me list)
 
 namespace ArrayList
 
   ArrayList : Type
   ArrayList = javaClass "java/util/ArrayList"
 
+  Inherits JList ArrayList where {}
+
   new : JVM_IO ArrayList
   new = FFI.new (JVM_IO ArrayList)
 
-Inherits JList ArrayList where {}
+  fromList : List a -> JVM_IO ArrayList
+  fromList xs = do
+      arrayList <- ArrayList.new
+      fromList' arrayList xs
+    where
+      fromList' : ArrayList -> List a -> JVM_IO ArrayList
+      fromList' arrayList [] = pure arrayList
+      fromList' arrayList (x :: xs) = do
+        JList.add arrayList x
+        fromList' arrayList xs
 
 namespace HashMap
   HashMap : Type

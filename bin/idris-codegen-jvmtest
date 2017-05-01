@@ -1,0 +1,4 @@
+#!/bin/bash
+dir=$(pwd)
+args="$@ $dir"
+curl -H "Content-Type: application/json" -X POST -d "$args" http://localhost:8081

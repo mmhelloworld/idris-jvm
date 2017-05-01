@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>idris-jvm</artifactId>
+        <groupId>io.github.mmhelloworld</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>idris-jvm-ir</artifactId>
+
+    <properties>
+        <idris.srcdir>${project.basedir}/src/main/idris</idris.srcdir>
+    </properties>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>clean-idris-package</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>idris</executable>
+                            <workingDirectory>${idris.srcdir}</workingDirectory>
+                            <arguments>
+                                <argument>--clean</argument>
+                                <argument>${idris.srcdir}/idris-jvm-ir.ipkg</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>install-idris-package</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>idris</executable>
+                            <workingDirectory>${idris.srcdir}</workingDirectory>
+                            <arguments>
+                                <argument>--install</argument>
+                                <argument>${idris.srcdir}/idris-jvm-ir.ipkg</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

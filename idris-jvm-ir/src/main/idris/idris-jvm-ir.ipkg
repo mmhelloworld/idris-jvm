@@ -1,0 +1,6 @@
+package idrisjvmir
+
+pkgs = idrisjvmruntime
+
+modules = IdrisJvm.IR.Types
+        , IdrisJvm.IR.Exports

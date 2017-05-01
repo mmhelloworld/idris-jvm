@@ -6,16 +6,11 @@ JVM bytecode backend for Idris
 
 ## Prerequisites
 
-1. [Haskell Stack](https://docs.haskellstack.org/en/stable/README/)
+1. [Idris](https://github.com/idris-lang/Idris-dev)
 2. Java 8
 
 ## Install
-
-1. `git clone https://github.com/mmhelloworld/idris-jvm.git`
-1. `cd idris-jvm`
-1. `bin/setup`. Windows users, please follow the instructions [here](docs/windows.md) before running this.
-
-For details on what the `setup` script does, please see [here](docs/setup.md).
+Setup instructions for the new backend will soon be available here.
 
 ## Example
 

@@ -1,0 +1,630 @@
+package idrisjvm.core;
+
+import idrisjvm.core.JBsmArg.JBsmArgGetType;
+import idrisjvm.core.JBsmArg.JBsmArgHandle;
+import org.objectweb.asm.AnnotationVisitor;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.Handle;
+import org.objectweb.asm.Label;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
+import static org.objectweb.asm.Opcodes.AALOAD;
+import static org.objectweb.asm.Opcodes.AASTORE;
+import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
+import static org.objectweb.asm.Opcodes.ACONST_NULL;
+import static org.objectweb.asm.Opcodes.ALOAD;
+import static org.objectweb.asm.Opcodes.ANEWARRAY;
+import static org.objectweb.asm.Opcodes.ARETURN;
+import static org.objectweb.asm.Opcodes.ASTORE;
+import static org.objectweb.asm.Opcodes.CHECKCAST;
+import static org.objectweb.asm.Opcodes.DADD;
+import static org.objectweb.asm.Opcodes.DDIV;
+import static org.objectweb.asm.Opcodes.DLOAD;
+import static org.objectweb.asm.Opcodes.DMUL;
+import static org.objectweb.asm.Opcodes.DREM;
+import static org.objectweb.asm.Opcodes.DRETURN;
+import static org.objectweb.asm.Opcodes.DSUB;
+import static org.objectweb.asm.Opcodes.DUP;
+import static org.objectweb.asm.Opcodes.F2D;
+import static org.objectweb.asm.Opcodes.FLOAD;
+import static org.objectweb.asm.Opcodes.FRETURN;
+import static org.objectweb.asm.Opcodes.I2C;
+import static org.objectweb.asm.Opcodes.I2L;
+import static org.objectweb.asm.Opcodes.IADD;
+import static org.objectweb.asm.Opcodes.IAND;
+import static org.objectweb.asm.Opcodes.ICONST_0;
+import static org.objectweb.asm.Opcodes.ICONST_1;
+import static org.objectweb.asm.Opcodes.ICONST_2;
+import static org.objectweb.asm.Opcodes.ICONST_3;
+import static org.objectweb.asm.Opcodes.ICONST_4;
+import static org.objectweb.asm.Opcodes.ICONST_5;
+import static org.objectweb.asm.Opcodes.ICONST_M1;
+import static org.objectweb.asm.Opcodes.IDIV;
+import static org.objectweb.asm.Opcodes.ILOAD;
+import static org.objectweb.asm.Opcodes.IMUL;
+import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
+import static org.objectweb.asm.Opcodes.IREM;
+import static org.objectweb.asm.Opcodes.IRETURN;
+import static org.objectweb.asm.Opcodes.ISHL;
+import static org.objectweb.asm.Opcodes.ISHR;
+import static org.objectweb.asm.Opcodes.ISTORE;
+import static org.objectweb.asm.Opcodes.ISUB;
+import static org.objectweb.asm.Opcodes.IUSHR;
+import static org.objectweb.asm.Opcodes.L2I;
+import static org.objectweb.asm.Opcodes.LADD;
+import static org.objectweb.asm.Opcodes.LAND;
+import static org.objectweb.asm.Opcodes.LDIV;
+import static org.objectweb.asm.Opcodes.LLOAD;
+import static org.objectweb.asm.Opcodes.LMUL;
+import static org.objectweb.asm.Opcodes.LREM;
+import static org.objectweb.asm.Opcodes.LRETURN;
+import static org.objectweb.asm.Opcodes.LSHL;
+import static org.objectweb.asm.Opcodes.LSHR;
+import static org.objectweb.asm.Opcodes.LSUB;
+import static org.objectweb.asm.Opcodes.LUSHR;
+import static org.objectweb.asm.Opcodes.NEW;
+import static org.objectweb.asm.Opcodes.POP;
+import static org.objectweb.asm.Opcodes.RETURN;
+import static org.objectweb.asm.Opcodes.SIPUSH;
+
+public class Assembler {
+    private Map<String, ClassWriter> cws;
+    private ClassWriter cw;
+    private MethodVisitor mv;
+    private FieldVisitor fv;
+    private Map<String, Object> env;
+    private String className;
+    private String methodName;
+    private int localVarCount;
+    private int ifIndex;
+    private int switchIndex;
+    private Map<String, Integer> lambdaIndex;
+    private boolean shouldDescribeFrame;
+
+    public Assembler() {
+        this.cws = new HashMap<>();
+        this.env = new HashMap<>();
+        this.lambdaIndex = new HashMap<>();
+    }
+
+    public void aaload() {
+        mv.visitInsn(AALOAD);
+    }
+
+    public void aastore() {
+        mv.visitInsn(AASTORE);
+    }
+
+    public void aconstnull() {
+        mv.visitInsn(ACONST_NULL);
+    }
+
+    public void aload(int n) {
+        mv.visitVarInsn(ALOAD, n);
+    }
+
+    public void anewarray(String desc) {
+        mv.visitTypeInsn(ANEWARRAY, desc);
+    }
+
+    public void astore(int index) {
+        mv.visitVarInsn(ASTORE, index);
+    }
+
+    public void areturn() {
+        mv.visitInsn(ARETURN);
+    }
+
+    public void checkcast(String desc) {
+        mv.visitTypeInsn(CHECKCAST, desc);
+    }
+
+    public void classCodeStart(int version,
+                               int access,
+                               String className,
+                               String signature,
+                               String parentClassName,
+                               List<String> interfaces,
+                               final List<Annotation> annotations) {
+        this.className = className;
+        handleClassCodeStart(cws, cw, version, access, className, signature, parentClassName, interfaces, annotations);
+    }
+
+    public void classCodeEnd(String outputClassFileDir) {
+        cw.visitEnd();
+        cws.entrySet().parallelStream().forEach(e -> {
+            String className = e.getKey();
+            ClassWriter classWriter = e.getValue();
+            File outFile = new File(outputClassFileDir, className + ".class");
+            new File(outFile.getParent()).mkdirs();
+            try (OutputStream out = new FileOutputStream(outFile)) {
+                out.write(classWriter.toByteArray());
+            } catch (Exception exception) {
+                exception.printStackTrace();
+            }
+        });
+    }
+
+    public void createClass(int flags) {
+        cw = new ClassWriter(flags);
+    }
+
+    private MethodVisitor createDefaultConstructor(final ClassWriter cw) {
+        final MethodVisitor mv;
+        mv = cw.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+        mv.visitCode();
+        mv.visitVarInsn(ALOAD, 0);
+        mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        mv.visitInsn(RETURN);
+        mv.visitMaxs(1, 1);
+        mv.visitEnd();
+        return mv;
+    }
+
+    public void createField(int acc, String className, String fieldName, String desc, String sig, Object value) {
+        cw = cws.computeIfAbsent(className, cname -> {
+            final ClassWriter classWriter = new ClassWriter(COMPUTE_MAXS);
+            classWriter.visit(52, ACC_PUBLIC, cname, null, "java/lang/Object", null);
+            createDefaultConstructor(classWriter);
+            return classWriter;
+        });
+        fv = cw.visitField(acc, fieldName, desc, sig, value);
+    }
+
+    public void createLabel(String labelName) {
+        Label label = new Label();
+        env.put(labelName, label);
+    }
+
+    private void handleCreateMethod(final MethodVisitor mv, List<Annotation> annotations) {
+        annotations.forEach(annotation -> {
+            final AnnotationVisitor av = mv.visitAnnotation(annotation.getName(), true);
+            annotation.getProperties().forEach(prop -> addPropertyToAnnotation(av, prop));
+        });
+    }
+
+
+    public void createMethod(int acc,
+                             String className,
+                             String methodName,
+                             String desc,
+                             String sig,
+                             List<String> exceptions,
+                             List<Annotation> annotations,
+                             List<List<Annotation>> paramAnnotations) {
+        this.className = className;
+        this.methodName = methodName;
+        cw = cws.computeIfAbsent(className, cname -> {
+            final ClassWriter classWriter = new ClassWriter(COMPUTE_MAXS);
+            classWriter.visit(52, ACC_PUBLIC, className, null, "java/lang/Object", null);
+            createDefaultConstructor(classWriter);
+            return classWriter;
+        });
+        final String[] exceptionsArr = exceptions == null ? null : exceptions.toArray(new String[exceptions.size()]);
+        mv = cw.visitMethod(
+            acc,
+            methodName,
+            desc,
+            sig,
+            exceptionsArr);
+        handleCreateMethod(mv, annotations);
+    }
+
+    public void dadd() {
+        mv.visitInsn(DADD);
+    }
+
+    public void ddiv() {
+        mv.visitInsn(DDIV);
+    }
+
+    public void dload(int n) {
+        mv.visitVarInsn(DLOAD, n);
+    }
+
+    public void dmul() {
+        mv.visitInsn(DMUL);
+    }
+
+    public void drem() {
+        mv.visitInsn(DREM);
+    }
+
+    public void dreturn() {
+        mv.visitInsn(DRETURN);
+    }
+
+    public void dsub() {
+        mv.visitInsn(DSUB);
+    }
+
+    public void dup() {
+        mv.visitInsn(DUP);
+    }
+
+    public void f2d() {
+        mv.visitInsn(F2D);
+    }
+
+    public void field(int fieldType, String className, String fieldName, String desc) {
+        mv.visitFieldInsn(fieldType, className, fieldName, desc);
+    }
+
+    public void fieldEnd() {
+        fv.visitEnd();
+    }
+
+    public void fload(int n) {
+        mv.visitVarInsn(FLOAD, n);
+    }
+
+    public void frame(int frameType, int nLocal, List<String> local, int nStack, List<String> stack) {
+        mv.visitFrame(
+            frameType,
+            nLocal,
+            local.stream().map(s -> s.equalsIgnoreCase("opcodes.integer") ? Opcodes.INTEGER : s).toArray(),
+            nStack,
+            stack.stream().map(s -> s.equalsIgnoreCase("opcodes.integer") ? Opcodes.INTEGER : s).toArray()
+        );
+    }
+
+    public int freshIfIndex() {
+        return ifIndex++;
+    }
+
+    public int freshSwitchIndex() {
+        return switchIndex++;
+    }
+
+    public int freshLambdaIndex(String className) {
+        final int currentLambdaIndex = lambdaIndex.getOrDefault(className, 0);
+        lambdaIndex.put(className, currentLambdaIndex + 1);
+        return currentLambdaIndex;
+    }
+
+    public void freturn() {
+        mv.visitInsn(FRETURN);
+    }
+
+    public String getClassName() {
+        return className;
+    }
+
+    public String getMethodName() {
+        return methodName;
+    }
+
+    public int getLocalVarCount() {
+        return localVarCount;
+    }
+
+    public void gotoLabel(String labelName) {
+        mv.visitJumpInsn(Opcodes.GOTO, (Label) env.get(labelName));
+    }
+
+    public void i2c() {
+        mv.visitInsn(I2C);
+    }
+
+    public void i2l() {
+        mv.visitInsn(I2L);
+    }
+
+    public void iadd() {
+        mv.visitInsn(IADD);
+    }
+
+    public void iand() {
+        mv.visitInsn(IAND);
+    }
+
+    public void iconst(int n) {
+        if (n >= 0 && n <= 5) {
+            final int[] opcodes = {ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5};
+            mv.visitInsn(opcodes[n]);
+        } else if (n == -1) {
+            mv.visitInsn(ICONST_M1);
+        } else if (n >= (-128) && n <= 127) {
+            mv.visitIntInsn(Opcodes.BIPUSH, n);
+        } else if (n >= (-32768) && n <= 32767) {
+            mv.visitIntInsn(SIPUSH, n);
+        } else {
+            mv.visitLdcInsn(n);
+        }
+    }
+
+    public void idiv() {
+        mv.visitInsn(IDIV);
+    }
+
+    public void ifeq(String label) {
+        mv.visitJumpInsn(Opcodes.IFEQ, (Label) env.get(label));
+    }
+
+    public void ificmpge(String label) {
+        mv.visitJumpInsn(Opcodes.IF_ICMPGE, (Label) env.get(label));
+    }
+
+    public void ificmpgt(String label) {
+        mv.visitJumpInsn(Opcodes.IF_ICMPGT, (Label) env.get(label));
+    }
+
+    public void ificmple(String label) {
+        mv.visitJumpInsn(Opcodes.IF_ICMPLE, (Label) env.get(label));
+    }
+
+    public void ificmplt(String label) {
+        mv.visitJumpInsn(Opcodes.IF_ICMPLT, (Label) env.get(label));
+    }
+
+    public void iload(int n) {
+        mv.visitVarInsn(ILOAD, n);
+    }
+
+    public void imul() {
+        mv.visitInsn(IMUL);
+    }
+
+    public void invokeMethod(int invocType, String className, String methodName, String desc, boolean isInterface) {
+        mv.visitMethodInsn(
+            invocType,
+            className,
+            methodName,
+            desc,
+            isInterface);
+    }
+
+    public void invokeDynamic(String methodName, String desc, JHandle handle, List<JBsmArg> invokeDynamicArgs) {
+        final Object[] bsmArgs = new Object[invokeDynamicArgs.size()];
+        for (int index = 0; index < bsmArgs.length; index++) {
+            JBsmArg arg = invokeDynamicArgs.get(index);
+            switch (arg.getType()) {
+                case BsmArgGetType:
+                    JBsmArgGetType getType = (JBsmArgGetType) arg;
+                    bsmArgs[index] = Type.getType(getType.getDesc());
+                    break;
+                case BsmArgHandle:
+                    JBsmArgHandle bsmHandle = (JBsmArgHandle) arg;
+                    bsmArgs[index] = getAsmHandle(bsmHandle.getHandle());
+                    break;
+            }
+        }
+
+        mv.visitInvokeDynamicInsn(
+            methodName,
+            desc,
+            getAsmHandle(handle),
+            bsmArgs
+        );
+    }
+
+    public void irem() {
+        mv.visitInsn(IREM);
+    }
+
+    public void ireturn() {
+        mv.visitInsn(IRETURN);
+    }
+
+    public void ishl() {
+        mv.visitInsn(ISHL);
+    }
+
+    public void ishr() {
+        mv.visitInsn(ISHR);
+    }
+
+    public void istore(int n) {
+        mv.visitVarInsn(ISTORE, n);
+    }
+
+    public void isub() {
+        mv.visitInsn(ISUB);
+    }
+
+    public void iushr() {
+        mv.visitInsn(IUSHR);
+    }
+
+    public void l2i() {
+        mv.visitInsn(L2I);
+    }
+
+    public void labelStart(String label) {
+        mv.visitLabel((Label) (env.get(label)));
+    }
+
+    public void ladd() {
+        mv.visitInsn(LADD);
+    }
+
+    public void land() {
+        mv.visitInsn(LAND);
+    }
+
+    public void ldcDouble(double val) {
+        mv.visitLdcInsn(val);
+    }
+
+    public void ldcInteger(int val) {
+        mv.visitLdcInsn(val);
+    }
+
+    public void ldcLong(long val) {
+        mv.visitLdcInsn(val);
+    }
+
+    public void ldcString(String val) {
+        mv.visitLdcInsn(val);
+    }
+
+    public void ldcType(String val) {
+        mv.visitLdcInsn(Type.getType(val));
+    }
+
+    public void ldc(Object value) {
+        mv.visitLdcInsn(value);
+    }
+
+    public void ldiv() {
+        mv.visitInsn(LDIV);
+    }
+
+    public void lload(int n) {
+        mv.visitVarInsn(LLOAD, n);
+    }
+
+    public void lmul() {
+        mv.visitInsn(LMUL);
+    }
+
+    public void lookupSwitch(String defaultLabel, List<String> caseLabels, List<Integer> cases) {
+        final int[] casesArr = cases.stream().mapToInt(n -> n).toArray();
+        mv.visitLookupSwitchInsn(
+            (Label) env.get(defaultLabel),
+            casesArr,
+            caseLabels.stream()
+                .map(s -> (Label) env.get(s))
+                .toArray(Label[]::new)
+        );
+    }
+
+    public void lshl() {
+        mv.visitInsn(LSHL);
+    }
+
+    public void lrem() {
+        mv.visitInsn(LREM);
+    }
+
+    public void lreturn() {
+        mv.visitInsn(LRETURN);
+    }
+
+    public void lshr() {
+        mv.visitInsn(LSHR);
+    }
+
+    public void lsub() {
+        mv.visitInsn(LSUB);
+    }
+
+    public void lushr() {
+        mv.visitInsn(LUSHR);
+    }
+
+    public void maxStackAndLocal(int maxStack, int maxLocal) {
+        mv.visitMaxs(maxStack, maxLocal);
+    }
+
+    public void methodCodeStart() {
+        mv.visitCode();
+    }
+
+    public void methodCodeEnd() {
+        mv.visitEnd();
+    }
+
+    public void asmNew(String className) {
+        mv.visitTypeInsn(NEW, className);
+    }
+
+    public void pop() {
+        mv.visitInsn(POP);
+    }
+
+    public void asmReturn() {
+        mv.visitInsn(RETURN);
+    }
+
+    public boolean shouldDescribeFrame() {
+        return shouldDescribeFrame;
+    }
+
+    public void sourceInfo(String sourceFileName) {
+        cw.visitSource(sourceFileName, null);
+    }
+
+    public void updateFunctionName(String className, String methodName) {
+        this.className = className;
+        this.methodName = methodName;
+    }
+
+    public void updateLocalVarCount(int localVarCount) {
+        this.localVarCount = localVarCount;
+    }
+
+    public void updateShouldDescribeFrame(boolean shouldDescribeFrame) {
+        this.shouldDescribeFrame = shouldDescribeFrame;
+    }
+
+    public void updateIfIndex(int ifIndex) {
+        this.ifIndex = ifIndex;
+    }
+
+    public void updateSwitchIndex(int switchIndex) {
+        this.switchIndex = switchIndex;
+    }
+
+    private void handleClassCodeStart(final Map<String, ClassWriter> cws,
+                                      final ClassWriter cw,
+                                      final int version,
+                                      final int access,
+                                      final String className,
+                                      final String signature,
+                                      final String parentClassName,
+                                      final List<String> interfaces,
+                                      final List<Annotation> annotations) {
+        cw.visit(version,
+            access,
+            className,
+            signature,
+            parentClassName,
+            interfaces.toArray(new String[interfaces.size()]));
+        cws.put(className, cw);
+
+        annotations.forEach(annotation -> {
+            AnnotationVisitor av = cw.visitAnnotation(annotation.getName(), true);
+            annotation.getProperties().forEach(prop -> addPropertyToAnnotation(av, prop));
+            av.visitEnd();
+        });
+    }
+
+    private void addPropertyToAnnotation(final AnnotationVisitor av, final AnnotationProperty prop) {
+        final JAnnotationValue.AnnotationValueType propType = prop.getValue().getType();
+        switch (propType) {
+            case AnnString:
+                JAnnotationValue.JAnnString annStr = (JAnnotationValue.JAnnString) prop.getValue();
+                av.visit(prop.getName(), annStr.getValue());
+                break;
+            case AnnInt:
+                JAnnotationValue.JAnnInt annInt = (JAnnotationValue.JAnnInt) prop.getValue();
+                av.visit(prop.getName(), annInt.getValue());
+                break;
+            case AnnArray:
+                break;
+        }
+    }
+
+    private Handle getAsmHandle(JHandle handle) {
+        return new Handle(
+            handle.getTag(),
+            handle.getCname(),
+            handle.getMname(),
+            handle.getDesc(),
+            handle.isIntf()
+        );
+    }
+
+}

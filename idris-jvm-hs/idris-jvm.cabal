@@ -1,0 +1,108 @@
+name:                idris-jvm
+version:             0.1.0.0
+synopsis:            JVM bytecode backend for Idris
+description:         JVM bytecode backend for Idris. Please see README.md.
+homepage:            https://github.com/mmhelloworld/idris-jvm#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Marimuthu Madasamy
+maintainer:          Marimuthu Madasamy
+copyright:           Copyright © 2016 Marimuthu Madasamy
+category:            JVM
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     IdrisJvm.CodegenJvm
+  exposed-modules:     IdrisJvm.AssemblerService
+                     , IdrisJvm.Codegen.Assembler
+                     , IdrisJvm.Codegen.Common
+                     , IdrisJvm.Codegen.Constant
+                     , IdrisJvm.Codegen.ControlFlow
+                     , IdrisJvm.Codegen.Foreign
+                     , IdrisJvm.Codegen.Function
+                     , IdrisJvm.Codegen.Operator
+                     , IdrisJvm.Codegen.Types
+  build-depends:       aeson
+                     , base
+                     , containers
+                     , directory
+                     , dlist
+                     , filepath
+                     , haskeline >= 0.7
+                     , idris >= 0.99.1
+                     , lens
+                     , mtl
+                     , pretty
+                     , process
+                     , split
+                     , text
+                     , transformers
+                     , unordered-containers
+                     , vector
+                     , wreq
+  default-language:    Haskell2010
+  ghc-options: -Wall
+
+executable idris-codegen-hsjvm
+  hs-source-dirs:      app
+  main-is:             Main.hs
+
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -funbox-strict-fields
+  ghc-prof-options:    -auto-all -caf-all
+
+  build-depends:       idris >= 0.99.1
+                     , base
+                     , containers
+                     , directory
+                     , filepath
+                     , haskeline >= 0.7
+                     , mtl
+                     , transformers
+                     , idris-jvm
+  default-language:    Haskell2010
+
+  if os(linux)
+     cpp-options:   -DLINUX
+     build-depends: unix < 2.8
+  if os(freebsd)
+     cpp-options:   -DFREEBSD
+     build-depends: unix < 2.8
+  if os(dragonfly)
+     cpp-options:   -DDRAGONFLY
+     build-depends: unix < 2.8
+  if os(darwin)
+     cpp-options:   -DMACOSX
+     build-depends: unix < 2.8
+  if os(windows)
+     cpp-options:   -DWINDOWS
+     build-depends: Win32 < 2.4
+
+test-suite idris-jvm-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  other-modules:       IdrisJvm.CodegenJvmSpec
+  main-is:             Spec.hs
+  build-depends:       base
+                     , directory
+                     , filepath
+                     , hspec
+                     , hspec-expectations-pretty-diff
+                     , idris-jvm
+                     , process
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+test-suite hlint
+  default-language: Haskell2010
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  type:             exitcode-stdio-1.0
+  build-depends:    base >= 4 && < 5
+                  , hlint
+  hs-source-dirs:   test
+  main-is:          HLint.hs
+
+source-repository head
+  type:     git
+  location: https://github.com/mmhelloworld/idris-jvm

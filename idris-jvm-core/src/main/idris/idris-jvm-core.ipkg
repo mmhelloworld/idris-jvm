@@ -1,0 +1,12 @@
+package idrisjvmcore
+
+pkgs = idrisjvmffi, idrisjvmir, contrib
+
+modules = IdrisJvm.Core.Asm
+        , IdrisJvm.Core.Common
+        , IdrisJvm.Core.Constant
+        , IdrisJvm.Core.Operator
+        , IdrisJvm.Core.ControlFlow
+        , IdrisJvm.Core.Foreign
+        , IdrisJvm.Core.Function
+        , IdrisJvm.Core.Codegen

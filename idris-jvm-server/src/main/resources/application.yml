@@ -1,0 +1,4 @@
+server.port: ${port:0}
+working.dir: ${IDRIS_JVM_HOME:}
+endpoints.shutdown.enabled: true
+management.security.enabled: false

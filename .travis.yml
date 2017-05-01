@@ -18,13 +18,13 @@ addons:
       - libgmp-dev
 
 before_install:
-  - mkdir -p ~/.local/bin ~/.idrisjvm
-  - export PATH=$HOME/.local/bin:$PATH
+  - mkdir -p $HOME/bin/idris-jvm $HOME/.local/bin
+  - wget https://github.com/mmhelloworld/idris-jvm/releases/download/1.0-SNAPSHOT/idris-jvm-codegen.zip
+  - unzip -o idris-jvm-codegen.zip -d $HOME/bin/idris-jvm
+  - export PATH=`pwd`/bin:$HOME/bin/idris-jvm/bin:$HOME/.local/bin:$PATH
   - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-  - jjs -scripting bin/install.js; cat ~/.idrisjvm/jvmasm.log
+  - stack --stack-yaml idris-jvm-hs/stack.yaml --no-terminal --skip-ghc-check setup
+  - bin/travis_long stack --stack-yaml idris-jvm-hs/stack.yaml --no-terminal --skip-ghc-check install idris
 
 script:
-  - stack --no-terminal --skip-ghc-check setup
-  - bin/travis_long stack --no-terminal --skip-ghc-check install idris
-  - pushd runtime > /dev/null; stack --no-terminal --skip-ghc-check exec idris -- --install idris-jvm-runtime.ipkg; popd > /dev/null
-  - bin/travis_long stack --no-terminal --skip-ghc-check test
+  - mvn -pl :idris-jvm-integration-test test -B

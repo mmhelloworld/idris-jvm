@@ -6,16 +6,12 @@ JVM bytecode backend for Idris
 
 ## Prerequisites
 
-1. [Haskell Stack](https://docs.haskellstack.org/en/stable/README/)
+1. [Idris](https://github.com/idris-lang/Idris-dev)
 2. Java 8
 
 ## Install
-
-1. `git clone https://github.com/mmhelloworld/idris-jvm.git`
-1. `cd idris-jvm`
-1. `bin/setup`. Windows users, please follow the instructions [here](docs/windows.md) before running this.
-
-For details on what the `setup` script does, please see [here](docs/setup.md).
+1. Download JVM bytecode backend and extract from [here](https://github.com/mmhelloworld/idris-jvm/releases).
+1. Add `bin` from the extracted directory to `PATH`.
 
 ## Example
 
@@ -32,8 +28,8 @@ For details on what the `setup` script does, please see [here](docs/setup.md).
     main = print (pythag 50)
     ```
 
-* `$ bin/idrisjvm pythag.idr -o pythag`
-* `$ java -cp ~/.idrisjvm/idris-jvm-runtime-1.0-SNAPSHOT.jar:pythag main.Main`
+* `$ idris --portable-codegen jvm pythag.idr -o target`
+* `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm-runtime.jar:target main.Main`
 
 ## Status
 

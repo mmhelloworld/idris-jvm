@@ -77,6 +77,6 @@
 
    ```
 
-   These files can be compiled with `idrisjvm --interface --cg-opt --interface  Foo/Foo.idr Foo/Bar.idr -o target` (the boilerplate with multiple `--interface` options, one for compiler and another for code generator will be removed soon).
+   These files can be compiled with `idris --portable-codegen jvm -p idrisjvmffi --interface --cg-opt --interface  Foo/Foo.idr Foo/Bar.idr -o target`.
 
    This would result in `Foo/FooThread.class` and `Foo/JBar.class` among other class files under `target`. `FooThread` extends `java.lang.Thread` and implements `java.lang.Runnable` with idris function `run` and in the same way `JBar` would have the exported Idris functions.

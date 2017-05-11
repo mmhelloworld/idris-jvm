@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+# This script is used only by Travis to avoid build timeouts.
+
+travis_long $HOME/.local/bin/idris "$@"

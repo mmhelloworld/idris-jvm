@@ -9,7 +9,21 @@
     <fileSets>
         <fileSet>
             <directory>${project.build.directory}/dist</directory>
-            <outputDirectory/>
+            <outputDirectory>codegen</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../idris-jvm-ffi/src/main/idris</directory>
+            <outputDirectory>idris-jvm-ffi</outputDirectory>
+            <excludes>
+                <exclude>**/*.ibc</exclude>
+            </excludes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../bin</directory>
+            <outputDirectory>bin</outputDirectory>
+            <includes>
+                <include>install*</include>
+            </includes>
         </fileSet>
     </fileSets>
     <files>

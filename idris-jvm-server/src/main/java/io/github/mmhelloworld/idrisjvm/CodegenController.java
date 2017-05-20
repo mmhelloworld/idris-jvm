@@ -103,7 +103,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
         assembler.createMethod(ACC_PUBLIC + ACC_STATIC, "main/Main", "main", "([Ljava/lang/String;)V", null, null,
             emptyList(), emptyList());
         assembler.methodCodeStart();
-        assembler.invokeMethod(INVOKESTATIC, "main/Main", "_lbrace_runMain0_rbrace_", "()Ljava/lang/Object;", false);
+        assembler.invokeMethod(INVOKESTATIC, "main/Main", "_lbrace_runMain_0_rbrace_", "()Ljava/lang/Object;", false);
         assembler.pop();
         assembler.asmReturn();
         assembler.maxStackAndLocal(-1, -1);

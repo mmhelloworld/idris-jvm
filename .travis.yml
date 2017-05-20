@@ -19,12 +19,12 @@ addons:
 
 before_install:
   - mkdir -p $HOME/bin/idris-jvm $HOME/.local/bin
-  - wget https://github.com/mmhelloworld/idris-jvm/releases/download/1.0-SNAPSHOT/idris-jvm-codegen.zip
-  - unzip -o idris-jvm-codegen.zip -d $HOME/bin/idris-jvm
-  - export PATH=`pwd`/bin:$HOME/bin/idris-jvm/bin:$HOME/.local/bin:$PATH
+  - wget https://github.com/mmhelloworld/idris-jvm/releases/download/1.0-SNAPSHOT-20170520/idris-jvm-1.0-SNAPSHOT-20170520.zip
+  - unzip -o idris-jvm-1.0-SNAPSHOT-20170520.zip -d $HOME/bin/idris-jvm
+  - export PATH=`pwd`/bin:$HOME/bin/idris-jvm/codegen/bin:$HOME/.local/bin:$PATH
   - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-  - stack --stack-yaml idris-jvm-hs/stack.yaml --no-terminal --skip-ghc-check setup
-  - bin/travis_long stack --stack-yaml idris-jvm-hs/stack.yaml --no-terminal --skip-ghc-check install idris
+  - stack --stack-yaml bin/stack.yaml --no-terminal --skip-ghc-check setup
+  - bin/travis_long stack --stack-yaml bin/stack.yaml --no-terminal --skip-ghc-check install idris
 
 script:
   - mvn -pl :idris-jvm-integration-test test -B

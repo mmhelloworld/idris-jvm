@@ -15,8 +15,7 @@ compareObj fn l r = do
 loadLocalIntWithCast : LVar -> Asm ()
 loadLocalIntWithCast var = do
   Aload $ locIndex var
-  Checkcast "java/lang/Integer"
-  unboxInt
+  InvokeMethod InvokeStatic (rtClassSig "Util") "asInt" "(Ljava/lang/Object;)I" False
 
 loadLocalLongWithCast : LVar -> Asm ()
 loadLocalLongWithCast var = do
@@ -321,12 +320,12 @@ cgOp2 (LASHR (ITFixed _)) [x, y] = binaryIntOp Ishr x y
 
 cgOp2 LFork [x] = do
   caller <- GetFunctionName
-  createThunk caller (jname "{EVAL0}") [x]
+  createThunk caller (jname "{EVAL_0}") [x]
   InvokeMethod InvokeStatic (rtClassSig "Concurrent") "fork" "(Lmmhelloworld/idrisjvmruntime/Thunk;)Ljava/lang/Object;" False
 
 cgOp2 LPar [x] = do
   caller <- GetFunctionName
-  createParThunk caller (jname "{EVAL0}") [x]
+  createParThunk caller (jname "{EVAL_0}") [x]
   InvokeMethod InvokeStatic (rtClassSig "Concurrent") "par" "(Lmmhelloworld/idrisjvmruntime/Thunk;)Ljava/lang/Object;" False
 
 cgOp2 (LExternal externalOp) args = cgExternalOp externalOp args

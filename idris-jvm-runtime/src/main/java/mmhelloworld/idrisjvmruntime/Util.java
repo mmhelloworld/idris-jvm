@@ -52,10 +52,14 @@ public class Util {
     }
 
     public static int asInt(Object m) {
-        if (m instanceof Character) {
+        if (m instanceof Integer) {
+            return (Integer) m;
+        } else if (m instanceof Character) {
             return (Character) m;
+        } else if (m instanceof Long) {
+            return ((Long) m).intValue();
         } else {
-            return (int) m;
+            throw new IllegalArgumentException("Not an integer: " + m);
         }
     }
 

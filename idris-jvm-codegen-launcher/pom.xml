@@ -84,7 +84,7 @@
                     <descriptors>
                         <descriptor>src/assembly/bin.xml</descriptor>
                     </descriptors>
-                    <finalName>idris-jvm-codegen</finalName>
+                    <finalName>idris-jvm</finalName>
                 </configuration>
                 <executions>
                     <execution>

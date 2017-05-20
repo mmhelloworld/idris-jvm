@@ -10,8 +10,9 @@ JVM bytecode backend for Idris
 2. Java 8
 
 ## Install
-1. Download JVM bytecode backend and extract from [here](https://github.com/mmhelloworld/idris-jvm/releases).
-1. Add `bin` from the extracted directory to `PATH`.
+1. Download and extract JVM bytecode backend from [here](https://github.com/mmhelloworld/idris-jvm/releases).
+1. From the extracted directory, run `bin/install` to install Idris packages for idris-jvm.
+1. Add `<IDRIS_JVM_EXTRACTED_DIRECTORY>/codegen/bin` to `PATH`.
 
 ## Example
 

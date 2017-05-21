@@ -17,4 +17,4 @@ PRGDIR=`dirname "$PRG"`
 BASEDIR=`cd "$PRGDIR/.." >/dev/null; pwd`
 
 cd $BASEDIR/idris-jvm-ffi
-idris --install idris-jvm-ffi.ipkg
+travis/idris --install idris-jvm-ffi.ipkg

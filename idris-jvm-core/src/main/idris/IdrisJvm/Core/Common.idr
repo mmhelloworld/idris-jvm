@@ -11,94 +11,26 @@ import Java.Lang
 jtrace : Show a => a -> b -> b
 jtrace x val = unsafePerformIO {ffi=FFI_JVM} (do printLn x; pure val)
 
-private
-knownOperators : SortedMap Char String
-knownOperators = SortedMap.fromList [ (' ', "space")
-                                   , ('!', "excl")
-                                   , ('"', "dquot")
-                                   , ('#', "hash")
-                                   , ('$', "dollar")
-                                   , ('%', "percent")
-                                   , ('&', "amper")
-                                   , ('\'', "squot")
-                                   , ('(', "lpar")
-                                   , (')', "rpar")
-                                   , ('*', "asterisk")
-                                   , ('+', "plus")
-                                   , (',', "comma")
-                                   , ('-', "hyphen")
-                                   , ('.', "dot")
-                                   , ('/', "slash")
-                                   , (':', "colon")
-                                   , (';', "semicol")
-                                   , ('<', "lt")
-                                   , ('=', "eq")
-                                   , ('>', "gt")
-                                   , ('?', "ques")
-                                   , ('@', "at")
-                                   , ('^', "caret")
-                                   , ('`', "grave")
-                                   , ('{', "lbrace")
-                                   , ('|', "pipe")
-                                   , ('}', "rbrace")
-                                   , ('~', "tilde")
-                                   ]
-
-private
-isAllowed : Char -> Bool
-isAllowed c = isAlphaNum c || c == '_' || c == '$'
-
 jerror : String -> a
 jerror msg = believe_me . unsafePerformIO $ invokeStatic RuntimeClass "error" (Object -> JVM_IO Object) (believe_me msg)
 
 sep : String -> List String -> String
 sep x xs = cast $ intercalate (cast x) $ map cast xs
 
-private
-jchar : Char -> String
-jchar x = if isAllowed x
-            then cast x
-            else case lookup x knownOperators of
-              Just subst => "_" ++ subst ++ "_"
-              Nothing => "_" ++ show (ord x) ++ "_"
+IdrisToJavaNameConverterClass : JVM_NativeTy
+IdrisToJavaNameConverterClass = Class "idrisjvm/core/IdrisToJavaNameConverter"
 
 jname : String -> JMethodName
 jname s =
-  let (classNameWithDot, methodName) = span isIdentifier $ cast s
-      reversedClassNameWithDot = reverse classNameWithDot
-  in
-    case span (not . (==) '.') reversedClassNameWithDot of
-      ([], c) => MkJMethodName (createClassName $ cname1 c) (createMethodName (mname1 reversedClassNameWithDot methodName))
-      (m, c) => MkJMethodName (createClassName $ cname1 c) (createMethodName $ reverse m ++ methodName)
-
-  where
-    dotsLengthAtEnd : List Char -> Nat
-    dotsLengthAtEnd c = List.length $ takeWhile (== '.') c
-
-    mname1 : List Char -> List Char -> List Char
-    mname1 c m = the (List Char) $ (replicate (pred (dotsLengthAtEnd c)) '.') ++ m
-
-    cname1 : List Char -> List Char
-    cname1 s = reverse $ dropWhile (== '.') s
-
-    isIdentifier : Char -> Bool
-    isIdentifier c = isAlphaNum c || c == '.'
-
-    createClassName : List Char -> String
-    createClassName [] = "main/Main"
-    createClassName xs = case split ((==) '.') xs of
-      [c] => "main/" ++ cast c
-      xs => cast $ the (List Char) $ intercalate ['/'] xs
-
-    createMethodName : List Char -> String
-    createMethodName xs = concat $ jchar <$> xs
+  let [cname, mname] = split (== ',') . unsafePerformIO $ invokeStatic IdrisToJavaNameConverterClass "idrisClassMethodName" (String -> JVM_IO String) s
+  in MkJMethodName cname mname
 
 locIndex : LVar -> Int
 locIndex (Loc i) = i
 locIndex _       = jerror "Unexpected global variable"
 
 rtClassSig : String -> String
-rtClassSig c = "mmhelloworld/idrisjvmruntime/" ++ c
+rtClassSig c = "io/github/mmhelloworld/idrisjvm/runtime/" ++ c
 
 rtFuncSig : String
 rtFuncSig = "L" ++ rtClassSig "Function" ++ ";"
@@ -108,13 +40,6 @@ rtThunkSig = "L" ++ rtClassSig "Thunk" ++ ";"
 
 createThunkSig : String
 createThunkSig = "(" ++ rtFuncSig ++ "[Ljava/lang/Object;)" ++ rtThunkSig
-
-{-hash : String -> Int
-hash s = flip mod 100 . sum $ the (List Int) $ map cast (the (List Char) $ cast s)
-
-hashedClassName : String -> String -> String
-hashedClassName "call__IO" cname = cname
-hashedClassName mname cname = cname ++ show (hash mname)-}
 
 listRange : Int -> Int -> List Int
 listRange from to = if from <= to then [from .. to] else []
@@ -287,7 +212,7 @@ defaultConstructor cname parent = do
   MaxStackAndLocal (-1) (-1) -- Let the asm calculate
   MethodCodeEnd
 
-mainMethod : Asm ()
+{- -mainMethod : Asm ()
 mainMethod = do
   let cname = "main/Main"
   let mname = "$runMain0$"
@@ -297,7 +222,7 @@ mainMethod = do
   Pop
   Return
   MaxStackAndLocal (-1) (-1)
-  MethodCodeEnd
+  MethodCodeEnd -}
 
 invokeError : String -> Asm ()
 invokeError x = do

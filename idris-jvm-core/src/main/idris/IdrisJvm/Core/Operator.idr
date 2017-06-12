@@ -43,12 +43,29 @@ binaryLongOp ops l r = do
   ops
   boxLong
 
+unaryIntOp : Asm () -> LVar -> Asm ()
+unaryIntOp ops x = do
+  loadLocalIntWithCast x
+  ops
+  boxInt
+
+unaryLongOp : Asm () -> LVar -> Asm ()
+unaryLongOp ops x = do
+  loadLocalLongWithCast x
+  ops
+  boxLong
+
 binaryDoubleOp : Asm () -> LVar -> LVar -> Asm ()
 binaryDoubleOp ops l r = do
   loadLocalDoubleWithCast l
   loadLocalDoubleWithCast r
   ops
   boxDouble
+
+signExtendToBigInteger : LVar -> Asm ()
+signExtendToBigInteger var = do
+  Aload $ locIndex var
+  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
 
 cgExternalOp : String -> List LVar -> Asm ()
 cgExternalOp op _ =
@@ -199,7 +216,7 @@ cgOpLStrCons l r = do
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
 
 cgOpNotImplemented : PrimFn -> Asm ()
-cgOpNotImplemented op = invokeError $ "OPERATOR " ++ show op ++ "NOT IMPLEMENTED!"
+cgOpNotImplemented op = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
 
 -- cgOp split into two to avoid JVM's "Method code too large" error.
 cgOp2 : PrimFn -> List LVar -> Asm ()
@@ -247,6 +264,10 @@ cgOp2 (LIntCh _) [x] = do
   InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
   I2c
   InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+
+cgOp2 (LSExt ITNative ITBig) [x] = signExtendToBigInteger x
+
+cgOp2 (LSExt (ITFixed from) ITBig) [x] = signExtendToBigInteger x
 
 cgOp2 (LSExt _ _) [x] = Aload $ locIndex x
 
@@ -321,12 +342,12 @@ cgOp2 (LASHR (ITFixed _)) [x, y] = binaryIntOp Ishr x y
 cgOp2 LFork [x] = do
   caller <- GetFunctionName
   createThunk caller (jname "{EVAL_0}") [x]
-  InvokeMethod InvokeStatic (rtClassSig "Concurrent") "fork" "(Lmmhelloworld/idrisjvmruntime/Thunk;)Ljava/lang/Object;" False
+  InvokeMethod InvokeStatic (rtClassSig "Concurrent") "fork" "(Lio/github/mmhelloworld/idrisjvm/runtime/Thunk;)Ljava/lang/Object;" False
 
 cgOp2 LPar [x] = do
   caller <- GetFunctionName
   createParThunk caller (jname "{EVAL_0}") [x]
-  InvokeMethod InvokeStatic (rtClassSig "Concurrent") "par" "(Lmmhelloworld/idrisjvmruntime/Thunk;)Ljava/lang/Object;" False
+  InvokeMethod InvokeStatic (rtClassSig "Concurrent") "par" "(Lio/github/mmhelloworld/idrisjvm/runtime/Thunk;)Ljava/lang/Object;" False
 
 cgOp2 (LExternal externalOp) args = cgExternalOp externalOp args
 
@@ -335,6 +356,19 @@ cgOp2 op _ = cgOpNotImplemented op
 cgOp : PrimFn -> List LVar -> Asm ()
 cgOp (LAnd (ITFixed IT64)) [l, r] = binaryLongOp Land l r
 cgOp (LAnd (ITFixed _)) [l, r] = binaryIntOp Iand l r
+cgOp (LAnd ITNative) [l, r] = binaryIntOp Iand l r
+
+cgOp (LOr (ITFixed IT64)) [l, r] = binaryLongOp Lor l r
+cgOp (LOr (ITFixed _)) [l, r] = binaryIntOp Ior l r
+cgOp (LOr ITNative) [l, r] = binaryIntOp Ior l r
+
+cgOp (LXOr (ITFixed IT64)) [l, r] = binaryLongOp Lxor l r
+cgOp (LXOr (ITFixed _)) [l, r] = binaryIntOp Ixor l r
+cgOp (LXOr ITNative) [l, r] = binaryIntOp Ixor l r
+
+cgOp (LCompl (ITFixed IT64)) [x] = unaryLongOp Lcompl x
+cgOp (LCompl (ITFixed _)) [x] = unaryIntOp Icompl x
+cgOp (LCompl ITNative) [x] = unaryIntOp Icompl x
 
 cgOp llt@(LLt _) args = cgOpLLt llt args
 

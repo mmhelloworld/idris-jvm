@@ -1,4 +1,4 @@
-package mmhelloworld.idrisjvmruntime;
+package io.github.mmhelloworld.idrisjvm.runtime;
 
 import java.math.BigInteger;
 import java.util.Objects;
@@ -91,6 +91,8 @@ public class Util {
             return (BigInteger) m;
         } else if (m instanceof Integer) {
             return BigInteger.valueOf((Integer) m);
+        } else if (m instanceof Long) {
+            return BigInteger.valueOf((Long) m);
         } else if (m instanceof String) {
             return new BigInteger((String) m);
         } else {

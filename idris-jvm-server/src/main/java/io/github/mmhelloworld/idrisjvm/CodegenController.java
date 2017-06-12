@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import idrisjvm.core.Assembler;
 import idrisjvm.core.JCodegen;
+import idrisjvm.core.IdrisToJavaNameConverter;
 import idrisjvm.ir.ExportIFace;
 import idrisjvm.ir.SDecl;
 import io.github.mmhelloworld.idrisjvm.model.Context;
@@ -68,9 +69,8 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
                                 final JsonNode node = parser.getCodec().readTree(parser);
                                 final ObjectMapper mapper = Context.getMapper();
                                 if (node.isArray()) {
-                                    final String name = node.get(0).asText();
                                     SDecl sDecl = mapper.readerFor(SDecl.class).readValue(node.get(1));
-                                    JCodegen.generateMethod(assembler, name, sDecl);
+                                    JCodegen.generateMethod(assembler, sDecl);
                                 } else {
                                     throw new RuntimeException("An array representing SimpleDecl expected");
                                 }
@@ -103,7 +103,8 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
         assembler.createMethod(ACC_PUBLIC + ACC_STATIC, "main/Main", "main", "([Ljava/lang/String;)V", null, null,
             emptyList(), emptyList());
         assembler.methodCodeStart();
-        assembler.invokeMethod(INVOKESTATIC, "main/Main", "_lbrace_runMain_0_rbrace_", "()Ljava/lang/Object;", false);
+        final String[] classAndMethodName = IdrisToJavaNameConverter.idrisClassMethodName("{runMain_0}").split(",");
+        assembler.invokeMethod(INVOKESTATIC, classAndMethodName[0], classAndMethodName[1], "()Ljava/lang/Object;", false);
         assembler.pop();
         assembler.asmReturn();
         assembler.maxStackAndLocal(-1, -1);

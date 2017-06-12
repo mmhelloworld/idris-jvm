@@ -105,7 +105,7 @@ public class IdrisJvmTest {
         jvmProcessBuilder.redirectErrorStream(true);
         jvmProcessBuilder.redirectOutput(Redirect.to(jvmOut));
         Process jvm = jvmProcessBuilder.start();
-        final boolean hasJvmExited = jvm.waitFor(30, TimeUnit.SECONDS);
+        final boolean hasJvmExited = jvm.waitFor(2, TimeUnit.MINUTES);
         if (!hasJvmExited) {
             Files.copy(jvmOut.toPath(), System.err);
             throw new RuntimeException("JVM timed out!");

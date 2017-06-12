@@ -54,6 +54,7 @@ import static org.objectweb.asm.Opcodes.IDIV;
 import static org.objectweb.asm.Opcodes.ILOAD;
 import static org.objectweb.asm.Opcodes.IMUL;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
+import static org.objectweb.asm.Opcodes.IOR;
 import static org.objectweb.asm.Opcodes.IREM;
 import static org.objectweb.asm.Opcodes.IRETURN;
 import static org.objectweb.asm.Opcodes.ISHL;
@@ -61,18 +62,21 @@ import static org.objectweb.asm.Opcodes.ISHR;
 import static org.objectweb.asm.Opcodes.ISTORE;
 import static org.objectweb.asm.Opcodes.ISUB;
 import static org.objectweb.asm.Opcodes.IUSHR;
+import static org.objectweb.asm.Opcodes.IXOR;
 import static org.objectweb.asm.Opcodes.L2I;
 import static org.objectweb.asm.Opcodes.LADD;
 import static org.objectweb.asm.Opcodes.LAND;
 import static org.objectweb.asm.Opcodes.LDIV;
 import static org.objectweb.asm.Opcodes.LLOAD;
 import static org.objectweb.asm.Opcodes.LMUL;
+import static org.objectweb.asm.Opcodes.LOR;
 import static org.objectweb.asm.Opcodes.LREM;
 import static org.objectweb.asm.Opcodes.LRETURN;
 import static org.objectweb.asm.Opcodes.LSHL;
 import static org.objectweb.asm.Opcodes.LSHR;
 import static org.objectweb.asm.Opcodes.LSUB;
 import static org.objectweb.asm.Opcodes.LUSHR;
+import static org.objectweb.asm.Opcodes.LXOR;
 import static org.objectweb.asm.Opcodes.NEW;
 import static org.objectweb.asm.Opcodes.POP;
 import static org.objectweb.asm.Opcodes.RETURN;
@@ -329,6 +333,19 @@ public class Assembler {
         mv.visitInsn(IAND);
     }
 
+    public void ior() {
+        mv.visitInsn(IOR);
+    }
+
+    public void ixor() {
+        mv.visitInsn(IXOR);
+    }
+
+    public void icompl() {
+        mv.visitInsn(ICONST_M1);
+        mv.visitInsn(IXOR);
+    }
+
     public void iconst(int n) {
         if (n >= 0 && n <= 5) {
             final int[] opcodes = {ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5};
@@ -451,6 +468,19 @@ public class Assembler {
 
     public void land() {
         mv.visitInsn(LAND);
+    }
+
+    public void lor() {
+        mv.visitInsn(LOR);
+    }
+
+    public void lxor() {
+        mv.visitInsn(LXOR);
+    }
+
+    public void lcompl() {
+        mv.visitLdcInsn(-1L);
+        mv.visitInsn(LXOR);
     }
 
     public void ldcDouble(double val) {

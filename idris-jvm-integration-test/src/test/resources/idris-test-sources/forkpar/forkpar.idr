@@ -17,7 +17,7 @@ fibonacci n =
 
 shutdownExecutor : JVM_IO ()
 shutdownExecutor = javacall (Static clz "shutdownExecutor") (JVM_IO ()) where
-  clz = Class "mmhelloworld/idrisjvmruntime/Concurrent"
+  clz = Class "io/github/mmhelloworld/idrisjvm/runtime/Concurrent"
 
 main : JVM_IO ()
 main = do

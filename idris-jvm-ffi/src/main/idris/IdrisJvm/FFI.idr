@@ -141,4 +141,4 @@ classLit : String -> Class.Class
 classLit s = unsafePerformIO $ javacall (ClassLiteral s) (JVM_IO Class.Class)
 
 RuntimeClass : JVM_NativeTy
-RuntimeClass = Class "mmhelloworld/idrisjvmruntime/Runtime"
+RuntimeClass = Class "io/github/mmhelloworld/idrisjvm/runtime/Runtime"

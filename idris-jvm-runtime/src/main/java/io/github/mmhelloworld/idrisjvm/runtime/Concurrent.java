@@ -1,4 +1,4 @@
-package mmhelloworld.idrisjvmruntime;
+package io.github.mmhelloworld.idrisjvm.runtime;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;

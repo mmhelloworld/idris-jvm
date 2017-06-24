@@ -17,13 +17,42 @@ generateDependencyMethods assembler (subroutine :: subroutines) = do
   (_, newSubroutines) <- runAsm [] assembler subroutine
   generateDependencyMethods assembler (newSubroutines ++ subroutines)
 
-generateMethod : Assembler -> String -> SDecl -> JVM_IO ()
-generateMethod assembler name (SFun _ args _ def) = do
+generateMethod' : Assembler -> SDecl -> JVM_IO ()
+generateMethod' assembler (SFun name args _ def) = do
   let jmethodName = jname name
   let fname = jmethName jmethodName
   let clsName = jmethClsName jmethodName
   (_, subroutines) <- runAsm [] assembler $ cgFun [Public, Static] name clsName fname args def
   generateDependencyMethods assembler subroutines
+
+generateMethod : Assembler -> SDecl -> JVM_IO ()
+generateMethod assembler decl@(SFun "{APPLY_0}" _ _ _) = do
+      _ <- sequence $ generateMethod' assembler <$> splitApplyFunction decl
+      pure ()
+  where
+    group : Nat -> List a -> List (List a)
+    group _ [] = []
+    group n xs =
+        let (ys, zs) = splitAt n xs
+        in  ys :: group n zs
+
+    callNextFn : String -> List String -> Int -> LVar -> Nat -> (Nat, List SAlt) -> SDecl
+    callNextFn fname args n caseVar last (index, cs) = SFun currFn args n body where
+      nextFn : String
+      nextFn = fname ++ "$" ++ show (index + 1)
+
+      currFn : String
+      currFn = if index == 0 then fname else (fname ++ "$" ++ show index)
+
+      body = SChkCase caseVar $ if index + 1 == last then cs else (cs ++ [SDefaultCase (SApp True nextFn [Loc 0, Loc 1])])
+
+    splitApplyFunction : SDecl -> List SDecl
+    splitApplyFunction (SFun fname args n (SChkCase var cases)) =
+      map (callNextFn fname args n var len) . List.zip [0.. len] $ cs where
+        cs = group 100 cases
+        len = List.length cs
+
+generateMethod assembler decl = generateMethod' assembler decl
 
 generateExport : Assembler -> ExportIFace -> JVM_IO ()
 generateExport assembler exportIFace = do

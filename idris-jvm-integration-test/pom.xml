@@ -51,7 +51,7 @@
                                     <groupId>io.github.mmhelloworld</groupId>
                                     <version>${project.version}</version>
                                     <destFileName>idris-jvm-server.jar</destFileName>
-                                    <outputDirectory>${deploy.dir}</outputDirectory>
+                                    <outputDirectory>${deploy.dir}/codegen</outputDirectory>
                                 </artifactItem>
                                 <artifactItem>
                                     <artifactId>idris-jvm-runtime</artifactId>

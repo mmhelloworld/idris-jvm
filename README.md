@@ -6,7 +6,7 @@ JVM bytecode backend for Idris
 
 ## Prerequisites
 
-1. [Idris](https://github.com/idris-lang/Idris-dev) 0.99.1
+1. [Idris](https://github.com/idris-lang/Idris-dev) 1.0
 2. Java 8
 
 ## Install

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
 
-# This script is used only by Travis to avoid build timeouts.
+travis_long docker run -v $HOME/bin/idris-packages:/root/.stack/snapshots/x86_64-linux/lts-8.18/8.0.2/share/x86_64-linux-ghc-8.0.2/idris-1.0/libs -v $PROJECT_ROOT:$PROJECT_ROOT -v $JAVA_HOME:/bin/jdk -v $HOME/bin/idris-jvm:/bin/idris-jvm -w `pwd` mmhelloworld/idris:1.0 idris "$@"
 
-travis_long $HOME/.local/bin/idris "$@"

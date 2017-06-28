@@ -123,6 +123,9 @@ namespace System
   getProperty : String -> JVM_IO (Maybe String)
   getProperty = invokeStatic SystemClass "getProperty" (String -> JVM_IO (Maybe String))
 
+  getenv : String -> JVM_IO (Maybe String)
+  getenv = invokeStatic SystemClass "getenv" (String -> JVM_IO (Maybe String))
+
   setProperty : String -> String -> JVM_IO (Maybe String)
   setProperty = invokeStatic SystemClass "setProperty" (String -> String -> JVM_IO (Maybe String))
 

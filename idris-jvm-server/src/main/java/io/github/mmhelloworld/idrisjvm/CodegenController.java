@@ -6,8 +6,8 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import idrisjvm.core.Assembler;
-import idrisjvm.core.JCodegen;
 import idrisjvm.core.IdrisToJavaNameConverter;
+import idrisjvm.core.JCodegen;
 import idrisjvm.ir.ExportIFace;
 import idrisjvm.ir.SDecl;
 import io.github.mmhelloworld.idrisjvm.model.Context;
@@ -29,6 +29,7 @@ import static java.util.Collections.emptyList;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 import static org.objectweb.asm.Opcodes.ACC_STATIC;
 import static org.objectweb.asm.Opcodes.INVOKESTATIC;
+import static org.objectweb.asm.Opcodes.PUTSTATIC;
 import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
 @RestController
@@ -100,10 +101,13 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
     }
 
     private void addMainMethod(final Assembler assembler) {
+        final String[] classAndMethodName = IdrisToJavaNameConverter.idrisClassMethodName("{runMain_0}").split(",");
         assembler.createMethod(ACC_PUBLIC + ACC_STATIC, "main/Main", "main", "([Ljava/lang/String;)V", null, null,
             emptyList(), emptyList());
         assembler.methodCodeStart();
-        final String[] classAndMethodName = IdrisToJavaNameConverter.idrisClassMethodName("{runMain_0}").split(",");
+        assembler.aload(0);
+        assembler.invokeMethod(INVOKESTATIC, "java/util/Arrays", "asList", "([Ljava/lang/Object;)Ljava/util/List;", false);
+        assembler.field(PUTSTATIC, "io/github/mmhelloworld/idrisjvm/runtime/Runtime", "programArgs", "Ljava/util/List;");
         assembler.invokeMethod(INVOKESTATIC, classAndMethodName[0], classAndMethodName[1], "()Ljava/lang/Object;", false);
         assembler.pop();
         assembler.asmReturn();

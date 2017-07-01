@@ -28,10 +28,6 @@ public class Runtime {
         return 0;
     }
 
-    public static Thunk thunk(Function fn, Object[] args) {
-        return () -> fn.apply(args);
-    }
-
     public static Object error(Object s) {
         throw new RuntimeException(s.toString());
     }

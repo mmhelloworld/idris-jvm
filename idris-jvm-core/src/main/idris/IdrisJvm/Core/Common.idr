@@ -87,10 +87,14 @@ unboxDouble = InvokeMethod InvokeVirtual "java/lang/Double" "doubleValue" "()D" 
 unboxFloat : Asm ()
 unboxFloat = InvokeMethod InvokeVirtual "java/lang/Float" "floatValue" "()F" False
 
+repeatString : Nat -> String -> String
+repeatString n s = concat (replicate n s)
+
+repeatObjectDesc : Nat -> String
+repeatObjectDesc n = repeatString n "Ljava/lang/Object;"
+
 sig : Nat -> String
-sig nArgs = "(" ++ argTypes ++  ")Ljava/lang/Object;" where
-  argTypes : String
-  argTypes = concat (replicate nArgs "Ljava/lang/Object;")
+sig nArgs = "(" ++ repeatObjectDesc nArgs ++  ")Ljava/lang/Object;"
 
 metafactoryDesc : Descriptor
 metafactoryDesc =
@@ -107,32 +111,27 @@ metafactoryDesc =
 lambdaDesc : Descriptor
 lambdaDesc = "([Ljava/lang/Object;)Ljava/lang/Object;"
 
-invokeDynamic : ClassName -> MethodName -> Asm ()
-invokeDynamic cname lambda = InvokeDynamic "apply" ("()" ++ rtFuncSig) metafactoryHandle metafactoryArgs where
-  metafactoryHandle = MkHandle HInvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory" metafactoryDesc False
-
-  lambdaHandle : Handle
-  lambdaHandle = MkHandle HInvokeStatic cname lambda lambdaDesc False
-
-  metafactoryArgs = [ BsmArgGetType lambdaDesc
-                    , BsmArgHandle lambdaHandle
-                    , BsmArgGetType lambdaDesc
-                    ]
-
-storeArgIntoArray : Int -> Int -> Asm ()
-storeArgIntoArray lhs rhs = do
-  Dup
-  Iconst lhs
-  Aload rhs
-  Aastore
-
-loadArgsFromArray : Nat -> Asm ()
-loadArgsFromArray nArgs = case isLTE 1 nArgs of
-    Yes prf => sequence_ (map (loadArg . cast) [0 .. (Nat.(-) nArgs 1)])
-    No contra => Pure ()
+invokeDynamic : ClassName -> MethodName -> Nat -> Asm ()
+invokeDynamic cname lambda nArgs =
+    InvokeDynamic "call" desc metafactoryHandle metafactoryArgs
   where
-    loadArg : Int -> Asm ()
-    loadArg n = do Aload 0; Iconst n; Aaload
+    desc : String
+    desc = "(" ++ repeatObjectDesc nArgs ++ ")" ++ rtThunkSig
+
+    metafactoryHandle = MkHandle HInvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory" metafactoryDesc False
+
+    lambdaHandle : Handle
+    lambdaHandle = MkHandle HInvokeStatic cname lambda (sig nArgs) False
+
+    metafactoryArgs = [ BsmArgGetType "()Ljava/lang/Object;"
+                      , BsmArgHandle lambdaHandle
+                      , BsmArgGetType "()Ljava/lang/Object;"
+                      ]
+
+loadArgsForLambdaTargetMethod : Nat -> Asm ()
+loadArgsForLambdaTargetMethod nArgs = case isLTE 1 nArgs of
+    Yes prf => sequence_ (map (Aload . cast) [0 .. (Nat.(-) nArgs 1)])
+    No contra => Pure ()
 
 createThunkForLambda : JMethodName -> List LVar -> (MethodName -> Asm ()) -> Asm ()
 createThunkForLambda caller args lambdaCode = do
@@ -140,20 +139,18 @@ createThunkForLambda caller args lambdaCode = do
   let cname = jmethClsName caller
   lambdaIndex <- FreshLambdaIndex cname
   let lambdaMethodName = sep "$" ["lambda", jmethName caller, show lambdaIndex]
-  invokeDynamic cname lambdaMethodName
-  lambdaCode lambdaMethodName
-  Iconst $ cast nArgs
-  Anewarray "java/lang/Object"
   let argNums = map locIndex args
-  sequence_ . map (uncurry storeArgIntoArray) $ List.zip [0.. (cast $ List.length argNums)] argNums
-  InvokeMethod InvokeStatic (rtClassSig "Runtime") "thunk" createThunkSig False
+  sequence_ . map Aload $ argNums
+  invokeDynamic cname lambdaMethodName nArgs
+  lambdaCode lambdaMethodName
 
 createLambda : JMethodName -> ClassName -> MethodName -> Nat -> Asm ()
 createLambda (MkJMethodName cname fname) callerCname lambdaMethodName nArgs = do
-  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName lambdaDesc Nothing Nothing [] []
+  let desc = sig nArgs
+  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName desc Nothing Nothing [] []
   MethodCodeStart
-  loadArgsFromArray nArgs
-  InvokeMethod InvokeStatic cname fname (sig nArgs) False -- invoke the target method
+  loadArgsForLambdaTargetMethod nArgs
+  InvokeMethod InvokeStatic cname fname desc False -- invoke the target method
   Areturn
   MaxStackAndLocal (-1) (-1)
   MethodCodeEnd
@@ -166,10 +163,11 @@ createThunk caller@(MkJMethodName callerCname _) fname args = do
 
 createParLambda : JMethodName -> ClassName -> MethodName -> Nat -> Asm ()
 createParLambda (MkJMethodName cname fname) callerCname lambdaMethodName nArgs = do
-  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName lambdaDesc Nothing Nothing [] []
+  let desc = sig nArgs
+  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName desc Nothing Nothing [] []
   MethodCodeStart
-  loadArgsFromArray nArgs
-  InvokeMethod InvokeStatic cname fname (sig nArgs) False -- invoke the target method
+  loadArgsForLambdaTargetMethod nArgs
+  InvokeMethod InvokeStatic cname fname desc False -- invoke the target method
   Astore 1
   Aload 1
   InvokeMethod InvokeVirtual "java/lang/Object" "getClass" "()Ljava/lang/Class;" False

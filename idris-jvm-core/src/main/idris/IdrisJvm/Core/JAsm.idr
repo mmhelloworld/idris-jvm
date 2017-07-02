@@ -337,6 +337,7 @@ runAsm subroutines assembler (MaxStackAndLocal stack local)
 runAsm subroutines assembler MethodCodeStart = singleInst subroutines $ invokeInstance "methodCodeStart" (Assembler -> JVM_IO ()) assembler
 runAsm subroutines assembler MethodCodeEnd = singleInst subroutines $ invokeInstance "methodCodeEnd" (Assembler -> JVM_IO ()) assembler
 runAsm subroutines assembler (New cname) = singleInst subroutines $ invokeInstance "asmNew" (Assembler -> String -> JVM_IO ()) assembler cname
+runAsm subroutines assembler (InstanceOf cname) = singleInst subroutines $ invokeInstance "asmInstanceOf" (Assembler -> String -> JVM_IO ()) assembler cname
 runAsm subroutines assembler Pop = singleInst subroutines $ invokeInstance "pop" (Assembler -> JVM_IO ()) assembler
 runAsm subroutines assembler Pop2 = singleInst subroutines $ invokeInstance "pop2" (Assembler -> JVM_IO ()) assembler
 runAsm subroutines assembler Return = singleInst subroutines $ invokeInstance "asmReturn" (Assembler -> JVM_IO ()) assembler

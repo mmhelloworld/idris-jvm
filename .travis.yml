@@ -15,7 +15,7 @@ jdk:
 before_install:
   - docker pull mmhelloworld/idris:1.0
   - mkdir -p $HOME/bin/idris-packages $HOME/bin/idris-jvm
-  - wget https://github.com/mmhelloworld/idris-jvm/releases/download/1.0-SNAPSHOT-20170701/idris-jvm-1.0-SNAPSHOT-20170701.zip
+  - wget https://github.com/mmhelloworld/idris-jvm/releases/download/1.0-SNAPSHOT-20170702.beta/idris-jvm-1.0-SNAPSHOT-20170702.beta.zip
   - unzip -o idris-jvm-*.zip -d $HOME/bin/idris-jvm
   - export PATH=`pwd`/bin/travis:$HOME/bin/idris-jvm/codegen/bin:$HOME/.local/bin:$PATH
   - export PROJECT_ROOT=`pwd`

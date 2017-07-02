@@ -268,6 +268,7 @@ data Asm : Type -> Type where
     MethodCodeStart : Asm ()
     MethodCodeEnd : Asm ()
     New : ClassName -> Asm ()
+    InstanceOf : ClassName -> Asm ()
     Pop : Asm ()
     Pop2 : Asm ()
     Return : Asm ()

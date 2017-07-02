@@ -96,10 +96,7 @@ mutual
     where
       project : Nat -> Nat -> Asm ()
       project i v = do
-        Aload sv
-        Checkcast "[Ljava/lang/Object;"
-        Iconst $ cast i
-        Aaload
+        idrisObjectProperty sv (cast i)
         Astore $ cast v
 
       argsLength : Nat
@@ -107,7 +104,7 @@ mutual
 
       extractConParams : Int -> Asm ()
       extractConParams lv = case isLTE 1 argsLength of
-        Yes prf => sequence_ $ (uncurry project) <$> List.zip (natRange 1 argsLength) (natRange (cast lv) ((cast lv) + (argsLength - 1)))
+        Yes prf => sequence_ $ (uncurry project) <$> List.zip (natRange 0 (argsLength - 1)) (natRange (cast lv) ((cast lv) + (argsLength - 1)))
         No contra => Pure ()
 
   conCase : SAlt -> Bool

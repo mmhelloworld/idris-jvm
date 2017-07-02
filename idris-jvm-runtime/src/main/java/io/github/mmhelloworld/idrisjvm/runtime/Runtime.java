@@ -40,8 +40,8 @@ public class Runtime {
     }
 
     public static int constructorIndex(Object obj) {
-        if (obj instanceof Object[]) {
-            return (int) ((Object[]) obj)[0];
+        if (obj instanceof IdrisObject) {
+            return ((IdrisObject) obj).getConstructorId();
         } else {
             return obj == null ? 0 : (Integer) obj;
         }

@@ -38,8 +38,8 @@ rtFuncSig = "L" ++ rtClassSig "Function" ++ ";"
 rtThunkSig : String
 rtThunkSig = "L" ++ rtClassSig "Thunk" ++ ";"
 
-createThunkSig : String
-createThunkSig = "(" ++ rtFuncSig ++ "[Ljava/lang/Object;)" ++ rtThunkSig
+idrisObjectType : String
+idrisObjectType = rtClassSig "IdrisObject"
 
 listRange : Int -> Int -> List Int
 listRange from to = if from <= to then [from .. to] else []
@@ -108,8 +108,11 @@ metafactoryDesc =
          , "Ljava/lang/invoke/CallSite;"
          ]
 
-lambdaDesc : Descriptor
-lambdaDesc = "([Ljava/lang/Object;)Ljava/lang/Object;"
+idrisObjectProperty : Int -> Int -> Asm ()
+idrisObjectProperty object propertyIndex = do
+    Aload object
+    Iconst propertyIndex
+    InvokeMethod InvokeStatic idrisObjectType "getProperty"  "(Ljava/lang/Object;I)Ljava/lang/Object;" False
 
 invokeDynamic : ClassName -> MethodName -> Nat -> Asm ()
 invokeDynamic cname lambda nArgs =
@@ -170,8 +173,7 @@ createParLambda (MkJMethodName cname fname) callerCname lambdaMethodName nArgs =
   InvokeMethod InvokeStatic cname fname desc False -- invoke the target method
   Astore 1
   Aload 1
-  InvokeMethod InvokeVirtual "java/lang/Object" "getClass" "()Ljava/lang/Class;" False
-  InvokeMethod InvokeVirtual "java/lang/Class" "isArray" "()Z" False
+  InstanceOf idrisObjectType
   CreateLabel "elseLabel"
   Ifeq "elseLabel"
   Aload 1

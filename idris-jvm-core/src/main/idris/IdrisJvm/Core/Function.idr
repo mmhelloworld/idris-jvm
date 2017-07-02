@@ -16,6 +16,43 @@ mutual
   assignLocal toIndex (Loc fromIndex) = assign fromIndex (cast toIndex)
   assignLocal _ _ = jerror "Unexpected global variable"
 
+  createIdrisObject : Int -> List LVar -> Asm ()
+  createIdrisObject constructorId args = do
+      New idrisObjectType
+      Dup
+      Iconst constructorId
+      createProperties
+      invokeIdrisObjectConstructor
+    where
+      argsLength : Nat
+      argsLength = length args
+
+      ins : Nat -> LVar -> Asm ()
+      ins idx (Loc varIndex) = do
+        Dup
+        Iconst $ cast idx
+        Aload varIndex
+        Aastore
+      ins _ _ = jerror "Unexpected global variable"
+
+      storeProperties : Asm ()
+      storeProperties = case isLTE 1 argsLength of
+        Yes prf => sequence_ $ List.zipWith ins (natRange 0 (argsLength - 1)) args
+        No contra => Pure ()
+
+      createProperties : Asm ()
+      createProperties =
+        if argsLength > 0
+          then do
+            Iconst . cast $ argsLength
+            Anewarray "java/lang/Object"
+            storeProperties
+          else Pure ()
+
+      invokeIdrisObjectConstructor : Asm ()
+      invokeIdrisObjectConstructor = InvokeMethod InvokeSpecial idrisObjectType "<init>" constructorSig False where
+        constructorSig = if argsLength > 0 then "(I[Ljava/lang/Object;)V" else "(I)V"
+
   cgBody : Lazy (Asm ()) -> SExp -> Asm ()
   cgBody ret (SV (Glob n)) = do
     let MkJMethodName cname mname = jname n
@@ -41,30 +78,10 @@ mutual
   cgBody ret (SUpdate _ e) = cgBody ret e
 
   cgBody ret (SProj (Loc v) i) = do
-    Aload v
-    Checkcast "[Ljava/lang/Object;"
-    Iconst $ succ i
-    Aaload
+    idrisObjectProperty v i
     ret
 
-  cgBody ret (SCon _ t _ args) = do
-      Iconst . cast $ (List.length args) + 1
-      Anewarray "java/lang/Object"
-      Dup
-      Iconst 0
-      Iconst t
-      boxInt
-      Aastore
-      sequence_ $ List.zipWith ins (natRange 1 (length args)) args
-      ret
-    where
-      ins : Nat -> LVar -> Asm ()
-      ins idx (Loc varIndex) = do
-        Dup
-        Iconst $ cast idx
-        Aload varIndex
-        Aastore
-      ins _ _ = jerror "Unexpected global variable"
+  cgBody ret (SCon _ t _ args) = do createIdrisObject t args; ret
 
   cgBody ret (SCase _ e alts) = cgSwitch ret cgBody e alts
 

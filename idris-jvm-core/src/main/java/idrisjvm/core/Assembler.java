@@ -53,6 +53,7 @@ import static org.objectweb.asm.Opcodes.ICONST_M1;
 import static org.objectweb.asm.Opcodes.IDIV;
 import static org.objectweb.asm.Opcodes.ILOAD;
 import static org.objectweb.asm.Opcodes.IMUL;
+import static org.objectweb.asm.Opcodes.INSTANCEOF;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
 import static org.objectweb.asm.Opcodes.IOR;
 import static org.objectweb.asm.Opcodes.IREM;
@@ -568,6 +569,10 @@ public class Assembler {
 
     public void asmNew(String className) {
         mv.visitTypeInsn(NEW, className);
+    }
+
+    public void asmInstanceOf(String className) {
+        mv.visitTypeInsn(INSTANCEOF, className);
     }
 
     public void pop() {

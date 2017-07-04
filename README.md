@@ -11,8 +11,8 @@ JVM bytecode backend for Idris
 
 ## Install
 1. Download and extract JVM bytecode backend from [here](https://github.com/mmhelloworld/idris-jvm/releases).
-1. From the extracted directory, run `bin/install` to install Idris packages for idris-jvm.
-1. Add `<IDRIS_JVM_EXTRACTED_DIRECTORY>/codegen/bin` to `PATH`.
+1. From the extracted directory, run `idris-jvm/bin/install` to install Idris packages for idris-jvm.
+1. Add `<IDRIS_JVM_EXTRACTED_DIRECTORY>/idris-jvm/codegen/bin` to `PATH`.
 
 ## Example
 
@@ -29,7 +29,7 @@ JVM bytecode backend for Idris
     main = print (pythag 50)
     ```
 
-* `$ idris --portable-codegen jvm pythag.idr -o target`
+* `$ idris --portable-codegen jvm pythag.idr -o target` (For Windows: `idris --portable-codegen jvm.bat pythag.idr -o target`)
 * `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm-runtime.jar:target main.Main`
 
 ## Status

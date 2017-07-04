@@ -30,48 +30,12 @@
     <build>
         <plugins>
             <plugin>
-                <artifactId>maven-dependency-plugin</artifactId>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>copy</id>
-                        <phase>package</phase>
                         <goals>
-                            <goal>copy</goal>
-                        </goals>
-                        <configuration>
-                            <stripVersion>true</stripVersion>
-                            <artifactItems>
-                                <artifactItem>
-                                    <artifactId>idris-jvm-server</artifactId>
-                                    <groupId>io.github.mmhelloworld</groupId>
-                                    <version>${project.version}</version>
-                                    <outputDirectory>${assemble.dir}</outputDirectory>
-                                </artifactItem>
-                            </artifactItems>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>appassembler-maven-plugin</artifactId>
-                <configuration>
-                    <assembleDirectory>${assemble.dir}</assembleDirectory>
-                    <repositoryName>lib</repositoryName>
-                    <programs>
-                        <program>
-                            <mainClass>io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher
-                            </mainClass>
-                            <id>idris-codegen-jvm</id>
-                        </program>
-                    </programs>
-                </configuration>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>assemble</goal>
+                            <goal>repackage</goal>
                         </goals>
                     </execution>
                 </executions>

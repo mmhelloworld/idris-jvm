@@ -1,6 +1,0 @@
-flags: {}
-extra-package-dbs: []
-packages: []
-extra-deps: [ ]
-#system-ghc: false
-resolver: lts-8.15

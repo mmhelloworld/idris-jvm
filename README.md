@@ -29,8 +29,13 @@ JVM bytecode backend for Idris
     main = print (pythag 50)
     ```
 
-* `$ idris --portable-codegen jvm pythag.idr -o target` (For Windows: `idris --portable-codegen jvm.bat pythag.idr -o target`)
-* `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm-runtime.jar:target main.Main`
+* Compiling
+    * On Linux/Mac OS:  `$ idris --portable-codegen jvm pythag.idr -o target`
+    * On Windows:  `idris --portable-codegen jvm.bat pythag.idr -o target`
+
+* Running
+    * On Linux/Mac OS:  `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm/idris-jvm-runtime.jar:target main.Main`
+    * On Windows:  `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm/idris-jvm-runtime.jar;target main.Main`
 
 ## Status
 

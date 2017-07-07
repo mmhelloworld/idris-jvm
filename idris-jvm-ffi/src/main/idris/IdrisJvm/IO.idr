@@ -11,6 +11,12 @@ printLn = printLn'
 putStrLn : String -> JVM_IO ()
 putStrLn = putStrLn'
 
+print : Show a => a -> JVM_IO ()
+print = print'
+
+putStr : String -> JVM_IO ()
+putStr = putStr'
+
 getLine : JVM_IO String
 getLine = getLine'
 

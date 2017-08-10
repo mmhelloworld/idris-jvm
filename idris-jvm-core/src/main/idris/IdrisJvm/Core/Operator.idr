@@ -349,6 +349,33 @@ cgOp2 LPar [x] = do
   createParThunk caller (jname "{EVAL_0}") [x]
   InvokeMethod InvokeStatic (rtClassSig "Concurrent") "par" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
 
+cgOp2 (LIntFloat ITBig) [x] = do
+  Aload $ locIndex x
+  Checkcast "java/math/BigInteger"
+  InvokeMethod InvokeVirtual "java/math/BigInteger" "doubleValue" "()D" False
+  boxDouble
+
+cgOp2 (LIntFloat ITNative) [x] = do
+  Aload $ locIndex x
+  Checkcast "java/lang/Integer"
+  InvokeMethod InvokeVirtual "java/lang/Integer" "doubleValue" "()D" False
+  boxDouble
+
+cgOp2 (LFloatInt ITBig) [x] = do
+  New "java/math/BigDecimal"
+  Dup
+  Aload $ locIndex x
+  Checkcast "java/lang/Double"
+  unboxDouble
+  InvokeMethod InvokeSpecial "java/math/BigDecimal" "<init>" "(D)V" False
+  InvokeMethod InvokeVirtual "java/math/BigDecimal" "toBigInteger" "()Ljava/math/BigInteger;" False
+
+cgOp2 (LFloatInt ITNative) [x] = do
+  Aload $ locIndex x
+  Checkcast "java/lang/Double"
+  InvokeMethod InvokeVirtual "java/lang/Double" "intValue" "()I" False
+  boxInt
+
 cgOp2 (LExternal externalOp) args = cgExternalOp externalOp args
 
 cgOp2 op _ = cgOpNotImplemented op

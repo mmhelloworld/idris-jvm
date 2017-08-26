@@ -10,6 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>idris-jvm-ffi</artifactId>
+    <name>Idris JVM FFI</name>
 
     <properties>
         <idris.srcdir>${project.basedir}/src/main/idris</idris.srcdir>

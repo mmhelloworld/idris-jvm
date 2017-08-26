@@ -1,16 +1,21 @@
 module Main
 
-numTest : (Num a, Show a) => a -> a -> IO ()
+import IdrisJvm.IO
+import Java.Lang
+import Java.Util
+import Data.Vect
+
+numTest : (Num a, Show a) => a -> a -> JVM_IO ()
 numTest a b = do
   putStrLn $ show a ++ " + " ++ show b ++ " = " ++ show (a + b)
   putStrLn $ show a ++ " * " ++ show b ++ " = " ++ show (a * b)
 
-integralTest : (Integral a, Show a) => a -> a -> IO ()
+integralTest : (Integral a, Show a) => a -> a -> JVM_IO ()
 integralTest a b = do
   putStrLn $ show a ++ " div " ++ show b ++ " = " ++ show (a `div` b)
   -- putStrLn $ show a ++ " mod " ++ show b ++ " = " ++ show (a `mod` b) -- not working due to a defect in Idris portable codegen
 
-fractionalTest : (Fractional a, Show a) => a -> a -> IO ()
+fractionalTest : (Fractional a, Show a) => a -> a -> JVM_IO ()
 fractionalTest a b = do
   putStrLn $ show a ++ " / " ++ show b ++ " = " ++ show (a / b)
   putStrLn $ "recip " ++ show a ++ " = " ++ show (recip a)
@@ -21,7 +26,7 @@ showOrdering EQ = "EQ"
 showOrdering LT = "LT"
 showOrdering GT = "GT"
 
-ordTest : (Ord a, Show a) => a -> a -> IO ()
+ordTest : (Ord a, Show a) => a -> a -> JVM_IO ()
 ordTest a b = putStrLn $ "compare " ++ show a ++ " " ++ show b ++ " = " ++ showOrdering (compare a b)
 
 int1 : Int
@@ -69,16 +74,16 @@ double1 = 24.234234
 double2 : Double
 double2 = 75676.23232
 
-printHeader : String -> IO ()
+printHeader : String -> JVM_IO ()
 printHeader header = do
   putStrLn ""
   putStrLn header
-  putStrLn $ concat $ replicate (length header) "="
+  putStrLn $ concat $ List.replicate (length header) "="
 
 pythag : Int -> List (Int, Int, Int)
 pythag max = [(x, y, z) | z <- [1..max], y <- [1..z], x <- [1..y],
                           x * x + y * y == z * z]
-main : IO ()
+main : JVM_IO ()
 main = do
   print "Hello "
   putStrLn "world!"
@@ -147,3 +152,25 @@ main = do
 
   putStrLn ""
   printLn $ pythag 50
+
+  -- Array tests start
+  printLn !(arrayToVect !(vectToArray ['d', 'c', 'a']))
+  printLn !(arrayToVect !(vectToArray $ the (Vect _ Int) $ [3, 4, 5]))
+  printLn !(arrayToVect !(vectToArray (the (Vect _ Bits8) [2, 4, 6, 5, 3])))
+  printLn !(arrayToVect !(vectToArray (the (Vect _ Bits16) [5, 3])))
+  printLn !(arrayToVect !(vectToArray (the (Vect _ Bits32) [2, 5, 3])))
+  printLn !(arrayToVect !(vectToArray (the (Vect _ Bits64) [2, 4, 6, 5])))
+  printLn !(arrayToVect !(vectToArray [Float 0.5, Float 2.0, Float 4.5]))
+  printLn !(arrayToVect !(vectToArray [1.3, 1.5, 1.9, 2.5]))
+  printLn !(arrayToVect !(vectToArray ["hello", "world", "!"]))
+
+  marr <- newMultiArray (Int -> Int -> Int -> Int -> JVM_IO (JVM_Array (JVM_Array (JVM_Array (JVM_Array String))))) 3 2 2 4
+  setArray (JVM_Array (JVM_Array (JVM_Array (JVM_Array String))) -> Int -> Int -> Int -> Int -> String -> JVM_IO ()) marr 0 0 0 3 "foo"
+  printLn !(Arrays.deepToString marr)
+  printLn !(getArray (JVM_Array (JVM_Array (JVM_Array (JVM_Array String))) -> Int -> Int -> Int -> Int -> JVM_IO String) marr 0 0 0 3)
+  printLn !(arrayLength !(getArray (JVM_Array (JVM_Array (JVM_Array (JVM_Array String))) -> Int -> Int -> JVM_IO (JVM_Array (JVM_Array String))) marr 0 0))
+  printLn !(arrayLength marr)
+
+  vectArr2d <- vectToArray2d (the (Vect _ (Vect _ Int)) [[3, 33], [4, 44], [5, 55]])
+  printLn !(Arrays.deepToString vectArr2d)
+  -- Array tests end

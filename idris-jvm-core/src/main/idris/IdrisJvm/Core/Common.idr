@@ -96,6 +96,23 @@ repeatObjectDesc n = repeatString n "Ljava/lang/Object;"
 sig : Nat -> String
 sig nArgs = "(" ++ repeatObjectDesc nArgs ++  ")Ljava/lang/Object;"
 
+anewarray : FieldTypeDescriptor -> Asm ()
+anewarray FieldTyDescByte          = Anewbytearray
+anewarray FieldTyDescChar          = Anewchararray
+anewarray FieldTyDescShort         = Anewshortarray
+anewarray FieldTyDescBoolean       = Anewbooleanarray
+anewarray FieldTyDescArray         = jerror $ "array is not a valid element type for a single dimensional array"
+anewarray FieldTyDescDouble        = Anewdoublearray
+anewarray FieldTyDescFloat         = Anewfloatarray
+anewarray FieldTyDescInt           = Anewintarray
+anewarray FieldTyDescLong          = Anewlongarray
+anewarray (FieldTyDescReference f) = Anewarray $ asmRefTyDesc f
+
+arrayDesc : String -> Nat -> String
+arrayDesc cname dimensions =
+  let arrayPrefix = cast $ replicate dimensions '['
+  in arrayPrefix ++ cname
+
 metafactoryDesc : Descriptor
 metafactoryDesc =
   concat [ "("
@@ -130,6 +147,34 @@ invokeDynamic cname lambda nArgs =
                       , BsmArgHandle lambdaHandle
                       , BsmArgGetType "()Ljava/lang/Object;"
                       ]
+
+arrayStore : FieldTypeDescriptor -> Asm ()
+arrayStore FieldTyDescByte = Bastore
+arrayStore FieldTyDescChar = Castore
+arrayStore FieldTyDescShort = Sastore
+arrayStore FieldTyDescBoolean = Bastore
+arrayStore FieldTyDescArray = Aastore
+arrayStore FieldTyDescDouble = Dastore
+arrayStore FieldTyDescFloat = Fastore
+arrayStore FieldTyDescInt = Iastore
+arrayStore FieldTyDescLong = Lastore
+arrayStore (FieldTyDescReference ReferenceTypeDescriptor) = Aastore
+
+arrayLoad : FieldTypeDescriptor -> Asm ()
+arrayLoad FieldTyDescByte                                = Baload
+arrayLoad FieldTyDescChar                                = Caload
+arrayLoad FieldTyDescShort                               = Saload
+arrayLoad FieldTyDescBoolean                             = Baload
+arrayLoad FieldTyDescArray                               = Aaload
+arrayLoad FieldTyDescDouble                              = Daload
+arrayLoad FieldTyDescFloat                               = Faload
+arrayLoad FieldTyDescInt                                 = Iaload
+arrayLoad FieldTyDescLong                                = Laload
+arrayLoad (FieldTyDescReference ReferenceTypeDescriptor) = Aaload
+
+typeDescToarrayElemDesc : TypeDescriptor -> FieldTypeDescriptor
+typeDescToarrayElemDesc VoidDescriptor = jerror $ "An array cannot have 'void' elements"
+typeDescToarrayElemDesc (FieldDescriptor desc) = desc
 
 loadArgsForLambdaTargetMethod : Nat -> Asm ()
 loadArgsForLambdaTargetMethod nArgs = case isLTE 1 nArgs of

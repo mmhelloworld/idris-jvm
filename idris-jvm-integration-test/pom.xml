@@ -10,6 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>idris-jvm-integration-test</artifactId>
+    <name>Idris JVM Integration Test</name>
 
     <properties>
         <test.output>${project.build.directory}</test.output>

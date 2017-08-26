@@ -10,6 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>idris-jvm-core</artifactId>
+    <name>Idris JVM Core</name>
 
     <properties>
         <idris.srcdir>${project.basedir}/src/main/idris</idris.srcdir>

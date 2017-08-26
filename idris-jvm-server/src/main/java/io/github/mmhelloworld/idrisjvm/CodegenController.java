@@ -47,57 +47,74 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
     }
 
     @RequestMapping(method = POST)
-    public void compile(@RequestBody String[] args) throws IOException {
+    public void compile(@RequestBody String[] args) {
         JsonFactory jsonfactory = new JsonFactory();
         jsonfactory.setCodec(mapper);
         File source = getSourceFile(args);
-        JsonParser parser = jsonfactory.createParser(source);
-        Assembler assembler = new Assembler();
-        if (parser.nextToken() != JsonToken.START_OBJECT) {
-            throw new IOException("Expected data to start with an Object");
+        try {
+            JsonParser parser = jsonfactory.createParser(source);
+            Assembler assembler = new Assembler();
+            if (parser.nextToken() != JsonToken.START_OBJECT) {
+                throw new IOException("Expected data to start with an Object");
+            }
+
+            while (parser.nextToken() != JsonToken.END_OBJECT) {
+                String fieldName = parser.getCurrentName();
+                if (fieldName.equals("codegen-info")) {
+                    processCodegenInfo(parser, assembler);
+                } else {
+                    parser.nextToken();
+                    parser.skipChildren();
+                }
+            }
+            addMainMethod(assembler);
+            assembler.classCodeEnd(getOutputFile(args).getPath());
+            parser.close();
+        } catch (Exception e) {
+            throw new IdrisCompilationException(e);
         }
 
+    }
+
+    private void processCodegenInfo(final JsonParser parser, final Assembler assembler) throws IOException {
+        parser.nextToken();
         while (parser.nextToken() != JsonToken.END_OBJECT) {
-            String fieldName = parser.getCurrentName();
-            if (fieldName.equals("codegen-info")) {
-                parser.nextToken();
-                while (parser.nextToken() != JsonToken.END_OBJECT) {
-                    String codegenInfoFieldName = parser.getCurrentName();
-                    switch (codegenInfoFieldName) {
-                        case "simple-decls":
-                            parser.nextToken();
-                            while (parser.nextToken() != JsonToken.END_ARRAY) {
-                                final JsonNode node = parser.getCodec().readTree(parser);
-                                final ObjectMapper mapper = Context.getMapper();
-                                if (node.isArray()) {
-                                    SDecl sDecl = mapper.readerFor(SDecl.class).readValue(node.get(1));
-                                    JCodegen.generateMethod(assembler, sDecl);
-                                } else {
-                                    throw new RuntimeException("An array representing SimpleDecl expected");
-                                }
-                            }
-                            break;
-                        case "exports":
-                            parser.nextToken();
-                            while (parser.nextToken() != JsonToken.END_ARRAY) {
-                                ExportIFace exportIFace = mapper.readerFor(ExportIFace.class).readValue(parser);
-                                JCodegen.generateExport(assembler, exportIFace);
-                            }
-                            break;
-                        default:
-                            parser.nextToken();
-                            parser.skipChildren();
-                            break;
-                    }
-                }
-            } else {
-                parser.nextToken();
-                parser.skipChildren();
+            String codegenInfoFieldName = parser.getCurrentName();
+            switch (codegenInfoFieldName) {
+                case "simple-decls":
+                    processSimpleDecls(parser, assembler);
+                    break;
+                case "exports":
+                    processExports(parser, assembler);
+                    break;
+                default:
+                    parser.nextToken();
+                    parser.skipChildren();
+                    break;
             }
         }
-        addMainMethod(assembler);
-        assembler.classCodeEnd(getOutputFile(args).getPath());
-        parser.close();
+    }
+
+    private void processExports(final JsonParser parser, final Assembler assembler) throws IOException {
+        parser.nextToken();
+        while (parser.nextToken() != JsonToken.END_ARRAY) {
+            ExportIFace exportIFace = mapper.readerFor(ExportIFace.class).readValue(parser);
+            JCodegen.generateExport(assembler, exportIFace);
+        }
+    }
+
+    private void processSimpleDecls(final JsonParser parser, final Assembler assembler) throws IOException {
+        parser.nextToken();
+        while (parser.nextToken() != JsonToken.END_ARRAY) {
+            final JsonNode node = parser.getCodec().readTree(parser);
+            final ObjectMapper mapper = Context.getMapper();
+            if (node.isArray()) {
+                SDecl sDecl = mapper.readerFor(SDecl.class).readValue(node.get(1));
+                JCodegen.generateMethod(assembler, sDecl);
+            } else {
+                throw new RuntimeException("An array representing SimpleDecl expected");
+            }
+        }
     }
 
     private void addMainMethod(final Assembler assembler) {

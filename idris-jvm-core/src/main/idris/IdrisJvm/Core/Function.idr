@@ -164,6 +164,57 @@ mutual
       InvokeMethod InvokeSpecial clazz "<init>" descriptor False
       ret
 
+    cgForeign JNewArray = case args of
+      [ty] => do
+        idrisToJava argsWithTypes
+        let arrDesc = fdescFieldDescriptor returns
+        let elemDesc = case arrDesc of
+          FieldTyDescReference (ArrayDesc elem) => elem
+          otherwise => jerror $ "Invalid return type while creating an array" ++ show returns
+        anewarray elemDesc
+        ret
+      otherwise => jerror $ "There can be only one argument (length) to create an array" ++ show args
+
+    cgForeign JMultiNewArray = do
+        idrisToJava argsWithTypes
+        let arrayType = refTyClassName $ fdescRefDescriptor returns
+        Multianewarray arrayType (List.length args)
+        ret
+
+    cgForeign JSetArray = case args of
+      ((arrFDesc, arr) :: rest@(arg1 :: arg2 :: args)) => do
+        let value = last rest
+        let indices = init rest
+        let valueDesc = fdescFieldDescriptor (fst value)
+        Aload $ locIndex arr
+        Checkcast $ refTyClassName (fdescRefDescriptor arrFDesc)
+        idrisToJavaLoadArray $ (\(fdesc, lvar) => (fdescFieldDescriptor fdesc, lvar)) <$> indices
+        idrisToJava [(valueDesc, snd value)]
+        arrayStore valueDesc
+        javaToIdris (fdescTypeDescriptor returns)
+        ret
+      otherwise => jerror $ "Invalid arguments while trying to set an element inside array: " ++ show args
+
+    cgForeign JGetArray = case args of
+      ((arrFDesc, arr) :: indices@(index :: restIndices)) => do
+        Aload $ locIndex arr
+        Checkcast $ refTyClassName (fdescRefDescriptor arrFDesc)
+        idrisToJavaLoadArray $ (\(fdesc, lvar) => (fdescFieldDescriptor fdesc, lvar)) <$> indices
+        let returnDesc = fdescTypeDescriptor returns
+        arrayLoad $ typeDescToarrayElemDesc returnDesc
+        javaToIdris returnDesc
+        ret
+      otherwise => jerror $ "Invalid arguments while trying to get an element from array: " ++ show args
+
+    cgForeign JArrayLength = case args of
+      [(arrFDesc, arr)] => do
+        Aload $ locIndex arr
+        Checkcast $ refTyClassName (fdescRefDescriptor arrFDesc)
+        Arraylength
+        javaToIdris (fdescTypeDescriptor returns)
+        ret
+      otherwise => jerror $ "Invalid arguments while trying to get length of an array: " ++ show args
+
     cgForeign (JClassLiteral "int") = do getPrimitiveClass "java/lang/Integer"; ret
     cgForeign (JClassLiteral "byte") = do getPrimitiveClass "java/lang/Byte"; ret
     cgForeign (JClassLiteral "char") = do getPrimitiveClass "java/lang/Character"; ret

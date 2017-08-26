@@ -1,6 +1,7 @@
 module Java.Lang
 
 import IdrisJvm.FFI
+import Data.Vect
 
 %access public export
 
@@ -99,7 +100,10 @@ namespace Object
   Object = JVM_Native ObjectClass
 
   ObjectArray : Type
-  ObjectArray = JVM_Native (Array ObjectClass)
+  ObjectArray = JVM_Array Object
+
+  ObjectArray2d : Type
+  ObjectArray2d = JVM_Array (JVM_Array Object)
 
   toString : Object -> JVM_IO String
   toString obj = invokeInstance "toString" (Object -> JVM_IO String) obj
@@ -151,7 +155,7 @@ namespace JavaString
   StringClass = Class "java/lang/String"
 
   StringArray : Type
-  StringArray = JVM_Native (Array StringClass)
+  StringArray = JVM_Array String
 
   boolToString : Bool -> String
   boolToString b = unsafePerformIO $ invokeStatic StringClass "valueOf" (Bool -> JVM_IO String) b
@@ -177,4 +181,66 @@ Inherits Object (Maybe String) where {}
 Inherits Object (JVM_Native t) where {}
 Inherits Object (Maybe (JVM_Native t)) where {}
 
-Inherits ObjectArray StringArray where {}
+Inherits ObjectArray (JVM_Array t) where {}
+
+%inline
+vectToArray : Vect n elemTy -> {auto jvmType: JVM_Types elemTy} -> JVM_IO (JVM_Array elemTy)
+vectToArray {elemTy} xs
+    = vectToArray' xs
+        (\n => newArray elemTy n)
+        (setArray (JVM_Array elemTy -> Int -> elemTy -> JVM_IO ()))
+  where
+    vectToArray' : Vect n elemTy
+                -> (Nat -> JVM_IO (JVM_Array elemTy))
+                -> (JVM_Array elemTy -> Int -> elemTy -> JVM_IO ())
+                -> JVM_IO (JVM_Array elemTy)
+    vectToArray' {n} xs createArray setArray' = do
+        arr <- createArray n
+        go arr 0 xs
+      where
+        go : JVM_Array elemTy -> Int -> Vect m elemTy -> JVM_IO (JVM_Array elemTy)
+        go arr index [] = pure arr
+        go arr index (x :: xs) = do
+          setArray' arr index x
+          go arr (index + 1) xs
+
+%inline
+vectToArray2d : Vect m (Vect n elemTy) -> {auto jvmType: JVM_Types elemTy} -> JVM_IO (JVM_Array (JVM_Array elemTy))
+vectToArray2d {elemTy} xs
+    = vectToArray2d' xs
+        (\m, n => newMultiArray (Int -> Int -> JVM_IO (JVM_Array (JVM_Array elemTy))) (cast m) (cast n))
+        (setArray (JVM_Array (JVM_Array elemTy) -> Int -> Int -> elemTy -> JVM_IO ()))
+  where
+    vectToArray2d' : Vect m (Vect n elemTy)
+                  -> (Nat -> Nat -> JVM_IO (JVM_Array (JVM_Array elemTy)))
+                  -> (JVM_Array (JVM_Array elemTy) -> Int -> Int -> elemTy -> JVM_IO ())
+                  -> JVM_IO (JVM_Array (JVM_Array elemTy))
+    vectToArray2d' {m} {n} xs createArray setArray' = do
+        arr <- createArray m n
+        go arr 0 xs
+      where
+        createRow : JVM_Array (JVM_Array elemTy) -> Int -> Int -> Vect a elemTy -> JVM_IO ()
+        createRow arr row col [] = pure ()
+        createRow arr row col (x :: xs) = do
+          setArray' arr row col x
+          createRow arr row (col + 1) xs
+
+        go : JVM_Array (JVM_Array elemTy) -> Int -> Vect a (Vect b elemTy) -> JVM_IO (JVM_Array (JVM_Array elemTy))
+        go {b} arr row [] = pure arr
+        go {b} arr row (xs :: xxs) = do
+          createRow arr row 0 xs
+          go arr (row + 1) xxs
+
+%inline
+arrayToVect : JVM_Array elemTy -> {auto jvmType: JVM_Types elemTy} -> JVM_IO (n ** Vect n elemTy)
+arrayToVect {elemTy} arr = do
+    len <- arrayLength arr
+    v <- f 0 len (getArray (JVM_Array elemTy -> Int -> JVM_IO elemTy) arr)
+    pure (_ ** v)
+  where
+    f : (index: Nat) -> (n: Nat) -> (Int -> JVM_IO elemTy) -> JVM_IO (Vect n elemTy)
+    f index Z getter = pure []
+    f index (S k) getter = do
+      rest <- f (index + 1) k getter
+      curr <- getter (cast index)
+      pure (curr :: rest)

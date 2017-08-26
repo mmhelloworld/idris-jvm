@@ -26,9 +26,17 @@ import static org.objectweb.asm.Opcodes.ACONST_NULL;
 import static org.objectweb.asm.Opcodes.ALOAD;
 import static org.objectweb.asm.Opcodes.ANEWARRAY;
 import static org.objectweb.asm.Opcodes.ARETURN;
+import static org.objectweb.asm.Opcodes.ARRAYLENGTH;
 import static org.objectweb.asm.Opcodes.ASTORE;
+import static org.objectweb.asm.Opcodes.BALOAD;
+import static org.objectweb.asm.Opcodes.BASTORE;
+import static org.objectweb.asm.Opcodes.BIPUSH;
+import static org.objectweb.asm.Opcodes.CALOAD;
+import static org.objectweb.asm.Opcodes.CASTORE;
 import static org.objectweb.asm.Opcodes.CHECKCAST;
 import static org.objectweb.asm.Opcodes.DADD;
+import static org.objectweb.asm.Opcodes.DALOAD;
+import static org.objectweb.asm.Opcodes.DASTORE;
 import static org.objectweb.asm.Opcodes.DDIV;
 import static org.objectweb.asm.Opcodes.DLOAD;
 import static org.objectweb.asm.Opcodes.DMUL;
@@ -37,12 +45,16 @@ import static org.objectweb.asm.Opcodes.DRETURN;
 import static org.objectweb.asm.Opcodes.DSUB;
 import static org.objectweb.asm.Opcodes.DUP;
 import static org.objectweb.asm.Opcodes.F2D;
+import static org.objectweb.asm.Opcodes.FALOAD;
+import static org.objectweb.asm.Opcodes.FASTORE;
 import static org.objectweb.asm.Opcodes.FLOAD;
 import static org.objectweb.asm.Opcodes.FRETURN;
 import static org.objectweb.asm.Opcodes.I2C;
 import static org.objectweb.asm.Opcodes.I2L;
 import static org.objectweb.asm.Opcodes.IADD;
+import static org.objectweb.asm.Opcodes.IALOAD;
 import static org.objectweb.asm.Opcodes.IAND;
+import static org.objectweb.asm.Opcodes.IASTORE;
 import static org.objectweb.asm.Opcodes.ICONST_0;
 import static org.objectweb.asm.Opcodes.ICONST_1;
 import static org.objectweb.asm.Opcodes.ICONST_2;
@@ -66,7 +78,9 @@ import static org.objectweb.asm.Opcodes.IUSHR;
 import static org.objectweb.asm.Opcodes.IXOR;
 import static org.objectweb.asm.Opcodes.L2I;
 import static org.objectweb.asm.Opcodes.LADD;
+import static org.objectweb.asm.Opcodes.LALOAD;
 import static org.objectweb.asm.Opcodes.LAND;
+import static org.objectweb.asm.Opcodes.LASTORE;
 import static org.objectweb.asm.Opcodes.LDIV;
 import static org.objectweb.asm.Opcodes.LLOAD;
 import static org.objectweb.asm.Opcodes.LMUL;
@@ -79,9 +93,20 @@ import static org.objectweb.asm.Opcodes.LSUB;
 import static org.objectweb.asm.Opcodes.LUSHR;
 import static org.objectweb.asm.Opcodes.LXOR;
 import static org.objectweb.asm.Opcodes.NEW;
+import static org.objectweb.asm.Opcodes.NEWARRAY;
 import static org.objectweb.asm.Opcodes.POP;
 import static org.objectweb.asm.Opcodes.RETURN;
+import static org.objectweb.asm.Opcodes.SALOAD;
+import static org.objectweb.asm.Opcodes.SASTORE;
 import static org.objectweb.asm.Opcodes.SIPUSH;
+import static org.objectweb.asm.Opcodes.T_BOOLEAN;
+import static org.objectweb.asm.Opcodes.T_BYTE;
+import static org.objectweb.asm.Opcodes.T_CHAR;
+import static org.objectweb.asm.Opcodes.T_DOUBLE;
+import static org.objectweb.asm.Opcodes.T_FLOAT;
+import static org.objectweb.asm.Opcodes.T_INT;
+import static org.objectweb.asm.Opcodes.T_LONG;
+import static org.objectweb.asm.Opcodes.T_SHORT;
 
 public class Assembler {
     private Map<String, ClassWriter> cws;
@@ -123,12 +148,64 @@ public class Assembler {
         mv.visitTypeInsn(ANEWARRAY, desc);
     }
 
+    public void anewintarray() {
+        mv.visitIntInsn(NEWARRAY, T_INT);
+    }
+
+    public void anewbytearray() {
+        mv.visitIntInsn(NEWARRAY, T_BYTE);
+    }
+
+    public void anewbooleanarray() {
+        mv.visitIntInsn(NEWARRAY, T_BOOLEAN);
+    }
+
+    public void anewchararray() {
+        mv.visitIntInsn(NEWARRAY, T_CHAR);
+    }
+
+    public void anewshortarray() {
+        mv.visitIntInsn(NEWARRAY, T_SHORT);
+    }
+
+    public void anewlongarray() {
+        mv.visitIntInsn(NEWARRAY, T_LONG);
+    }
+
+    public void anewfloatarray() {
+        mv.visitIntInsn(NEWARRAY, T_FLOAT);
+    }
+
+    public void anewdoublearray() {
+        mv.visitIntInsn(NEWARRAY, T_DOUBLE);
+    }
+
     public void astore(int index) {
         mv.visitVarInsn(ASTORE, index);
     }
 
+    public void arraylength() {
+        mv.visitInsn(ARRAYLENGTH);
+    }
+
     public void areturn() {
         mv.visitInsn(ARETURN);
+    }
+
+    public void baload() {
+        mv.visitInsn(BALOAD);
+    }
+
+    public void bastore() {
+        mv.visitInsn(BASTORE);
+    }
+
+    public void caload() {
+        mv.visitInsn(CALOAD);
+    }
+
+    public void castore() {
+        mv.visitInsn(CASTORE);
     }
 
     public void checkcast(String desc) {
@@ -230,6 +307,14 @@ public class Assembler {
         mv.visitInsn(DADD);
     }
 
+    public void daload() {
+        mv.visitInsn(DALOAD);
+    }
+
+    public void dastore() {
+        mv.visitInsn(DASTORE);
+    }
+
     public void ddiv() {
         mv.visitInsn(DDIV);
     }
@@ -260,6 +345,14 @@ public class Assembler {
 
     public void f2d() {
         mv.visitInsn(F2D);
+    }
+
+    public void faload() {
+        mv.visitInsn(FALOAD);
+    }
+
+    public void fastore() {
+        mv.visitInsn(FASTORE);
     }
 
     public void field(int fieldType, String className, String fieldName, String desc) {
@@ -330,8 +423,16 @@ public class Assembler {
         mv.visitInsn(IADD);
     }
 
+    public void iaload() {
+        mv.visitInsn(IALOAD);
+    }
+
     public void iand() {
         mv.visitInsn(IAND);
+    }
+
+    public void iastore() {
+        mv.visitInsn(IASTORE);
     }
 
     public void ior() {
@@ -354,7 +455,7 @@ public class Assembler {
         } else if (n == -1) {
             mv.visitInsn(ICONST_M1);
         } else if (n >= (-128) && n <= 127) {
-            mv.visitIntInsn(Opcodes.BIPUSH, n);
+            mv.visitIntInsn(BIPUSH, n);
         } else if (n >= (-32768) && n <= 32767) {
             mv.visitIntInsn(SIPUSH, n);
         } else {
@@ -467,8 +568,16 @@ public class Assembler {
         mv.visitInsn(LADD);
     }
 
+    public void laload() {
+        mv.visitInsn(LALOAD);
+    }
+
     public void land() {
         mv.visitInsn(LAND);
+    }
+
+    public void lastore() {
+        mv.visitInsn(LASTORE);
     }
 
     public void lor() {
@@ -567,6 +676,10 @@ public class Assembler {
         mv.visitEnd();
     }
 
+    public void multiANewArray(String desc, int noOfDims) {
+        mv.visitMultiANewArrayInsn(desc, noOfDims);
+    }
+
     public void asmNew(String className) {
         mv.visitTypeInsn(NEW, className);
     }
@@ -581,6 +694,14 @@ public class Assembler {
 
     public void asmReturn() {
         mv.visitInsn(RETURN);
+    }
+
+    public void saload() {
+        mv.visitInsn(SALOAD);
+    }
+
+    public void sastore() {
+        mv.visitInsn(SASTORE);
     }
 
     public boolean shouldDescribeFrame() {

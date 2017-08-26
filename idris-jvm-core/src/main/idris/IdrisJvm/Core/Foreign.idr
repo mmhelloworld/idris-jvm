@@ -14,6 +14,11 @@ data JForeign = JStatic String String
               | JSetInstanceField String String
               | JInterface String String
               | JNew String
+              | JNewArray
+              | JMultiNewArray
+              | JSetArray
+              | JGetArray
+              | JArrayLength
               | JClassLiteral String
 
 mutual
@@ -21,7 +26,7 @@ mutual
   parseDescriptor returns ffi argsDesc = tryParseStaticMethodDescriptor returns ffi argsDesc where
 
     unsupportedDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
-    unsupportedDescriptor _ fdesc _ = jerror $ "Unsupported descriptor"
+    unsupportedDescriptor _ fdesc _ = jerror $ ("Unsupported descriptor: " ++ show fdesc)
 
     tryParseClassLiteralDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
     tryParseClassLiteralDescriptor returns ffiDesc@(FApp ffi [FStr cname]) argsDesc
@@ -30,6 +35,26 @@ mutual
           else unsupportedDescriptor returns ffiDesc argsDesc
     tryParseClassLiteralDescriptor returns ffi argsDesc = unsupportedDescriptor returns ffi argsDesc
 
+    tryParseArrayLengthDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
+    tryParseArrayLengthDescriptor returns (FCon "ArrayLength") argsDesc = JArrayLength
+    tryParseArrayLengthDescriptor returns ffi argsDesc = tryParseClassLiteralDescriptor returns ffi argsDesc
+
+    tryParseGetArrayDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
+    tryParseGetArrayDescriptor returns (FCon "GetArray") argsDesc = JGetArray
+    tryParseGetArrayDescriptor returns ffi argsDesc = tryParseArrayLengthDescriptor returns ffi argsDesc
+
+    tryParseSetArrayDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
+    tryParseSetArrayDescriptor returns (FCon "SetArray") argsDesc = JSetArray
+    tryParseSetArrayDescriptor returns ffi argsDesc = tryParseGetArrayDescriptor returns ffi argsDesc
+
+    tryParseMultiNewArrayDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
+    tryParseMultiNewArrayDescriptor returns (FCon "MultiNewArray") argsDesc = JMultiNewArray
+    tryParseMultiNewArrayDescriptor returns ffi argsDesc = tryParseSetArrayDescriptor returns ffi argsDesc
+
+    tryParseNewArrayDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
+    tryParseNewArrayDescriptor returns (FCon "NewArray") argsDesc = JNewArray
+    tryParseNewArrayDescriptor returns ffi argsDesc = tryParseMultiNewArrayDescriptor returns ffi argsDesc
+
     tryParseConstructorDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
     tryParseConstructorDescriptor returns ffiDesc@(FCon ffi) argsDesc
       = if ffi == "New"
@@ -37,12 +62,12 @@ mutual
                   ClassDesc cname    => JNew cname
                   InterfaceDesc _    => jerror $ "Invalid FFI descriptor for constructor. " ++
                                             "A constructor can't return an interface type. "
-                  ArrayDesc _        => jerror "Array construction is not yet supported"
+                  ArrayDesc _        => jerror "No constructors for array types"
                   IdrisExportDesc _  => jerror "Cannot invoke constructor of Idris exported type"
                   NullableStrDesc    => jerror "A constructor cannot return a nullable string"
                   NullableRefDesc _  => jerror "A constructor cannot return a nullable reference"
-          else tryParseClassLiteralDescriptor returns ffiDesc argsDesc
-    tryParseConstructorDescriptor returns ffi argsDesc = tryParseClassLiteralDescriptor returns ffi argsDesc
+          else tryParseNewArrayDescriptor returns ffiDesc argsDesc
+    tryParseConstructorDescriptor returns ffi argsDesc = tryParseNewArrayDescriptor returns ffi argsDesc
 
     tryParseSetInstanceFieldDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
     tryParseSetInstanceFieldDescriptor returns ffiDesc@(FApp ffi [FStr fieldName]) argsDesc@((declClass, _)::_)
@@ -105,6 +130,13 @@ mutual
 
   idrisToJava : List (FieldTypeDescriptor, LVar) -> Asm ()
   idrisToJava = sequence_ . map f where
+    f : (FieldTypeDescriptor, LVar) -> Asm ()
+    f (ty, v) = do
+      Aload $ locIndex v
+      idrisDescToJava (FieldDescriptor ty)
+
+  idrisToJavaLoadArray : List (FieldTypeDescriptor, LVar) -> Asm ()
+  idrisToJavaLoadArray = sequence_ . intersperse Aaload . map f where
     f : (FieldTypeDescriptor, LVar) -> Asm ()
     f (ty, v) = do
       Aload $ locIndex v
@@ -200,23 +232,26 @@ mutual
   fdescFieldDescriptor (FApp "JVM_IntT" [_, FCon "JVM_IntBits16"]) = FieldTyDescShort
   fdescFieldDescriptor (FApp "JVM_IntT" [_, FCon "JVM_IntBits32"]) = FieldTyDescInt
   fdescFieldDescriptor (FApp "JVM_IntT" [_, FCon "JVM_IntBits64"]) = FieldTyDescLong
-  fdescFieldDescriptor (FCon "JVM_Str") = FieldTyDescReference $ ClassDesc "java/lang/String"
   fdescFieldDescriptor (FCon "JVM_Float") = FieldTyDescFloat
   fdescFieldDescriptor (FCon "JVM_Double") = FieldTyDescDouble
   fdescFieldDescriptor (FCon "JVM_Bool") = FieldTyDescBoolean
+
+  fdescFieldDescriptor (FCon "JVM_Str") = FieldTyDescReference $ ClassDesc "java/lang/String"
   fdescFieldDescriptor fdesc = FieldTyDescReference $ fdescRefDescriptor fdesc
 
   fdescRefDescriptor : FDesc -> ReferenceTypeDescriptor
   fdescRefDescriptor desc@(FApp "JVM_NativeT" [FApp "Class" [FStr typeName]]) = ClassDesc typeName
   fdescRefDescriptor desc@(FApp "JVM_NativeT" [FApp "Interface" [FStr typeName]]) = InterfaceDesc typeName
+
+  fdescRefDescriptor desc@(FApp "JVM_ArrayT" [_, elemDesc]) = ArrayDesc $ fdescFieldDescriptor elemDesc
+
   fdescRefDescriptor desc@(FApp "JVM_Nullable" [FApp "Class" [FStr typeName]]) = NullableRefDesc typeName
   fdescRefDescriptor desc@(FApp "JVM_Nullable" [FApp "Interface" [FStr typeName]]) = NullableRefDesc typeName
-  fdescRefDescriptor (FApp "JVM_NativeT" [FApp "Array" [FApp "Class" [FStr typeName]]]) = ArrayDesc (ClassDesc typeName)
+
   fdescRefDescriptor (FCon "JVM_Str") = ClassDesc "java/lang/String"
   fdescRefDescriptor (FStr exportedType) = IdrisExportDesc exportedType
   fdescRefDescriptor (FCon "JVM_NullableStr") = NullableStrDesc
-  fdescRefDescriptor desc = jerror $ "Expected a class or interface descriptor. " ++
-    "Invalid reference type descriptor: " ++ show desc
+  fdescRefDescriptor desc = jerror $ "Invalid reference type descriptor: " ++ show desc
 
   isExportIO : FDesc -> Bool
   isExportIO (FIO _) = True

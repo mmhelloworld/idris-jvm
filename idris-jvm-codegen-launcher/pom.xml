@@ -10,6 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>idris-jvm-codegen-launcher</artifactId>
+    <name>Idris JVM Codegen Launcher</name>
 
     <properties>
         <assemble.dir.name>dist</assemble.dir.name>

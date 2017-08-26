@@ -36,7 +36,7 @@ run this = do
   threadName <- getThreadName this
   printLn !(helloFromIdris this threadName)
 
-jmain : StringArray -> JVM_IO ()
+jmain : JVM_Array String -> JVM_IO ()
 jmain args = do
   printLn $ exportedBoolToString True
   Arrays.toString args >>= printLn

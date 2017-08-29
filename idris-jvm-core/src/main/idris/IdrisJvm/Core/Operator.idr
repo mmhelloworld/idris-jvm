@@ -271,6 +271,12 @@ cgOp2 (LSExt (ITFixed from) ITBig) [x] = signExtendToBigInteger x
 
 cgOp2 (LSExt _ _) [x] = Aload $ locIndex x
 
+cgOp2 (LTrunc ITNative (ITFixed IT64)) [x] = do
+  Aload $ locIndex x
+  Checkcast "java/lang/Integer"
+  InvokeMethod InvokeVirtual "java/lang/Integer" "longValue" "()J" False
+  boxLong
+
 cgOp2 (LTrunc (ITFixed IT64) (ITFixed IT32)) [x] = do
   Aload $ locIndex x
   Checkcast "java/lang/Long"

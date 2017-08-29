@@ -5,6 +5,7 @@ import Effect.System
 import Effect.StdIO
 import IdrisJvm.IO
 import IdrisJvm.System
+import Java.Util.Concurrent
 
 %access export
 
@@ -19,3 +20,6 @@ implementation Handler System JVM_IO where
     handle () Time k = do x <- time; k x ()
     handle () (GetEnv s) k = do x <- getEnv s; k x ()
     handle () (CSystem s) k = do x <- system s; k x ()
+    handle () (Usleep timeout _) k = do
+      sleep microseconds $ prim__truncInt_B64 timeout
+      k () ()

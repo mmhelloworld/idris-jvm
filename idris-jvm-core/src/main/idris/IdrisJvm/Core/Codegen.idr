@@ -59,25 +59,25 @@ generateExport assembler exportIFace = do
   (_, _) <- runAsm [] assembler $ exportCode exportIFace
   pure ()
 
-exports : FFI_Export FFI_JVM "idrisjvm/core/JCodegen" []
+exports : FFI_Export FFI_JVM "IdrisJvm/Core/export/Codegen" []
 exports =
-  Data SDecl "idrisjvm/ir/SDecl" $
-  Data FDesc "idrisjvm/ir/FDesc" $
-  Data SExp "idrisjvm/ir/SExp" $
-  Data Const "idrisjvm/ir/Const" $
-  Data LVar "idrisjvm/ir/LVar" $
-  Data CaseType "idrisjvm/ir/CaseType" $
-  Data Export "idrisjvm/ir/Export" $
-  Data NativeTy "idrisjvm/ir/NativeTy" $
-  Data ExportIFace "idrisjvm/ir/ExportIFace" $
-  Data IntTy ("idrisjvm/ir/IntTy") $
-  Data ArithTy ("idrisjvm/ir/ArithTy") $
-  Data PrimFn ("idrisjvm/ir/PrimFn") $
-  Data SAlt "idrisjvm/ir/SAlt" $
-  Data (FDesc, LVar) "idrisjvm/ir/SForeignArg" $
+  Data SDecl "IdrisJvm/IR/export/SDecl" $
+  Data FDesc "IdrisJvm/IR/export/FDesc" $
+  Data SExp "IdrisJvm/IR/export/SExp" $
+  Data Const "IdrisJvm/IR/export/Const" $
+  Data LVar "IdrisJvm/IR/export/LVar" $
+  Data CaseType "IdrisJvm/IR/export/CaseType" $
+  Data Export "IdrisJvm/IR/export/Export" $
+  Data NativeTy "IdrisJvm/IR/export/NativeTy" $
+  Data ExportIFace "IdrisJvm/IR/export/ExportIFace" $
+  Data IntTy ("IdrisJvm/IR/export/IntTy") $
+  Data ArithTy ("IdrisJvm/IR/export/ArithTy") $
+  Data PrimFn ("IdrisJvm/IR/export/PrimFn") $
+  Data SAlt "IdrisJvm/IR/export/SAlt" $
+  Data (FDesc, LVar) "IdrisJvm/IR/export/SForeignArg" $
   Data (List SAlt) "idris/prelude/list/ListSAlt" $
-  Data (List (FDesc, LVar)) "idrisjvm/ir/SForeignArgs" $
-  Data (Maybe LVar) "idrisjvm/ir/MaybeLVar" $
+  Data (List (FDesc, LVar)) "IdrisJvm/IR/export/SForeignArgs" $
+  Data (Maybe LVar) "IdrisJvm/IR/export/MaybeLVar" $
   Data (List String) "idris/prelude/list/ListString" $
   Data (List FDesc) "idris/prelude/list/ListFDesc" $
   Data (List LVar) "idris/prelude/list/ListLVar" $

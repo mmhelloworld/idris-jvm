@@ -8,37 +8,37 @@ import Java.Lang
 %access public export
 
 Assembler : Type
-Assembler = javaClass "idrisjvm/core/Assembler"
+Assembler = javaClass "IdrisJvm/Core/Assembler"
 
 JAnnotation : Type
-JAnnotation = javaClass "idrisjvm/core/JAnnotation"
+JAnnotation = javaClass "IdrisJvm/Core/JAnnotation"
 
 JAnnString : Type
-JAnnString = javaClass "idrisjvm/core/JAnnotationValue$JAnnString"
+JAnnString = javaClass "IdrisJvm/Core/JAnnotationValue$JAnnString"
 
 JAnnInt : Type
-JAnnInt = javaClass "idrisjvm/core/JAnnotationValue$JAnnInt"
+JAnnInt = javaClass "IdrisJvm/Core/JAnnotationValue$JAnnInt"
 
 JAnnArray : Type
-JAnnArray = javaClass "idrisjvm/core/JAnnotationValue$JAnnArray"
+JAnnArray = javaClass "IdrisJvm/Core/JAnnotationValue$JAnnArray"
 
 JAnnotationProperty : Type
-JAnnotationProperty = javaClass "idrisjvm/core/JAnnotationProperty"
+JAnnotationProperty = javaClass "IdrisJvm/Core/JAnnotationProperty"
 
 JAnnotationValue: Type
-JAnnotationValue = javaClass "idrisjvm/core/JAnnotationValue"
+JAnnotationValue = javaClass "IdrisJvm/Core/JAnnotationValue"
 
 JHandle: Type
-JHandle = javaClass "idrisjvm/core/JHandle"
+JHandle = javaClass "IdrisJvm/Core/JHandle"
 
 JBsmArg: Type
-JBsmArg = javaClass "idrisjvm/core/JBsmArg"
+JBsmArg = javaClass "IdrisJvm/Core/JBsmArg"
 
 JBsmArgGetType: Type
-JBsmArgGetType = javaClass "idrisjvm/core/JBsmArg$JBsmArgGetType"
+JBsmArgGetType = javaClass "IdrisJvm/Core/JBsmArg$JBsmArgGetType"
 
 JBsmArgHandle: Type
-JBsmArgHandle = javaClass "idrisjvm/core/JBsmArg$JBsmArgHandle"
+JBsmArgHandle = javaClass "IdrisJvm/Core/JBsmArg$JBsmArgHandle"
 
 toJClassOpts : ClassOpts -> Int
 toJClassOpts ComputeMaxs = 1

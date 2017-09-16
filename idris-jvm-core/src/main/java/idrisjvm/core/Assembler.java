@@ -1,7 +1,7 @@
-package idrisjvm.core;
+package IdrisJvm.Core;
 
-import idrisjvm.core.JBsmArg.JBsmArgGetType;
-import idrisjvm.core.JBsmArg.JBsmArgHandle;
+import IdrisJvm.Core.JBsmArg.JBsmArgGetType;
+import IdrisJvm.Core.JBsmArg.JBsmArgHandle;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.FieldVisitor;

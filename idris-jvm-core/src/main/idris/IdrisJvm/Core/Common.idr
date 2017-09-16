@@ -18,7 +18,7 @@ sep : String -> List String -> String
 sep x xs = cast $ intercalate (cast x) $ map cast xs
 
 IdrisToJavaNameConverterClass : JVM_NativeTy
-IdrisToJavaNameConverterClass = Class "idrisjvm/core/IdrisToJavaNameConverter"
+IdrisToJavaNameConverterClass = Class "IdrisJvm/Core/IdrisToJavaNameConverter"
 
 jname : String -> JMethodName
 jname s =

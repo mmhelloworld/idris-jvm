@@ -1,4 +1,4 @@
-package idrisjvm.core;
+package IdrisJvm.Core;
 
 import java.util.List;
 

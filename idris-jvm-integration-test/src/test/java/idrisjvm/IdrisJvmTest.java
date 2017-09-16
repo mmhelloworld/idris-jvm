@@ -25,14 +25,16 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
+import static java.lang.Boolean.parseBoolean;
 import static java.lang.Integer.parseInt;
+import static java.lang.System.getProperty;
 import static java.util.stream.Collectors.toList;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.junit.Assert.assertThat;
 
 @RunWith(Parameterized.class)
 public class IdrisJvmTest {
-    private static final String IDRIS_JVM_HOME = System.getProperty("IDRIS_JVM_HOME", System.getProperty("user.home"));
+    private static final String IDRIS_JVM_HOME = getProperty("IDRIS_JVM_HOME", getProperty("user.home"));
 
     private static File testOutputRootDir;
     private static String runtimeJarPath;
@@ -58,9 +60,11 @@ public class IdrisJvmTest {
 
     @BeforeClass
     public static void beforeClass() throws InterruptedException, TimeoutException {
-        getPortFile().delete();
-        testOutputRootDir = new File(System.getProperty("test.output", System.getProperty("user.dir")));
-        runtimeJarPath = Paths.get(System.getProperty("runtime.jar.path")).toString();
+        if (shouldStartIdrisJvmServer()) {
+            getPortFile().delete();
+        }
+        testOutputRootDir = new File(getProperty("test.output", getProperty("user.dir")));
+        runtimeJarPath = Paths.get(getProperty("runtime.jar.path")).toString();
     }
 
     @Test
@@ -77,6 +81,10 @@ public class IdrisJvmTest {
         List<String> expectedOutput = readFile(expectedOutputFile);
 
         assertThat(actualOutput, hasItems(expectedOutput.toArray(new String[expectedOutput.size()])));
+    }
+
+    private static boolean shouldStartIdrisJvmServer() {
+        return parseBoolean(getProperty("start-idris-jvm-server", "false"));
     }
 
     private void compile(final File testOutputDir, final File compilerOut) throws IOException, InterruptedException {

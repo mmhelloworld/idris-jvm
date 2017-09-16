@@ -1,7 +1,7 @@
-package idrisjvm.core;
+package IdrisJvm.Core;
 
-import static idrisjvm.core.JBsmArg.BsmArgType.BsmArgGetType;
-import static idrisjvm.core.JBsmArg.BsmArgType.BsmArgHandle;
+import static IdrisJvm.Core.JBsmArg.BsmArgType.BsmArgGetType;
+import static IdrisJvm.Core.JBsmArg.BsmArgType.BsmArgHandle;
 
 public abstract class JBsmArg {
     private final BsmArgType type;

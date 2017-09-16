@@ -15,6 +15,7 @@
     <properties>
         <test.output>${project.build.directory}</test.output>
         <deploy.dir>${user.home}/bin/idris-jvm</deploy.dir>
+        <start-idris-jvm-server>true</start-idris-jvm-server>
     </properties>
 
     <build>
@@ -75,6 +76,7 @@
                     <systemPropertyVariables>
                         <test.output>${test.output}</test.output>
                         <runtime.jar.path>${deploy.dir}/idris-jvm-runtime.jar</runtime.jar.path>
+                        <start-idris-jvm-server>${start-idris-jvm-server}</start-idris-jvm-server>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

@@ -5,13 +5,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import idrisjvm.ir.LVar;
+import IdrisJvm.IR.export.LVar;
 
 import java.io.IOException;
 import java.util.Map;
 
-import static idrisjvm.core.JCodegen.glob;
-import static idrisjvm.core.JCodegen.loc;
+import static IdrisJvm.Core.export.Codegen.glob;
+import static IdrisJvm.Core.export.Codegen.loc;
 
 public class LVarDeserializer extends StdDeserializer<LVar> {
 

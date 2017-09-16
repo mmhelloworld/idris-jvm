@@ -1,4 +1,4 @@
-package idrisjvm.core;
+package IdrisJvm.Core;
 
 class AnnotationProperty {
     private final String name;

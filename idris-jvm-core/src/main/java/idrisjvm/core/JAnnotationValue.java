@@ -1,4 +1,4 @@
-package idrisjvm.core;
+package IdrisJvm.Core;
 
 import lombok.ToString;
 

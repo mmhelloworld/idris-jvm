@@ -6,16 +6,16 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import idrisjvm.ir.Const;
-import idrisjvm.core.JCodegen;
-import idrisjvm.ir.SAlt;
-import idrisjvm.ir.SExp;
+import IdrisJvm.IR.export.Const;
+import IdrisJvm.Core.export.Codegen;
+import IdrisJvm.IR.export.SAlt;
+import IdrisJvm.IR.export.SExp;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static idrisjvm.core.JCodegen.sDefaultCase;
+import static IdrisJvm.Core.export.Codegen.sDefaultCase;
 import static io.github.mmhelloworld.idrisjvm.Converters.toIdrisListString;
 import static java.util.Arrays.asList;
 
@@ -62,7 +62,7 @@ public class SAltDeserializer extends StdDeserializer<SAlt> {
         if (node.isArray()) {
             final Const con = mapper.readerFor(Const.class).readValue(node.get(0));
             final SExp exp = mapper.readerFor(SExp.class).readValue(node.get(1));
-            return JCodegen.sConstCase(con, exp);
+            return Codegen.sConstCase(con, exp);
         } else {
             throw new RuntimeException("An array representing SConstCase expected but found " + node);
         }
@@ -77,7 +77,7 @@ public class SAltDeserializer extends StdDeserializer<SAlt> {
             final String name = node.get(2).asText();
             final List<String> names = asList(mapper.readerFor(String[].class).readValue(node.get(3)));
             final SExp exp = mapper.readerFor(SExp.class).readValue(node.get(4));
-            return JCodegen.sConCase(n1, n2, name, toIdrisListString(names), exp);
+            return Codegen.sConCase(n1, n2, name, toIdrisListString(names), exp);
         } else {
             throw new RuntimeException("An array representing SConCase expected but found " +
                 node);

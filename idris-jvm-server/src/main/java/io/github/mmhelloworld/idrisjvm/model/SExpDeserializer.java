@@ -6,31 +6,31 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import idrisjvm.ir.CaseType;
-import idrisjvm.ir.Const;
-import idrisjvm.ir.FDesc;
-import idrisjvm.core.JCodegen;
-import idrisjvm.ir.LVar;
-import idrisjvm.ir.PrimFn;
-import idrisjvm.ir.SAlt;
-import idrisjvm.ir.SExp;
-import idrisjvm.ir.SForeignArg;
+import IdrisJvm.IR.export.CaseType;
+import IdrisJvm.IR.export.Const;
+import IdrisJvm.IR.export.FDesc;
+import IdrisJvm.Core.export.Codegen;
+import IdrisJvm.IR.export.LVar;
+import IdrisJvm.IR.export.PrimFn;
+import IdrisJvm.IR.export.SAlt;
+import IdrisJvm.IR.export.SExp;
+import IdrisJvm.IR.export.SForeignArg;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static idrisjvm.core.JCodegen.mkSForeignArg;
-import static idrisjvm.core.JCodegen.sCase;
-import static idrisjvm.core.JCodegen.sChkCase;
-import static idrisjvm.core.JCodegen.sCon;
-import static idrisjvm.core.JCodegen.sConst;
-import static idrisjvm.core.JCodegen.sError;
-import static idrisjvm.core.JCodegen.sForeign;
-import static idrisjvm.core.JCodegen.sNothing;
-import static idrisjvm.core.JCodegen.sV;
-import static idrisjvm.core.JCodegen.shared;
-import static idrisjvm.core.JCodegen.updatable;
+import static IdrisJvm.Core.export.Codegen.mkSForeignArg;
+import static IdrisJvm.Core.export.Codegen.sCase;
+import static IdrisJvm.Core.export.Codegen.sChkCase;
+import static IdrisJvm.Core.export.Codegen.sCon;
+import static IdrisJvm.Core.export.Codegen.sConst;
+import static IdrisJvm.Core.export.Codegen.sError;
+import static IdrisJvm.Core.export.Codegen.sForeign;
+import static IdrisJvm.Core.export.Codegen.sNothing;
+import static IdrisJvm.Core.export.Codegen.sV;
+import static IdrisJvm.Core.export.Codegen.shared;
+import static IdrisJvm.Core.export.Codegen.updatable;
 import static io.github.mmhelloworld.idrisjvm.Converters.nullableToMaybeLVar;
 import static io.github.mmhelloworld.idrisjvm.Converters.toIdrisListLVar;
 import static io.github.mmhelloworld.idrisjvm.Converters.toIdrisListSAlt;
@@ -104,7 +104,7 @@ public class SExpDeserializer extends StdDeserializer<SExp> {
         if (node.isArray()) {
             final PrimFn primFn = mapper.readerFor(PrimFn.class).readValue(node.get(0));
             final List<LVar> lvars = asList(mapper.readerFor(LVar[].class).readValue(node.get(1)));
-            return JCodegen.sOp(primFn, toIdrisListLVar(lvars));
+            return Codegen.sOp(primFn, toIdrisListLVar(lvars));
         } else {
             throw new RuntimeException("An array representing SOp expected but found " + node);
         }
@@ -147,7 +147,7 @@ public class SExpDeserializer extends StdDeserializer<SExp> {
         if (sProj.isArray()) {
             final LVar lvar = mapper.readerFor(LVar.class).readValue(sProj.get(0));
             final int n = sProj.get(1).asInt();
-            return JCodegen.sProj(lvar, n);
+            return Codegen.sProj(lvar, n);
         } else {
             throw new RuntimeException("An object representing SProj expected but found " + sProj);
         }
@@ -206,7 +206,7 @@ public class SExpDeserializer extends StdDeserializer<SExp> {
         if (node.isArray()) {
             final LVar lvar = mapper.readerFor(LVar.class).readValue(node.get(0));
             final SExp sexp = mapper.readerFor(SExp.class).readValue(node.get(1));
-            return JCodegen.sUpdate(lvar, sexp);
+            return Codegen.sUpdate(lvar, sexp);
         } else {
             throw new RuntimeException("An object representing SUpdate expected but found " + node);
         }
@@ -219,7 +219,7 @@ public class SExpDeserializer extends StdDeserializer<SExp> {
             final LVar lvar = mapper.readerFor(LVar.class).readValue(slet.get(0));
             final SExp lsexp = mapper.readerFor(SExp.class).readValue(slet.get(1));
             final SExp rsexp = mapper.readerFor(SExp.class).readValue(slet.get(2));
-            return JCodegen.sLet(lvar, lsexp, rsexp);
+            return Codegen.sLet(lvar, lsexp, rsexp);
         } else {
             throw new RuntimeException("An object representing SLet expected but found " + slet);
         }
@@ -231,7 +231,7 @@ public class SExpDeserializer extends StdDeserializer<SExp> {
             final boolean isTailRecursive = sapp.get(0).asBoolean();
             final String functionName = sapp.get(1).asText();
             final List<LVar> lvars = asList(mapper.readerFor(LVar[].class).readValue(sapp.get(2)));
-            return JCodegen.sApp(isTailRecursive, functionName, toIdrisListLVar(lvars));
+            return Codegen.sApp(isTailRecursive, functionName, toIdrisListLVar(lvars));
         } else {
             throw new RuntimeException("An object representing SApp expected but found " + sapp);
         }

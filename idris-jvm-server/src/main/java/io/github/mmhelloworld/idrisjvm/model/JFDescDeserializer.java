@@ -6,17 +6,17 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import idrisjvm.ir.FDesc;
-import idrisjvm.core.JCodegen;
+import IdrisJvm.IR.export.FDesc;
+import IdrisJvm.Core.export.Codegen;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static idrisjvm.core.JCodegen.fcon;
-import static idrisjvm.core.JCodegen.fio;
-import static idrisjvm.core.JCodegen.fstr;
-import static idrisjvm.core.JCodegen.funknown;
+import static IdrisJvm.Core.export.Codegen.fcon;
+import static IdrisJvm.Core.export.Codegen.fio;
+import static IdrisJvm.Core.export.Codegen.fstr;
+import static IdrisJvm.Core.export.Codegen.funknown;
 import static io.github.mmhelloworld.idrisjvm.Converters.toIdrisListFDesc;
 import static java.util.Arrays.asList;
 
@@ -65,7 +65,7 @@ public class JFDescDeserializer extends StdDeserializer<FDesc> {
     private static FDesc deserializeJFApp(final JsonNode node) throws IOException {
         final String name = node.get(0).asText();
         final List<FDesc> fdescs = asList(Context.getMapper().readerFor(FDesc[].class).readValue(node.get(1)));
-        return JCodegen.fapp(name, toIdrisListFDesc(fdescs));
+        return Codegen.fapp(name, toIdrisListFDesc(fdescs));
     }
 
 }

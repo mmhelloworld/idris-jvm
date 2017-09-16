@@ -6,17 +6,17 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import idrisjvm.ir.Export;
-import idrisjvm.ir.ExportIFace;
+import IdrisJvm.IR.export.Export;
+import IdrisJvm.IR.export.ExportIFace;
 import io.github.mmhelloworld.idrisjvm.Converters;
 
 import java.io.IOException;
 import java.util.List;
 
-import static idrisjvm.core.JCodegen.mkExportIFace;
+import static IdrisJvm.Core.export.Codegen.mkExportIFace;
 import static java.util.Arrays.asList;
 
-public class ExportIFaceDeserializer extends StdDeserializer<idrisjvm.ir.ExportIFace> {
+public class ExportIFaceDeserializer extends StdDeserializer<IdrisJvm.IR.export.ExportIFace> {
 
     public ExportIFaceDeserializer() {
         this(null);

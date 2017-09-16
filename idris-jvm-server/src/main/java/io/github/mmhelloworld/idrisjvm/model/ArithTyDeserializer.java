@@ -6,13 +6,13 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import idrisjvm.ir.ArithTy;
+import IdrisJvm.IR.export.ArithTy;
 
 import java.io.IOException;
 import java.util.Map;
 
-import static idrisjvm.core.JCodegen.atFloat;
-import static idrisjvm.core.JCodegen.atInt;
+import static IdrisJvm.Core.export.Codegen.atFloat;
+import static IdrisJvm.Core.export.Codegen.atInt;
 import static io.github.mmhelloworld.idrisjvm.model.PrimFnDeserializer.parseIntTy;
 
 public class ArithTyDeserializer extends StdDeserializer<ArithTy> {

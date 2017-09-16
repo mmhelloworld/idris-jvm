@@ -1,15 +1,15 @@
 package io.github.mmhelloworld.idrisjvm;
 
-import idrisjvm.ir.ArithTy;
-import idrisjvm.ir.Const;
-import idrisjvm.ir.Export;
-import idrisjvm.ir.ExportIFace;
-import idrisjvm.ir.FDesc;
-import idrisjvm.ir.LVar;
-import idrisjvm.ir.PrimFn;
-import idrisjvm.ir.SAlt;
-import idrisjvm.ir.SDecl;
-import idrisjvm.ir.SExp;
+import IdrisJvm.IR.export.ArithTy;
+import IdrisJvm.IR.export.Const;
+import IdrisJvm.IR.export.Export;
+import IdrisJvm.IR.export.ExportIFace;
+import IdrisJvm.IR.export.FDesc;
+import IdrisJvm.IR.export.LVar;
+import IdrisJvm.IR.export.PrimFn;
+import IdrisJvm.IR.export.SAlt;
+import IdrisJvm.IR.export.SDecl;
+import IdrisJvm.IR.export.SExp;
 import io.github.mmhelloworld.idrisjvm.model.ArithTyDeserializer;
 import io.github.mmhelloworld.idrisjvm.model.ConstDeserializer;
 import io.github.mmhelloworld.idrisjvm.model.ExportDeserializer;

@@ -5,14 +5,14 @@ import idris.prelude.list.ListFDesc;
 import idris.prelude.list.ListLVar;
 import idris.prelude.list.ListSAlt;
 import idris.prelude.list.ListString;
-import idrisjvm.ir.Export;
-import idrisjvm.ir.FDesc;
-import idrisjvm.core.JCodegen;
-import idrisjvm.ir.LVar;
-import idrisjvm.ir.MaybeLVar;
-import idrisjvm.ir.SAlt;
-import idrisjvm.ir.SForeignArg;
-import idrisjvm.ir.SForeignArgs;
+import IdrisJvm.IR.export.Export;
+import IdrisJvm.IR.export.FDesc;
+import IdrisJvm.Core.export.Codegen;
+import IdrisJvm.IR.export.LVar;
+import IdrisJvm.IR.export.MaybeLVar;
+import IdrisJvm.IR.export.SAlt;
+import IdrisJvm.IR.export.SForeignArg;
+import IdrisJvm.IR.export.SForeignArgs;
 
 import java.util.List;
 import java.util.ListIterator;
@@ -24,31 +24,31 @@ import java.util.function.Supplier;
 public class Converters {
 
     public static ListFDesc toIdrisListFDesc(List<FDesc> jlist) {
-        return toIdrisList(jlist, JCodegen::emptyFDesc, JCodegen::consFDesc);
+        return toIdrisList(jlist, Codegen::emptyFDesc, Codegen::consFDesc);
     }
 
     public static ListExport toIdrisListExport(List<Export> jlist) {
-        return toIdrisList(jlist, JCodegen::emptyExport, JCodegen::consExport);
+        return toIdrisList(jlist, Codegen::emptyExport, Codegen::consExport);
     }
 
     public static ListString toIdrisListString(List<String> jlist) {
-        return toIdrisList(jlist, JCodegen::emptyListString, JCodegen::consString);
+        return toIdrisList(jlist, Codegen::emptyListString, Codegen::consString);
     }
 
     public static ListLVar toIdrisListLVar(List<LVar> jlist) {
-        return toIdrisList(jlist, JCodegen::emptyLVar, JCodegen::consLVar);
+        return toIdrisList(jlist, Codegen::emptyLVar, Codegen::consLVar);
     }
 
     public static ListSAlt toIdrisListSAlt(List<SAlt> jlist) {
-        return toIdrisList(jlist, JCodegen::emptySAlt, JCodegen::consSAlt);
+        return toIdrisList(jlist, Codegen::emptySAlt, Codegen::consSAlt);
     }
 
     public static SForeignArgs toIdrisListSForeignArgs(List<SForeignArg> jlist) {
-        return toIdrisList(jlist, JCodegen::emptySForeignArg, JCodegen::consSForeignArg);
+        return toIdrisList(jlist, Codegen::emptySForeignArg, Codegen::consSForeignArg);
     }
 
     public static MaybeLVar nullableToMaybeLVar(LVar nullableLVar) {
-        return nullableToMaybe(nullableLVar, JCodegen::justLVar, JCodegen::nothingLVar);
+        return nullableToMaybe(nullableLVar, Codegen::justLVar, Codegen::nothingLVar);
     }
 
     private static <JType, IdrisType> IdrisType nullableToMaybe(JType nullableValue,

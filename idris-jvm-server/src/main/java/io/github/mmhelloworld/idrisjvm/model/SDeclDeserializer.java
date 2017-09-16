@@ -6,14 +6,14 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import idrisjvm.ir.SDecl;
-import idrisjvm.ir.SExp;
+import IdrisJvm.IR.export.SDecl;
+import IdrisJvm.IR.export.SExp;
 import io.github.mmhelloworld.idrisjvm.Converters;
 
 import java.io.IOException;
 import java.util.List;
 
-import static idrisjvm.core.JCodegen.sFun;
+import static IdrisJvm.Core.export.Codegen.sFun;
 import static java.util.Arrays.asList;
 
 public class SDeclDeserializer extends StdDeserializer<SDecl> {

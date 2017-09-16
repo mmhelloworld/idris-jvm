@@ -5,11 +5,11 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import idrisjvm.core.Assembler;
-import idrisjvm.core.IdrisToJavaNameConverter;
-import idrisjvm.core.JCodegen;
-import idrisjvm.ir.ExportIFace;
-import idrisjvm.ir.SDecl;
+import IdrisJvm.Core.Assembler;
+import IdrisJvm.Core.IdrisToJavaNameConverter;
+import IdrisJvm.Core.export.Codegen;
+import IdrisJvm.IR.export.ExportIFace;
+import IdrisJvm.IR.export.SDecl;
 import io.github.mmhelloworld.idrisjvm.model.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,7 +99,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
         parser.nextToken();
         while (parser.nextToken() != JsonToken.END_ARRAY) {
             ExportIFace exportIFace = mapper.readerFor(ExportIFace.class).readValue(parser);
-            JCodegen.generateExport(assembler, exportIFace);
+            Codegen.generateExport(assembler, exportIFace);
         }
     }
 
@@ -110,7 +110,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
             final ObjectMapper mapper = Context.getMapper();
             if (node.isArray()) {
                 SDecl sDecl = mapper.readerFor(SDecl.class).readValue(node.get(1));
-                JCodegen.generateMethod(assembler, sDecl);
+                Codegen.generateMethod(assembler, sDecl);
             } else {
                 throw new RuntimeException("An array representing SimpleDecl expected");
             }

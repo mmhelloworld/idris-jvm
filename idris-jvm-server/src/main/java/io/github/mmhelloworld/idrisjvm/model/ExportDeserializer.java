@@ -5,15 +5,15 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import idrisjvm.ir.Export;
-import idrisjvm.ir.FDesc;
+import IdrisJvm.IR.export.Export;
+import IdrisJvm.IR.export.FDesc;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static idrisjvm.core.JCodegen.exportData;
-import static idrisjvm.core.JCodegen.exportFun;
+import static IdrisJvm.Core.export.Codegen.exportData;
+import static IdrisJvm.Core.export.Codegen.exportFun;
 import static io.github.mmhelloworld.idrisjvm.Converters.toIdrisListFDesc;
 import static java.util.Arrays.asList;
 

@@ -1,4 +1,4 @@
-package idrisjvm.core;
+package IdrisJvm.Core;
 
 public final class JHandle {
     private final int tag;

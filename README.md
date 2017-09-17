@@ -56,7 +56,8 @@ See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integ
       go acc n@(S k) = go (acc + n) k
     ```
 
-* **Non-recursive tail call** is handled using trampolines. For the following code, `evenT 10909000007` would work just fine and return the result after few seconds. `IO` is used here as otherwise Idris inlines the function calls and the functions end up being tail recursive instead of mutually recursive.
+* **Non-recursive tail call** is handled using trampolines. For the following code, `evenT 10909000007` would work just fine and return the result after few seconds. `IO` is used here as otherwise Idris inlines the function calls and the functions end up being tail recursive instead of mutually recursive. Non-recursive tail calls are delayed using Java 8 lambdas with JVM's `invokedynamic`.
+
     ```idris
     mutual
       evenT : Nat -> IO Bool
@@ -68,11 +69,21 @@ See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integ
       oddT (S k) = evenT k
     ```
 
-* It compiles to **Java 8 class files**. Tail calls are delayed using Java 8 lambdas and use JVM's `invokedynamic`.
+* **Idris functions as Java lambdas:** Idris functions can be passed as Java lambdas in FFI. JVM's `invokedynamic` instruction is used to create target functional interface objects just like how javac does. 
+
+```idris
+main : JVM_IO ()
+main = ArrayList.fromList ["foobar", "hello", "world"] >>=
+       stream >>=                                           -- Java 8 Stream from Java's ArrayList
+       filter (jlambda (not . isPrefixOf "foo")) >>=        -- Idris function as Java "Predicate" lambda
+       map (jlambda Strings.reverse) >>=                    -- Idris function as Java "Function" lambda
+       collect !toList >>=
+       Objects.toString >>=
+       printLn
+```
 
 * Idris primitives `par` and `fork` for running in parallel and creating threads are supported using Java's `ForkJoin` and `ExecutorService`. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integration-test/src/test/resources/idris-test-sources/forkpar/forkpar.idr) for an example.
 
 * `Maybe` type can be used in an FFI function to avoid Java `null` getting into Idris code. `Maybe` used in an
 argument position will pass `null` to the Java code if the value is `Nothing` otherwise the unwrapped value will be passed to
-Java. In the similar way, `Maybe` type used in the return type position would return `Nothing` if the FFI function returns `null`
-otherwise returns the actual value in `Just`.
+Java. In the similar way, `Maybe` type used in the return type position would return `Nothing` if the FFI function returns `null` otherwise returns the actual value in `Just`.

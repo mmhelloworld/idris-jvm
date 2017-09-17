@@ -70,7 +70,7 @@ mutual
     sequence_ $ (Aload . locIndex) <$> args
     let MkJMethodName cname mname = jname f
     InvokeMethod InvokeStatic cname mname (sig $ length  args) False
-    InvokeMethod InvokeStatic (rtClassSig "Runtime") "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+    InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
     ret
 
   cgBody ret (SLet (Loc i) v sc) = do cgBody (Astore i) v; cgBody ret sc
@@ -102,9 +102,9 @@ mutual
 
     cgForeign (JStatic clazz fn) = do
       let returnDesc = fdescTypeDescriptor returns
-      let descriptor = \r => asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) r
+      let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) returnDesc
       idrisToJava argsWithTypes
-      InvokeMethod InvokeStatic clazz fn (descriptor returnDesc) False
+      InvokeMethod InvokeStatic clazz fn descriptor False
       javaToIdris returnDesc
       ret
 
@@ -224,8 +224,16 @@ mutual
     cgForeign (JClassLiteral "float") = do getPrimitiveClass "java/lang/Float"; ret
     cgForeign (JClassLiteral "double") = do getPrimitiveClass "java/lang/Double"; ret
     cgForeign (JClassLiteral clazz) = do
-      Ldc $ TypeConst $ "L" ++ clazz ++ ";"
+      Ldc $ TypeConst $ classSig clazz
       ret
+
+    cgForeign (JLambda clazz interfaceFnName) = case args of
+      [(interfaceFnTy, _), (lambdaTy, lambdaVar)] => do
+        caller <- GetFunctionName
+        createJvmFunctionalObject lambdaVar caller (MkJMethodName clazz interfaceFnName) interfaceFnTy lambdaTy
+        ret
+      otherwise => jerror $ "There can be only two arguments while passing a java lambda for " ++ clazz ++
+        "." ++ interfaceFnName ++ ": the interface method signature and the lambda signature"
 
   cgBody _ _ = jerror "NOT IMPLEMENTED!!!!"
 
@@ -337,14 +345,9 @@ mutual
     when (not isStatic) $ Aload 0 -- load `this`
     loadArgs
     InvokeMethod invType sourceCname sourceMname sourceMdesc False
-    when (not isSuperExport) $ InvokeMethod InvokeStatic (rtClassSig "Runtime") "unwrap" (sig 1) False
+    when (not isSuperExport) $ InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
     when (not isSuperExport && isExportIO returns) unwrapExportedIO
     returnExport exportCall returnDesc
-
-  unwrapExportedIO : Asm ()
-  unwrapExportedIO = do
-    InvokeMethod InvokeStatic "main/Main" "call__IO" (sig 3) False
-    InvokeMethod InvokeStatic (rtClassSig "Runtime") "unwrap" (sig 1) False
 
   hasConstructorExport : List Export -> Bool
   hasConstructorExport = any isConstructorExport where

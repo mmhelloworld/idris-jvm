@@ -2,6 +2,7 @@ module IdrisJvm.Core.Operator
 
 import IdrisJvm.Core.Asm
 import IdrisJvm.Core.Common
+import IdrisJvm.Core.Foreign
 import IdrisJvm.IR.Types
 
 %access public export
@@ -10,12 +11,12 @@ compareObj : MethodName -> LVar -> LVar -> Asm ()
 compareObj fn l r = do
   Aload $ locIndex l
   Aload $ locIndex r
-  InvokeMethod InvokeStatic (rtClassSig "Util") fn "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
+  InvokeMethod InvokeStatic (rtClass "Util") fn "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
 
 loadLocalIntWithCast : LVar -> Asm ()
 loadLocalIntWithCast var = do
   Aload $ locIndex var
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asInt" "(Ljava/lang/Object;)I" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asInt" "(Ljava/lang/Object;)I" False
 
 loadLocalLongWithCast : LVar -> Asm ()
 loadLocalLongWithCast var = do
@@ -65,7 +66,7 @@ binaryDoubleOp ops l r = do
 signExtendToBigInteger : LVar -> Asm ()
 signExtendToBigInteger var = do
   Aload $ locIndex var
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
 
 cgExternalOp : String -> List LVar -> Asm ()
 cgExternalOp op _ =
@@ -100,9 +101,9 @@ cgOpLGt (LGt (ITFixed IT64)) [l, r] = compareObj "ulongGreaterThan" l r
 cgOpLPlusBig : LVar -> LVar -> Asm ()
 cgOpLPlusBig lvar rvar = do
   Aload $ locIndex lvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   Aload $ locIndex rvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   InvokeMethod InvokeVirtual "java/math/BigInteger" "add"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
 
 cgOpLPlusChar : LVar -> LVar -> Asm ()
@@ -120,33 +121,33 @@ cgOpLPlusChar lvar rvar = do
 cgOpLMinusBig : LVar -> LVar -> Asm ()
 cgOpLMinusBig lvar rvar = do
   Aload $ locIndex lvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   Aload $ locIndex rvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   InvokeMethod InvokeVirtual "java/math/BigInteger" "subtract"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
 
 cgOpLTimesBig : LVar -> LVar -> Asm ()
 cgOpLTimesBig lvar rvar = do
   Aload $ locIndex lvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   Aload $ locIndex rvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   InvokeMethod InvokeVirtual "java/math/BigInteger" "multiply"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
 
 cgOpLSDivBig : LVar -> LVar -> Asm ()
 cgOpLSDivBig lvar rvar = do
   Aload $ locIndex lvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   Aload $ locIndex rvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   InvokeMethod InvokeVirtual "java/math/BigInteger" "divide"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
 
 cgOpLSRemBig : LVar -> LVar -> Asm ()
 cgOpLSRemBig lvar rvar = do
   Aload $ locIndex lvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   Aload $ locIndex rvar
-  InvokeMethod InvokeStatic (rtClassSig "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  InvokeMethod InvokeStatic (rtClass "Util") "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
   InvokeMethod InvokeVirtual "java/math/BigInteger" "mod"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
 
 cgOpLStrRev : LVar -> Asm ()
@@ -293,9 +294,9 @@ cgOp2 (LTrunc (ITFixed _) (ITFixed _)) [x] = Aload $ locIndex x
 
 cgOp2 LWriteStr [_, s] = do
   Aload $ locIndex s
-  InvokeMethod InvokeStatic (rtClassSig "Runtime") "writeString" "(Ljava/lang/Object;)Ljava/lang/Integer;" False
+  InvokeMethod InvokeStatic (rtClass "Runtime") "writeString" "(Ljava/lang/Object;)Ljava/lang/Integer;" False
 
-cgOp2 LReadStr [_] = InvokeMethod InvokeStatic (rtClassSig "Runtime") "readString" "()Ljava/lang/String;" False
+cgOp2 LReadStr [_] = InvokeMethod InvokeStatic (rtClass "Runtime") "readString" "()Ljava/lang/String;" False
 
 cgOp2 LStrConcat [l,r] = cgOpLStrConcat l r
 
@@ -348,12 +349,12 @@ cgOp2 (LASHR (ITFixed _)) [x, y] = binaryIntOp Ishr x y
 cgOp2 LFork [x] = do
   caller <- GetFunctionName
   createThunk caller (jname "{EVAL_0}") [x]
-  InvokeMethod InvokeStatic (rtClassSig "Concurrent") "fork" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+  InvokeMethod InvokeStatic (rtClass "Concurrent") "fork" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
 
 cgOp2 LPar [x] = do
   caller <- GetFunctionName
   createParThunk caller (jname "{EVAL_0}") [x]
-  InvokeMethod InvokeStatic (rtClassSig "Concurrent") "par" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+  InvokeMethod InvokeStatic (rtClass "Concurrent") "par" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
 
 cgOp2 (LIntFloat ITBig) [x] = do
   Aload $ locIndex x

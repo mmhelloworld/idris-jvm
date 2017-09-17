@@ -24,6 +24,7 @@ mutual
   data JVM_FfiFn = Static JVM_NativeTy String
                  | GetStaticField JVM_NativeTy String
                  | SetStaticField JVM_NativeTy String
+                 | Lambda JVM_NativeTy String
                  | Constructor
                  | New
                  | NewArray
@@ -57,21 +58,25 @@ mutual
   ||| Supported JVM function types
   data JVM_FnTypes : Type -> Type where
       JVM_Fn : JVM_Types s -> JVM_FnTypes t -> JVM_FnTypes (s -> t)
-      JVM_FnIO : JVM_Types t -> JVM_FnTypes (IO' FFI_JVM t)
+      JVM_FnIO : JVM_Types t -> JVM_FnTypes (JVM_IO t)
       JVM_FnBase : JVM_Types t -> JVM_FnTypes t
+
+  data JVM_FunctionalObject : Type -> Type where
+    MkJVMFunctionalObject : (lambdaFunctionTy : t) -> JVM_FunctionalObject t
 
   ||| Supported JVM foreign types
   data JVM_Types : Type -> Type where
-      JVM_Bool    : JVM_Types Bool
-      JVM_Str     : JVM_Types String
-      JVM_Double  : JVM_Types Double
-      JVM_Float   : JVM_Types JFloat
-      JVM_Unit    : JVM_Types ()
-      JVM_NullableStr: JVM_Types (Maybe String)
-      JVM_Nullable : JVM_Types (Maybe (JVM_Native t))
-      JVM_NativeT : JVM_Types (JVM_Native a)
-      JVM_IntT    : JVM_IntTypes i -> JVM_Types i
-      JVM_ArrayT  : JVM_Types t -> JVM_Types (JVM_Array t)
+      JVM_Bool        : JVM_Types Bool
+      JVM_Str         : JVM_Types String
+      JVM_Double      : JVM_Types Double
+      JVM_Float       : JVM_Types JFloat
+      JVM_Unit        : JVM_Types ()
+      JVM_NullableStr : JVM_Types (Maybe String)
+      JVM_Nullable    : JVM_Types (Maybe (JVM_Native t))
+      JVM_NativeT     : JVM_Types (JVM_Native a)
+      JVM_IntT        : JVM_IntTypes i -> JVM_Types i
+      JVM_ArrayT      : JVM_Types t -> JVM_Types (JVM_Array t)
+      JVM_FnT         : JVM_FnTypes t -> JVM_Types (JVM_FunctionalObject t)
 
   data JVM_Array : Type -> Type where
     MkJvmTypesArray : JVM_Types t -> JVM_Array t
@@ -81,11 +86,13 @@ mutual
   FFI_JVM : FFI
   FFI_JVM = MkFFI JVM_Types JVM_FfiFn String
 
+  JVM_IO : Type -> Type
+  JVM_IO = IO' FFI_JVM
+
 Show JFloat where
   show (Float d) = show d
 
-JVM_IO : Type -> Type
-JVM_IO = IO' FFI_JVM
+%used MkJVMFunctionalObject lambdaFunctionTy
 
 %inline
 javacall : (fname : JVM_FfiFn) -> (ty : Type) ->
@@ -97,6 +104,25 @@ javaClass = JVM_Native . Class
 
 javaInterface : String -> Type
 javaInterface = JVM_Native . Interface
+
+%inline
+javalambda : String
+        -> (interfaceFnTy: Type)
+        -> {auto interfaceFnJvmTy: JVM_FnTypes interfaceFnTy}
+        -> lambdaTy
+        -> {auto lambdaJvmTy: JVM_FnTypes lambdaTy}
+        -> JVM_Native nativeTy
+javalambda {nativeTy} {lambdaTy} fname interfaceFnTy lambda = unsafePerformIO $
+  javacall
+    (Lambda nativeTy fname)
+    (JVM_FunctionalObject interfaceFnTy -> JVM_FunctionalObject lambdaTy -> JVM_IO (JVM_Native nativeTy))
+
+    {- This value is not used. This is here so that the corresponding type can provide the interface method signature
+     - which can be different from the actual lambda signature
+     -}
+    (believe_me "")
+
+    (MkJVMFunctionalObject lambda)
 
 %inline
 new : (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
@@ -147,6 +173,8 @@ setStaticField : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JV
 setStaticField klass fieldName = javacall (SetStaticField klass fieldName)
 
 interface Inherits a b where {}
+
+Inherits a a where { }
 
 namespace Class
 

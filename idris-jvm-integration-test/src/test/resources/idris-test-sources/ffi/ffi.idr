@@ -5,6 +5,9 @@ import IdrisJvm.IO
 import Java.Lang
 import Java.Util
 import Java.Math
+import Java.Util.Function
+import Java.Util.Stream
+import Data.Vect
 
 IdrisThreadClass : JVM_NativeTy
 IdrisThreadClass = Class "hello/IdrisThread"
@@ -165,6 +168,33 @@ floatClassLit = classLit "float"
 doubleClassLit : Class
 doubleClassLit = classLit "double"
 
+lambdaTest1 : JVM_IO ()
+lambdaTest1 = ArrayList.fromList ["foobar", "hello", "world"] >>=
+              stream >>=
+              filter (jlambda (not . isPrefixOf "foo")) >>=
+              map (jlambda Strings.reverse) >>=
+              collect !toList >>=
+              Objects.toString >>=
+              printLn
+
+lambdaTest2 : JVM_IO ()
+lambdaTest2 = do
+  let runnable = (jlambda $ printLn "hello")
+  Runnable.run runnable
+
+lambdaTest3 : JVM_IO ()
+lambdaTest3 = generate (Supplier.jlambda (pure "hello")) >>=
+              limit 3 >>=
+              collect !toList >>=
+              Objects.toString >>=
+              printLn
+
+lambdaTest4 : JVM_IO ()
+lambdaTest4 = IntStream.from !(vectToArray [2, 4, 6]) >>=
+              map (jlambda (+1)) >>=
+              sum >>=
+              printLn
+
 main : JVM_IO ()
 main = do
   -- Test ffi calls
@@ -181,9 +211,9 @@ main = do
   System.setProperty "foo" "fooval"
   printLn !(getProperty "foo")  -- Test returning a non-null string from FFI call
   hashMap <- HashMap.new
-  printLn $ Objects.toString <$> !(HashMap.get hashMap "bar") -- Test returning null object as Nothing
+  printLn !(Objects.toString !(HashMap.get hashMap "bar")) -- Test returning null object as Nothing
   HashMap.put hashMap (Just "foo") (Just "fooval")
-  printLn $ Objects.toString <$> !(HashMap.get hashMap "foo") -- Test returning a non-null object as Just
+  printLn !(Objects.toString !(HashMap.get hashMap "foo")) -- Test returning a non-null object as Just
 
   printLn $ nullableToString (the (Maybe BigInteger) Nothing) -- Test passing Nothing as a null to FFI call
   bigOne <- BigInteger.new "1"
@@ -215,8 +245,13 @@ main = do
   setStaticNumbers joneToTen -- Test setting a static field
   printLn !getStaticNumbers -- Test getting a static field
 
-  printLn $ getName <$> [ stringClassLit, intClassLit, byteClassLit, charClassLit, shortClassLit, booleanClassLit
+  printLn $ getName <$> the (List Class) [ stringClassLit, intClassLit, byteClassLit, charClassLit, shortClassLit, booleanClassLit
                         , longClassLit, floatClassLit, doubleClassLit ]
+
+  lambdaTest1
+  lambdaTest2
+  lambdaTest3
+  lambdaTest4
 
 exports1 : FFI_Export FFI_JVM "hello/IdrisThread extends java/lang/Thread implements java/lang/Runnable" []
 exports1 =
@@ -228,7 +263,7 @@ exports1 =
   Fun helloFromIdris ExportDefault $
   Fun idrisThreadConstructor Constructor $
   Fun idrisThreadWithNameConstructor Constructor $
-  Fun run ExportDefault $
+  Fun Main.run ExportDefault $
   Fun getThreadName (Super "getName") $
   Fun Main.jmain (ExportStatic "main") $
   End

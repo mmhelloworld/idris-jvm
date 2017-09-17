@@ -141,6 +141,20 @@ namespace System
   out : JVM_IO PrintStream
   out = getStaticField SystemClass "out" (JVM_IO PrintStream)
 
+namespace Runnable
+  Runnable : Type
+  Runnable = javaInterface "java/lang/Runnable"
+
+  %inline
+  jlambda : JVM_IO () -> Runnable
+  jlambda f = javalambda "run" (JVM_IO ()) g
+    where
+      g : () -> ()
+      g x = unsafePerformIO f
+
+  run : Runnable -> JVM_IO ()
+  run runnable = invokeInstance "run" (Runnable -> JVM_IO ()) runnable
+
 namespace Thread
 
   ThreadClass : JVM_NativeTy
@@ -148,6 +162,24 @@ namespace Thread
 
   Thread : Type
   Thread = JVM_Native ThreadClass
+
+  fromRunnable : Runnable -> JVM_IO Thread
+  fromRunnable runnable = FFI.new (Runnable -> JVM_IO Thread) runnable
+
+  start : Thread -> JVM_IO ()
+  start thread = invokeInstance "start" (Thread -> JVM_IO ()) thread
+
+  sleep : Bits64 -> JVM_IO ()
+  sleep millis = invokeStatic ThreadClass "sleep" (Bits64 -> JVM_IO ()) millis
+
+  currentThread : JVM_IO Thread
+  currentThread = invokeStatic ThreadClass "currentThread" (JVM_IO Thread)
+
+  getId : Thread -> JVM_IO Bits64
+  getId thread = invokeInstance "getId" (Thread -> JVM_IO Bits64) thread
+
+  join : Thread -> JVM_IO ()
+  join thread = invokeInstance "join" (Thread -> JVM_IO ()) thread
 
 namespace JavaString
 

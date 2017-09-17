@@ -29,17 +29,20 @@ locIndex : LVar -> Int
 locIndex (Loc i) = i
 locIndex _       = jerror "Unexpected global variable"
 
-rtClassSig : String -> String
-rtClassSig c = "io/github/mmhelloworld/idrisjvm/runtime/" ++ c
+classSig : String -> String
+classSig className = "L" ++ className ++ ";"
+
+rtClass : String -> String
+rtClass c = "io/github/mmhelloworld/idrisjvm/runtime/" ++ c
 
 rtFuncSig : String
-rtFuncSig = "L" ++ rtClassSig "Function" ++ ";"
+rtFuncSig = classSig $ rtClass "Function"
 
 rtThunkSig : String
-rtThunkSig = "L" ++ rtClassSig "Thunk" ++ ";"
+rtThunkSig = classSig $ rtClass "Thunk"
 
 idrisObjectType : String
-idrisObjectType = rtClassSig "IdrisObject"
+idrisObjectType = rtClass "IdrisObject"
 
 listRange : Int -> Int -> List Int
 listRange from to = if from <= to then [from .. to] else []
@@ -96,22 +99,10 @@ repeatObjectDesc n = repeatString n "Ljava/lang/Object;"
 sig : Nat -> String
 sig nArgs = "(" ++ repeatObjectDesc nArgs ++  ")Ljava/lang/Object;"
 
-anewarray : FieldTypeDescriptor -> Asm ()
-anewarray FieldTyDescByte          = Anewbytearray
-anewarray FieldTyDescChar          = Anewchararray
-anewarray FieldTyDescShort         = Anewshortarray
-anewarray FieldTyDescBoolean       = Anewbooleanarray
-anewarray FieldTyDescArray         = jerror $ "array is not a valid element type for a single dimensional array"
-anewarray FieldTyDescDouble        = Anewdoublearray
-anewarray FieldTyDescFloat         = Anewfloatarray
-anewarray FieldTyDescInt           = Anewintarray
-anewarray FieldTyDescLong          = Anewlongarray
-anewarray (FieldTyDescReference f) = Anewarray $ asmRefTyDesc f
-
-arrayDesc : String -> Nat -> String
-arrayDesc cname dimensions =
-  let arrayPrefix = cast $ replicate dimensions '['
-  in arrayPrefix ++ cname
+unwrapExportedIO : Asm ()
+unwrapExportedIO = do
+  InvokeMethod InvokeStatic "main/Main" "call__IO" (sig 3) False
+  InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
 
 metafactoryDesc : Descriptor
 metafactoryDesc =
@@ -130,112 +121,6 @@ idrisObjectProperty object propertyIndex = do
     Aload object
     Iconst propertyIndex
     InvokeMethod InvokeStatic idrisObjectType "getProperty"  "(Ljava/lang/Object;I)Ljava/lang/Object;" False
-
-invokeDynamic : ClassName -> MethodName -> Nat -> Asm ()
-invokeDynamic cname lambda nArgs =
-    InvokeDynamic "call" desc metafactoryHandle metafactoryArgs
-  where
-    desc : String
-    desc = "(" ++ repeatObjectDesc nArgs ++ ")" ++ rtThunkSig
-
-    metafactoryHandle = MkHandle HInvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory" metafactoryDesc False
-
-    lambdaHandle : Handle
-    lambdaHandle = MkHandle HInvokeStatic cname lambda (sig nArgs) False
-
-    metafactoryArgs = [ BsmArgGetType "()Ljava/lang/Object;"
-                      , BsmArgHandle lambdaHandle
-                      , BsmArgGetType "()Ljava/lang/Object;"
-                      ]
-
-arrayStore : FieldTypeDescriptor -> Asm ()
-arrayStore FieldTyDescByte = Bastore
-arrayStore FieldTyDescChar = Castore
-arrayStore FieldTyDescShort = Sastore
-arrayStore FieldTyDescBoolean = Bastore
-arrayStore FieldTyDescArray = Aastore
-arrayStore FieldTyDescDouble = Dastore
-arrayStore FieldTyDescFloat = Fastore
-arrayStore FieldTyDescInt = Iastore
-arrayStore FieldTyDescLong = Lastore
-arrayStore (FieldTyDescReference ReferenceTypeDescriptor) = Aastore
-
-arrayLoad : FieldTypeDescriptor -> Asm ()
-arrayLoad FieldTyDescByte                                = Baload
-arrayLoad FieldTyDescChar                                = Caload
-arrayLoad FieldTyDescShort                               = Saload
-arrayLoad FieldTyDescBoolean                             = Baload
-arrayLoad FieldTyDescArray                               = Aaload
-arrayLoad FieldTyDescDouble                              = Daload
-arrayLoad FieldTyDescFloat                               = Faload
-arrayLoad FieldTyDescInt                                 = Iaload
-arrayLoad FieldTyDescLong                                = Laload
-arrayLoad (FieldTyDescReference ReferenceTypeDescriptor) = Aaload
-
-typeDescToarrayElemDesc : TypeDescriptor -> FieldTypeDescriptor
-typeDescToarrayElemDesc VoidDescriptor = jerror $ "An array cannot have 'void' elements"
-typeDescToarrayElemDesc (FieldDescriptor desc) = desc
-
-loadArgsForLambdaTargetMethod : Nat -> Asm ()
-loadArgsForLambdaTargetMethod nArgs = case isLTE 1 nArgs of
-    Yes prf => sequence_ (map (Aload . cast) [0 .. (Nat.(-) nArgs 1)])
-    No contra => Pure ()
-
-createThunkForLambda : JMethodName -> List LVar -> (MethodName -> Asm ()) -> Asm ()
-createThunkForLambda caller args lambdaCode = do
-  let nArgs = List.length args
-  let cname = jmethClsName caller
-  lambdaIndex <- FreshLambdaIndex cname
-  let lambdaMethodName = sep "$" ["lambda", jmethName caller, show lambdaIndex]
-  let argNums = map locIndex args
-  sequence_ . map Aload $ argNums
-  invokeDynamic cname lambdaMethodName nArgs
-  lambdaCode lambdaMethodName
-
-createLambda : JMethodName -> ClassName -> MethodName -> Nat -> Asm ()
-createLambda (MkJMethodName cname fname) callerCname lambdaMethodName nArgs = do
-  let desc = sig nArgs
-  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName desc Nothing Nothing [] []
-  MethodCodeStart
-  loadArgsForLambdaTargetMethod nArgs
-  InvokeMethod InvokeStatic cname fname desc False -- invoke the target method
-  Areturn
-  MaxStackAndLocal (-1) (-1)
-  MethodCodeEnd
-
-createThunk : JMethodName -> JMethodName -> (List LVar) -> Asm ()
-createThunk caller@(MkJMethodName callerCname _) fname args = do
-  let nArgs = List.length args
-  let lambdaCode = \lambdaMethodName => Subroutine $ createLambda fname callerCname lambdaMethodName nArgs
-  createThunkForLambda caller args lambdaCode
-
-createParLambda : JMethodName -> ClassName -> MethodName -> Nat -> Asm ()
-createParLambda (MkJMethodName cname fname) callerCname lambdaMethodName nArgs = do
-  let desc = sig nArgs
-  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName desc Nothing Nothing [] []
-  MethodCodeStart
-  loadArgsForLambdaTargetMethod nArgs
-  InvokeMethod InvokeStatic cname fname desc False -- invoke the target method
-  Astore 1
-  Aload 1
-  InstanceOf idrisObjectType
-  CreateLabel "elseLabel"
-  Ifeq "elseLabel"
-  Aload 1
-  InvokeMethod InvokeStatic cname fname "(Ljava/lang/Object;)Ljava/lang/Object;" False
-  Areturn
-  LabelStart "elseLabel"
-  Frame FAppend 1 ["java/lang/Object"] 0 []
-  Aload 1
-  Areturn
-  MaxStackAndLocal (-1) (-1)
-  MethodCodeEnd
-
-createParThunk : JMethodName -> JMethodName -> (List LVar) -> Asm ()
-createParThunk caller@(MkJMethodName callerCname _) fname args = do
-  let nArgs = List.length args
-  let lambdaCode = \lambdaMethodName => Subroutine $ createParLambda fname callerCname lambdaMethodName nArgs
-  createThunkForLambda caller args lambdaCode
 
 addFrame : Asm ()
 addFrame = do
@@ -260,8 +145,7 @@ defaultConstructor cname parent = do
 invokeError : String -> Asm ()
 invokeError x = do
   Ldc $ StringConst x
-  InvokeMethod InvokeStatic (rtClassSig "Runtime") "error" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+  InvokeMethod InvokeStatic (rtClass "Runtime") "error" "(Ljava/lang/Object;)Ljava/lang/Object;" False
 
 getPrimitiveClass : String -> Asm ()
 getPrimitiveClass clazz = Field FGetStatic clazz "TYPE" "Ljava/lang/Class;"
-

@@ -6,6 +6,8 @@ modules = IdrisJvm.FFI
         , IdrisJvm.IO
         , IdrisJvm.System
         , Java.Util.Concurrent
+        , Java.Util.Function
+        , Java.Util.Stream
         , IdrisJvm.Effects
         , Java.Lang
         , Java.Util

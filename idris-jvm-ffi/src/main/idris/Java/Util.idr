@@ -2,8 +2,17 @@ module Java.Util
 
 import IdrisJvm.IO
 import Java.Lang
+import Java.Util.Stream
 
 %access public export
+
+namespace Collection
+
+  Collection : Type
+  Collection = javaInterface "java/util/Collection"
+
+  stream : Inherits Collection collection => collection -> JVM_IO JStream
+  stream collection = invokeInstance "stream" (Collection -> JVM_IO JStream) (believe_me collection)
 
 namespace Arrays
 
@@ -48,8 +57,6 @@ namespace Iterator
   Iterator : Type
   Iterator = javaInterface "java/util/Iterator"
 
-  Inherits Iterator Iterator where {}
-
   hasNext : Inherits Iterator that => that -> JVM_IO Bool
   hasNext itr = invokeInstance "hasNext" (Iterator -> JVM_IO Bool) (believe_me itr)
 
@@ -70,7 +77,7 @@ namespace JList
   JList : Type
   JList = javaInterface "java/util/List"
 
-  Inherits JList JList where {}
+  Inherits Collection JList where {}
 
   add : Inherits JList list => list -> a -> JVM_IO Bool
   add list item = invokeInstance "add" (JList -> Object -> JVM_IO Bool) (believe_me list) (believe_me item)
@@ -86,6 +93,7 @@ namespace ArrayList
   ArrayList : Type
   ArrayList = javaClass "java/util/ArrayList"
 
+  Inherits Collection ArrayList where {}
   Inherits JList ArrayList where {}
 
   new : JVM_IO ArrayList
@@ -115,16 +123,13 @@ namespace HashMap
   put : (Inherits Object key, Inherits Object value) => HashMap -> Maybe key -> Maybe value -> JVM_IO (Maybe Object)
   put this key value = invokeInstance "put" (HashMap -> Maybe Object -> Maybe Object -> JVM_IO (Maybe Object)) this (believe_me key) (believe_me value)
 
-
 namespace Objects
 
   ObjectsClass : JVM_NativeTy
   ObjectsClass = Class "java/util/Objects"
 
-  -- Respects inheritance so that this function can be called on all types
-  -- that extend java.lang.Object, which is everything.
-  toString : Inherits Object that => that -> String
-  toString obj = unsafePerformIO $ invokeStatic ObjectsClass "toString" (Object -> JVM_IO String) (believe_me obj)
+  toString : Inherits Object that => that -> JVM_IO String
+  toString obj = invokeStatic ObjectsClass "toString" (Object -> JVM_IO String) (believe_me obj)
 
-  isNull : Inherits Object that => that -> Bool
-  isNull obj = unsafePerformIO $ invokeStatic ObjectsClass "isNull" (Object -> JVM_IO Bool) (believe_me obj)
+  isNull : Inherits Object that => that -> JVM_IO Bool
+  isNull obj = invokeStatic ObjectsClass "isNull" (Object -> JVM_IO Bool) (believe_me obj)

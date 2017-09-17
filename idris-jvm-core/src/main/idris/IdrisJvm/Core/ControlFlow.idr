@@ -58,7 +58,7 @@ mutual
     addFrame
     Aload $ locIndex e
     ifExpr
-    InvokeMethod InvokeStatic (rtClassSig "Util") "equals" "(Ljava/lang/Object;Ljava/lang/Object;)Z" False
+    InvokeMethod InvokeStatic (rtClass "Util") "equals" "(Ljava/lang/Object;Ljava/lang/Object;)Z" False
     Ifeq nextLabel
     cgBody ret expr
     Goto $ ifEndLabel ifIndex
@@ -166,12 +166,12 @@ mutual
   switchConstructorExpr : Int -> Asm ()
   switchConstructorExpr varIndex = do
    Aload varIndex
-   InvokeMethod InvokeStatic (rtClassSig "Runtime") "constructorIndex" "(Ljava/lang/Object;)I" False
+   InvokeMethod InvokeStatic (rtClass "Runtime") "constructorIndex" "(Ljava/lang/Object;)I" False
 
   switchIntExpr : Int -> Asm ()
   switchIntExpr varIndex = do
     Aload varIndex
-    InvokeMethod InvokeStatic (rtClassSig "Util") "hash" "(Ljava/lang/Object;)I" False
+    InvokeMethod InvokeStatic (rtClass "Util") "hash" "(Ljava/lang/Object;)I" False
 
   isIntCase : SAlt -> Bool
   isIntCase (SConCase _ _ _ _ _)    = True

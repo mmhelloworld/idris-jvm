@@ -31,3 +31,7 @@ False
 [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 ["java.lang.String", "int", "byte", "char", "short", "boolean", "long", "float", "double"]
+"[olleh, dlrow]"
+"hello"
+"[hello, hello, hello]"
+15

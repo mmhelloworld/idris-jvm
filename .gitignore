@@ -5,6 +5,7 @@
 *.ibc
 
 # IDE
+.idea
 .settings/
 *.iml
 .classpath

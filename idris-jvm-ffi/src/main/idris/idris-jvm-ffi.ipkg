@@ -4,6 +4,7 @@ pkgs = effects
 
 modules = IdrisJvm.FFI
         , IdrisJvm.IO
+        , IdrisJvm.JvmImport
         , IdrisJvm.System
         , Java.Util.Concurrent
         , Java.Util.Function

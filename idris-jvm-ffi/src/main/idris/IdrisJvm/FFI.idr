@@ -99,6 +99,11 @@ javacall : (fname : JVM_FfiFn) -> (ty : Type) ->
            {auto fty : FTy FFI_JVM [] ty} -> ty
 javacall fname ty = foreign FFI_JVM fname ty
 
+%inline
+jcall : (fname : JVM_FfiFn) -> (ty : Type) ->
+           {fty : FTy FFI_JVM [] ty} -> ty
+jcall fname ty = foreign FFI_JVM fname ty
+
 javaClass : String -> Type
 javaClass = JVM_Native . Class
 
@@ -153,6 +158,10 @@ invokeInstance : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 invokeInstance method = javacall (Instance method)
 
 %inline
+jcallInstance : String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallInstance method ty fty = jcall (Instance method) ty {fty=fty}
+
+%inline
 getInstanceField : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 getInstanceField fieldName = javacall (GetInstanceField fieldName)
 
@@ -163,6 +172,10 @@ setInstanceField fieldName = javacall (SetInstanceField fieldName)
 %inline
 invokeStatic : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 invokeStatic klass method = javacall (Static klass method)
+
+%inline
+jcallStatic : JVM_NativeTy -> String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallStatic klass method ty fty = jcall (Static klass method) ty {fty=fty}
 
 %inline
 getStaticField : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty

@@ -177,6 +177,7 @@ jtypeElab EChar = charTyElab
 jtypeElab EInt = intTyElab
 jtypeElab EString = stringTyElab
 jtypeElab EDouble = doubleTyElab
+jtypeElab (EArray ety) = RApp (Var (NS (UN "JVM_Array") ["FFI", "IdrisJvm"])) (jtypeElab ety)
 jtypeElab EVoid = voidTyElab
 jtypeElab (EClass className) = RApp jvmNativeElab (RApp classRaw (classNameElab className))
 jtypeElab (EInterface className) = RApp jvmNativeElab (RApp interfaceElab (classNameElab className))

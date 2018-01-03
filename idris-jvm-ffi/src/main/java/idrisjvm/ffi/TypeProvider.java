@@ -22,7 +22,7 @@ public class TypeProvider {
     private static Stream<String> importMethods(String className) {
         try {
             Class<?> clazz = Class.forName(className, false, currentThread().getContextClassLoader());
-            return Arrays.stream(clazz.getDeclaredMethods())
+            return Arrays.stream(clazz.getMethods())
                     .filter(m -> isPublic(m.getModifiers()) && !m.isBridge() && !m.isSynthetic())
                     .map(TypeProvider::importMethod);
         } catch (ClassNotFoundException e) {

@@ -189,6 +189,9 @@ interface Inherits a b where {}
 
 Inherits a a where { }
 
+implicit subtyping : Inherits (JVM_Native t) (JVM_Native s) => JVM_Native s -> JVM_Native t
+subtyping = believe_me
+
 namespace Class
 
   ClassClass : JVM_NativeTy

@@ -44,6 +44,9 @@ Eq EType where
 
 data JvmFfiDesc = MkJvmFfiDesc InvType EType String (List EType)
 
+JvmFfiDescs : Type
+JvmFfiDescs = List JvmFfiDesc
+
 createArray : Nat -> EType -> EType
 createArray Z ty = ty
 createArray (S k) ty = EArray $ createArray k ty
@@ -77,9 +80,9 @@ parseArgs args = sequence $ parseEType <$> args
  - appropriate FFI call site.
 -}
 public export
-jvmImport : String -> List String -> IO (Provider (List JvmFfiDesc))
+jvmImport : String -> List String -> IO (Provider JvmFfiDescs)
 jvmImport cmd classNames = do
-    let args = unwords classNames
+    let args = unwords $ (\item => "\"" ++ item ++ "\"") <$> classNames
     let types = "jvm.types"
     system $ cmd ++ " " ++ args ++ " > " ++ types
     Right str <- readFile types
@@ -224,15 +227,18 @@ jinstance (MkJvmFfiDesc _ ret fname args) = do
   let f = RApp appFunctionName functionTy
   searchFty f
 
+decl syntax javaimport [cmd] [items] = %provide (jimports: JvmFfiDescs) with jvmImport cmd items
+
+term syntax java [className] [methodName] = (%runElab (j jimports className methodName))
+
 public export
-j : List JvmFfiDesc -> String -> String -> Elab ()
+j : JvmFfiDescs -> String -> String -> Elab ()
 j ffiDescs ty fname = do
     (methodName, args) <- argTypes
     maybe err gen $ findFfiDesc ty methodName args ffiDescs
   where
       err : Elab ()
-      err = fail [TextPart $ "Couldn't find JVM FFI function " ++ fname ++ " in " ++ ty ++ ": " ++
-              show (length ffiDescs)]
+      err = fail [TextPart $ "Couldn't find JVM FFI function " ++ fname ++ " in " ++ ty]
 
       gen : JvmFfiDesc -> Elab ()
       gen ffi@(MkJvmFfiDesc (JStatic _) _ _ _) = jstatic ffi
@@ -242,7 +248,7 @@ j ffiDescs ty fname = do
       argTypes = case filter (not . (== "")) $ Strings.split (== '(') fname of
         [methodName] => pure (methodName, Nothing)
         methodName :: rest :: _ => case Strings.split (== ')') rest of
-          [] => pure (methodName, Just [])
+          "" :: _ => pure (methodName, Just [])
           paramsStr :: _ =>
             either (\err => fail [TextPart err]) (\args => pure (methodName, Just args)) $ parseArgs $
               Strings.split (== ',') paramsStr

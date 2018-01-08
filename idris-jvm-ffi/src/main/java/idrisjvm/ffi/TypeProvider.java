@@ -2,13 +2,17 @@ package idrisjvm.ffi;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.lang.reflect.Modifier.isStatic;
+import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.toList;
 
 public class TypeProvider {
 
@@ -19,11 +23,18 @@ public class TypeProvider {
                 .forEach(System.out::println);
     }
 
-    private static Stream<String> importMethods(String className) {
+    private static Stream<String> importMethods(String classAndMethodNameStr) {
+        String[] classAndMethodNames = classAndMethodNameStr.split(" ");
+        String className = classAndMethodNames[0];
+        List<String> methodNames = classAndMethodNames.length > 1 ?
+                Arrays.stream(classAndMethodNames, 1, classAndMethodNames.length).collect(toList()) : emptyList();
+        Predicate<Method> methodNamePredicate = methodNames.isEmpty() ? m -> true :
+                m -> methodNames.contains(m.getName());
         try {
             Class<?> clazz = Class.forName(className, false, currentThread().getContextClassLoader());
             return Arrays.stream(clazz.getMethods())
-                    .filter(m -> isPublic(m.getModifiers()) && !m.isBridge() && !m.isSynthetic())
+                    .filter(m -> isPublic(m.getModifiers()) && !m.isBridge() && !m.isSynthetic() &&
+                        methodNamePredicate.test(m))
                     .map(TypeProvider::importMethod);
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);

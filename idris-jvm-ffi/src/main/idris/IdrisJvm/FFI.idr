@@ -162,6 +162,10 @@ jcallInstance : String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
 jcallInstance method ty fty = jcall (Instance method) ty {fty=fty}
 
 %inline
+jcallNew : (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallNew ty fty = jcall New ty {fty=fty}
+
+%inline
 getInstanceField : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 getInstanceField fieldName = javacall (GetInstanceField fieldName)
 
@@ -191,6 +195,11 @@ Inherits a a where { }
 
 implicit subtyping : Inherits (JVM_Native t) (JVM_Native s) => JVM_Native s -> JVM_Native t
 subtyping = believe_me
+
+implicit stringIsAnObject : String -> JVM_Native (Class "java/lang/Object")
+stringIsAnObject = believe_me
+
+decl syntax [sub] inherits [super] = Inherits (JVM_Native (super)) (JVM_Native (sub)) where {}
 
 namespace Class
 

@@ -7,7 +7,7 @@ import IdrisJvm.FFI
 
 %access public export
 
-data InvType = JStatic JVM_NativeTy | JInstance
+data InvType = JStatic JVM_NativeTy | JInstance | JConstructor
 
 -- Type for Elaborator Reflection to generate JVM FFI calls
 data EType = EBool
@@ -42,7 +42,8 @@ Eq EType where
   (EInterface i1) == (EInterface i2) = i1 == i2
   _ == _ = False
 
-data JvmFfiDesc = MkJvmFfiDesc InvType EType String (List EType)
+data JvmFfiDesc = MethodDesc InvType EType String (List EType)
+                | ConstructorDesc EType (List EType)
 
 JvmFfiDescs : Type
 JvmFfiDescs = List JvmFfiDesc
@@ -81,8 +82,8 @@ parseArgs args = sequence $ parseEType <$> args
 -}
 public export
 jvmImport : String -> List String -> IO (Provider JvmFfiDescs)
-jvmImport cmd classNames = do
-    let args = unwords $ (\item => "\"" ++ item ++ "\"") <$> classNames
+jvmImport cmd importList = do
+    let args = unwords $ (\item => "\"" ++ item ++ "\"") <$> importList
     let types = "jvm.types"
     system $ cmd ++ " " ++ args ++ " > " ++ types
     Right str <- readFile types
@@ -99,11 +100,15 @@ jvmImport cmd classNames = do
 
     parseJvmOutput : String -> Either String JvmFfiDesc
     parseJvmOutput desc = case filter (not . (== "")) $ Strings.split (== ',') desc of
+      "constructor" :: returns :: args => do
+        jtype <- parseEType returns
+        args <- parseArgs args
+        pure $ ConstructorDesc jtype args
       invTypeStr :: retStr :: mname :: args => do
         invType <- parseInvType invTypeStr
         jtype <- parseEType retStr
         args <- parseArgs args
-        pure $ MkJvmFfiDesc invType jtype mname args
+        pure $ MethodDesc invType jtype mname args
       _ => Left $ "Unable to parse JVM type provider output: " ++ desc
 
 
@@ -115,6 +120,9 @@ jcallStaticTTName = NS (UN "jcallStatic") jvmFfiNamespace
 
 jcallInstanceTTName : TTName
 jcallInstanceTTName = NS (UN "jcallInstance") jvmFfiNamespace
+
+jcallNewTTName : TTName
+jcallNewTTName = NS (UN "jcallNew") jvmFfiNamespace
 
 boolTyElab : Raw
 boolTyElab = Var (NS (UN "Bool") ["Bool", "Prelude"])
@@ -207,25 +215,23 @@ searchFty f = do
   focus fty
   search
 
-{-
- - Generates an FFI function call to invoke a Java static method with appropriate types for arguments and return type using
- - types stored in `ffiDescs` provided by the type provider function `jvmImport`
- -}
-jstatic : JvmFfiDesc -> Elab ()
-jstatic (MkJvmFfiDesc (JStatic ty) ret fname args) = do
-  functionTy <- jvmFunctionTyElab args ret
-  let cls = RApp classRaw (classNameElab $ nativeTyClassName ty)
-  let appInvokeStatic = RApp (Var jcallStaticTTName) cls
-  let appFunctionName = RApp appInvokeStatic $ RConstant (Str fname)
-  let f = RApp appFunctionName functionTy
-  searchFty f
-
-jinstance : JvmFfiDesc -> Elab ()
-jinstance (MkJvmFfiDesc _ ret fname args) = do
-  functionTy <- jvmFunctionTyElab args ret
-  let appFunctionName = RApp (Var jcallInstanceTTName) $ RConstant (Str fname)
-  let f = RApp appFunctionName functionTy
-  searchFty f
+gen : JvmFfiDesc -> Elab ()
+gen (MethodDesc (JStatic ty) ret fname args) = do
+    functionTy <- jvmFunctionTyElab args ret
+    let cls = RApp classRaw (classNameElab $ nativeTyClassName ty)
+    let appInvokeStatic = RApp (Var jcallStaticTTName) cls
+    let appFunctionName = RApp appInvokeStatic $ RConstant (Str fname)
+    let f = RApp appFunctionName functionTy
+    searchFty f
+gen (MethodDesc JInstance ret fname args) = do
+    functionTy <- jvmFunctionTyElab args ret
+    let appFunctionName = RApp (Var jcallInstanceTTName) $ RConstant (Str fname)
+    let f = RApp appFunctionName functionTy
+    searchFty f
+gen (ConstructorDesc ret args) = do
+    functionTy <- jvmFunctionTyElab args ret
+    let f = RApp (Var jcallNewTTName) functionTy
+    searchFty f
 
 decl syntax javaimport [cmd] [items] = %provide (jimports: JvmFfiDescs) with jvmImport cmd items
 
@@ -240,10 +246,6 @@ j ffiDescs ty fname = do
       err : Elab ()
       err = fail [TextPart $ "Couldn't find JVM FFI function " ++ fname ++ " in " ++ ty]
 
-      gen : JvmFfiDesc -> Elab ()
-      gen ffi@(MkJvmFfiDesc (JStatic _) _ _ _) = jstatic ffi
-      gen ffi@(MkJvmFfiDesc JInstance _ _ _) = jinstance ffi
-
       argTypes : Elab (String, Maybe (List EType))
       argTypes = case filter (not . (== "")) $ Strings.split (== '(') fname of
         [methodName] => pure (methodName, Nothing)
@@ -253,19 +255,27 @@ j ffiDescs ty fname = do
             either (\err => fail [TextPart err]) (\args => pure (methodName, Just args)) $ parseArgs $
               Strings.split (== ',') paramsStr
 
+      argsMatching : Maybe (List EType) -> List EType -> Bool
+      argsMatching callsiteArgs declaredArgs = maybe True (== declaredArgs) callsiteArgs
+
       findFfiDesc : String -> String -> Maybe (List EType) -> List JvmFfiDesc -> Maybe JvmFfiDesc
+
+      findFfiDesc className "<init>" args ffiDescs = find f ffiDescs where
+        f : JvmFfiDesc -> Bool
+        f (ConstructorDesc (EClass otherClassName) declaredArgs)
+            = className == otherClassName && argsMatching args declaredArgs
+        f _ = False
+
       findFfiDesc className methodName args ffiDescs = find f ffiDescs where
 
-        argsMatching : List EType -> Bool
-        argsMatching otherArgs = maybe True (== otherArgs) args
-
         f : JvmFfiDesc -> Bool
-        f (MkJvmFfiDesc (JStatic otherNativeTy) ret otherMethodName args)
-          = className == nativeTyClassName otherNativeTy && methodName == otherMethodName && argsMatching args
-        f (MkJvmFfiDesc JInstance ret otherMethodName (EString :: args)) =
-          className == "java/lang/String" && methodName == otherMethodName && argsMatching args
-        f (MkJvmFfiDesc JInstance ret otherMethodName (EClass otherClassName :: args)) =
-          className == otherClassName && methodName == otherMethodName && argsMatching args
-        f (MkJvmFfiDesc JInstance ret otherMethodName (EInterface otherClassName :: args)) =
-          className == otherClassName && methodName == otherMethodName && argsMatching args
+        f (MethodDesc (JStatic otherNativeTy) ret otherMethodName declaredArgs)
+          = className == nativeTyClassName otherNativeTy && methodName == otherMethodName
+                && argsMatching args declaredArgs
+        f (MethodDesc JInstance ret otherMethodName (EString :: declaredArgs)) =
+          className == "java/lang/String" && methodName == otherMethodName && argsMatching args declaredArgs
+        f (MethodDesc JInstance ret otherMethodName (EClass otherClassName :: declaredArgs)) =
+          className == otherClassName && methodName == otherMethodName && argsMatching args declaredArgs
+        f (MethodDesc JInstance ret otherMethodName (EInterface otherClassName :: declaredArgs)) =
+          className == otherClassName && methodName == otherMethodName && argsMatching args declaredArgs
         f _ = False

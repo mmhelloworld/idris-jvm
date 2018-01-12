@@ -1,5 +1,6 @@
 package idrisjvm.ffi;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
@@ -19,26 +20,43 @@ public class TypeProvider {
     public static void main(String[] args) {
         Arrays.stream(args)
                 .map(className -> className.replace('/', '.'))
-                .flatMap(TypeProvider::importMethods)
+                .flatMap(TypeProvider::importItems)
                 .forEach(System.out::println);
     }
 
-    private static Stream<String> importMethods(String classAndMethodNameStr) {
-        String[] classAndMethodNames = classAndMethodNameStr.split(" ");
-        String className = classAndMethodNames[0];
-        List<String> methodNames = classAndMethodNames.length > 1 ?
-                Arrays.stream(classAndMethodNames, 1, classAndMethodNames.length).collect(toList()) : emptyList();
-        Predicate<Method> methodNamePredicate = methodNames.isEmpty() ? m -> true :
-                m -> methodNames.contains(m.getName());
+    private static Stream<String> importItems(String importItemsStr) {
+        String[] imports = importItemsStr.split(" ");
+        String className = imports[0];
+
         try {
             Class<?> clazz = Class.forName(className, false, currentThread().getContextClassLoader());
-            return Arrays.stream(clazz.getMethods())
-                    .filter(m -> isPublic(m.getModifiers()) && !m.isBridge() && !m.isSynthetic() &&
-                        methodNamePredicate.test(m))
-                    .map(TypeProvider::importMethod);
+            List<String> importItems = getImportItems(imports);
+            Stream<String> constructors = importItems.contains("<init>") ? importContructors(clazz) : Stream.empty();
+            Stream<String> methods = importMethods(importItems, clazz);
+            return Stream.concat(methods, constructors);
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static List<String> getImportItems(String[] imports) {
+        return imports.length > 1 ?
+                Arrays.stream(imports, 1, imports.length).collect(toList()) : emptyList();
+    }
+
+    private static Stream<String> importContructors(Class<?> clazz) {
+        return Arrays.stream(clazz.getConstructors())
+                .filter(constructor -> !constructor.isSynthetic() && isPublic(constructor.getModifiers()))
+                .map(TypeProvider::importConstructor);
+    }
+
+    private static Stream<String> importMethods(List<String> methodNames, Class<?> clazz) {
+        Predicate<Method> methodNamePredicate = methodNames.isEmpty() ? m -> true :
+                m -> methodNames.contains(m.getName());
+        return Arrays.stream(clazz.getMethods())
+                .filter(m -> isPublic(m.getModifiers()) && !m.isBridge() && !m.isSynthetic() &&
+                    methodNamePredicate.test(m))
+                .map(TypeProvider::importMethod);
     }
 
     private static String importMethod(Method m) {
@@ -48,6 +66,19 @@ public class TypeProvider {
                 renderType(m.getReturnType()),
                 m.getName(),
                 args);
+    }
+
+    private static String importConstructor(Constructor c) {
+        String args = renderConstructorArgs(c);
+        return format("constructor,%s,%s",
+                renderType(c.getDeclaringClass()),
+                args);
+    }
+
+    private static String renderConstructorArgs(Constructor c) {
+        return Arrays.stream(c.getParameterTypes())
+                .map(TypeProvider::renderType)
+                .collect(joining(","));
     }
 
     private static String renderArgs(Method m) {

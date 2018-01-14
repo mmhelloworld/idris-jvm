@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-travis_long docker run -v $HOME/bin/idris-packages:/.stack-work/install/x86_64-linux/lts-9.1/8.0.2/share/x86_64-linux-ghc-8.0.2/idris-1.1.1/libs -v $PROJECT_ROOT:$PROJECT_ROOT -v $JAVA_HOME:/bin/jdk -v $HOME/bin/idris-jvm:/bin/idris-jvm -w `pwd` mmhelloworld/idris:1.1.1 idris "$@"
+travis_long docker run -v $HOME/bin/idris-packages:/.stack-work/install/x86_64-linux/lts-10.0/8.2.2/share/x86_64-linux-ghc-8.2.2/idris-1.2.0/libs -v $PROJECT_ROOT:$PROJECT_ROOT -v $JAVA_HOME:/bin/jdk -v $HOME/bin/idris-jvm:/bin/idris-jvm -w `pwd` mmhelloworld/idris:1.2.0 idris "$@"
 

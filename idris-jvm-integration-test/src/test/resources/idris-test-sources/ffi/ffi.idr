@@ -21,10 +21,13 @@ add _ x y = x + y
 exportedBoolToString : Bool -> String
 exportedBoolToString = show
 
-helloFromIdris : IdrisThread -> String -> JVM_IO String
-helloFromIdris this name = do
+helloFromIdris' : IdrisThread -> String -> JVM_IO String
+helloFromIdris' this name = do
   printLn "Hi "
   pure $ "Hello " ++ name
+
+helloFromIdris : IdrisThread -> String -> JVM_IO String
+helloFromIdris this name = helloFromIdris' this name
 
 Inherits Thread IdrisThread where {}
 
@@ -34,10 +37,13 @@ setName this name = invokeInstance "setName" (IdrisThread -> String -> JVM_IO ()
 getThreadName : IdrisThread -> JVM_IO String
 getThreadName = invokeInstance "getThreadName" (IdrisThread -> JVM_IO String)
 
-run : IdrisThread -> JVM_IO ()
-run this = do
+run' : IdrisThread -> JVM_IO ()
+run' this = do
   threadName <- getThreadName this
   printLn !(helloFromIdris this threadName)
+
+run : IdrisThread -> JVM_IO ()
+run this = run' this
 
 jmain : JVM_Array String -> JVM_IO ()
 jmain args = do

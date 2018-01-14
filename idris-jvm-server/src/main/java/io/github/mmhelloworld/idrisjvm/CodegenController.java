@@ -1,15 +1,15 @@
 package io.github.mmhelloworld.idrisjvm;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import IdrisJvm.Core.Assembler;
 import IdrisJvm.Core.IdrisToJavaNameConverter;
 import IdrisJvm.Core.export.Codegen;
 import IdrisJvm.IR.export.ExportIFace;
 import IdrisJvm.IR.export.SDecl;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.mmhelloworld.idrisjvm.model.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +24,9 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.List;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 import static org.objectweb.asm.Opcodes.ACC_STATIC;
@@ -50,30 +52,45 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
     public void compile(@RequestBody String[] args) {
         JsonFactory jsonfactory = new JsonFactory();
         jsonfactory.setCodec(mapper);
-        File source = getSourceFile(args);
+        List<String> argsList = stripArgs(asList(args));
+        File source = getSourceFile(argsList);
         try {
             JsonParser parser = jsonfactory.createParser(source);
             Assembler assembler = new Assembler();
-            if (parser.nextToken() != JsonToken.START_OBJECT) {
-                throw new IOException("Expected data to start with an Object");
-            }
-
-            while (parser.nextToken() != JsonToken.END_OBJECT) {
-                String fieldName = parser.getCurrentName();
-                if (fieldName.equals("codegen-info")) {
-                    processCodegenInfo(parser, assembler);
-                } else {
-                    parser.nextToken();
-                    parser.skipChildren();
-                }
-            }
+            codegen(parser, assembler);
             addMainMethod(assembler);
-            assembler.classCodeEnd(getOutputFile(args).getPath());
+            assembler.classCodeEnd(getOutputFile(argsList).getPath());
             parser.close();
         } catch (Exception e) {
             throw new IdrisCompilationException(e);
         }
+    }
 
+    private void requireJsonObject(JsonParser parser) throws IOException {
+        if (parser.nextToken() != JsonToken.START_OBJECT) {
+            throw new IOException("Expected data to start with an Object");
+        }
+    }
+
+    private void codegen(JsonParser parser, Assembler assembler) throws IOException {
+        requireJsonObject(parser);
+        while (parser.nextToken() != JsonToken.END_OBJECT) {
+            String fieldName = parser.getCurrentName();
+            if (fieldName.equals("codegen-info")) {
+                processCodegenInfo(parser, assembler);
+            } else {
+                parser.nextToken();
+                parser.skipChildren();
+            }
+        }
+    }
+
+    private List<String> stripArgs(List<String> args) {
+        if (args.get(0).equals("--interface")) {
+            return args.subList(1, args.size());
+        } else {
+            return args;
+        }
     }
 
     private void processCodegenInfo(final JsonParser parser, final Assembler assembler) throws IOException {
@@ -132,16 +149,18 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
         assembler.methodCodeEnd();
     }
 
-    private File getSourceFile(final String[] args) {
-        return getAbsoluteFile(args[0], getCurrentWorkingDirectory(args));
+    private File getSourceFile(final List<String> args) {
+        String sourceFileName = args.get(0);
+        return getAbsoluteFile(sourceFileName, getCurrentWorkingDirectory(args));
     }
 
-    private File getOutputFile(final String[] args) {
-        return getAbsoluteFile(args[2], getCurrentWorkingDirectory(args));
+    private File getOutputFile(final List<String> args) {
+        String outputFileName = args.get(2);
+        return getAbsoluteFile(outputFileName, getCurrentWorkingDirectory(args));
     }
 
-    private String getCurrentWorkingDirectory(final String[] args) {
-        return args[args.length - 1];
+    private String getCurrentWorkingDirectory(final List<String> args) {
+        return args.get(args.size() - 1);
     }
 
     private File getAbsoluteFile(String fileName, String cwd) {

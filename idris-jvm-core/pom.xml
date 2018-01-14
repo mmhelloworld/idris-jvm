@@ -71,8 +71,6 @@
                             <workingDirectory>${idris.srcdir}</workingDirectory>
                             <arguments>
                                 <argument>--interface</argument>
-                                <argument>--cg-opt</argument>
-                                <argument>--interface</argument>
                                 <argument>${codegen.type}</argument>
                                 <argument>${codegen.target}</argument>
                                 <argument>-p</argument>

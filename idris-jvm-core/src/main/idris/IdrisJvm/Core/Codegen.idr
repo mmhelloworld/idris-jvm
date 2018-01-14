@@ -54,10 +54,13 @@ generateMethod assembler decl@(SFun "{APPLY_0}" _ _ _) = do
 
 generateMethod assembler decl = generateMethod' assembler decl
 
-generateExport : Assembler -> ExportIFace -> JVM_IO ()
-generateExport assembler exportIFace = do
+generateExport' : Assembler -> ExportIFace -> JVM_IO ()
+generateExport' assembler exportIFace = do
   (_, _) <- runAsm [] assembler $ exportCode exportIFace
   pure ()
+
+generateExport : Assembler -> ExportIFace -> JVM_IO ()
+generateExport assembler exportIFace = generateExport' assembler exportIFace
 
 exports : FFI_Export FFI_JVM "IdrisJvm/Core/export/Codegen" []
 exports =

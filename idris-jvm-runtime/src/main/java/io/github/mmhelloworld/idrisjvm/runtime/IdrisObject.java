@@ -1,5 +1,7 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
+import java.util.Arrays;
+
 public class IdrisObject {
     public static final IdrisObject IDRIS_NO_ARG_CONSTRUCTOR_0 = new IdrisObject(0);
     public static final IdrisObject IDRIS_NO_ARG_CONSTRUCTOR_1 = new IdrisObject(1);
@@ -25,5 +27,13 @@ public class IdrisObject {
 
     public static Object getProperty(Object obj, int propertyIndex) {
         return ((IdrisObject)obj).getProperties()[propertyIndex];
+    }
+
+    @Override
+    public String toString() {
+        return "IdrisObject{" +
+                "constructorId=" + constructorId +
+                ", properties=" + Arrays.toString(properties) +
+                '}';
     }
 }

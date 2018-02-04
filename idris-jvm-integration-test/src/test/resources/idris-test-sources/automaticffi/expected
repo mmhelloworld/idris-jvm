@@ -1,0 +1,15 @@
+0
+23
+"2.5"
+"B"
+"property name is null or empty"
+Nothing
+java.lang.StringIndexOutOfBoundsException: String index out of range: -1
+Just "oobar"
+"oobar"
+java.lang.IllegalArgumentException: Illegal Capacity: -1
+java.lang.IndexOutOfBoundsException: Index: 0, Size: 0
+"world"
+1
+2
+34

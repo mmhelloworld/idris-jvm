@@ -1,6 +1,9 @@
 package io.github.mmhelloworld.idrisjvm.codegen.launcher;
 
 import org.springframework.http.HttpEntity;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.BufferedReader;
@@ -21,15 +24,23 @@ import java.util.concurrent.TimeUnit;
 import static java.lang.Integer.parseInt;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
-import static org.springframework.http.HttpMethod.POST;
 
 public class IdrisJvmCodegenLauncher {
-    private static final String IDRIS_JVM_HOME = System.getProperty("IDRIS_JVM_HOME", System.getProperty("user.home"));
+    private static final String IDRIS_JVM_HOME = Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
+        .orElseGet(() -> System.getProperty("IDRIS_JVM_HOME", System.getProperty("user.home")));
 
     private final RestTemplate restTemplate;
 
     public IdrisJvmCodegenLauncher() {
         restTemplate = new RestTemplate();
+        restTemplate.setErrorHandler(new DefaultResponseErrorHandler() {
+            @Override
+            public void handleError(ClientHttpResponse response) throws IOException {
+                if (response.getStatusText() != null) {
+                    System.err.println(response.getStatusText());
+                }
+            }
+        });
     }
 
     public static void main(String[] args) throws Exception {
@@ -86,7 +97,10 @@ public class IdrisJvmCodegenLauncher {
         List<String> endpointArgs = new ArrayList<>(Arrays.asList(args));
         endpointArgs.add(System.getProperty("user.dir"));
         int port = getPort().orElseThrow(() -> new RuntimeException("Idris JVM codegen server is not running"));
-        new RestTemplate().exchange("http://localhost:" + port, POST, new HttpEntity<>(endpointArgs), Void.class);
+        ResponseEntity<String> response = restTemplate.postForEntity("http://localhost:" + port, new HttpEntity<>(endpointArgs), String.class);
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            System.err.println(response.getBody());
+        }
     }
 
     private List<String> readFile(File f) throws IOException {

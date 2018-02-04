@@ -34,7 +34,8 @@ import static org.junit.Assert.assertThat;
 
 @RunWith(Parameterized.class)
 public class IdrisJvmTest {
-    private static final String IDRIS_JVM_HOME = getProperty("IDRIS_JVM_HOME", getProperty("user.home"));
+    private static final String IDRIS_JVM_HOME = Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
+            .orElseGet(() -> System.getProperty("IDRIS_JVM_HOME", System.getProperty("user.home")));
 
     private static File testOutputRootDir;
     private static String runtimeJarPath;

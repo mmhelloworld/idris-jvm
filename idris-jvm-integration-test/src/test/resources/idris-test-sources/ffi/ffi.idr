@@ -144,34 +144,34 @@ nullableToString obj = unsafePerformIO $ invokeStatic ObjectsClass "toString" (M
 equalsIgnoreCase : String -> Maybe String -> Bool
 equalsIgnoreCase str1 str2 = unsafePerformIO $ invokeInstance "equalsIgnoreCase" (String -> Maybe String -> JVM_IO Bool) str1 str2
 
-getName : Class -> String
-getName clazz = unsafePerformIO $ invokeInstance "getName" (Class -> JVM_IO String) clazz
+getName : JClass -> String
+getName clazz = unsafePerformIO $ invokeInstance "getName" (JClass -> JVM_IO String) clazz
 
-stringClassLit : Class
+stringClassLit : JClass
 stringClassLit = classLit "java/lang/String"
 
-intClassLit : Class
+intClassLit : JClass
 intClassLit = classLit "int"
 
-booleanClassLit : Class
+booleanClassLit : JClass
 booleanClassLit = classLit "boolean"
 
-byteClassLit : Class
+byteClassLit : JClass
 byteClassLit = classLit "byte"
 
-charClassLit : Class
+charClassLit : JClass
 charClassLit = classLit "char"
 
-shortClassLit : Class
+shortClassLit : JClass
 shortClassLit = classLit "short"
 
-longClassLit : Class
+longClassLit : JClass
 longClassLit = classLit "long"
 
-floatClassLit : Class
+floatClassLit : JClass
 floatClassLit = classLit "float"
 
-doubleClassLit : Class
+doubleClassLit : JClass
 doubleClassLit = classLit "double"
 
 lambdaTest1 : JVM_IO ()
@@ -251,8 +251,8 @@ main = do
   setStaticNumbers joneToTen -- Test setting a static field
   printLn !getStaticNumbers -- Test getting a static field
 
-  printLn $ getName <$> the (List Class) [ stringClassLit, intClassLit, byteClassLit, charClassLit, shortClassLit, booleanClassLit
-                        , longClassLit, floatClassLit, doubleClassLit ]
+  printLn $ getName <$> the (List JClass) [ stringClassLit, intClassLit, byteClassLit, charClassLit, shortClassLit,
+                            booleanClassLit, longClassLit, floatClassLit, doubleClassLit ]
 
   lambdaTest1
   lambdaTest2

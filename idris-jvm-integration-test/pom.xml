@@ -62,6 +62,13 @@
                                     <destFileName>idris-jvm-runtime.jar</destFileName>
                                     <outputDirectory>${deploy.dir}</outputDirectory>
                                 </artifactItem>
+                                <artifactItem>
+                                    <artifactId>idris-jvm-server</artifactId>
+                                    <groupId>io.github.mmhelloworld</groupId>
+                                    <version>${project.version}</version>
+                                    <destFileName>idris-jvm-codegen-launcher.jar</destFileName>
+                                    <outputDirectory>${deploy.dir}/codegen</outputDirectory>
+                                </artifactItem>
                             </artifactItems>
                         </configuration>
                     </execution>

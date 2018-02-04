@@ -83,6 +83,24 @@ printHeader header = do
 pythag : Int -> List (Int, Int, Int)
 pythag max = [(x, y, z) | z <- [1..max], y <- [1..z], x <- [1..y],
                           x * x + y * y == z * z]
+
+compareMaybe : (a, Maybe Int, b) -> (a, Maybe Int, b) -> Ordering
+compareMaybe (_, Just c1, _) (_, Just c2, _) = compare c1 c2
+compareMaybe (_, Just _, _) (_, Nothing, _)  = LT
+compareMaybe (_, Nothing, _) (_, Just _, _)  = GT
+compareMaybe _ _                             = EQ
+
+maybeTest1 : Maybe String -> JVM_IO ()
+maybeTest1 s = putStrLn (maybe "nothing" id s)
+
+maybeTest2 : Maybe String -> JVM_IO ()
+maybeTest2 Nothing = putStrLn "nothing"
+maybeTest2 _       = putStrLn "just"
+
+maybeTest3 : Maybe String -> JVM_IO ()
+maybeTest3 (Just _) = putStrLn "just"
+maybeTest3 _        = putStrLn "nothing"
+
 main : JVM_IO ()
 main = do
   print "Hello "
@@ -174,3 +192,9 @@ main = do
   vectArr2d <- vectToArray2d (the (Vect _ (Vect _ Int)) [[3, 33], [4, 44], [5, 55]])
   printLn !(Arrays.deepToString vectArr2d)
   -- Array tests end
+
+  -- Maybe tests
+  maybeTest1 (if Strings.length "foo" == 0 then Nothing else Just "foo")
+  maybeTest2 (if Strings.length "" == 0 then Nothing else Just "foobar")
+  maybeTest3 (if Strings.length "bar" == 0 then Nothing else Just "bar")
+  printLn $ sortBy compareMaybe $ [("", Just 10, ""), ("", Just 23, ""), ("", Nothing, ""), ("", Just 15, "")]

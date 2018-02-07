@@ -20,21 +20,22 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
 import static java.lang.Boolean.parseBoolean;
-import static java.lang.Integer.parseInt;
 import static java.lang.System.getProperty;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.stream.Collectors.toList;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.junit.Assert.assertThat;
 
 @RunWith(Parameterized.class)
 public class IdrisJvmTest {
-    private static final String IDRIS_JVM_HOME = getProperty("IDRIS_JVM_HOME", getProperty("user.home"));
+    private static final String IDRIS_JVM_HOME = Optional.ofNullable(System.getProperty("IDRIS_JVM_HOME"))
+            .orElseGet(() -> Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
+                    .orElseGet(() -> System.getProperty("user.home")));
 
     private static File testOutputRootDir;
     private static String runtimeJarPath;
@@ -96,14 +97,14 @@ public class IdrisJvmTest {
         idrisCompilerProcessBuilder.redirectOutput(Redirect.to(compilerOut));
 
         Process idrisCompiler = idrisCompilerProcessBuilder.start();
-        final boolean hasCompilerExited = idrisCompiler.waitFor(3, TimeUnit.MINUTES);
+        final boolean hasCompilerExited = idrisCompiler.waitFor(2, MINUTES);
         if (!hasCompilerExited) {
             Files.copy(compilerOut.toPath(), System.err);
-            throw new RuntimeException("Compilation timed out!");
+            throw new RuntimeException("Compilation timed out. Log file is available at " + compilerOut.getPath());
         }
         if (idrisCompiler.exitValue() != 0) {
             Files.copy(compilerOut.toPath(), System.err);
-            throw new RuntimeException("Compilation error!");
+            throw new RuntimeException("Compilation error. Log file is available at " + compilerOut.getPath());
         }
     }
 
@@ -113,22 +114,14 @@ public class IdrisJvmTest {
         jvmProcessBuilder.redirectErrorStream(true);
         jvmProcessBuilder.redirectOutput(Redirect.to(jvmOut));
         Process jvm = jvmProcessBuilder.start();
-        final boolean hasJvmExited = jvm.waitFor(2, TimeUnit.MINUTES);
+        final boolean hasJvmExited = jvm.waitFor(2, MINUTES);
         if (!hasJvmExited) {
             Files.copy(jvmOut.toPath(), System.err);
-            throw new RuntimeException("JVM timed out!");
+            throw new RuntimeException("JVM timed out. Log file is available at " + jvmOut.getPath());
         }
         if (jvm.exitValue() != 0) {
             Files.copy(jvmOut.toPath(), System.err);
-            throw new RuntimeException("Runtime error!");
-        }
-    }
-
-    private static Optional<Integer> getPort() {
-        try {
-            return Optional.of(parseInt(readFile(getPortFile()).get(0)));
-        } catch (IOException e) {
-            return Optional.empty();
+            throw new RuntimeException("Runtime error. Log file is available at " + jvmOut.getPath());
         }
     }
 

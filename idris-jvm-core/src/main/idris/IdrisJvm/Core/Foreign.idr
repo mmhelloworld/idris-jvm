@@ -21,6 +21,7 @@ data JForeign = JStatic String String
               | JArrayLength
               | JClassLiteral String
               | JLambda String String
+              | JInstanceOf String
 
 javaToIdris : TypeDescriptor -> Asm ()
 javaToIdris (FieldDescriptor FieldTyDescBoolean) =
@@ -35,10 +36,6 @@ javaToIdris (FieldDescriptor FieldTyDescLong)    = boxLong
 javaToIdris (FieldDescriptor FieldTyDescFloat)   = do F2d; boxDouble
 javaToIdris (FieldDescriptor FieldTyDescDouble)  = boxDouble
 javaToIdris VoidDescriptor                       = Aconstnull
-javaToIdris (FieldDescriptor (FieldTyDescReference NullableStrDesc)) =
-  InvokeMethod InvokeStatic (rtClass "Util") "nullableRefToMaybe" "(Ljava/lang/Object;)Ljava/lang/Object;" False
-javaToIdris (FieldDescriptor (FieldTyDescReference (NullableRefDesc _))) =
-  InvokeMethod InvokeStatic (rtClass "Util") "nullableRefToMaybe" "(Ljava/lang/Object;)Ljava/lang/Object;" False
 javaToIdris _                                    = pure ()
 
 javaReturn : TypeDescriptor -> Asm ()
@@ -76,12 +73,8 @@ idrisDescToJava (FieldDescriptor FieldTyDescFloat)
        InvokeMethod InvokeVirtual "java/lang/Double" "floatValue" "()F" False
 idrisDescToJava (FieldDescriptor FieldTyDescDouble) = do Checkcast "java/lang/Double"; unboxDouble
 idrisDescToJava (FieldDescriptor (FieldTyDescReference (IdrisExportDesc _))) = pure () -- converted using factory method on the exported type
-idrisDescToJava (FieldDescriptor (FieldTyDescReference NullableStrDesc)) =
-  do InvokeMethod InvokeStatic (rtClass "Util") "maybeToNullableRef" "(Ljava/lang/Object;)Ljava/lang/Object;" False
-     Checkcast "java/lang/String"
-idrisDescToJava (FieldDescriptor (FieldTyDescReference (NullableRefDesc cname))) = do
-  InvokeMethod InvokeStatic (rtClass "Util") "maybeToNullableRef" "(Ljava/lang/Object;)Ljava/lang/Object;" False
-  checkcast cname
+idrisDescToJava (FieldDescriptor (FieldTyDescReference NullableStrDesc)) = Checkcast "java/lang/String"
+idrisDescToJava (FieldDescriptor (FieldTyDescReference (NullableRefDesc cname))) = checkcast cname
 idrisDescToJava (FieldDescriptor (FieldTyDescReference refTy)) = checkcast $ refTyClassName refTy
 idrisDescToJava VoidDescriptor = pure ()
 idrisDescToJava ty = jerror $ "unknown type: " ++ show ty
@@ -133,6 +126,7 @@ mutual
 fdescTypeDescriptor : FDesc -> TypeDescriptor
 fdescTypeDescriptor (FCon "JVM_Unit") = VoidDescriptor
 fdescTypeDescriptor (FIO t) = fdescTypeDescriptor t
+fdescTypeDescriptor (FApp "JVM_ThrowableT" [_, desc]) = ThrowableDescriptor $ fdescTypeDescriptor desc
 fdescTypeDescriptor fdesc = FieldDescriptor $ fdescFieldDescriptor fdesc
 
 isExportIO : FDesc -> Bool
@@ -170,18 +164,22 @@ parseDescriptor returns ffi argsDesc = tryParseStaticMethodDescriptor returns ff
   unsupportedDescriptor returns ffiDesc args =
       jerror $ "Unsupported descriptor: " ++ show ffiDesc ++ ", returns: " ++ show returns ++ ", args: " ++ show args
 
+  tryParseInstanceOfDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
+  tryParseInstanceOfDescriptor returns (FApp "InstanceOf" [FStr cname]) argsDesc = JInstanceOf cname
+  tryParseInstanceOfDescriptor returns ffi argsDesc = unsupportedDescriptor returns ffi argsDesc
+
   tryParseLambdaDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
   tryParseLambdaDescriptor returns ffiDesc@(FApp ffi [FApp nativeTy [FStr cname], FStr interfaceMethodName]) argsDesc
     = if ffi == "Lambda" && nativeTy == "Interface"
         then JLambda cname interfaceMethodName
-        else unsupportedDescriptor returns ffiDesc argsDesc
-  tryParseLambdaDescriptor returns ffi argsDesc = unsupportedDescriptor returns ffi argsDesc
+        else tryParseInstanceOfDescriptor returns ffiDesc argsDesc
+  tryParseLambdaDescriptor returns ffi argsDesc = tryParseInstanceOfDescriptor returns ffi argsDesc
 
   tryParseClassLiteralDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
   tryParseClassLiteralDescriptor returns ffiDesc@(FApp ffi [FStr cname]) argsDesc
     = if ffi == "ClassLiteral"
         then JClassLiteral cname
-        else unsupportedDescriptor returns ffiDesc argsDesc
+        else tryParseLambdaDescriptor returns ffiDesc argsDesc
   tryParseClassLiteralDescriptor returns ffi argsDesc = tryParseLambdaDescriptor returns ffi argsDesc
 
   tryParseArrayLengthDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
@@ -206,16 +204,21 @@ parseDescriptor returns ffi argsDesc = tryParseStaticMethodDescriptor returns ff
 
   tryParseConstructorDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
   tryParseConstructorDescriptor returns ffiDesc@(FCon ffi) argsDesc
-    = if ffi == "New"
-        then case fdescRefDescriptor returns of
-                ClassDesc cname    => JNew cname
-                InterfaceDesc _    => jerror $ "Invalid FFI descriptor for constructor. " ++
-                                          "A constructor can't return an interface type. "
-                ArrayDesc _        => jerror "No constructors for array types"
-                IdrisExportDesc _  => jerror "Cannot invoke constructor of Idris exported type"
-                NullableStrDesc    => jerror "A constructor cannot return a nullable string"
-                NullableRefDesc _  => jerror "A constructor cannot return a nullable reference"
-        else tryParseNewArrayDescriptor returns ffiDesc argsDesc
+    = if ffi == "New" then
+        case fdescTypeDescriptor returns of
+            (FieldDescriptor (FieldTyDescReference (ClassDesc cname)))    => JNew cname
+            (ThrowableDescriptor (FieldDescriptor (FieldTyDescReference (ClassDesc cname)))) => JNew cname
+            (FieldDescriptor (FieldTyDescReference (InterfaceDesc _)))    =>
+                jerror $ "Invalid FFI descriptor for constructor. A constructor can't return an interface type. "
+            (FieldDescriptor (FieldTyDescReference (ArrayDesc _)))        => jerror "No constructors for array types"
+            (FieldDescriptor (FieldTyDescReference (IdrisExportDesc _)))  =>
+                jerror "Cannot invoke constructor of Idris exported type"
+            (FieldDescriptor (FieldTyDescReference (NullableStrDesc)))    =>
+                jerror "A constructor cannot return a nullable string"
+            (FieldDescriptor (FieldTyDescReference (NullableRefDesc _)))  =>
+                jerror "A constructor cannot return a nullable reference"
+        else
+            tryParseNewArrayDescriptor returns ffiDesc argsDesc
   tryParseConstructorDescriptor returns ffi argsDesc = tryParseNewArrayDescriptor returns ffi argsDesc
 
   tryParseSetInstanceFieldDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
@@ -402,6 +405,16 @@ createWrapperForThunkLambda (MkJMethodName cname fname) callerCname lambdaMethod
   MaxStackAndLocal (-1) (-1)
   MethodCodeEnd
 
+createLambdaWrapper : ClassName -> MethodName -> Nat -> Asm () -> Asm ()
+createLambdaWrapper callerCname lambdaMethodName nArgs body = do
+  let desc = sig nArgs
+  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName desc Nothing Nothing [] []
+  MethodCodeStart
+  body
+  Areturn
+  MaxStackAndLocal (-1) (-1)
+  MethodCodeEnd
+
 createWrapperForJavaLambda : ClassName -> MethodName -> List FieldTypeDescriptor -> TypeDescriptor -> Asm ()
 createWrapperForJavaLambda callerCname lambdaMethodName argDescs returnDesc = do
     let objectDesc = FieldTyDescReference $ ClassDesc "java/lang/Object"
@@ -437,6 +450,12 @@ createThunk caller@(MkJMethodName callerCname _) fname args = do
   let nArgs = List.length args
   let lambdaCode = \lambdaMethodName => Subroutine $ createWrapperForThunkLambda fname callerCname lambdaMethodName nArgs
   createLambdaForThunk caller args lambdaCode
+
+createExceptionHandlerThunk : JMethodName -> List (FieldTypeDescriptor, LVar) -> Asm () -> Asm ()
+createExceptionHandlerThunk caller@(MkJMethodName callerCname _) argsWithTypes body = do
+  let nArgs = List.length argsWithTypes
+  let lambdaCode = \lambdaMethodName => Subroutine $ createLambdaWrapper callerCname lambdaMethodName nArgs body
+  createLambdaForThunk caller (snd <$> argsWithTypes) lambdaCode
 
 createJvmFunctionalObject : LVar -> JMethodName -> JMethodName -> FDesc -> FDesc -> Asm ()
 createJvmFunctionalObject idrisFunction caller@(MkJMethodName callerCname _) interfaceMethod interfaceFnTy lambdaTy  = do

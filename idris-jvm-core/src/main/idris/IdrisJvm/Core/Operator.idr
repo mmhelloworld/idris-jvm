@@ -513,6 +513,8 @@ cgOp LStrRev [var] = cgOpLStrRev var
 
 cgOp LStrLen [var] = cgOpLStrLen var
 
+cgOp LStrLt [l, r] = compareObj "stringLessThan" l r
+
 cgOp LStrHead [var] = cgOpLStrHead var
 
 cgOp LStrIndex [string, index] = cgOpLStrIndex string index

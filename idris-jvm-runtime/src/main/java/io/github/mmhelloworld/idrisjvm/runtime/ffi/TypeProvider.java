@@ -1,7 +1,12 @@
-package idrisjvm.ffi;
+package io.github.mmhelloworld.idrisjvm.runtime.ffi;
 
+import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
@@ -9,19 +14,30 @@ import java.util.stream.Stream;
 
 import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
+import static java.lang.reflect.Modifier.isFinal;
 import static java.lang.reflect.Modifier.isPublic;
 import static java.lang.reflect.Modifier.isStatic;
 import static java.util.Collections.emptyList;
+import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 
 public class TypeProvider {
 
-    public static void main(String[] args) {
-        Arrays.stream(args)
+    private static final String INSTANCE = "i";
+    private static final String STATIC = "s";
+    private static final String SETTER = "s";
+    private static final String GETTER = "g";
+    private static final String CONSTRUCTOR = "c";
+    private static final String CLASS = "c";
+    private static final String INTERFACE = "i";
+
+    public static void main(String[] args) throws IOException {
+        Iterable<String> lines = Arrays.stream(args, 1, args.length)
                 .map(className -> className.replace('/', '.'))
-                .flatMap(TypeProvider::importItems)
-                .forEach(System.out::println);
+                .flatMap(TypeProvider::importItems)::iterator;
+        Path outputFilePath = Paths.get(args[0]);
+        Files.write(outputFilePath, lines);
     }
 
     private static Stream<String> importItems(String importItemsStr) {
@@ -31,9 +47,10 @@ public class TypeProvider {
         try {
             Class<?> clazz = Class.forName(className, false, currentThread().getContextClassLoader());
             List<String> importItems = getImportItems(imports);
-            Stream<String> constructors = importItems.contains("<init>") ? importContructors(clazz) : Stream.empty();
+            Stream<String> constructors = importItems.contains("<init>") ? importConstructors(clazz) : Stream.empty();
             Stream<String> methods = importMethods(importItems, clazz);
-            return Stream.concat(methods, constructors);
+            Stream<String> fields = importFields(importItems, clazz);
+            return Stream.of(methods, constructors, fields).flatMap(identity());
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
@@ -44,7 +61,15 @@ public class TypeProvider {
                 Arrays.stream(imports, 1, imports.length).collect(toList()) : emptyList();
     }
 
-    private static Stream<String> importContructors(Class<?> clazz) {
+    private static Stream<String> importFields(List<String> fieldNames, Class<?> clazz) {
+        Predicate<Field> fieldNamePredicate = fieldNames.isEmpty() ? m -> true :
+                f -> fieldNames.contains(f.getName());
+        return Arrays.stream(clazz.getFields())
+                .filter(f -> isPublic(f.getModifiers()) && !f.isSynthetic() && fieldNamePredicate.test(f))
+                .flatMap(TypeProvider::importField);
+    }
+
+    private static Stream<String> importConstructors(Class<?> clazz) {
         return Arrays.stream(clazz.getConstructors())
                 .filter(constructor -> !constructor.isSynthetic() && isPublic(constructor.getModifiers()))
                 .map(TypeProvider::importConstructor);
@@ -55,8 +80,40 @@ public class TypeProvider {
                 m -> methodNames.contains(m.getName());
         return Arrays.stream(clazz.getMethods())
                 .filter(m -> isPublic(m.getModifiers()) && !m.isBridge() && !m.isSynthetic() &&
-                    methodNamePredicate.test(m))
+                        methodNamePredicate.test(m))
                 .map(TypeProvider::importMethod);
+    }
+
+    private static Stream<String> importField(Field f) {
+        String getterArgs = isStatic(f.getModifiers()) ? "" : renderType(f.getDeclaringClass());
+        String getter = format("%s,%s,%s,%s",
+                renderFieldType(f, false),
+                renderType(f.getType()),
+                f.getName(),
+                getterArgs);
+        if (!isFinal(f.getModifiers())) {
+            String setterArgs = isStatic(f.getModifiers())
+                    ? renderType(f.getType())
+                    : format("%s,%s", renderType(f.getDeclaringClass()), renderType(f.getType()));
+            String setter = format("%s,%s,%s,%s",
+                    renderFieldType(f, true),
+
+                    // Setters always return void
+                    renderType(void.class),
+
+                    f.getName(),
+                    setterArgs);
+            return Stream.of(getter, setter);
+        } else {
+            return Stream.of(getter);
+        }
+    }
+
+    private static String renderFieldType(Field field, boolean isSetter) {
+        boolean isStatic = isStatic(field.getModifiers());
+        String itemCategoryPrefix = format("%sf%s", isStatic ? STATIC : INSTANCE, isSetter ? SETTER : GETTER);
+        return isStatic ? format("%s %s", itemCategoryPrefix, renderType(field.getDeclaringClass()))
+                : itemCategoryPrefix;
     }
 
     private static String importMethod(Method m) {
@@ -70,7 +127,8 @@ public class TypeProvider {
 
     private static String importConstructor(Constructor c) {
         String args = renderConstructorArgs(c);
-        return format("constructor,%s,%s",
+        return format("%s,%s,%s",
+                CONSTRUCTOR,
                 renderType(c.getDeclaringClass()),
                 args);
     }
@@ -113,16 +171,16 @@ public class TypeProvider {
     }
 
     private static String renderNonPrimitiveType(Class<?> type) {
-        String interfaceOrClass = type.isInterface() ? "interface" : "class";
+        String interfaceOrClass = type.isInterface() ? INTERFACE : CLASS;
         return format("%s %s", interfaceOrClass, type.getName().replace('.', '/'));
     }
 
     private static String renderMethodType(Method m) {
-        return isStatic(m.getModifiers()) ? renderStatic(m) : "instance";
+        return isStatic(m.getModifiers()) ? renderStatic(m) : INSTANCE;
     }
 
     private static String renderStatic(Method m) {
-        return format("static %s", renderType(m.getDeclaringClass()));
+        return format("%s %s", STATIC, renderType(m.getDeclaringClass()));
     }
 
 

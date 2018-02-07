@@ -1,4 +1,4 @@
-module IdrisJvm.Codegen.ControlFlow
+module IdrisJvm.Core.ControlFlow
 
 import IdrisJvm.Core.Asm
 import IdrisJvm.Core.Common
@@ -43,17 +43,36 @@ mutual
 
   cgIf : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> List SAlt -> Asm ()
   cgIf ret cgBody e alts = do
-    ifIndex <- FreshIfIndex
-    let ifExpr = ifCasesWithLbls ifIndex alts
-    let fallbackLabels = drop 1 ((\(lbl, _, _) => lbl) <$> ifExpr) ++ [ifEndLabel ifIndex]
-    sequence_ $ CreateLabel . (\(lbl, _, _) => lbl) <$> ifExpr
-    CreateLabel $ ifEndLabel ifIndex
-    sequence_ $ (uncurry $ cgIfCase ifIndex ret cgBody e) <$> zip fallbackLabels ifExpr
-    LabelStart (ifEndLabel ifIndex)
-    Frame FSame 0 [] 0 []
+       ifIndex <- FreshIfIndex
+       let ifExpr = ifCasesWithLbls ifIndex alts
+       let fallbackLabels = drop 1 ((\(lbl, _, _) => lbl) <$> ifExpr) ++ [ifEndLabel ifIndex]
+       sequence_ $ CreateLabel . (\(lbl, _, _) => lbl) <$> ifExpr
+       CreateLabel $ ifEndLabel ifIndex
+       sequence_ $ gen ifIndex ret cgBody e <$> zip fallbackLabels ifExpr
+       LabelStart (ifEndLabel ifIndex)
+       Frame FSame 0 [] 0 []
+     where
+        gen : Nat
+           -> Lazy (Asm ())
+           -> (Lazy (Asm ()) -> SExp -> Asm ())
+           -> LVar
+           -> (String, String, Maybe (Asm ()), SAlt)
+           -> Asm ()
+        gen ifIndex ret cgBody e (nextLabel, label, ifExpr, expr)
+          = maybe (cgElseCase ifIndex ret cgBody e nextLabel label expr)
+                (\condition => cgIfElseIfCase ifIndex ret cgBody e nextLabel label condition expr)
+                ifExpr
 
-  cgIfCase : Nat -> Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> String -> (String, Maybe (Asm ()), SAlt) -> Asm ()
-  cgIfCase ifIndex ret cgBody e nextLabel (label, Just ifExpr, SConstCase _ expr) = do
+  cgIfElseIfCase : Nat
+                -> Lazy (Asm ())
+                -> (Lazy (Asm ()) -> SExp -> Asm ())
+                -> LVar
+                -> String
+                -> String
+                -> Asm ()
+                -> SAlt
+                -> Asm ()
+  cgIfElseIfCase ifIndex ret cgBody e nextLabel label ifExpr (SConstCase _ expr) = do
     LabelStart label
     addFrame
     Aload $ locIndex e
@@ -63,11 +82,17 @@ mutual
     cgBody ret expr
     Goto $ ifEndLabel ifIndex
 
-  cgIfCase ifIndex ret cgBody _ _ (label, Nothing, SDefaultCase expr) = do
+  cgElseCase : Nat
+          -> Lazy (Asm ())
+          -> (Lazy (Asm ()) -> SExp -> Asm ())
+          -> LVar
+          -> String
+          -> String
+          -> SAlt
+          -> Asm ()
+  cgElseCase ifIndex ret cgBody _ _ label (SDefaultCase expr) = do
     cgCase ret cgBody label expr
     Goto $ ifEndLabel ifIndex
-
-  cgIfCase _ _ _ _ _ _ = invokeError "Unexpected if expression"
 
   cgCase : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> Label -> SExp -> Asm ()
   cgCase ret cgBody label expr = do
@@ -216,3 +241,42 @@ mutual
     constCaseExpr VoidType = jerror "Constant VoidType cannot be compiled to 'if' yet"
     constCaseExpr Forgot = jerror "Constant Forgot cannot be compiled to 'if' yet"
   ifCaseExpr _ = Nothing
+
+cgIfElse : Lazy (Asm ())
+        -> (Lazy (Asm ()) -> SExp -> Asm ())
+        -> LVar
+        -> (Label -> Asm ())
+        -> Maybe Int
+        -> SExp
+        -> SExp
+        -> Asm ()
+cgIfElse ret cgBody e condition valueStore case1 case2 = do
+    ifIndex <- FreshIfIndex
+    let ifLabel = ifLabelName ifIndex 0
+    let elseLabel = ifLabelName ifIndex 1
+    let endLabel = ifEndLabel ifIndex
+    CreateLabel ifLabel
+    CreateLabel elseLabel
+    CreateLabel endLabel
+    Aload $ locIndex e
+    condition elseLabel
+    LabelStart ifLabel
+    maybe (pure ()) store valueStore
+    cgBody ret case1
+    Goto endLabel
+    LabelStart elseLabel
+    addFrame
+    cgBody ret case2
+    LabelStart endLabel
+    Frame FSame 0 [] 0 []
+  where
+    store : Int -> Asm ()
+    store loc = do
+       Aload $ locIndex e
+       Astore loc
+
+cgIfNonNull : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> Int -> SExp -> SExp -> Asm ()
+cgIfNonNull ret cgBody e loc ifExp elseExp = cgIfElse ret cgBody e Ifnull (Just loc) ifExp elseExp
+
+cgIfNull : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()
+cgIfNull ret cgBody e ifExp elseExp = cgIfElse ret cgBody e Ifnonnull Nothing ifExp elseExp

@@ -33,6 +33,22 @@ public class Util {
         return (int) s;
     }
 
+    public static Object throwable(Thunk computation) {
+        try {
+            return right(computation.call());
+        } catch (Throwable t) {
+            return left(t);
+        }
+    }
+
+    private static IdrisObject right(Object value) {
+        return new IdrisObject(1, new Object[] {value});
+    }
+
+    private static IdrisObject left(Object value) {
+        return new IdrisObject(0, new Object[] {value});
+    }
+
     public static Object nullableRefToMaybe(Object ref) {
         return ref == null ? IDRIS_NO_ARG_CONSTRUCTOR_0 : new IdrisObject(1, new Object[]{ref});
     }
@@ -65,10 +81,9 @@ public class Util {
         } else if (a instanceof BigInteger && b instanceof Integer) {
             return a.equals(BigInteger.valueOf((Integer) b));
         } else if (a instanceof Integer && b instanceof BigInteger) {
-            return equals(b, a);
+            return b.equals(BigInteger.valueOf((Integer)a));
         } else {
-            throw new RuntimeException(
-                format("Comparing incompatible types: %s (%s) and %s (%s)", a, a.getClass(), b, b.getClass()));
+            return Objects.equals(a, b);
         }
     }
 
@@ -133,6 +148,9 @@ public class Util {
         return boolToInt(asInt(m) >= asInt(n));
     }
 
+    public static Object stringLessThan(Object m, Object n) {
+        return boolToInt(((String)m).compareTo((String)n) < 0);
+    }
 
     public static Object uintLessThan(Object m, Object n) {
         return boolToInt(Integer.compareUnsigned(asInt(m), asInt(n)) < 0);

@@ -20,6 +20,15 @@ data JVM_NativeTy = Class String
 data JVM_Native  : JVM_NativeTy -> Type where
   MkJVMNative : (ty : JVM_NativeTy) -> JVM_Native ty
 
+ThrowableClass : JVM_NativeTy
+ThrowableClass = Class "java/lang/Throwable"
+
+Throwable : Type
+Throwable = JVM_Native ThrowableClass
+
+JVM_Throwable : Type -> Type
+JVM_Throwable t = Either Throwable t
+
 mutual
   data JVM_FfiFn = Static JVM_NativeTy String
                  | GetStaticField JVM_NativeTy String
@@ -37,6 +46,7 @@ mutual
                  | GetInstanceField String
                  | SetInstanceField String
                  | Super String
+                 | InstanceOf String
                  | ExportStaticField String
                  | ExportInstanceField String
                  | ExportStatic String
@@ -76,6 +86,7 @@ mutual
       JVM_NativeT     : JVM_Types (JVM_Native a)
       JVM_IntT        : JVM_IntTypes i -> JVM_Types i
       JVM_ArrayT      : JVM_Types t -> JVM_Types (JVM_Array t)
+      JVM_ThrowableT  : JVM_Types t -> JVM_Types (JVM_Throwable t)
       JVM_FnT         : JVM_FnTypes t -> JVM_Types (JVM_FunctionalObject t)
 
   data JVM_Array : Type -> Type where
@@ -109,6 +120,50 @@ javaClass = JVM_Native . Class
 
 javaInterface : String -> Type
 javaInterface = JVM_Native . Interface
+
+%inline
+invokeInstance : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
+invokeInstance method = javacall (Instance method)
+
+%inline
+invokeStatic : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
+invokeStatic klass method = javacall (Static klass method)
+
+interface Inherits a b where {}
+
+Inherits (JVM_Native t) (JVM_Native t) where {}
+
+namespace Object
+  ObjectClass : JVM_NativeTy
+  ObjectClass = Class "java/lang/Object"
+
+  Object : Type
+  Object = JVM_Native ObjectClass
+
+  ObjectArray : Type
+  ObjectArray = JVM_Array Object
+
+  ObjectArray2d : Type
+  ObjectArray2d = JVM_Array (JVM_Array Object)
+
+  toString : Object -> JVM_IO String
+  toString obj = invokeInstance "toString" (Object -> JVM_IO String) obj
+
+Inherits Object String where {}
+Inherits Object (Maybe String) where {}
+
+Inherits Object (JVM_Native t) where {}
+Inherits Object (Maybe (JVM_Native t)) where {}
+
+Inherits ObjectArray (JVM_Array t) where {}
+
+implicit subtyping : Inherits (JVM_Native t) (JVM_Native s) => JVM_Native s -> JVM_Native t
+subtyping = believe_me
+
+implicit stringIsAnObject : String -> Object
+stringIsAnObject = believe_me
+
+decl syntax [sub] inherits [super] = Inherits (JVM_Native (super)) (JVM_Native (sub)) where {}
 
 %inline
 javalambda : String
@@ -154,32 +209,12 @@ newMultiArray : (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 newMultiArray = javacall MultiNewArray
 
 %inline
-invokeInstance : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
-invokeInstance method = javacall (Instance method)
-
-%inline
-jcallInstance : String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
-jcallInstance method ty fty = jcall (Instance method) ty {fty=fty}
-
-%inline
-jcallNew : (ty : Type) -> FTy FFI_JVM [] ty -> ty
-jcallNew ty fty = jcall New ty {fty=fty}
-
-%inline
 getInstanceField : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 getInstanceField fieldName = javacall (GetInstanceField fieldName)
 
 %inline
 setInstanceField : String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 setInstanceField fieldName = javacall (SetInstanceField fieldName)
-
-%inline
-invokeStatic : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
-invokeStatic klass method = javacall (Static klass method)
-
-%inline
-jcallStatic : JVM_NativeTy -> String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
-jcallStatic klass method ty fty = jcall (Static klass method) ty {fty=fty}
 
 %inline
 getStaticField : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
@@ -189,32 +224,98 @@ getStaticField klass fieldName = javacall (GetStaticField klass fieldName)
 setStaticField : JVM_NativeTy -> String -> (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 setStaticField klass fieldName = javacall (SetStaticField klass fieldName)
 
-interface Inherits a b where {}
+%inline
+jcallInstance : String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallInstance method ty fty = jcall (Instance method) ty {fty=fty}
 
-Inherits a a where { }
+%inline
+jcallStatic : JVM_NativeTy -> String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallStatic klass method ty fty = jcall (Static klass method) ty {fty=fty}
 
-implicit subtyping : Inherits (JVM_Native t) (JVM_Native s) => JVM_Native s -> JVM_Native t
-subtyping = believe_me
+%inline
+jcallNew : (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallNew ty fty = jcall New ty {fty=fty}
 
-implicit stringIsAnObject : String -> JVM_Native (Class "java/lang/Object")
-stringIsAnObject = believe_me
+%inline
+jcallGetInstanceField : String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallGetInstanceField fieldName ty fty = jcall (GetInstanceField fieldName) ty {fty = fty}
 
-decl syntax [sub] inherits [super] = Inherits (JVM_Native (super)) (JVM_Native (sub)) where {}
+%inline
+jcallSetInstanceField : String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallSetInstanceField fieldName ty fty = jcall (SetInstanceField fieldName) ty {fty = fty}
+
+%inline
+jcallGetStaticField : JVM_NativeTy -> String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallGetStaticField klass fieldName ty fty = jcall (GetStaticField klass fieldName) ty {fty = fty}
+
+%inline
+jcallSetStaticField : JVM_NativeTy -> String -> (ty : Type) -> FTy FFI_JVM [] ty -> ty
+jcallSetStaticField klass fieldName ty fty = jcall (SetStaticField klass fieldName) ty {fty=fty}
+
+%inline
+instanceOf : Inherits Object obj => JVM_NativeTy -> obj -> Bool
+instanceOf (Class className) obj = unsafePerformIO $ javacall (InstanceOf className) (Object -> JVM_IO Bool) (believe_me obj)
+instanceOf (Interface className) obj = unsafePerformIO $ javacall (InstanceOf className) (Object -> JVM_IO Bool) (believe_me obj)
 
 namespace Class
 
   ClassClass : JVM_NativeTy
   ClassClass = Class "java/lang/Class"
 
-  Class : Type
-  Class = JVM_Native ClassClass
+  JClass : Type
+  JClass = JVM_Native ClassClass
 
-  forName : String -> Class
-  forName className = unsafePerformIO $ invokeStatic ClassClass "forName" (String -> JVM_IO Class) className
+  forName : String -> JClass
+  forName className = unsafePerformIO $ invokeStatic ClassClass "forName" (String -> JVM_IO JClass) className
+
+  isInstance : Inherits Object (JVM_Native t) => JClass -> JVM_Native t -> Bool
+  isInstance clazz obj = unsafePerformIO $ invokeInstance "isInstance" (JClass -> Object -> JVM_IO Bool) clazz (believe_me obj)
 
 %inline
-classLit : String -> Class.Class
-classLit s = unsafePerformIO $ javacall (ClassLiteral s) (JVM_IO Class.Class)
+classLit : String -> JClass
+classLit s = unsafePerformIO $ javacall (ClassLiteral s) (JVM_IO JClass)
 
 RuntimeClass : JVM_NativeTy
 RuntimeClass = Class "io/github/mmhelloworld/idrisjvm/runtime/Runtime"
+
+throw : Inherits Throwable t => t -> JVM_IO a
+throw t = believe_me $ invokeStatic RuntimeClass "rethrow" (Throwable -> JVM_IO Object) (believe_me t)
+
+VirtualMachineErrorClass : JVM_NativeTy
+VirtualMachineErrorClass = Class "java/lang/VirtualMachineError"
+
+ThreadDeathClass : JVM_NativeTy
+ThreadDeathClass = Class "java/lang/ThreadDeath"
+
+LinkageErrorClass : JVM_NativeTy
+LinkageErrorClass = Class "java/lang/LinkageError"
+
+InterruptedExceptionClass : JVM_NativeTy
+InterruptedExceptionClass = Class "java/lang/InterruptedException"
+
+VirtualMachineErrorClass inherits ThrowableClass
+ThreadDeathClass inherits ThrowableClass
+InterruptedExceptionClass inherits ThrowableClass
+LinkageErrorClass inherits ThrowableClass
+
+term syntax catch [clazz] = \t => instanceOf clazz t
+
+try : JVM_IO (JVM_Throwable a) -> List (List (Throwable -> Bool), Throwable -> JVM_IO a) -> JVM_IO a
+try action handlers = do
+    value <- action
+    either (go handlers) pure value
+  where
+    go : List (List (Throwable -> Bool), Throwable -> JVM_IO a) -> Throwable -> JVM_IO a
+    go [] t = throw t
+    go ((ps, handler) :: handlers) t =
+      if any (\p => p t) ps then
+        handler t
+      else
+        go handlers t
+
+-- Inspired by Scala's NonFatal
+catchNonFatal : Throwable -> Bool
+catchNonFatal t = not (instanceOf VirtualMachineErrorClass t
+                 && instanceOf ThreadDeathClass t
+                 && instanceOf InterruptedExceptionClass t
+                 && instanceOf LinkageErrorClass t)

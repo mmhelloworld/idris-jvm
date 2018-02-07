@@ -10,48 +10,80 @@ import IdrisJvm.IR.Types
 
 %access public export
 
+data ExportCall = ExportCallConstructor
+                | ExportCallInstance
+                | ExportCallStatic
+                | ExportCallSuper
+
+Show ExportCall where
+    show ExportCallConstructor = "ExportCallConstructor"
+    show ExportCallInstance = "ExportCallInstance"
+    show ExportCallStatic = "ExportCallStatic"
+    show ExportCallSuper = "ExportCallSuper"
+
+Eq ExportCall where
+    ExportCallConstructor == ExportCallConstructor = True
+    ExportCallInstance == ExportCallInstance = True
+    ExportCallStatic == ExportCallStatic = True
+    ExportCallSuper == ExportCallSuper = True
+    _ == _ = False
+
+assignLocal : Nat -> LVar -> Asm ()
+assignLocal toIndex (Loc fromIndex) = assign fromIndex (cast toIndex)
+assignLocal _ _ = jerror "Unexpected global variable"
+
+createIdrisObject : Int -> List LVar -> Asm ()
+createIdrisObject constructorId args = do
+  New idrisObjectType
+  Dup
+  Iconst constructorId
+  createProperties
+  invokeIdrisObjectConstructor
+where
+  argsLength : Nat
+  argsLength = length args
+
+  ins : Nat -> LVar -> Asm ()
+  ins idx (Loc varIndex) = do
+    Dup
+    Iconst $ cast idx
+    Aload varIndex
+    Aastore
+  ins _ _ = jerror "Unexpected global variable"
+
+  storeProperties : Asm ()
+  storeProperties = case isLTE 1 argsLength of
+    Yes prf => sequence_ $ List.zipWith ins (natRange 0 (argsLength - 1)) args
+    No contra => Pure ()
+
+  createProperties : Asm ()
+  createProperties =
+    if argsLength > 0
+      then do
+        Iconst . cast $ argsLength
+        Anewarray "java/lang/Object"
+        storeProperties
+      else Pure ()
+
+  invokeIdrisObjectConstructor : Asm ()
+  invokeIdrisObjectConstructor = InvokeMethod InvokeSpecial idrisObjectType "<init>" constructorSig False where
+    constructorSig = if argsLength > 0 then "(I[Ljava/lang/Object;)V" else "(I)V"
+
+hasConstructorExport : List Export -> Bool
+hasConstructorExport = any isConstructorExport where
+    isConstructorExport (ExportFun _ (FCon "Constructor") _ _) = True
+    isConstructorExport _                                      = False
+
+tailRecStartLabelName : String
+tailRecStartLabelName = "$tailRecStartLabel"
+
+tailRecEndLabelName : String
+tailRecEndLabelName = "$tailRecEndLabel"
+
+assignNull : Int -> Asm ()
+assignNull varIndex = do Aconstnull; Astore varIndex
+
 mutual
-
-  assignLocal : Nat -> LVar -> Asm ()
-  assignLocal toIndex (Loc fromIndex) = assign fromIndex (cast toIndex)
-  assignLocal _ _ = jerror "Unexpected global variable"
-
-  createIdrisObject : Int -> List LVar -> Asm ()
-  createIdrisObject constructorId args = do
-      New idrisObjectType
-      Dup
-      Iconst constructorId
-      createProperties
-      invokeIdrisObjectConstructor
-    where
-      argsLength : Nat
-      argsLength = length args
-
-      ins : Nat -> LVar -> Asm ()
-      ins idx (Loc varIndex) = do
-        Dup
-        Iconst $ cast idx
-        Aload varIndex
-        Aastore
-      ins _ _ = jerror "Unexpected global variable"
-
-      storeProperties : Asm ()
-      storeProperties = case isLTE 1 argsLength of
-        Yes prf => sequence_ $ List.zipWith ins (natRange 0 (argsLength - 1)) args
-        No contra => Pure ()
-
-      createProperties : Asm ()
-      createProperties =
-        if argsLength > 0
-          then do
-            Iconst . cast $ argsLength
-            Anewarray "java/lang/Object"
-            storeProperties
-          else Pure ()
-
-      invokeIdrisObjectConstructor : Asm ()
-      invokeIdrisObjectConstructor = InvokeMethod InvokeSpecial idrisObjectType "<init>" constructorSig False where
-        constructorSig = if argsLength > 0 then "(I[Ljava/lang/Object;)V" else "(I)V"
 
   cgBody : Lazy (Asm ()) -> SExp -> Asm ()
   cgBody ret (SV (Glob n)) = do
@@ -81,7 +113,31 @@ mutual
     idrisObjectProperty v i
     ret
 
+  cgBody ret (SCon _ 1 "Prelude.Maybe.Just" [(Loc v)]) = do Aload v; ret
+  cgBody ret (SCon _ 0 "Prelude.Maybe.Nothing" []) = do Aconstnull; ret
+
   cgBody ret (SCon _ t _ args) = do createIdrisObject t args; ret
+
+  cgBody ret (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
+                         (SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
+                         _))
+    = cgIfNonNull ret cgBody e justValueStore justExpr nothingExpr
+
+  cgBody ret (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
+                         (SDefaultCase defaultExpr) ::
+                         _))
+      = cgIfNonNull ret cgBody e justValueStore justExpr defaultExpr
+
+  cgBody ret (SCase _ e ((SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
+                         (SDefaultCase defaultExpr) ::
+                         _))
+    = cgIfNull ret cgBody e nothingExpr defaultExpr
+
+  {-cgBody ret (SCase _ _ ((SConCase _ _ "Prelude.Maybe.Just" _ _) ::
+                         _)) = jerror "Unsupported 'Maybe' pattern matching"
+
+  cgBody ret (SCase _ _ ((SConCase _ _ "Prelude.Maybe.Nothing" _ _) ::
+                         _)) = jerror "Unsupported 'Maybe' pattern matching"-}
 
   cgBody ret (SCase _ e alts) = cgSwitch ret cgBody e alts
 
@@ -100,13 +156,30 @@ mutual
     argsWithTypes : List (FieldTypeDescriptor, LVar)
     argsWithTypes = (\(fdesc, lvar) => (fdescFieldDescriptor fdesc, lvar)) <$> args
 
-    cgForeign (JStatic clazz fn) = do
-      let returnDesc = fdescTypeDescriptor returns
-      let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) returnDesc
-      idrisToJava argsWithTypes
-      InvokeMethod InvokeStatic clazz fn descriptor False
-      javaToIdris returnDesc
-      ret
+    loadLambdaArgs : Nat -> List FieldTypeDescriptor -> Asm ()
+    loadLambdaArgs _ [] = pure ()
+    loadLambdaArgs index (ty :: types) = do
+        Aload $ cast index
+        idrisDescToJava (FieldDescriptor ty)
+        loadLambdaArgs (S index) types
+
+    cgForeign (JStatic clazz fn) = case fdescTypeDescriptor returns of
+      ThrowableDescriptor returnDesc => do
+        let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) returnDesc
+        let lambdaBody = do
+          loadLambdaArgs 0 (fst <$> argsWithTypes)
+          InvokeMethod InvokeStatic clazz fn descriptor False
+          javaToIdris returnDesc
+        caller <- GetFunctionName
+        createExceptionHandlerThunk caller argsWithTypes lambdaBody
+        InvokeMethod InvokeStatic (rtClass "Util") "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+        ret
+      returnDesc => do
+        let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) returnDesc
+        idrisToJava argsWithTypes
+        InvokeMethod InvokeStatic clazz fn descriptor False
+        javaToIdris returnDesc
+        ret
 
     cgForeign (JGetStaticField clazz fieldName) = do
       let returnDesc = fdescTypeDescriptor returns
@@ -123,14 +196,24 @@ mutual
         ret
       otherwise => jerror $ "There can be only one argument for setting a static field: " ++ clazz ++ "." ++ fieldName
 
-    cgForeign (JVirtual clazz fn) = do
-      let returnDesc = fdescTypeDescriptor returns
+    cgForeign (JVirtual clazz fn) = case fdescTypeDescriptor returns of
+      ThrowableDescriptor returnDesc => do
+        let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
+        let lambdaBody = do
+          loadLambdaArgs 0 (fst <$> argsWithTypes)
+          InvokeMethod InvokeVirtual clazz fn descriptor False
+          javaToIdris returnDesc
+        caller <- GetFunctionName
+        createExceptionHandlerThunk caller argsWithTypes lambdaBody
+        InvokeMethod InvokeStatic (rtClass "Util") "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+        ret
+      returnDesc => do
           -- drop first arg type as it is an implicit 'this'
-      let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
-      idrisToJava argsWithTypes
-      InvokeMethod InvokeVirtual clazz fn descriptor False
-      javaToIdris returnDesc
-      ret
+          let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
+          idrisToJava argsWithTypes
+          InvokeMethod InvokeVirtual clazz fn descriptor False
+          javaToIdris returnDesc
+          ret
 
     cgForeign (JGetInstanceField clazz fieldName) = do
       let returnDesc = fdescTypeDescriptor returns
@@ -148,21 +231,43 @@ mutual
         ret
       otherwise => jerror "Setting an instance field must take 2 arguments: the instance and the field value"
 
-    cgForeign (JInterface clazz fn) = do
-      let returnDesc = fdescTypeDescriptor returns
-      let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
-      idrisToJava argsWithTypes
-      InvokeMethod InvokeInterface clazz fn descriptor True
-      javaToIdris returnDesc
-      ret
+    cgForeign (JInterface clazz fn) = case fdescTypeDescriptor returns of
+        ThrowableDescriptor returnDesc => do
+          let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
+          let lambdaBody = do
+            loadLambdaArgs 0 (fst <$> argsWithTypes)
+            InvokeMethod InvokeInterface clazz fn descriptor True
+            javaToIdris returnDesc
+          caller <- GetFunctionName
+          createExceptionHandlerThunk caller argsWithTypes lambdaBody
+          InvokeMethod InvokeStatic (rtClass "Util") "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+          ret
+        returnDesc => do
+          let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
+          idrisToJava argsWithTypes
+          InvokeMethod InvokeInterface clazz fn descriptor True
+          javaToIdris returnDesc
+          ret
 
-    cgForeign (JNew clazz) = do
-      let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) VoidDescriptor
-      New clazz
-      Dup
-      idrisToJava argsWithTypes
-      InvokeMethod InvokeSpecial clazz "<init>" descriptor False
-      ret
+    cgForeign (JNew clazz) = case fdescTypeDescriptor returns of
+      ThrowableDescriptor returnDesc => do
+        let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) VoidDescriptor
+        let lambdaBody = do
+          New clazz
+          Dup
+          loadLambdaArgs 0 (fst <$> argsWithTypes)
+          InvokeMethod InvokeSpecial clazz "<init>" descriptor False
+        caller <- GetFunctionName
+        createExceptionHandlerThunk caller argsWithTypes lambdaBody
+        InvokeMethod InvokeStatic (rtClass "Util") "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+        ret
+      returnDesc => do
+        let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) VoidDescriptor
+        New clazz
+        Dup
+        idrisToJava argsWithTypes
+        InvokeMethod InvokeSpecial clazz "<init>" descriptor False
+        ret
 
     cgForeign JNewArray = case args of
       [ty] => do
@@ -215,6 +320,13 @@ mutual
         ret
       otherwise => jerror $ "Invalid arguments while trying to get length of an array: " ++ show args
 
+    cgForeign (JInstanceOf className) = case args of
+      [ty] => do
+          idrisToJava argsWithTypes
+          InstanceOf className
+          javaToIdris (fdescTypeDescriptor returns)
+          ret
+
     cgForeign (JClassLiteral "int") = do getPrimitiveClass "java/lang/Integer"; ret
     cgForeign (JClassLiteral "byte") = do getPrimitiveClass "java/lang/Byte"; ret
     cgForeign (JClassLiteral "char") = do getPrimitiveClass "java/lang/Character"; ret
@@ -237,30 +349,13 @@ mutual
 
   cgBody _ _ = jerror "NOT IMPLEMENTED!!!!"
 
-  data ExportCall = ExportCallConstructor
-                  | ExportCallInstance
-                  | ExportCallStatic
-                  | ExportCallSuper
-
-  Show ExportCall where
-    show ExportCallConstructor = "ExportCallConstructor"
-    show ExportCallInstance = "ExportCallInstance"
-    show ExportCallStatic = "ExportCallStatic"
-    show ExportCallSuper = "ExportCallSuper"
-
-  Eq ExportCall where
-    ExportCallConstructor == ExportCallConstructor = True
-    ExportCallInstance == ExportCallInstance = True
-    ExportCallStatic == ExportCallStatic = True
-    ExportCallSuper == ExportCallSuper = True
-    _ == _ = False
-
   exportCode : ExportIFace -> Asm ()
   exportCode (MkExportIFace "IdrisJvm.FFI.FFI_JVM" exportedClassName exportItems) = do
       let (cls, parent, intf) = parseExportedClassName exportedClassName
       let (classAnns, otherExports) = parseClassAnnotations exportItems
       CreateClass ComputeMaxs
       ClassCodeStart 52 Public cls Nothing parent intf classAnns
+      SourceInfo "IdrisGenerated.idr"
       when (not $ hasConstructorExport exportItems) $ defaultConstructor cls parent
       sequence_ $ (cgExport cls parent) <$> otherExports
   exportCode e = jerror $ "Unsupported Export: " ++ show e
@@ -349,13 +444,8 @@ mutual
     when (not isSuperExport && isExportIO returns) unwrapExportedIO
     returnExport exportCall returnDesc
 
-  hasConstructorExport : List Export -> Bool
-  hasConstructorExport = any isConstructorExport where
-    isConstructorExport (ExportFun _ (FCon "Constructor") _ _) = True
-    isConstructorExport _                                           = False
-
-  cgFun : List Access -> String -> ClassName -> MethodName -> List String -> SExp -> Asm ()
-  cgFun access idrisName clsName fname args def = do
+  cgFun : List Access -> String -> ClassName -> MethodName -> List String -> Int -> SExp -> Asm ()
+  cgFun access idrisName clsName fname args locs def = do
       UpdateFunctionName $ MkJMethodName clsName fname
       UpdateShouldDescribeFrame True
       CreateMethod access clsName fname signature Nothing Nothing [] []
@@ -380,7 +470,7 @@ mutual
       signature = if static then sig nArgs else sig (pred nArgs)
 
       nLocalVars : Int
-      nLocalVars = localVariables (cast nArgs) def
+      nLocalVars = cast nArgs + locs
 
       resultVarIndex : Int
       resultVarIndex = nLocalVars
@@ -396,7 +486,7 @@ mutual
 
       ret : Lazy (Asm ())
       ret = if shouldEliminateTco
-              then do Astore resultVarIndex -- Store the result
+              then do Astore resultVarIndex
                       Iconst 0
                       Istore tailRecVarIndex -- Base case for tailrec. Set the tailrec flag to false.
               else Astore resultVarIndex
@@ -436,6 +526,7 @@ mutual
   createClassForIdrisType idrisType = do
       CreateClass ComputeMaxs
       ClassCodeStart 52 Public idrisType Nothing "java/lang/Object" [] []
+      SourceInfo "IdrisGenerated.idr"
       CreateField [Private, Final] idrisType "value" "Ljava/lang/Object;" Nothing Nothing
       FieldEnd
       createConstructor
@@ -517,15 +608,6 @@ mutual
   parseAnnotationValue (FApp "AnnString" [ FStr value]) = AnnString value
   parseAnnotationValue desc = jerror $ "Annotation value not yet supported: " ++ show desc
 
-  tailRecStartLabelName : String
-  tailRecStartLabelName = "$tailRecStartLabel"
-
-  tailRecEndLabelName : String
-  tailRecEndLabelName = "$tailRecEndLabel"
-
-  assignNull : Int -> Asm ()
-  assignNull varIndex = do Aconstnull; Astore varIndex
-
   findTailCallApps : List String -> SExp -> List String
   findTailCallApps acc (SApp tailCall f _) = if tailCall then f :: acc else acc
   findTailCallApps acc (SLet _ v sc) =  acc ++ findTailCallApps [] v ++ findTailCallApps [] sc
@@ -539,31 +621,3 @@ mutual
   findTailCallAppsCase (SDefaultCase e)     = findTailCallApps [] e
   findTailCallAppsCase (SConCase _ _ _ _ e) = findTailCallApps [] e
 
-  localVariables : Int -> SExp -> Int
-  localVariables n (SLet (Loc i) v sc)
-     = let nAssignmentExp = localVariables 0 v
-           nLetBodyExp = localVariables 0 sc in
-         foldl max n [i, nAssignmentExp, nLetBodyExp]
-  localVariables n (SUpdate _ e) = localVariables n e
-  localVariables n (SCase _ e alts) = localVariablesSwitch n e alts
-  localVariables n (SChkCase e alts) = localVariablesSwitch n e alts
-  localVariables locals _ = locals
-
-  localVariablesSwitch : Int -> LVar -> List SAlt -> Int
-  localVariablesSwitch locals _ alts
-     = let newLocals = localVariablesAlt <$> alts
-           nonDefaultCases = filter (not . defaultCase) alts
-       in if all isIntCase alts
-            then foldl max locals newLocals
-            else foldl max locals newLocals + (cast $ List.length nonDefaultCases)
-
-  localVariablesAlt : SAlt -> Int
-  localVariablesAlt (SConstCase _ e) = localVariables 0 e
-  localVariablesAlt (SDefaultCase e) = localVariables 0 e
-  localVariablesAlt (SConCase lv _ _ args e) = max assignmentLocals bodyLocals
-     where
-      argsLength : Nat
-      argsLength = length args
-
-      assignmentLocals = the Int $ if argsLength == 0 then 0 else (lv + (cast argsLength) - 1)
-      bodyLocals = localVariables 0 e

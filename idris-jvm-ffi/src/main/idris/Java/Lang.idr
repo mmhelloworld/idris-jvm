@@ -92,22 +92,6 @@ namespace Math
   maxFloat : JFloat -> JFloat -> JFloat
   maxFloat a b = unsafePerformIO $ invokeStatic MathClass "max" (JFloat -> JFloat -> JVM_IO JFloat) a b
 
-namespace Object
-  ObjectClass : JVM_NativeTy
-  ObjectClass = Class "java/lang/Object"
-
-  Object : Type
-  Object = JVM_Native ObjectClass
-
-  ObjectArray : Type
-  ObjectArray = JVM_Array Object
-
-  ObjectArray2d : Type
-  ObjectArray2d = JVM_Array (JVM_Array Object)
-
-  toString : Object -> JVM_IO String
-  toString obj = invokeInstance "toString" (Object -> JVM_IO String) obj
-
 namespace PrintStream
 
   PrintStream : Type
@@ -206,14 +190,6 @@ namespace JavaString
 
   longToString : Bits64 -> String
   longToString b = unsafePerformIO $ invokeStatic LongClass "toString" (Bits64 -> JVM_IO String) b
-
-Inherits Object String where {}
-Inherits Object (Maybe String) where {}
-
-Inherits Object (JVM_Native t) where {}
-Inherits Object (Maybe (JVM_Native t)) where {}
-
-Inherits ObjectArray (JVM_Array t) where {}
 
 %inline
 vectToArray : Vect n elemTy -> {auto jvmType: JVM_Types elemTy} -> JVM_IO (JVM_Array elemTy)

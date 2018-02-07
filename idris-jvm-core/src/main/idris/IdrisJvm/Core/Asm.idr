@@ -32,7 +32,7 @@ mutual
                            | FieldTyDescLong
                            | FieldTyDescReference ReferenceTypeDescriptor
 
-  data TypeDescriptor = FieldDescriptor FieldTypeDescriptor | VoidDescriptor
+  data TypeDescriptor = FieldDescriptor FieldTypeDescriptor | VoidDescriptor | ThrowableDescriptor TypeDescriptor
 
   data MethodDescriptor = MkMethodDescriptor (List FieldTypeDescriptor) TypeDescriptor
 
@@ -134,6 +134,7 @@ mutual
   Show TypeDescriptor where
     show (FieldDescriptor fieldTypeDescriptor) = "FieldDescriptor(" ++ show fieldTypeDescriptor ++ ")"
     show VoidDescriptor = "VoidDescriptor"
+    show (ThrowableDescriptor tyDesc) = "ThrowableDescriptor(" ++ show tyDesc ++ ")"
 
 record JMethodName where
   constructor MkJMethodName
@@ -164,20 +165,21 @@ mutual
     refTyClassName arr@(ArrayDesc _)   = asmRefTyDesc arr
 
     asmFieldTypeDesc : FieldTypeDescriptor -> String
-    asmFieldTypeDesc FieldTyDescByte          = "B"
-    asmFieldTypeDesc FieldTyDescChar          = "C"
-    asmFieldTypeDesc FieldTyDescShort         = "S"
-    asmFieldTypeDesc FieldTyDescBoolean       = "Z"
-    asmFieldTypeDesc FieldTyDescArray         = "["
-    asmFieldTypeDesc FieldTyDescDouble        = "D"
-    asmFieldTypeDesc FieldTyDescFloat         = "F"
-    asmFieldTypeDesc FieldTyDescInt           = "I"
-    asmFieldTypeDesc FieldTyDescLong          = "J"
-    asmFieldTypeDesc (FieldTyDescReference f) = asmRefTyDesc f
+    asmFieldTypeDesc FieldTyDescByte           = "B"
+    asmFieldTypeDesc FieldTyDescChar           = "C"
+    asmFieldTypeDesc FieldTyDescShort          = "S"
+    asmFieldTypeDesc FieldTyDescBoolean        = "Z"
+    asmFieldTypeDesc FieldTyDescArray          = "["
+    asmFieldTypeDesc FieldTyDescDouble         = "D"
+    asmFieldTypeDesc FieldTyDescFloat          = "F"
+    asmFieldTypeDesc FieldTyDescInt            = "I"
+    asmFieldTypeDesc FieldTyDescLong           = "J"
+    asmFieldTypeDesc (FieldTyDescReference f)  = asmRefTyDesc f
 
 asmTypeDesc : TypeDescriptor -> String
 asmTypeDesc (FieldDescriptor t) = asmFieldTypeDesc t
 asmTypeDesc VoidDescriptor      = "V"
+asmTypeDesc (ThrowableDescriptor tyDesc) = asmTypeDesc tyDesc
 
 asmMethodDesc : MethodDescriptor -> String
 asmMethodDesc (MkMethodDescriptor args returns) = "(" ++ asmArgs ++ ")" ++ r where
@@ -256,8 +258,11 @@ data Asm : Type -> Type where
     Ificmpgt : Label -> Asm ()
     Ificmple : Label -> Asm ()
     Ificmplt : Label -> Asm ()
+    Ifnonnull : Label -> Asm ()
+    Ifnull : Label -> Asm ()
     Iload : Int -> Asm ()
     Imul : Asm ()
+    InstanceOf : ClassName -> Asm ()
     InvokeMethod : InvocType -> ClassName -> MethodName -> Descriptor -> Bool -> Asm ()
     InvokeDynamic : MethodName -> Descriptor -> Handle -> List BsmArg -> Asm ()
     Irem : Asm ()
@@ -292,7 +297,6 @@ data Asm : Type -> Type where
     MethodCodeEnd : Asm ()
     Multianewarray : Descriptor -> Nat -> Asm ()
     New : ClassName -> Asm ()
-    InstanceOf : ClassName -> Asm ()
     Pop : Asm ()
     Pop2 : Asm ()
     Return : Asm ()

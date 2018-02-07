@@ -26,7 +26,11 @@ public class IdrisObject {
     }
 
     public static Object getProperty(Object obj, int propertyIndex) {
-        return ((IdrisObject)obj).getProperties()[propertyIndex];
+        if (obj instanceof IdrisObject) {
+            return ((IdrisObject)obj).getProperties()[propertyIndex];
+        } else {
+            return obj;
+        }
     }
 
     @Override

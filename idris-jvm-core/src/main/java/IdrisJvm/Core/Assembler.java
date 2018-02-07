@@ -28,6 +28,7 @@ import static org.objectweb.asm.Opcodes.ANEWARRAY;
 import static org.objectweb.asm.Opcodes.ARETURN;
 import static org.objectweb.asm.Opcodes.ARRAYLENGTH;
 import static org.objectweb.asm.Opcodes.ASTORE;
+import static org.objectweb.asm.Opcodes.ATHROW;
 import static org.objectweb.asm.Opcodes.BALOAD;
 import static org.objectweb.asm.Opcodes.BASTORE;
 import static org.objectweb.asm.Opcodes.BIPUSH;
@@ -63,6 +64,12 @@ import static org.objectweb.asm.Opcodes.ICONST_4;
 import static org.objectweb.asm.Opcodes.ICONST_5;
 import static org.objectweb.asm.Opcodes.ICONST_M1;
 import static org.objectweb.asm.Opcodes.IDIV;
+import static org.objectweb.asm.Opcodes.IFNONNULL;
+import static org.objectweb.asm.Opcodes.IFNULL;
+import static org.objectweb.asm.Opcodes.IF_ICMPGE;
+import static org.objectweb.asm.Opcodes.IF_ICMPGT;
+import static org.objectweb.asm.Opcodes.IF_ICMPLE;
+import static org.objectweb.asm.Opcodes.IF_ICMPLT;
 import static org.objectweb.asm.Opcodes.ILOAD;
 import static org.objectweb.asm.Opcodes.IMUL;
 import static org.objectweb.asm.Opcodes.INSTANCEOF;
@@ -180,16 +187,20 @@ public class Assembler {
         mv.visitIntInsn(NEWARRAY, T_DOUBLE);
     }
 
-    public void astore(int index) {
-        mv.visitVarInsn(ASTORE, index);
-    }
-
     public void arraylength() {
         mv.visitInsn(ARRAYLENGTH);
     }
 
     public void areturn() {
         mv.visitInsn(ARETURN);
+    }
+
+    public void astore(int index) {
+        mv.visitVarInsn(ASTORE, index);
+    }
+
+    public void athrow() {
+        mv.visitInsn(ATHROW);
     }
 
     public void baload() {
@@ -290,6 +301,7 @@ public class Assembler {
         cw = cws.computeIfAbsent(className, cname -> {
             final ClassWriter classWriter = new ClassWriter(COMPUTE_MAXS);
             classWriter.visit(52, ACC_PUBLIC, className, null, "java/lang/Object", null);
+            classWriter.visitSource(getClassNameLastPart(className) + ".idr", null);
             createDefaultConstructor(classWriter);
             return classWriter;
         });
@@ -301,6 +313,10 @@ public class Assembler {
             sig,
             exceptionsArr);
         handleCreateMethod(mv, annotations);
+    }
+
+    private String getClassNameLastPart(String className) {
+        return className.substring(className.lastIndexOf('/') + 1);
     }
 
     public void dadd() {
@@ -472,19 +488,27 @@ public class Assembler {
     }
 
     public void ificmpge(String label) {
-        mv.visitJumpInsn(Opcodes.IF_ICMPGE, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPGE, (Label) env.get(label));
     }
 
     public void ificmpgt(String label) {
-        mv.visitJumpInsn(Opcodes.IF_ICMPGT, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPGT, (Label) env.get(label));
     }
 
     public void ificmple(String label) {
-        mv.visitJumpInsn(Opcodes.IF_ICMPLE, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPLE, (Label) env.get(label));
     }
 
     public void ificmplt(String label) {
-        mv.visitJumpInsn(Opcodes.IF_ICMPLT, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPLT, (Label) env.get(label));
+    }
+
+    public void ifnonnull(String label) {
+        mv.visitJumpInsn(IFNONNULL, (Label) env.get(label));
+    }
+
+    public void ifnull(String label) {
+        mv.visitJumpInsn(IFNULL, (Label) env.get(label));
     }
 
     public void iload(int n) {
@@ -493,6 +517,10 @@ public class Assembler {
 
     public void imul() {
         mv.visitInsn(IMUL);
+    }
+
+    public void instanceOf(String className) {
+        mv.visitTypeInsn(INSTANCEOF, className);
     }
 
     public void invokeMethod(int invocType, String className, String methodName, String desc, boolean isInterface) {
@@ -682,10 +710,6 @@ public class Assembler {
 
     public void asmNew(String className) {
         mv.visitTypeInsn(NEW, className);
-    }
-
-    public void asmInstanceOf(String className) {
-        mv.visitTypeInsn(INSTANCEOF, className);
     }
 
     public void pop() {

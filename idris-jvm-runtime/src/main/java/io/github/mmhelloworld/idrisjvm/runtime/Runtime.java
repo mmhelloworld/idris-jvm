@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 
+import static java.lang.System.currentTimeMillis;
 import static java.util.Collections.emptyList;
 
 public class Runtime {
@@ -32,6 +33,10 @@ public class Runtime {
         throw new RuntimeException(s.toString());
     }
 
+    public static Object rethrow(Throwable t) throws Throwable {
+        throw t;
+    }
+
     public static Object unwrap(Object value) {
         while (value instanceof Thunk) {
             value = ((Thunk) value).call();
@@ -48,7 +53,7 @@ public class Runtime {
     }
 
     public static BigInteger time() {
-        return BigInteger.valueOf(Duration.ofMillis(System.currentTimeMillis()).getSeconds());
+        return BigInteger.valueOf(Duration.ofMillis(currentTimeMillis()).getSeconds());
     }
 
     public static int runCommand(String command) throws IOException, InterruptedException {

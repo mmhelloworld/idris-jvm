@@ -18,11 +18,11 @@ generateDependencyMethods assembler (subroutine :: subroutines) = do
   generateDependencyMethods assembler (newSubroutines ++ subroutines)
 
 generateMethod' : Assembler -> SDecl -> JVM_IO ()
-generateMethod' assembler (SFun name args _ def) = do
+generateMethod' assembler (SFun name args locs def) = do
   let jmethodName = jname name
   let fname = jmethName jmethodName
   let clsName = jmethClsName jmethodName
-  (_, subroutines) <- runAsm [] assembler $ cgFun [Public, Static] name clsName fname args def
+  (_, subroutines) <- runAsm [] assembler $ cgFun [Public, Static] name clsName fname args locs def
   generateDependencyMethods assembler subroutines
 
 generateMethod : Assembler -> SDecl -> JVM_IO ()

@@ -12,12 +12,15 @@ services:
 jdk:
   - oraclejdk8
 
+env:
+  - IDRIS_JVM_HOME=${HOME}/bin/idris-jvm
+
 before_install:
   - docker pull mmhelloworld/idris:1.2.0
-  - mkdir -p $HOME/bin/idris-packages $HOME/bin/idris-jvm
-  - wget https://github.com/mmhelloworld/idris-jvm/releases/download/1.0-SNAPSHOT-20180114/idris-jvm-1.0-SNAPSHOT-20180114.zip
+  - mkdir -p $HOME/bin/idris-packages $IDRIS_JVM_HOME
+  - wget https://github.com/mmhelloworld/idris-jvm/releases/download/1.0-SNAPSHOT-20180207.beta/idris-jvm-1.0-SNAPSHOT-20180207.beta.zip
   - unzip -o idris-jvm-*.zip -d $HOME/bin
-  - export PATH=`pwd`/bin/travis:$HOME/bin/idris-jvm/codegen/bin:$HOME/.local/bin:$PATH
+  - export PATH=`pwd`/bin/travis:$IDRIS_JVM_HOME/codegen/bin:$HOME/.local/bin:$PATH
   - export PROJECT_ROOT=`pwd`
   - docker run --name idris mmhelloworld/idris:1.2.0 idris -v && docker cp idris:/.stack-work/install/x86_64-linux/lts-10.0/8.2.2/share/x86_64-linux-ghc-8.2.2/idris-1.2.0/libs/. $HOME/bin/idris-packages && docker rm idris
 

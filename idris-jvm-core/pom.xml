@@ -45,22 +45,6 @@
                         </configuration>
                     </execution>
                     <execution>
-                        <id>install-idris-package</id>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>idris</executable>
-                            <workingDirectory>${idris.srcdir}</workingDirectory>
-                            <arguments>
-                                <argument>--install</argument>
-                                <argument>${idris.srcdir}/idris-jvm-core.ipkg</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-
-                    <execution>
                         <id>generate-idris-interface</id>
                         <phase>compile</phase>
                         <goals>
@@ -80,14 +64,14 @@
                                 <argument>-p</argument>
                                 <argument>contrib</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/Asm.idr</argument>
+                                <argument>${idris.srcdir}/IdrisJvm/Core/Codegen.idr</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/Common.idr</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/Constant.idr</argument>
-                                <argument>${idris.srcdir}/IdrisJvm/Core/Operator.idr</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/ControlFlow.idr</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/Foreign.idr</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/Function.idr</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/JAsm.idr</argument>
-                                <argument>${idris.srcdir}/IdrisJvm/Core/Codegen.idr</argument>
+                                <argument>${idris.srcdir}/IdrisJvm/Core/Operator.idr</argument>
                                 <argument>-o</argument>
                                 <argument>${project.build.outputDirectory}</argument>
                             </arguments>

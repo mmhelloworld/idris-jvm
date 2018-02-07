@@ -18,6 +18,20 @@
         <start-idris-jvm-server>true</start-idris-jvm-server>
     </properties>
 
+    <profiles>
+        <profile>
+            <id>idrisJvmHomePresent</id>
+            <activation>
+                <property>
+                    <name>env.IDRIS_JVM_HOME</name>
+                </property>
+            </activation>
+            <properties>
+                <deploy.dir>${env.IDRIS_JVM_HOME}</deploy.dir>
+            </properties>
+        </profile>
+    </profiles>
+
     <build>
         <plugins>
             <plugin>
@@ -61,6 +75,13 @@
                                     <version>${project.version}</version>
                                     <destFileName>idris-jvm-runtime.jar</destFileName>
                                     <outputDirectory>${deploy.dir}</outputDirectory>
+                                </artifactItem>
+                                <artifactItem>
+                                    <artifactId>idris-jvm-codegen-launcher</artifactId>
+                                    <groupId>io.github.mmhelloworld</groupId>
+                                    <version>${project.version}</version>
+                                    <destFileName>idris-jvm-codegen-launcher.jar</destFileName>
+                                    <outputDirectory>${deploy.dir}/codegen</outputDirectory>
                                 </artifactItem>
                             </artifactItems>
                         </configuration>

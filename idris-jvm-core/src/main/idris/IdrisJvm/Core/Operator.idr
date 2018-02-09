@@ -216,6 +216,22 @@ cgOpLStrCons l r = do
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "append" "(Ljava/lang/String;)Ljava/lang/StringBuilder;" False
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
 
+cgOpLStrSubstr : LVar -> LVar -> LVar -> Asm ()
+cgOpLStrSubstr offset len str = do
+  Aload $ locIndex str
+  Checkcast "java/lang/String"
+  Aload $ locIndex offset
+  Checkcast "java/lang/Integer"
+  unboxInt
+  Aload $ locIndex offset
+  Checkcast "java/lang/Integer"
+  unboxInt
+  Aload $ locIndex len
+  Checkcast "java/lang/Integer"
+  unboxInt
+  Iadd
+  InvokeMethod InvokeVirtual "java/lang/String" "substring" "(II)Ljava/lang/String;" False
+
 cgOpNotImplemented : PrimFn -> Asm ()
 cgOpNotImplemented op = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
 
@@ -301,6 +317,8 @@ cgOp2 LReadStr [_] = InvokeMethod InvokeStatic (rtClass "Runtime") "readString" 
 cgOp2 LStrConcat [l,r] = cgOpLStrConcat l r
 
 cgOp2 LStrCons [l,r] = cgOpLStrCons l r
+
+cgOp2 LStrSubstr [offset, len, str] = cgOpLStrSubstr offset len str
 
 cgOp2 (LStrInt ITBig) [x] = do
   New "java/math/BigInteger"

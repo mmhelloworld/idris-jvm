@@ -3,14 +3,14 @@ package io.github.mmhelloworld.idrisjvm.runtime;
 import java.math.BigInteger;
 import java.util.Objects;
 
-import static io.github.mmhelloworld.idrisjvm.runtime.IdrisObject.IDRIS_NO_ARG_CONSTRUCTOR_0;
-import static io.github.mmhelloworld.idrisjvm.runtime.IdrisObject.IDRIS_NO_ARG_CONSTRUCTOR_1;
+import static io.github.mmhelloworld.idrisjvm.runtime.IdrisObject.NO_ARG_CONSTRUCTOR_0;
+import static io.github.mmhelloworld.idrisjvm.runtime.IdrisObject.NO_ARG_CONSTRUCTOR_1;
 import static java.lang.String.format;
 
 public class Util {
 
     public static Object boolToIdrisBool(boolean b) {
-        return b ? IDRIS_NO_ARG_CONSTRUCTOR_1 : IDRIS_NO_ARG_CONSTRUCTOR_0;
+        return b ? NO_ARG_CONSTRUCTOR_1 : NO_ARG_CONSTRUCTOR_0;
     }
 
     public static boolean idrisBoolToBool(Object idrisBool) {
@@ -42,21 +42,11 @@ public class Util {
     }
 
     private static IdrisObject right(Object value) {
-        return new IdrisObject(1, new Object[] {value});
+        return new IdrisObject(1, value);
     }
 
     private static IdrisObject left(Object value) {
-        return new IdrisObject(0, new Object[] {value});
-    }
-
-    public static Object nullableRefToMaybe(Object ref) {
-        return ref == null ? IDRIS_NO_ARG_CONSTRUCTOR_0 : new IdrisObject(1, new Object[]{ref});
-    }
-
-    public static Object maybeToNullableRef(Object maybe) {
-        IdrisObject maybeValue = (IdrisObject) maybe;
-        int constructor = maybeValue.getConstructorId();
-        return constructor == 0 ? null : maybeValue.getProperties()[0];
+        return new IdrisObject(0, value);
     }
 
     private static int boolToInt(final boolean b) {

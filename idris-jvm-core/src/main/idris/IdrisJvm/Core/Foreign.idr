@@ -25,11 +25,11 @@ data JForeign = JStatic String String
 
 javaToIdris : TypeDescriptor -> Asm ()
 javaToIdris (FieldDescriptor FieldTyDescBoolean) =
-  InvokeMethod InvokeStatic (rtClass "Util") "boolToIdrisBool" "(Z)Ljava/lang/Object;" False
+  InvokeMethod InvokeStatic utilClass "boolToIdrisBool" "(Z)Ljava/lang/Object;" False
 javaToIdris (FieldDescriptor FieldTyDescByte) =
-  InvokeMethod InvokeStatic (rtClass "Util") "byteToIdrisBits8" "(B)Ljava/lang/Object;" False
+  InvokeMethod InvokeStatic utilClass "byteToIdrisBits8" "(B)Ljava/lang/Object;" False
 javaToIdris (FieldDescriptor FieldTyDescShort) =
-  InvokeMethod InvokeStatic (rtClass "Util") "shortToIdrisBits16" "(S)Ljava/lang/Object;" False
+  InvokeMethod InvokeStatic utilClass "shortToIdrisBits16" "(S)Ljava/lang/Object;" False
 javaToIdris (FieldDescriptor FieldTyDescInt)     = boxInt
 javaToIdris (FieldDescriptor FieldTyDescChar)    = boxChar
 javaToIdris (FieldDescriptor FieldTyDescLong)    = boxLong
@@ -60,11 +60,11 @@ checkcast cname              = Checkcast cname
 
 idrisDescToJava : TypeDescriptor -> Asm ()
 idrisDescToJava (FieldDescriptor FieldTyDescBoolean) =
-  InvokeMethod InvokeStatic (rtClass "Util") "idrisBoolToBool" "(Ljava/lang/Object;)Z" False
+  InvokeMethod InvokeStatic utilClass "idrisBoolToBool" "(Ljava/lang/Object;)Z" False
 idrisDescToJava (FieldDescriptor FieldTyDescByte) =
-  InvokeMethod InvokeStatic (rtClass "Util") "idrisBits8ToByte" "(Ljava/lang/Object;)B" False
+  InvokeMethod InvokeStatic utilClass "idrisBits8ToByte" "(Ljava/lang/Object;)B" False
 idrisDescToJava (FieldDescriptor FieldTyDescShort) =
-  InvokeMethod InvokeStatic (rtClass "Util") "idrisBits16ToShort" "(Ljava/lang/Object;)S" False
+  InvokeMethod InvokeStatic utilClass "idrisBits16ToShort" "(Ljava/lang/Object;)S" False
 idrisDescToJava (FieldDescriptor FieldTyDescInt) = do Checkcast "java/lang/Integer"; unboxInt
 idrisDescToJava (FieldDescriptor FieldTyDescChar) = do Checkcast "java/lang/Character"; unboxChar
 idrisDescToJava (FieldDescriptor FieldTyDescLong) = do Checkcast "java/lang/Long"; unboxLong

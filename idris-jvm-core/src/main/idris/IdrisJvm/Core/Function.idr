@@ -33,41 +33,60 @@ assignLocal toIndex (Loc fromIndex) = assign fromIndex (cast toIndex)
 assignLocal _ _ = jerror "Unexpected global variable"
 
 createIdrisObject : Int -> List LVar -> Asm ()
+createIdrisObject constructorId [] =
+  if constructorId < cast unrolledConstructorPropsCount then
+    let fieldName = "NO_ARG_CONSTRUCTOR_" ++ cast constructorId
+    in Field FGetStatic idrisObjectType fieldName (classSig idrisObjectType)
+  else do
+    New idrisObjectType
+    Dup
+    Iconst constructorId
+    InvokeMethod InvokeSpecial idrisObjectType "<init>" "(I)V" False
+
 createIdrisObject constructorId args = do
   New idrisObjectType
   Dup
   Iconst constructorId
-  createProperties
-  invokeIdrisObjectConstructor
+  sequence_ $ Aload . locIndex <$> take unrolledConstructorPropsCount args
+  createUnrolledProperties
+  InvokeMethod InvokeSpecial idrisObjectType "<init>" constructorSig False
 where
-  argsLength : Nat
-  argsLength = length args
+  argsLength : Int
+  argsLength = cast $ length args
 
-  ins : Nat -> LVar -> Asm ()
+  unrolledProps : List LVar
+  unrolledProps = drop unrolledConstructorPropsCount args
+
+  unrolledPropsLength : Int
+  unrolledPropsLength = cast $ length unrolledProps
+
+  constructorSig : String
+  constructorSig =
+    if unrolledPropsLength == 0 then
+      "(I" ++ repeatObjectDesc (cast argsLength) ++ ")V"
+    else
+      "(I" ++ repeatObjectDesc unrolledConstructorPropsCount ++ "[Ljava/lang/Object;)V"
+
+  ins : Int -> LVar -> Asm ()
   ins idx (Loc varIndex) = do
     Dup
-    Iconst $ cast idx
+    Iconst idx
     Aload varIndex
     Aastore
   ins _ _ = jerror "Unexpected global variable"
 
-  storeProperties : Asm ()
-  storeProperties = case isLTE 1 argsLength of
-    Yes prf => sequence_ $ List.zipWith ins (natRange 0 (argsLength - 1)) args
-    No contra => Pure ()
+  storeUnrolledProperties : Asm ()
+  storeUnrolledProperties =
+    sequence_ $ List.zipWith ins [0 .. (unrolledPropsLength - 1)] unrolledProps
 
-  createProperties : Asm ()
-  createProperties =
-    if argsLength > 0
-      then do
-        Iconst . cast $ argsLength
-        Anewarray "java/lang/Object"
-        storeProperties
-      else Pure ()
-
-  invokeIdrisObjectConstructor : Asm ()
-  invokeIdrisObjectConstructor = InvokeMethod InvokeSpecial idrisObjectType "<init>" constructorSig False where
-    constructorSig = if argsLength > 0 then "(I[Ljava/lang/Object;)V" else "(I)V"
+  createUnrolledProperties : Asm ()
+  createUnrolledProperties =
+    if unrolledPropsLength == 0 then
+      Pure ()
+    else do
+      Iconst unrolledPropsLength
+      Anewarray "java/lang/Object"
+      storeUnrolledProperties
 
 hasConstructorExport : List Export -> Bool
 hasConstructorExport = any isConstructorExport where
@@ -133,12 +152,6 @@ mutual
                          _))
     = cgIfNull ret cgBody e nothingExpr defaultExpr
 
-  {-cgBody ret (SCase _ _ ((SConCase _ _ "Prelude.Maybe.Just" _ _) ::
-                         _)) = jerror "Unsupported 'Maybe' pattern matching"
-
-  cgBody ret (SCase _ _ ((SConCase _ _ "Prelude.Maybe.Nothing" _ _) ::
-                         _)) = jerror "Unsupported 'Maybe' pattern matching"-}
-
   cgBody ret (SCase _ e alts) = cgSwitch ret cgBody e alts
 
   cgBody ret (SChkCase e alts) = cgSwitch ret cgBody e alts
@@ -172,7 +185,7 @@ mutual
           javaToIdris returnDesc
         caller <- GetFunctionName
         createExceptionHandlerThunk caller argsWithTypes lambdaBody
-        InvokeMethod InvokeStatic (rtClass "Util") "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+        InvokeMethod InvokeStatic utilClass "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
         ret
       returnDesc => do
         let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) returnDesc
@@ -205,7 +218,7 @@ mutual
           javaToIdris returnDesc
         caller <- GetFunctionName
         createExceptionHandlerThunk caller argsWithTypes lambdaBody
-        InvokeMethod InvokeStatic (rtClass "Util") "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+        InvokeMethod InvokeStatic utilClass "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
         ret
       returnDesc => do
           -- drop first arg type as it is an implicit 'this'
@@ -240,7 +253,7 @@ mutual
             javaToIdris returnDesc
           caller <- GetFunctionName
           createExceptionHandlerThunk caller argsWithTypes lambdaBody
-          InvokeMethod InvokeStatic (rtClass "Util") "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+          InvokeMethod InvokeStatic utilClass "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
           ret
         returnDesc => do
           let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
@@ -259,7 +272,7 @@ mutual
           InvokeMethod InvokeSpecial clazz "<init>" descriptor False
         caller <- GetFunctionName
         createExceptionHandlerThunk caller argsWithTypes lambdaBody
-        InvokeMethod InvokeStatic (rtClass "Util") "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+        InvokeMethod InvokeStatic utilClass "throwable" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
         ret
       returnDesc => do
         let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) VoidDescriptor

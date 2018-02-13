@@ -41,6 +41,9 @@ rtFuncSig = classSig $ rtClass "Function"
 rtThunkSig : String
 rtThunkSig = classSig $ rtClass "Thunk"
 
+utilClass : String
+utilClass = rtClass "Util"
+
 idrisObjectType : String
 idrisObjectType = rtClass "IdrisObject"
 
@@ -116,11 +119,20 @@ metafactoryDesc =
          , "Ljava/lang/invoke/CallSite;"
          ]
 
+unrolledConstructorPropsCount : Nat
+unrolledConstructorPropsCount = 10
+
 idrisObjectProperty : Int -> Int -> Asm ()
 idrisObjectProperty object propertyIndex = do
-    Aload object
-    Iconst propertyIndex
-    InvokeMethod InvokeStatic idrisObjectType "getProperty"  "(Ljava/lang/Object;I)Ljava/lang/Object;" False
+  Aload object
+  Checkcast idrisObjectType
+  if propertyIndex < (cast unrolledConstructorPropsCount) then
+    let fieldName = "property" ++ cast propertyIndex
+    in Field FGetField idrisObjectType fieldName "Ljava/lang/Object;"
+  else do
+    Field FGetField idrisObjectType "properties" "[Ljava/lang/Object;"
+    Iconst (propertyIndex - (cast unrolledConstructorPropsCount))
+    Aaload
 
 addFrame : Asm ()
 addFrame = do

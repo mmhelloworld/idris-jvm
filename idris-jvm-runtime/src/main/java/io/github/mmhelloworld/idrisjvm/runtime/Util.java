@@ -3,19 +3,9 @@ package io.github.mmhelloworld.idrisjvm.runtime;
 import java.math.BigInteger;
 import java.util.Objects;
 
-import static io.github.mmhelloworld.idrisjvm.runtime.IdrisObject.NO_ARG_CONSTRUCTOR_0;
-import static io.github.mmhelloworld.idrisjvm.runtime.IdrisObject.NO_ARG_CONSTRUCTOR_1;
 import static java.lang.String.format;
 
 public class Util {
-
-    public static Object boolToIdrisBool(boolean b) {
-        return b ? NO_ARG_CONSTRUCTOR_1 : NO_ARG_CONSTRUCTOR_0;
-    }
-
-    public static boolean idrisBoolToBool(Object idrisBool) {
-        return Runtime.constructorIndex(idrisBool) == 1;
-    }
 
     public static byte idrisBits8ToByte(Object idrisBits8) {
         return (byte) ((int) idrisBits8);

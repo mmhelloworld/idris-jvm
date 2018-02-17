@@ -280,3 +280,11 @@ cgIfNonNull ret cgBody e loc ifExp elseExp = cgIfElse ret cgBody e Ifnull (Just 
 
 cgIfNull : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()
 cgIfNull ret cgBody e ifExp elseExp = cgIfElse ret cgBody e Ifnonnull Nothing ifExp elseExp
+
+cgIfTrueElse : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()
+cgIfTrueElse ret cgBody e ifExp elseExp = cgIfElse ret cgBody e condition Nothing ifExp elseExp where
+  condition : Label -> Asm ()
+  condition elseLabel = do
+    Checkcast "java/lang/Boolean"
+    unboxBool
+    Ifeq elseLabel

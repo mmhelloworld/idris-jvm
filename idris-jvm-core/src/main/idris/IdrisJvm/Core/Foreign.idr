@@ -24,8 +24,7 @@ data JForeign = JStatic String String
               | JInstanceOf String
 
 javaToIdris : TypeDescriptor -> Asm ()
-javaToIdris (FieldDescriptor FieldTyDescBoolean) =
-  InvokeMethod InvokeStatic utilClass "boolToIdrisBool" "(Z)Ljava/lang/Object;" False
+javaToIdris (FieldDescriptor FieldTyDescBoolean) = boxBool
 javaToIdris (FieldDescriptor FieldTyDescByte) =
   InvokeMethod InvokeStatic utilClass "byteToIdrisBits8" "(B)Ljava/lang/Object;" False
 javaToIdris (FieldDescriptor FieldTyDescShort) =
@@ -59,8 +58,9 @@ checkcast "java/lang/Object" = pure ()
 checkcast cname              = Checkcast cname
 
 idrisDescToJava : TypeDescriptor -> Asm ()
-idrisDescToJava (FieldDescriptor FieldTyDescBoolean) =
-  InvokeMethod InvokeStatic utilClass "idrisBoolToBool" "(Ljava/lang/Object;)Z" False
+idrisDescToJava (FieldDescriptor FieldTyDescBoolean) = do
+  Checkcast "java/lang/Boolean"
+  unboxBool
 idrisDescToJava (FieldDescriptor FieldTyDescByte) =
   InvokeMethod InvokeStatic utilClass "idrisBits8ToByte" "(Ljava/lang/Object;)B" False
 idrisDescToJava (FieldDescriptor FieldTyDescShort) =

@@ -3,19 +3,9 @@ package io.github.mmhelloworld.idrisjvm.runtime;
 import java.math.BigInteger;
 import java.util.Objects;
 
-import static io.github.mmhelloworld.idrisjvm.runtime.IdrisObject.NO_ARG_CONSTRUCTOR_0;
-import static io.github.mmhelloworld.idrisjvm.runtime.IdrisObject.NO_ARG_CONSTRUCTOR_1;
 import static java.lang.String.format;
 
 public class Util {
-
-    public static Object boolToIdrisBool(boolean b) {
-        return b ? NO_ARG_CONSTRUCTOR_1 : NO_ARG_CONSTRUCTOR_0;
-    }
-
-    public static boolean idrisBoolToBool(Object idrisBool) {
-        return Runtime.constructorIndex(idrisBool) == 1;
-    }
 
     public static byte idrisBits8ToByte(Object idrisBits8) {
         return (byte) ((int) idrisBits8);
@@ -71,7 +61,7 @@ public class Util {
         } else if (a instanceof BigInteger && b instanceof Integer) {
             return a.equals(BigInteger.valueOf((Integer) b));
         } else if (a instanceof Integer && b instanceof BigInteger) {
-            return b.equals(BigInteger.valueOf((Integer)a));
+            return b.equals(BigInteger.valueOf((Integer) a));
         } else {
             return Objects.equals(a, b);
         }
@@ -139,7 +129,7 @@ public class Util {
     }
 
     public static Object stringLessThan(Object m, Object n) {
-        return boolToInt(((String)m).compareTo((String)n) < 0);
+        return boolToInt(((String) m).compareTo((String) n) < 0);
     }
 
     public static Object uintLessThan(Object m, Object n) {

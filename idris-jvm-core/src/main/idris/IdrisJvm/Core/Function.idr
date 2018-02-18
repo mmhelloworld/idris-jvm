@@ -132,10 +132,32 @@ mutual
     idrisObjectProperty v i
     ret
 
-  cgBody ret (SCon _ 1 "Prelude.Maybe.Just" [(Loc v)]) = do Aload v; ret
+  cgBody ret (SCon _ 0 "Prelude.Bool.False" []) = do
+    Field FGetStatic "java/lang/Boolean" "FALSE" "Ljava/lang/Boolean;"
+    ret
+  cgBody ret (SCon _ 1 "Prelude.Bool.True" []) = do
+    Field FGetStatic "java/lang/Boolean" "TRUE" "Ljava/lang/Boolean;"
+    ret
+
   cgBody ret (SCon _ 0 "Prelude.Maybe.Nothing" []) = do Aconstnull; ret
+  cgBody ret (SCon _ 1 "Prelude.Maybe.Just" [(Loc v)]) = do Aload v; ret
 
   cgBody ret (SCon _ t _ args) = do createIdrisObject t args; ret
+
+  cgBody ret (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
+                         (SConCase _ 1 "Prelude.Bool.True" [] trueAlt) ::
+                         _))
+    = cgIfTrueElse ret cgBody e trueAlt falseAlt
+
+  cgBody ret (SCase _ e ((SConCase _ 1 "Prelude.Bool.True" [] trueAlt) ::
+                        (SDefaultCase falseAlt) ::
+                        _))
+    = cgIfTrueElse ret cgBody e trueAlt falseAlt
+
+  cgBody ret (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
+                        (SDefaultCase trueAlt) ::
+                        _))
+    = cgIfTrueElse ret cgBody e trueAlt falseAlt
 
   cgBody ret (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
                          (SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
@@ -145,7 +167,7 @@ mutual
   cgBody ret (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
                          (SDefaultCase defaultExpr) ::
                          _))
-      = cgIfNonNull ret cgBody e justValueStore justExpr defaultExpr
+    = cgIfNonNull ret cgBody e justValueStore justExpr defaultExpr
 
   cgBody ret (SCase _ e ((SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
                          (SDefaultCase defaultExpr) ::

@@ -26,6 +26,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
 
+import static com.fasterxml.jackson.core.JsonToken.END_ARRAY;
+import static com.fasterxml.jackson.core.JsonToken.END_OBJECT;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
@@ -74,7 +76,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
 
     private void codegen(JsonParser parser, Assembler assembler) throws IOException {
         requireJsonObject(parser);
-        while (parser.nextToken() != JsonToken.END_OBJECT) {
+        while (parser.nextToken() != END_OBJECT) {
             String fieldName = parser.getCurrentName();
             if (fieldName.equals("codegen-info")) {
                 processCodegenInfo(parser, assembler);
@@ -95,7 +97,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
 
     private void processCodegenInfo(final JsonParser parser, final Assembler assembler) throws IOException {
         parser.nextToken();
-        while (parser.nextToken() != JsonToken.END_OBJECT) {
+        while (parser.nextToken() != END_OBJECT) {
             String codegenInfoFieldName = parser.getCurrentName();
             switch (codegenInfoFieldName) {
                 case "simple-decls":
@@ -114,7 +116,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
 
     private void processExports(final JsonParser parser, final Assembler assembler) throws IOException {
         parser.nextToken();
-        while (parser.nextToken() != JsonToken.END_ARRAY) {
+        while (parser.nextToken() != END_ARRAY) {
             ExportIFace exportIFace = mapper.readerFor(ExportIFace.class).readValue(parser);
             Codegen.generateExport(assembler, exportIFace);
         }
@@ -122,7 +124,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
 
     private void processSimpleDecls(final JsonParser parser, final Assembler assembler) throws IOException {
         parser.nextToken();
-        while (parser.nextToken() != JsonToken.END_ARRAY) {
+        while (parser.nextToken() != END_ARRAY) {
             final JsonNode node = parser.getCodec().readTree(parser);
             final ObjectMapper mapper = Context.getMapper();
             if (node.isArray()) {

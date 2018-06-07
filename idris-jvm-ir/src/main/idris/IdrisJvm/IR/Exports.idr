@@ -10,12 +10,16 @@ fcon : String -> FDesc
 fstr : String -> FDesc
 fio : FDesc -> FDesc
 fapp : String -> List FDesc -> FDesc
+
 consFDesc : FDesc -> List FDesc -> List FDesc
 emptyFDesc : List FDesc
+
 consString : String -> List String -> List String
 emptyListString : List String
+
 consExport : Export -> List Export -> List Export
 emptyExport : List Export
+
 loc : Int -> LVar
 glob : String -> LVar
 it8 : NativeTy

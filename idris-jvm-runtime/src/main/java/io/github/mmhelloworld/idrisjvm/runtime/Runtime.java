@@ -46,7 +46,7 @@ public class Runtime {
 
     public static int constructorIndex(Object obj) {
         if (obj instanceof IdrisObject) {
-            return ((IdrisObject) obj).getConstructorId();
+            return ((IdrisObject) obj).constructorId;
         } else {
             return obj == null ? 0 : (Integer) obj;
         }

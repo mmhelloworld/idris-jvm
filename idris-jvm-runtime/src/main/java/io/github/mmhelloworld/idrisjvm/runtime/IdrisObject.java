@@ -15,7 +15,7 @@ public class IdrisObject {
     public static final IdrisObject NO_ARG_CONSTRUCTOR_9 = new IdrisObject(9);
     private static final int UNROLLED_PROPS_COUNT = 10;
 
-    private final int constructorId;
+    public final int constructorId;
 
     public final Object property0;
     public final Object property1;
@@ -101,10 +101,6 @@ public class IdrisObject {
                        Object property9) {
         this(constructorId, property0, property1, property2, property3, property4, property5, property6, property7,
                 property8, property9, null);
-    }
-
-    public int getConstructorId() {
-        return constructorId;
     }
 
     @Override

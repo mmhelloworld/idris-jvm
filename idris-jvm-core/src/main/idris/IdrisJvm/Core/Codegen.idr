@@ -25,8 +25,8 @@ generateMethod' assembler (SFun name args locs def) = do
   (_, subroutines) <- runAsm [] assembler $ cgFun [Public, Static] name clsName fname args locs def
   generateDependencyMethods assembler subroutines
 
-generateMethod : Assembler -> SDecl -> JVM_IO ()
-generateMethod assembler decl@(SFun "{APPLY_0}" _ _ _) = do
+generateApplyMethod : Assembler -> SDecl -> JVM_IO ()
+generateApplyMethod assembler decl = do
       _ <- sequence $ generateMethod' assembler <$> splitApplyFunction decl
       pure ()
   where
@@ -52,6 +52,8 @@ generateMethod assembler decl@(SFun "{APPLY_0}" _ _ _) = do
         cs = group 100 cases
         len = List.length cs
 
+generateMethod : Assembler -> SDecl -> JVM_IO ()
+generateMethod assembler decl@(SFun "{APPLY_0}" _ _ _) = generateApplyMethod assembler decl
 generateMethod assembler decl = generateMethod' assembler decl
 
 generateExport' : Assembler -> ExportIFace -> JVM_IO ()

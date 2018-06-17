@@ -262,6 +262,13 @@ cgOp2 (LChInt ITBig) [x] = do
   I2l
   InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf"  "(J)Ljava/math/BigInteger;" False
 
+cgOp2 (LChInt (ITFixed IT64)) [x] = do
+  Aload $ locIndex x
+  Checkcast "java/lang/Character"
+  InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
+  I2l
+  InvokeMethod InvokeStatic "java/lang/Long" "valueOf" "(J)Ljava/lang/Long;" False
+
 cgOp2 (LChInt _) [x] = do
   Aload $ locIndex x
   Checkcast "java/lang/Character"
@@ -275,6 +282,14 @@ cgOp2 (LIntCh ITBig) [x] = do
   I2c
   InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
 
+cgOp2 (LIntCh (ITFixed IT64)) [x] = do
+  Aload $ locIndex x
+  Checkcast "java/lang/Long"
+  InvokeMethod InvokeVirtual "java/lang/Long" "longValue" "()J" False
+  L2i
+  I2c
+  InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+
 cgOp2 (LIntCh _) [x] = do
   Aload $ locIndex x
   Checkcast "java/lang/Integer"
@@ -285,8 +300,6 @@ cgOp2 (LIntCh _) [x] = do
 cgOp2 (LSExt ITNative ITBig) [x] = signExtendToBigInteger x
 
 cgOp2 (LSExt (ITFixed from) ITBig) [x] = signExtendToBigInteger x
-
-cgOp2 (LSExt _ _) [x] = Aload $ locIndex x
 
 cgOp2 (LTrunc ITNative (ITFixed IT64)) [x] = do
   Aload $ locIndex x

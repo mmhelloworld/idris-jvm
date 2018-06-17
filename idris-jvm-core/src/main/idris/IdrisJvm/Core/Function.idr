@@ -6,7 +6,9 @@ import IdrisJvm.Core.Constant
 import IdrisJvm.Core.ControlFlow
 import IdrisJvm.Core.Foreign
 import IdrisJvm.Core.Operator
+import IdrisJvm.Core.Inference
 import IdrisJvm.IR.Types
+import Data.SortedMap
 
 %access public export
 
@@ -449,7 +451,7 @@ mutual
                -> Asm ()
   exportFun targetCname targetMethName sourceCname sourceMname exportCall parent returns args anns paramAnns = do
     let isStatic = exportCall == ExportCallStatic
-    let accessMods = if isStatic then [Public,Static] else [Public]
+    let accessMods = if isStatic then [Public, Static] else [Public]
     let argStartIndex = if isStatic then 0 else 1 -- drop `this` for instance methods
     let isSuperExport = exportCall == ExportCallSuper
     let isConstructor = exportCall == ExportCallConstructor
@@ -465,13 +467,13 @@ mutual
 
     CreateMethod accessMods targetCname targetMethName mdesc Nothing Nothing anns paramAnns
     MethodCodeStart
-    when (not isSuperExport && isExportIO returns) $ do
-      Aconstnull -- Setup the 2 null args for "call__IO"
-      Dup
     when isConstructor $ do -- Call matching super Constructor
       Aload 0
       loadArgs
       InvokeMethod InvokeSpecial parent "<init>" mdesc False
+    when (not isSuperExport && isExportIO returns) $ do
+      Aconstnull -- Setup the 2 null args for "call__IO"
+      Dup
     when (not isStatic) $ Aload 0 -- load `this`
     loadArgs
     InvokeMethod invType sourceCname sourceMname sourceMdesc False
@@ -481,6 +483,8 @@ mutual
 
   cgFun : List Access -> String -> ClassName -> MethodName -> List String -> Int -> SExp -> Asm ()
   cgFun access idrisName clsName fname args locs def = do
+      let (retTy, types) = inferExp SortedMap.empty def
+      Debug ("### " ++ clsName ++ "." ++ fname ++ ": " ++ show (toList types) ++ " -> " ++ show retTy)
       UpdateFunctionName $ MkJMethodName clsName fname
       UpdateShouldDescribeFrame True
       CreateMethod access clsName fname signature Nothing Nothing [] []
@@ -655,4 +659,3 @@ mutual
   findTailCallAppsCase (SConstCase _ e)     = findTailCallApps [] e
   findTailCallAppsCase (SDefaultCase e)     = findTailCallApps [] e
   findTailCallAppsCase (SConCase _ _ _ _ e) = findTailCallApps [] e
-

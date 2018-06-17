@@ -221,6 +221,7 @@ data Asm : Type -> Type where
     Daload : Asm ()
     Dastore : Asm ()
     Ddiv : Asm ()
+    Debug : String -> Asm ()
     Dload : Int -> Asm ()
     Dmul : Asm ()
     Drem : Asm ()

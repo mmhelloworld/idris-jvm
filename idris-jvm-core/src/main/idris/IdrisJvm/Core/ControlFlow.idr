@@ -7,6 +7,42 @@ import IdrisJvm.IR.Types
 
 %access public export
 
+isIntCase : SAlt -> Bool
+isIntCase (SConCase _ _ _ _ _)    = True
+isIntCase (SDefaultCase _)        = True
+isIntCase (SConstCase (I _) _)    = True
+isIntCase (SConstCase (B8 _) _)   = True
+isIntCase (SConstCase (B16 _) _)  = True
+isIntCase (SConstCase (Ch _) _)   = True
+isIntCase (SConstCase TheWorld _) = True
+isIntCase (SConstCase x _)        = isTypeConst x
+isIntCase _                       = False
+
+isIntSwitchCases : List SAlt -> Bool
+isIntSwitchCases alts = all isIntSwitchCase alts where
+    isIntSwitchCase : SAlt -> Bool
+    isIntSwitchCase (SConstCase (I _) _)    = True
+    isIntSwitchCase (SConstCase (B8 _) _)   = True
+    isIntSwitchCase (SConstCase (B16 _) _)  = True
+    isIntSwitchCase (SConstCase TheWorld _) = True
+    isIntSwitchCase (SConstCase x _)        = isTypeConst x
+    isIntSwitchCase (SDefaultCase _)        = True
+    isIntSwitchCase _ = False
+
+isCharSwitchCases : List SAlt -> Bool
+isCharSwitchCases alts = all isCharSwitchCase alts where
+    isCharSwitchCase : SAlt -> Bool
+    isCharSwitchCase (SConstCase (Ch _) _)   = True
+    isCharSwitchCase (SDefaultCase _)        = True
+    isCharSwitchCase _ = False
+
+isConstructorSwitchCases : List SAlt -> Bool
+isConstructorSwitchCases alts = all isConstructorSwitchCase alts where
+    isConstructorSwitchCase : SAlt -> Bool
+    isConstructorSwitchCase (SConCase _ _ _ _ _)    = True
+    isConstructorSwitchCase (SDefaultCase _)        = True
+    isConstructorSwitchCase _ = False
+
 mutual
   cgSwitch : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> List SAlt -> Asm ()
   cgSwitch ret cgBody e alts
@@ -198,17 +234,6 @@ mutual
   switchIntExpr varIndex = do
     Aload varIndex
     InvokeMethod InvokeStatic utilClass "hash" "(Ljava/lang/Object;)I" False
-
-  isIntCase : SAlt -> Bool
-  isIntCase (SConCase _ _ _ _ _)    = True
-  isIntCase (SDefaultCase _)        = True
-  isIntCase (SConstCase (I _) _)    = True
-  isIntCase (SConstCase (B8 _) _)   = True
-  isIntCase (SConstCase (B16 _) _)  = True
-  isIntCase (SConstCase (Ch _) _)   = True
-  isIntCase (SConstCase TheWorld _) = True
-  isIntCase (SConstCase x _)        = isTypeConst x
-  isIntCase _                       = False
 
   caseExpr : SAlt -> Maybe Int
   caseExpr (SConstCase t _) = Just $ constCaseExpr t where

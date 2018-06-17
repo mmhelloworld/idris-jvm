@@ -208,6 +208,9 @@ runAsm subroutines assembler Dadd = singleInst subroutines $ invokeInstance "dad
 runAsm subroutines assembler Daload = singleInst subroutines $ invokeInstance "daload" (Assembler -> JVM_IO ()) assembler
 runAsm subroutines assembler Dastore = singleInst subroutines $ invokeInstance "dastore" (Assembler -> JVM_IO ()) assembler
 runAsm subroutines assembler Ddiv = singleInst subroutines $ invokeInstance "ddiv" (Assembler -> JVM_IO ()) assembler
+
+runAsm subroutines assembler (Debug msg) = singleInst subroutines $ invokeInstance "debug" (Assembler -> String -> JVM_IO ()) assembler msg
+
 runAsm subroutines assembler (Dload n) = singleInst subroutines $ invokeInstance "dload" (Assembler -> Int -> JVM_IO ()) assembler n
 runAsm subroutines assembler Dmul = singleInst subroutines $ invokeInstance "dmul" (Assembler -> JVM_IO ()) assembler
 runAsm subroutines assembler Drem = singleInst subroutines $ invokeInstance "drem" (Assembler -> JVM_IO ()) assembler

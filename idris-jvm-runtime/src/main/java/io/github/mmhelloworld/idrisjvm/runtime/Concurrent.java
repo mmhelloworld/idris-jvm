@@ -26,7 +26,7 @@ public class Concurrent {
         // unknown interfaces are java.util.concurrent.Callable"
         return new Callable<Object>() {
             @Override
-            public Object call() throws Exception {
+            public Object call() {
                 return thunk.call();
             }
         };

@@ -335,6 +335,10 @@ public class Assembler {
         mv.visitInsn(DDIV);
     }
 
+    public void debug(String msg) {
+        System.out.println(msg);
+    }
+
     public void dload(int n) {
         mv.visitVarInsn(DLOAD, n);
     }

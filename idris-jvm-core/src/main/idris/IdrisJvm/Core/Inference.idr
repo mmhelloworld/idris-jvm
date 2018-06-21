@@ -16,8 +16,22 @@ data InferredType = IBool | IChar | IInt | ILong | IFloat | IDouble | Ref String
 InferredTypeStore : Type
 InferredTypeStore = SortedMap Int InferredType
 
+record InferredFunctionType where
+    constructor MkInferredFunctionType
+    functionName : JMethodName
+    returnType : InferredType
+    argsType : InferredTypeStore
+
 inferredObjectType : InferredType
-inferredObjectType = Ref "Ljava/lang/Object;"
+inferredObjectType = Ref $ classSig "java/lang/Object"
+
+inferredIdrisObjectType : InferredType
+inferredIdrisObjectType = Ref $ classSig idrisObjectType
+
+record InferenceConfig where
+  constructor MkInferenceConfig
+  functionName : JMethodName
+  functionTypes : SortedMap JMethodName (InferredType, InferredTypeStore)
 
 Eq InferredType where
   IBool == IBool = True
@@ -373,99 +387,140 @@ inferConstExp acc TheWorld = (IInt, acc)
 inferConstExp acc x = if isTypeConst x
               then (IInt, acc)
               else jerror $ "Constant " ++ show x ++ " not compilable yet"
-mutual
-    inferIfElseTy : InferredTypeStore -> LVar -> SExp -> SExp -> (InferredType, InferredTypeStore)
-    inferIfElseTy acc (Loc i) trueAlt falseAlt = let ifVarInferred = addType acc i IBool
-                                                     (falseRetTy, falseAltTypes) = inferExp ifVarInferred falseAlt
-                                                     (trueRetTy, trueAltTypes) = inferExp ifVarInferred trueAlt
-                                                 in (falseRetTy <+> trueRetTy, merge falseAltTypes trueAltTypes)
 
-    inferNullableIfElseTy : InferredTypeStore -> LVar -> SExp -> SExp -> (InferredType, InferredTypeStore)
-    inferNullableIfElseTy acc (Loc i) trueAlt falseAlt =
-        let ifVarInferred = addType acc i IUnknown
-            (falseRetTy, falseAltTypes) = inferExp ifVarInferred falseAlt
-            (trueRetTy, trueAltTypes) = inferExp ifVarInferred trueAlt
+inferFunctionAppArgs : InferredTypeStore -> InferredTypeStore -> List LVar -> InferredTypeStore
+inferFunctionAppArgs calledFunctionArgTypes types args =
+    let lookupType = \argPos => fromMaybe IUnknown $ SortedMap.lookup (cast $ the Nat argPos) calledFunctionArgTypes
+    in foldl
+         (\acc, (pos, arg) => addType acc (locIndex arg) (lookupType pos))
+         types
+         (List.zip [0 .. length args] args)
+
+combineTypes : InferredType -> List InferredType -> InferredType
+combineTypes ty [] = ty
+combineTypes IUnknown (IUnknown :: rest) = combineTypes IUnknown rest
+combineTypes IUnknown (ty :: rest) = combineTypes ty rest
+combineTypes ty (IUnknown :: rest) = combineTypes ty rest
+combineTypes prevTy (currTy :: rest) =
+    if prevTy == currTy then
+        combineTypes currTy rest
+    else
+        inferredObjectType
+
+mutual
+    inferIfElseTy : InferenceConfig -> InferredTypeStore -> LVar -> SExp -> SExp -> (InferredType, InferredTypeStore)
+    inferIfElseTy config acc (Loc i) trueAlt falseAlt =
+        let ifVarInferred = addType acc i IBool
+            (falseRetTy, falseAltTypes) = inferExp config ifVarInferred falseAlt
+            (trueRetTy, trueAltTypes) = inferExp config ifVarInferred trueAlt
         in (falseRetTy <+> trueRetTy, merge falseAltTypes trueAltTypes)
 
-    inferAlt : InferredTypeStore -> SAlt -> (InferredType, InferredTypeStore)
-    inferAlt types (SConstCase _ expr) = inferExp types expr
+    inferNullableIfElseTy : InferenceConfig -> InferredTypeStore -> LVar -> SExp -> SExp -> (InferredType, InferredTypeStore)
+    inferNullableIfElseTy config acc (Loc i) trueAlt falseAlt =
+        let ifVarInferred = addType acc i IUnknown
+            (falseRetTy, falseAltTypes) = inferExp config ifVarInferred falseAlt
+            (trueRetTy, trueAltTypes) = inferExp config ifVarInferred trueAlt
+        in (falseRetTy <+> trueRetTy, merge falseAltTypes trueAltTypes)
 
-    inferAlt types (SDefaultCase expr) = inferExp types expr
+    inferAlt :InferenceConfig -> InferredTypeStore -> SAlt -> (InferredType, InferredTypeStore)
+    inferAlt config types (SConstCase _ expr) = inferExp config types expr
+    inferAlt config types (SDefaultCase expr) = inferExp config types expr
+    inferAlt config types (SConCase lv _ _ args expr) = inferExp config types expr
 
-    inferAlt types (SConCase lv _ _ args expr) = inferExp types expr
-
-    inferSwitch : InferredTypeStore -> LVar -> List SAlt -> (InferredType, InferredTypeStore)
-    inferSwitch types (Loc e) alts =
+    inferSwitch : InferenceConfig -> InferredTypeStore -> LVar -> List SAlt -> (InferredType, InferredTypeStore)
+    inferSwitch config types (Loc e) alts =
         let switchExprType =
                 if isConstructorSwitchCases alts then
-                    (Ref idrisObjectType)
+                    inferredIdrisObjectType
                 else if isIntSwitchCases alts then
                     IInt
                 else if isCharSwitchCases alts then
                     IChar
                 else
                     IUnknown
-            altTypes = inferAlt (addType types e switchExprType) <$> alts
+            altTypes = inferAlt config (addType types e switchExprType) <$> alts
 
-        in (foldl (<+>) IUnknown $ fst <$> altTypes, concat $ snd <$> altTypes)
+        in (combineTypes IUnknown $ fst <$> altTypes, concat $ snd <$> altTypes)
 
-    inferExp : InferredTypeStore -> SExp -> (InferredType, InferredTypeStore)
-    inferExp acc (SV (Glob _)) = (inferredObjectType, acc)
-    inferExp acc (SV (Loc i)) = (fromMaybe IUnknown $ lookup i acc, acc)
-    inferExp acc (SApp _ f args) = (inferredObjectType, acc)
-    inferExp acc (SLet (Loc i) v sc) = let (vty, nacc) = inferExp acc v
-                                           naccWithI = addType nacc i vty
-                                       in inferExp naccWithI sc
-    inferExp acc (SUpdate _ e) = inferExp acc e
-    inferExp acc (SProj (Loc v) i) = (inferredObjectType, addType acc v (Ref idrisObjectType))
+    inferExp : InferenceConfig -> InferredTypeStore -> SExp -> (InferredType, InferredTypeStore)
+    inferExp config acc (SV (Glob _)) = (inferredObjectType, acc)
+    inferExp config acc (SV (Loc i)) = (fromMaybe IUnknown $ lookup i acc, acc)
+    inferExp config acc (SApp False f args) =
+      maybe (IUnknown, acc) inferArgs $ lookup (jname f) (functionTypes config) where
+        inferArgs : (InferredType, InferredTypeStore) -> (InferredType, InferredTypeStore)
+        inferArgs (retTy, argTys) = (retTy, inferFunctionAppArgs argTys acc args)
 
-    inferExp acc (SCon _ 0 "Prelude.Bool.False" []) = (IBool, acc)
-    inferExp acc (SCon _ 1 "Prelude.Bool.True" []) = (IBool, acc)
-    inferExp acc (SCon _ t _ args) = (Ref idrisObjectType, acc)
-    inferExp acc (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
+    inferExp config acc (SApp True f args) =
+        let calledFunctionName = jname f
+        in
+          if calledFunctionName == functionName config then
+            (IUnknown, acc)
+          else maybe (Ref rtThunkSig, acc) inferArgs $ lookup calledFunctionName (functionTypes config) where
+             inferArgs : (InferredType, InferredTypeStore) -> (InferredType, InferredTypeStore)
+             inferArgs (_, argTys) = (Ref rtThunkSig, inferFunctionAppArgs argTys acc args)
+
+    inferExp config acc (SLet (Loc i) v sc) =
+        let (vty, nacc) = inferExp config acc v
+            naccWithI = addType nacc i vty
+        in inferExp config naccWithI sc
+    inferExp config acc (SUpdate _ e) = inferExp config acc e
+    inferExp config acc (SProj (Loc v) i) = (inferredObjectType, addType acc v inferredIdrisObjectType)
+
+    inferExp config acc (SCon _ 0 "Prelude.Bool.False" []) = (IBool, acc)
+    inferExp config acc (SCon _ 1 "Prelude.Bool.True" []) = (IBool, acc)
+    inferExp config acc (SCon _ t _ args) = (inferredIdrisObjectType, acc)
+    inferExp config acc (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
                              (SConCase _ 1 "Prelude.Bool.True" [] trueAlt) ::
-                             _)) = inferIfElseTy acc e trueAlt falseAlt
+                             _)) = inferIfElseTy config acc e trueAlt falseAlt
 
-    inferExp acc (SCase _ e ((SConCase _ 1 "Prelude.Bool.True" [] trueAlt) ::
+    inferExp config acc (SCase _ e ((SConCase _ 1 "Prelude.Bool.True" [] trueAlt) ::
                             (SDefaultCase falseAlt) ::
                             _))
-        = inferIfElseTy acc e trueAlt falseAlt
+        = inferIfElseTy config acc e trueAlt falseAlt
 
-    inferExp acc (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
+    inferExp config acc (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
                         (SDefaultCase trueAlt) ::
                         _))
-        = inferIfElseTy acc e trueAlt falseAlt
+        = inferIfElseTy config acc e trueAlt falseAlt
 
-    inferExp acc (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
+    inferExp config acc (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
                          (SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
                          _))
-        = inferNullableIfElseTy (addType acc justValueStore inferredObjectType) e justExpr nothingExpr
+        = inferNullableIfElseTy config (addType acc justValueStore inferredObjectType) e justExpr nothingExpr
 
-    inferExp acc (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
+    inferExp config acc (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
                              (SDefaultCase defaultExpr) ::
                              _))
-        = inferNullableIfElseTy (addType acc justValueStore inferredObjectType) e justExpr defaultExpr
+        = inferNullableIfElseTy config (addType acc justValueStore inferredObjectType) e justExpr defaultExpr
 
-    inferExp acc (SCase _ e ((SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
+    inferExp config acc (SCase _ e ((SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
                              (SDefaultCase defaultExpr) ::
                              _))
-        = inferNullableIfElseTy acc e nothingExpr defaultExpr
+        = inferNullableIfElseTy config acc e nothingExpr defaultExpr
 
-    inferExp acc (SCase _ e alts) = inferSwitch acc e alts
+    inferExp config acc (SCase _ e alts) = inferSwitch config acc e alts
 
-    inferExp acc (SChkCase e alts) = inferSwitch acc e alts
+    inferExp config acc (SChkCase e alts) = inferSwitch config acc e alts
 
-    inferExp acc (SConst c) = inferConstExp acc c
+    inferExp config acc (SConst c) = inferConstExp acc c
 
-    inferExp acc (SOp op args) = inferOp acc op args
+    inferExp config acc (SOp op args) = inferOp acc op args
 
-    inferExp acc SNothing = (IInt, acc)
+    inferExp config acc SNothing = (IInt, acc)
 
-    inferExp acc (SError x) = (IUnknown, acc)
+    inferExp config acc (SError x) = (IUnknown, acc)
 
-    inferExp acc (SForeign returns fdesc args) = case parseDescriptor returns fdesc args of
+    inferExp config acc (SForeign returns fdesc args) = case parseDescriptor returns fdesc args of
         JLambda clazz _ => (Ref ("L" ++ clazz ++ ";"), acc)
         _ =>
             let argsWithTypes = (\(fdesc, lvar) => (fdescFieldDescriptor fdesc, lvar)) <$> args
                 returnDesc = fdescTypeDescriptor returns
             in (inferForeignReturnDesc returnDesc, inferForeignArgDescs acc argsWithTypes)
+
+inferFun : SortedMap JMethodName (InferredType, InferredTypeStore) -> SDecl -> InferredFunctionType
+inferFun types (SFun name args locs def) =
+  let jmethodName = jname name
+      config = MkInferenceConfig jmethodName types
+      initialArgsTypes = fromMaybe SortedMap.empty $ snd <$> lookup jmethodName types
+      (returnType, argsType) = inferExp config initialArgsTypes def
+  in MkInferredFunctionType jmethodName returnType argsType

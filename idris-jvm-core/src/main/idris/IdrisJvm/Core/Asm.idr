@@ -147,6 +147,12 @@ Eq JMethodName where
 Show JMethodName where
   show (MkJMethodName cname mname) = cname ++ "#" ++ mname
 
+Ord JMethodName where
+   compare (MkJMethodName c1 m1) (MkJMethodName c2 m2) =
+     case c1 `compare` c2 of
+       EQ => m1 `compare` m2
+       classOrdering => classOrdering
+
 mutual
     asmRefTyDesc : ReferenceTypeDescriptor -> String
     asmRefTyDesc (ClassDesc c)       = "L" ++ c ++ ";"

@@ -1,13 +1,20 @@
 module Main
 
+import IdrisJvm.IO
+import Java.Lang
+
 mutual
-  evenT : Nat -> IO Bool
-  evenT Z = pure True
-  evenT (S k) = oddT k
+  evenT : Nat -> JVM_IO ()
+  evenT Z = printLn True
+  evenT (S k) = do
+    setProperty "bar" (show k)
+    oddT k
 
-  oddT : Nat -> IO Bool
-  oddT Z = pure False
-  oddT (S k) = evenT k
+  oddT : Nat -> JVM_IO ()
+  oddT Z = printLn False
+  oddT (S k) = do
+    setProperty "foo" (show k)
+    evenT k
 
-main : IO ()
-main = evenT 99999 >>= printLn
+main : JVM_IO ()
+main = evenT 99999

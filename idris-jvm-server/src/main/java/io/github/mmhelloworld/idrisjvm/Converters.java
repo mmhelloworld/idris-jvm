@@ -1,5 +1,7 @@
 package io.github.mmhelloworld.idrisjvm;
 
+import IdrisJvm.IR.export.ListSDecl;
+import IdrisJvm.IR.export.SDecl;
 import idris.prelude.list.ListExport;
 import idris.prelude.list.ListFDesc;
 import idris.prelude.list.ListLVar;
@@ -41,6 +43,10 @@ public class Converters {
 
     public static ListSAlt toIdrisListSAlt(List<SAlt> jlist) {
         return toIdrisList(jlist, Codegen::emptySAlt, Codegen::consSAlt);
+    }
+
+    public static ListSDecl toIdrisListSDecl(List<SDecl> jlist) {
+        return toIdrisList(jlist, Codegen::emptySDecl, Codegen::consSDecl);
     }
 
     public static SForeignArgs toIdrisListSForeignArgs(List<SForeignArg> jlist) {

@@ -14,6 +14,12 @@ fapp : String -> List FDesc -> FDesc
 consFDesc : FDesc -> List FDesc -> List FDesc
 emptyFDesc : List FDesc
 
+consSDecl : SDecl -> List SDecl -> List SDecl
+consSDecl = (::)
+
+emptySDecl : List SDecl
+emptySDecl = []
+
 consString : String -> List String -> List String
 emptyListString : List String
 

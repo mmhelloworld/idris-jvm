@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
@@ -60,7 +59,7 @@ public class IdrisJvmTest {
     }
 
     @BeforeClass
-    public static void beforeClass() throws InterruptedException, TimeoutException {
+    public static void beforeClass() {
         if (shouldStartIdrisJvmServer()) {
             getPortFile().delete();
         }
@@ -97,7 +96,7 @@ public class IdrisJvmTest {
         idrisCompilerProcessBuilder.redirectOutput(Redirect.to(compilerOut));
 
         Process idrisCompiler = idrisCompilerProcessBuilder.start();
-        final boolean hasCompilerExited = idrisCompiler.waitFor(2, MINUTES);
+        final boolean hasCompilerExited = idrisCompiler.waitFor(3, MINUTES);
         if (!hasCompilerExited) {
             Files.copy(compilerOut.toPath(), System.err);
             throw new RuntimeException("Compilation timed out. Log file is available at " + compilerOut.getPath());

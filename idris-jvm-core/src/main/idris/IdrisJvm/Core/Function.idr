@@ -481,11 +481,12 @@ mutual
     when (not isSuperExport && isExportIO returns) unwrapExportedIO
     returnExport exportCall returnDesc
 
-  cgFun : List Access -> String -> ClassName -> MethodName -> List String -> Int -> SExp -> Asm ()
-  cgFun access idrisName clsName fname args locs def = do
-      let (retTy, types) = inferExp SortedMap.empty def
+  cgFun : SortedMap JMethodName (InferredType, InferredTypeStore) -> List Access -> String -> ClassName -> MethodName -> List String -> Int -> SExp -> Asm ()
+  cgFun functionTypes access idrisName clsName fname args locs def = do
+      let jMethodName = MkJMethodName clsName fname
+      let (retTy, types) = fromMaybe (IUnknown, SortedMap.empty) $ lookup jMethodName functionTypes
       Debug ("### " ++ clsName ++ "." ++ fname ++ ": " ++ show (toList types) ++ " -> " ++ show retTy)
-      UpdateFunctionName $ MkJMethodName clsName fname
+      UpdateFunctionName jMethodName
       UpdateShouldDescribeFrame True
       CreateMethod access clsName fname signature Nothing Nothing [] []
       MethodCodeStart

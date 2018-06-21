@@ -7,7 +7,9 @@ import IdrisJvm.Core.Common
 import IdrisJvm.Core.Constant
 import IdrisJvm.Core.Function
 import IdrisJvm.Core.JAsm
+import IdrisJvm.Core.Inference
 import IdrisJvm.IR.Exports
+import Data.SortedMap
 
 %access public export
 
@@ -17,24 +19,25 @@ generateDependencyMethods assembler (subroutine :: subroutines) = do
   (_, newSubroutines) <- runAsm [] assembler subroutine
   generateDependencyMethods assembler (newSubroutines ++ subroutines)
 
-generateMethod' : Assembler -> SDecl -> JVM_IO ()
-generateMethod' assembler (SFun name args locs def) = do
+generateMethod : Assembler -> SortedMap JMethodName (InferredType, InferredTypeStore) -> SDecl -> JVM_IO ()
+generateMethod assembler functionTypes (SFun name args locs def) = do
   let jmethodName = jname name
   let fname = jmethName jmethodName
   let clsName = jmethClsName jmethodName
-  (_, subroutines) <- runAsm [] assembler $ cgFun [Public, Static] name clsName fname args locs def
+  (_, subroutines) <- runAsm [] assembler $ cgFun functionTypes [Public, Static] name clsName fname args locs def
   generateDependencyMethods assembler subroutines
 
-generateApplyMethod : Assembler -> SDecl -> JVM_IO ()
-generateApplyMethod assembler decl = do
-      _ <- sequence $ generateMethod' assembler <$> splitApplyFunction decl
-      pure ()
-  where
-    group : Nat -> List a -> List (List a)
-    group _ [] = []
-    group n xs =
-        let (ys, zs) = splitAt n xs
-        in  ys :: group n zs
+group : Nat -> List a -> List (List a)
+group _ [] = []
+group n xs =
+    let (ys, zs) = splitAt n xs
+    in  ys :: group n zs
+
+splitApplyFunction : SDecl -> List SDecl
+splitApplyFunction (SFun fname args n (SChkCase var cases)) =
+  let cs = group 100 cases
+      len = List.length cs
+  in map (callNextFn fname args n var len) . List.zip [0.. len] $ cs where
 
     callNextFn : String -> List String -> Int -> LVar -> Nat -> (Nat, List SAlt) -> SDecl
     callNextFn fname args n caseVar last (index, cs) = SFun currFn args n body where
@@ -46,15 +49,36 @@ generateApplyMethod assembler decl = do
 
       body = SChkCase caseVar $ if index + 1 == last then cs else (cs ++ [SDefaultCase (SApp True nextFn [Loc 0, Loc 1])])
 
-    splitApplyFunction : SDecl -> List SDecl
-    splitApplyFunction (SFun fname args n (SChkCase var cases)) =
-      map (callNextFn fname args n var len) . List.zip [0.. len] $ cs where
-        cs = group 100 cases
-        len = List.length cs
+splitLargeFunctions : List SDecl -> List SDecl
+splitLargeFunctions decls = decls >>= f where
+  f : SDecl -> List SDecl
+  f decl@(SFun "{APPLY_0}" _ _ _) = splitApplyFunction decl
+  f decl = [decl]
 
-generateMethod : Assembler -> SDecl -> JVM_IO ()
-generateMethod assembler decl@(SFun "{APPLY_0}" _ _ _) = generateApplyMethod assembler decl
-generateMethod assembler decl = generateMethod' assembler decl
+inferFuns : SortedMap JMethodName (InferredType, InferredTypeStore)
+         -> List SDecl
+         -> SortedMap JMethodName (InferredType, InferredTypeStore)
+inferFuns initial decls = go SortedMap.empty decls where
+    go : SortedMap JMethodName (InferredType, InferredTypeStore)
+      -> List SDecl
+      -> SortedMap JMethodName (InferredType, InferredTypeStore)
+    go acc [] = acc
+    go acc (decl :: rest) =
+        let (MkInferredFunctionType fname retTy argTys) = inferFun initial decl
+            newAcc = SortedMap.insert fname (retTy, argTys) acc
+        in go newAcc rest
+
+generateMethods : Assembler -> List SDecl -> JVM_IO ()
+generateMethods assembler decls =
+    let smallDecls = splitLargeFunctions decls
+        functionTypesByNameStage1 = inferFuns SortedMap.empty smallDecls
+        functionTypesByName = inferFuns functionTypesByNameStage1 smallDecls
+    in go functionTypesByName smallDecls where
+        go : SortedMap JMethodName (InferredType, InferredTypeStore) -> List SDecl -> JVM_IO ()
+        go types [] = pure ()
+        go types (decl :: rest) = do
+            generateMethod assembler types decl
+            go types rest
 
 generateExport' : Assembler -> ExportIFace -> JVM_IO ()
 generateExport' assembler exportIFace = do
@@ -87,6 +111,10 @@ exports =
   Data (List FDesc) "idris/prelude/list/ListFDesc" $
   Data (List LVar) "idris/prelude/list/ListLVar" $
   Data (List Export) "idris/prelude/list/ListExport" $
+  Data (List SDecl) "IdrisJvm/IR/export/ListSDecl" $
+
+  Fun consSDecl (ExportStatic "consSDecl") $
+  Fun emptySDecl (ExportStatic "emptySDecl") $
 
   Fun consFDesc (ExportStatic "consFDesc") $
   Fun emptyFDesc (ExportStatic "emptyFDesc") $
@@ -241,7 +269,7 @@ exports =
   Fun updatable (ExportStatic "updatable") $
   Fun shared (ExportStatic "shared") $
 
-  Fun generateMethod (ExportStatic "generateMethod") $
+  Fun generateMethods (ExportStatic "generateMethods") $
   Fun generateExport (ExportStatic "generateExport") $
   End
 

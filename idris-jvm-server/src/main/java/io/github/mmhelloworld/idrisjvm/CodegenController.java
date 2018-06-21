@@ -24,6 +24,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
 
 import static com.fasterxml.jackson.core.JsonToken.END_ARRAY;
@@ -123,17 +124,19 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
     }
 
     private void processSimpleDecls(final JsonParser parser, final Assembler assembler) throws IOException {
+        List<SDecl> decls = new LinkedList<>();
         parser.nextToken();
         while (parser.nextToken() != END_ARRAY) {
             final JsonNode node = parser.getCodec().readTree(parser);
             final ObjectMapper mapper = Context.getMapper();
             if (node.isArray()) {
                 SDecl sDecl = mapper.readerFor(SDecl.class).readValue(node.get(1));
-                Codegen.generateMethod(assembler, sDecl);
+                decls.add(sDecl);
             } else {
                 throw new RuntimeException("An array representing SimpleDecl expected");
             }
         }
+        Codegen.generateMethods(assembler, Converters.toIdrisListSDecl(decls));
     }
 
     private void addMainMethod(final Assembler assembler) {

@@ -33,16 +33,15 @@ public class TypeProvider {
     private static final String INTERFACE = "i";
 
     public static void main(String[] args) throws IOException {
-        Iterable<String> lines = Arrays.stream(args, 1, args.length)
-                .map(className -> className.replace('/', '.'))
+        Path outputFilePath = Paths.get(".idrisjvmtypes");
+        Iterable<String> lines = Files.lines(Paths.get(".idrisjvmtypesimport"))
                 .flatMap(TypeProvider::importItems)::iterator;
-        Path outputFilePath = Paths.get(args[0]);
         Files.write(outputFilePath, lines);
     }
 
     private static Stream<String> importItems(String importItemsStr) {
         String[] imports = importItemsStr.split(" ");
-        String className = imports[0];
+        String className = imports[0].replace('/', '.');
 
         try {
             Class<?> clazz = Class.forName(className, false, currentThread().getContextClassLoader());

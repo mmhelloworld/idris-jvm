@@ -97,7 +97,6 @@ data JSafety = JSafe -- both exception and null safe
 JvmFfiDescs : Type
 JvmFfiDescs = List JvmFfiDesc
 
-
 createArray : Nat -> EType -> EType
 createArray Z ty = ty
 createArray (S k) ty = EArray $ createArray k ty
@@ -128,6 +127,7 @@ parseEType jtypeStr with (words jtypeStr)
   | ("Array" :: dim :: ty :: []) = createArray (cast dim) <$> parseEType ty
 
   | ["c", "java/lang/String"] = pure EString
+  | ["java/lang/String"] = pure EString
   | ["?java/lang/String"] = pure ENullableString
 
   | ["c", className] = pure $ EClass className
@@ -148,10 +148,10 @@ parseArgs args = sequence $ parseEType <$> args
 public export
 jvmImport : String -> List (String, List String) -> IO (Provider JvmFfiDescs)
 jvmImport cmd importList = do
-    let args =  unwords $ uncurry createCommandParam <$> importList
-    let types = ".idrisjvmtypes"
-    system $ cmd ++ " " ++ quoted types ++ " " ++ args
-    Right str <- readFile types
+    let args =  unlines $ uncurry createCommandParam <$> importList
+    writeFile ".idrisjvmtypesimport" args
+    system cmd
+    Right str <- readFile ".idrisjvmtypes"
         | Left err => pure (Error $ show err)
     let errOrffiDescs = sequence $ parseJvmOutput <$> lines str
     pure $ either Error Provide errOrffiDescs
@@ -161,7 +161,7 @@ jvmImport cmd importList = do
     quoted s = "\"" ++ s ++ "\""
 
     createCommandParam : String -> List String -> String
-    createCommandParam clazz clazzItems = quoted $ clazz ++ " " ++ (unwords clazzItems)
+    createCommandParam clazz clazzItems = clazz ++ " " ++ (unwords clazzItems)
 
     parseInvType : String -> Either String InvType
     parseInvType invStr with (words invStr)

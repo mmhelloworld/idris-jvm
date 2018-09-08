@@ -45,6 +45,21 @@
                         </configuration>
                     </execution>
                     <execution>
+                        <id>install-idris-package</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>idris</executable>
+                            <workingDirectory>${idris.srcdir}</workingDirectory>
+                            <arguments>
+                                <argument>--install</argument>
+                                <argument>${idris.srcdir}/idris-jvm-core.ipkg</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>generate-idris-interface</id>
                         <phase>compile</phase>
                         <goals>
@@ -105,6 +120,14 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
         </dependency>
     </dependencies>
 

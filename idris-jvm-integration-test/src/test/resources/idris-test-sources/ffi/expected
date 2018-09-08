@@ -8,8 +8,8 @@
 "9223372036854775807"
 Nothing
 Just "fooval"
-Nothing
-Just "fooval"
+"null"
+"barval"
 "null"
 "1"
 True

@@ -53,6 +53,27 @@
 
     <profiles>
         <profile>
+            <id>useExistingServer</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${maven-surefire-plugin.version}</version>
+
+                        <configuration>
+                            <systemPropertyVariables>
+                                <test.output>${test.output}</test.output>
+                                <runtime.jar.path>
+                                    ${basedir}/../idris-jvm-runtime/target/idris-jvm-runtime-${project.version}.jar
+                                </runtime.jar.path>
+                                <start-idris-jvm-server>false</start-idris-jvm-server>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>idrisJvmHomePresent</id>
             <activation>
                 <property>

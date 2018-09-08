@@ -2,6 +2,8 @@ package IdrisJvm.Core;
 
 import IdrisJvm.Core.JBsmArg.JBsmArgGetType;
 import IdrisJvm.Core.JBsmArg.JBsmArgHandle;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.FieldVisitor;
@@ -35,23 +37,34 @@ import static org.objectweb.asm.Opcodes.BIPUSH;
 import static org.objectweb.asm.Opcodes.CALOAD;
 import static org.objectweb.asm.Opcodes.CASTORE;
 import static org.objectweb.asm.Opcodes.CHECKCAST;
+import static org.objectweb.asm.Opcodes.D2F;
+import static org.objectweb.asm.Opcodes.D2I;
 import static org.objectweb.asm.Opcodes.DADD;
 import static org.objectweb.asm.Opcodes.DALOAD;
 import static org.objectweb.asm.Opcodes.DASTORE;
+import static org.objectweb.asm.Opcodes.DCONST_0;
+import static org.objectweb.asm.Opcodes.DCONST_1;
 import static org.objectweb.asm.Opcodes.DDIV;
 import static org.objectweb.asm.Opcodes.DLOAD;
 import static org.objectweb.asm.Opcodes.DMUL;
 import static org.objectweb.asm.Opcodes.DREM;
 import static org.objectweb.asm.Opcodes.DRETURN;
+import static org.objectweb.asm.Opcodes.DSTORE;
 import static org.objectweb.asm.Opcodes.DSUB;
 import static org.objectweb.asm.Opcodes.DUP;
 import static org.objectweb.asm.Opcodes.F2D;
 import static org.objectweb.asm.Opcodes.FALOAD;
 import static org.objectweb.asm.Opcodes.FASTORE;
+import static org.objectweb.asm.Opcodes.FCONST_0;
+import static org.objectweb.asm.Opcodes.FCONST_1;
 import static org.objectweb.asm.Opcodes.FLOAD;
 import static org.objectweb.asm.Opcodes.FRETURN;
+import static org.objectweb.asm.Opcodes.FSTORE;
+import static org.objectweb.asm.Opcodes.I2B;
 import static org.objectweb.asm.Opcodes.I2C;
+import static org.objectweb.asm.Opcodes.I2D;
 import static org.objectweb.asm.Opcodes.I2L;
+import static org.objectweb.asm.Opcodes.I2S;
 import static org.objectweb.asm.Opcodes.IADD;
 import static org.objectweb.asm.Opcodes.IALOAD;
 import static org.objectweb.asm.Opcodes.IAND;
@@ -88,6 +101,8 @@ import static org.objectweb.asm.Opcodes.LADD;
 import static org.objectweb.asm.Opcodes.LALOAD;
 import static org.objectweb.asm.Opcodes.LAND;
 import static org.objectweb.asm.Opcodes.LASTORE;
+import static org.objectweb.asm.Opcodes.LCONST_0;
+import static org.objectweb.asm.Opcodes.LCONST_1;
 import static org.objectweb.asm.Opcodes.LDIV;
 import static org.objectweb.asm.Opcodes.LLOAD;
 import static org.objectweb.asm.Opcodes.LMUL;
@@ -96,6 +111,7 @@ import static org.objectweb.asm.Opcodes.LREM;
 import static org.objectweb.asm.Opcodes.LRETURN;
 import static org.objectweb.asm.Opcodes.LSHL;
 import static org.objectweb.asm.Opcodes.LSHR;
+import static org.objectweb.asm.Opcodes.LSTORE;
 import static org.objectweb.asm.Opcodes.LSUB;
 import static org.objectweb.asm.Opcodes.LUSHR;
 import static org.objectweb.asm.Opcodes.LXOR;
@@ -116,6 +132,8 @@ import static org.objectweb.asm.Opcodes.T_LONG;
 import static org.objectweb.asm.Opcodes.T_SHORT;
 
 public class Assembler {
+    private static final Logger LOGGER = LogManager.getLogger(Assembler.class);
+
     private Map<String, ClassWriter> cws;
     private ClassWriter cw;
     private MethodVisitor mv;
@@ -319,6 +337,14 @@ public class Assembler {
         return className.substring(className.lastIndexOf('/') + 1);
     }
 
+    public void d2i() {
+        mv.visitInsn(D2I);
+    }
+
+    public void d2f() {
+        mv.visitInsn(D2F);
+    }
+
     public void dadd() {
         mv.visitInsn(DADD);
     }
@@ -331,12 +357,22 @@ public class Assembler {
         mv.visitInsn(DASTORE);
     }
 
+    public void dconst(double n) {
+        if (n == 0) {
+            mv.visitInsn(DCONST_0);
+        } else if (n == 1) {
+            mv.visitInsn(DCONST_1);
+        } else {
+            mv.visitLdcInsn(n);
+        }
+    }
+
     public void ddiv() {
         mv.visitInsn(DDIV);
     }
 
     public void debug(String msg) {
-        System.out.println(msg);
+        LOGGER.debug(msg);
     }
 
     public void dload(int n) {
@@ -353,6 +389,10 @@ public class Assembler {
 
     public void dreturn() {
         mv.visitInsn(DRETURN);
+    }
+
+    public void dstore(int n) {
+        mv.visitVarInsn(DSTORE, n);
     }
 
     public void dsub() {
@@ -375,6 +415,16 @@ public class Assembler {
         mv.visitInsn(FASTORE);
     }
 
+    public void fconst(double n) {
+        if (n == 0) {
+            mv.visitInsn(FCONST_0);
+        } else if (n == 1) {
+            mv.visitInsn(FCONST_1);
+        } else {
+            mv.visitLdcInsn((float)n);
+        }
+    }
+
     public void field(int fieldType, String className, String fieldName, String desc) {
         mv.visitFieldInsn(fieldType, className, fieldName, desc);
     }
@@ -391,10 +441,31 @@ public class Assembler {
         mv.visitFrame(
             frameType,
             nLocal,
-            local.stream().map(s -> s.equalsIgnoreCase("opcodes.integer") ? Opcodes.INTEGER : s).toArray(),
+            local.stream().map(this::toOpcode).toArray(),
             nStack,
-            stack.stream().map(s -> s.equalsIgnoreCase("opcodes.integer") ? Opcodes.INTEGER : s).toArray()
+            stack.stream().map(this::toOpcode).toArray()
         );
+    }
+
+    private Object toOpcode(String s) {
+        switch (s) {
+            case "INTEGER":
+                return Opcodes.INTEGER;
+            case "FLOAT":
+                return Opcodes.FLOAT;
+            case "LONG":
+                return Opcodes.LONG;
+            case "DOUBLE":
+                return Opcodes.DOUBLE;
+            case "NULL":
+                return Opcodes.NULL;
+            case "UNINITIALIZED_THIS":
+                return Opcodes.UNINITIALIZED_THIS;
+            case "TOP":
+                return Opcodes.TOP;
+            default:
+                return s;
+        }
     }
 
     public int freshIfIndex() {
@@ -415,6 +486,10 @@ public class Assembler {
         mv.visitInsn(FRETURN);
     }
 
+    public void fstore(int n) {
+        mv.visitVarInsn(FSTORE, n);
+    }
+
     public String getClassName() {
         return className;
     }
@@ -431,12 +506,24 @@ public class Assembler {
         mv.visitJumpInsn(Opcodes.GOTO, (Label) env.get(labelName));
     }
 
+    public void i2b() {
+        mv.visitInsn(I2B);
+    }
+
     public void i2c() {
         mv.visitInsn(I2C);
     }
 
+    public void i2d() {
+        mv.visitInsn(I2D);
+    }
+
     public void i2l() {
         mv.visitInsn(I2L);
+    }
+
+    public void i2s() {
+        mv.visitInsn(I2S);
     }
 
     public void iadd() {
@@ -625,6 +712,16 @@ public class Assembler {
         mv.visitInsn(LXOR);
     }
 
+    public void lconst(long n) {
+        if (n == 0) {
+            mv.visitInsn(LCONST_0);
+        } else if (n == 1) {
+            mv.visitInsn(LCONST_1);
+        } else {
+            mv.visitLdcInsn(n);
+        }
+    }
+
     public void ldcDouble(double val) {
         mv.visitLdcInsn(val);
     }
@@ -686,6 +783,10 @@ public class Assembler {
 
     public void lshr() {
         mv.visitInsn(LSHR);
+    }
+
+    public void lstore(int n) {
+        mv.visitVarInsn(LSTORE, n);
     }
 
     public void lsub() {

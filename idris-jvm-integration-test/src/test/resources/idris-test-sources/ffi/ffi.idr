@@ -217,9 +217,9 @@ main = do
   System.setProperty "foo" "fooval"
   printLn !(getProperty "foo")  -- Test returning a non-null string from FFI call
   hashMap <- HashMap.new
-  printLn !(Objects.toString !(HashMap.get hashMap "bar")) -- Test returning null object as Nothing
-  HashMap.put hashMap (Just "foo") (Just "fooval")
-  printLn !(Objects.toString !(HashMap.get hashMap "foo")) -- Test returning a non-null object as Just
+  printLn !(Objects.toString !(HashMap.get hashMap "bar")) -- Test returning null object
+  HashMap.put hashMap (Just "bar") (Just "barval")
+  printLn !(Objects.toString !(HashMap.get hashMap "bar")) -- Test returning a non-null object
 
   printLn $ nullableToString (the (Maybe BigInteger) Nothing) -- Test passing Nothing as a null to FFI call
   bigOne <- BigInteger.new "1"

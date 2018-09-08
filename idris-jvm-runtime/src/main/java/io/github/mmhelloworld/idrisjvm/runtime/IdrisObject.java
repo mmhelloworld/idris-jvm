@@ -17,18 +17,18 @@ public class IdrisObject {
 
     public final int constructorId;
 
-    public final Object property0;
-    public final Object property1;
-    public final Object property2;
-    public final Object property3;
-    public final Object property4;
-    public final Object property5;
-    public final Object property6;
-    public final Object property7;
-    public final Object property8;
-    public final Object property9;
+    public Object property0;
+    public Object property1;
+    public Object property2;
+    public Object property3;
+    public Object property4;
+    public Object property5;
+    public Object property6;
+    public Object property7;
+    public Object property8;
+    public Object property9;
 
-    public final Object[] properties;
+    public Object[] properties;
 
     public IdrisObject(int constructorId, Object property0, Object property1, Object property2, Object property3,
                        Object property4, Object property5, Object property6, Object property7, Object property8,
@@ -45,6 +45,45 @@ public class IdrisObject {
         this.property8 = property8;
         this.property9 = property9;
         this.properties = properties;
+    }
+
+    public IdrisObject(int constructorId, Object[] properties) {
+        this.constructorId = constructorId;
+        int propertiesCount = properties.length;
+
+        if (propertiesCount > 0) {
+            this.property0 = properties[0];
+        }
+        if (propertiesCount > 1) {
+            this.property1 = properties[1];
+        }
+        if (propertiesCount > 2) {
+            this.property2 = properties[2];
+        }
+        if (propertiesCount > 3) {
+            this.property3 = properties[3];
+        }
+        if (propertiesCount > 4) {
+            this.property4 = properties[4];
+        }
+        if (propertiesCount > 5) {
+            this.property5 = properties[5];
+        }
+        if (propertiesCount > 6) {
+            this.property6 = properties[6];
+        }
+        if (propertiesCount > 7) {
+            this.property7 = properties[7];
+        }
+        if (propertiesCount > 8) {
+            this.property8 = properties[8];
+        }
+        if (propertiesCount > 9) {
+            this.property9 = properties[9];
+        }
+        if (propertiesCount > 10) {
+            this.properties = Arrays.copyOfRange(properties, 10, propertiesCount);
+        }
     }
 
     public IdrisObject(int constructorId) {
@@ -101,6 +140,42 @@ public class IdrisObject {
                        Object property9) {
         this(constructorId, property0, property1, property2, property3, property4, property5, property6, property7,
                 property8, property9, null);
+    }
+
+    public static Object getProperty(Object obj, int propertyIndex) {
+        if (obj instanceof IdrisObject) {
+            IdrisObject idrisObject = (IdrisObject) obj;
+            if (propertyIndex < UNROLLED_PROPS_COUNT) {
+                switch (propertyIndex) {
+                    case 0:
+                        return idrisObject.property0;
+                    case 1:
+                        return idrisObject.property1;
+                    case 2:
+                        return idrisObject.property2;
+                    case 3:
+                        return idrisObject.property3;
+                    case 4:
+                        return idrisObject.property4;
+                    case 5:
+                        return idrisObject.property5;
+                    case 6:
+                        return idrisObject.property6;
+                    case 7:
+                        return idrisObject.property7;
+                    case 8:
+                        return idrisObject.property8;
+                    case 9:
+                        return idrisObject.property9;
+                    default:
+                        throw new IllegalStateException("Unexpected property index: " + propertyIndex);
+                }
+            } else {
+                return idrisObject.properties[propertyIndex - UNROLLED_PROPS_COUNT];
+            }
+        } else {
+            return obj;
+        }
     }
 
     @Override

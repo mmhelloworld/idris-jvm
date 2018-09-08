@@ -24,6 +24,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -97,15 +98,17 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
     }
 
     private void processCodegenInfo(final JsonParser parser, final Assembler assembler) throws IOException {
+        List<SDecl> decls = new ArrayList<>();
+        List<ExportIFace> exports = new ArrayList<>();
         parser.nextToken();
         while (parser.nextToken() != END_OBJECT) {
             String codegenInfoFieldName = parser.getCurrentName();
             switch (codegenInfoFieldName) {
                 case "simple-decls":
-                    processSimpleDecls(parser, assembler);
+                    decls = parseSimpleDecls(parser);
                     break;
                 case "exports":
-                    processExports(parser, assembler);
+                    exports = parseExports(parser);
                     break;
                 default:
                     parser.nextToken();
@@ -113,17 +116,21 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
                     break;
             }
         }
+        Codegen.generateMethods(assembler, Converters.toIdrisListSDecl(decls),
+                Converters.toIdrisListExportIFace(exports));
     }
 
-    private void processExports(final JsonParser parser, final Assembler assembler) throws IOException {
+    private List<ExportIFace> parseExports(final JsonParser parser) throws IOException {
+        List<ExportIFace> exports = new LinkedList<>();
         parser.nextToken();
         while (parser.nextToken() != END_ARRAY) {
             ExportIFace exportIFace = mapper.readerFor(ExportIFace.class).readValue(parser);
-            Codegen.generateExport(assembler, exportIFace);
+            exports.add(exportIFace);
         }
+        return exports;
     }
 
-    private void processSimpleDecls(final JsonParser parser, final Assembler assembler) throws IOException {
+    private List<SDecl> parseSimpleDecls(final JsonParser parser) throws IOException {
         List<SDecl> decls = new LinkedList<>();
         parser.nextToken();
         while (parser.nextToken() != END_ARRAY) {
@@ -136,7 +143,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
                 throw new RuntimeException("An array representing SimpleDecl expected");
             }
         }
-        Codegen.generateMethods(assembler, Converters.toIdrisListSDecl(decls));
+        return decls;
     }
 
     private void addMainMethod(final Assembler assembler) {
@@ -147,7 +154,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
         assembler.aload(0);
         assembler.invokeMethod(INVOKESTATIC, "java/util/Arrays", "asList", "([Ljava/lang/Object;)Ljava/util/List;", false);
         assembler.field(PUTSTATIC, "io/github/mmhelloworld/idrisjvm/runtime/Runtime", "programArgs", "Ljava/util/List;");
-        assembler.invokeMethod(INVOKESTATIC, classAndMethodName[0], classAndMethodName[1], "()Ljava/lang/Object;", false);
+        assembler.invokeMethod(INVOKESTATIC, classAndMethodName[0], classAndMethodName[1], "()Lio/github/mmhelloworld/idrisjvm/runtime/Thunk;", false);
         assembler.pop();
         assembler.asmReturn();
         assembler.maxStackAndLocal(-1, -1);

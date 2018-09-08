@@ -11,57 +11,6 @@ import Data.SortedMap
 
 %access public export
 
-data InferredType = IBool | IChar | IInt | ILong | IFloat | IDouble | Ref String | IUnknown
-
-InferredTypeStore : Type
-InferredTypeStore = SortedMap Int InferredType
-
-record InferredFunctionType where
-    constructor MkInferredFunctionType
-    functionName : JMethodName
-    returnType : InferredType
-    argsType : InferredTypeStore
-
-inferredObjectType : InferredType
-inferredObjectType = Ref $ classSig "java/lang/Object"
-
-inferredIdrisObjectType : InferredType
-inferredIdrisObjectType = Ref $ classSig idrisObjectType
-
-record InferenceConfig where
-  constructor MkInferenceConfig
-  functionName : JMethodName
-  functionTypes : SortedMap JMethodName (InferredType, InferredTypeStore)
-
-Eq InferredType where
-  IBool == IBool = True
-  IChar == IChar = True
-  IInt == IInt = True
-  ILong == ILong = True
-  IFloat == IFloat = True
-  IDouble == IDouble = True
-  (Ref ty1) == (Ref ty2) = ty1 == ty2
-  IUnknown == IUnknown = True
-  _ == _ = False
-
-Show InferredType where
-    show IBool = "boolean"
-    show IChar = "char"
-    show IInt = "int"
-    show ILong = "long"
-    show IFloat = "float"
-    show IDouble = "double"
-    show (Ref clsName) = clsName
-    show IUnknown = "unknown"
-
-Semigroup InferredType where
-  IUnknown <+> known = known
-  known <+> IUnknown = known
-  ty1 <+> ty2 = if ty1 == ty2 then ty1 else inferredObjectType
-
-Monoid InferredType where
-  neutral = IUnknown
-
 addType : InferredTypeStore -> Int -> InferredType -> InferredTypeStore
 addType types var ty = maybe addNew checkExisting $ lookup var types where
   addNew : InferredTypeStore
@@ -78,30 +27,30 @@ inferUnaryOp : InferredTypeStore -> InferredType  -> LVar -> InferredTypeStore
 inferUnaryOp types ty (Loc op) = addType types op ty
 
 inferOp2 : InferredTypeStore -> PrimFn -> List LVar -> (InferredType, InferredTypeStore)
-inferOp2 types (LIntStr (ITFixed IT64)) [x] = (Ref "Ljava/lang/String;", inferUnaryOp types ILong x)
-inferOp2 types (LIntStr (ITFixed _)) [x] = (Ref "Ljava/lang/String;", inferUnaryOp types IInt x)
-inferOp2 types (LIntStr ITNative) [x] = (Ref "Ljava/lang/String;", inferUnaryOp types IInt x)
-inferOp2 types (LIntStr ITBig) [x] = (Ref "Ljava/lang/String;", inferUnaryOp types (Ref "Ljava/math/BigInteger;") x)
+inferOp2 types (LIntStr (ITFixed IT64)) [x] = (inferredStringType, inferUnaryOp types ILong x)
+inferOp2 types (LIntStr (ITFixed _)) [x] = (inferredStringType, inferUnaryOp types IInt x)
+inferOp2 types (LIntStr ITNative) [x] = (inferredStringType, inferUnaryOp types IInt x)
+inferOp2 types (LIntStr ITBig) [x] = (inferredStringType, inferUnaryOp types (inferredBigIntegerType) x)
 
-inferOp2 types LFloatStr [x] = (Ref "Ljava/lang/String;", inferUnaryOp types IDouble x)
+inferOp2 types LFloatStr [x] = (inferredStringType, inferUnaryOp types IDouble x)
 
-inferOp2 types (LChInt ITBig) [x] = (Ref "Ljava/math/BigInteger;", inferUnaryOp types IChar x)
+inferOp2 types (LChInt ITBig) [x] = (inferredBigIntegerType, inferUnaryOp types IChar x)
 
 inferOp2 types (LChInt (ITFixed IT64)) [x] = (ILong, inferUnaryOp types IChar x)
 
 inferOp2 types (LChInt _) [x] = (IInt, inferUnaryOp types IChar x)
 
-inferOp2 types (LIntCh ITBig) [x] = (IChar, inferUnaryOp types (Ref "Ljava/math/BigInteger;") x)
+inferOp2 types (LIntCh ITBig) [x] = (IChar, inferUnaryOp types (inferredBigIntegerType) x)
 
 inferOp2 types (LIntCh (ITFixed IT64)) [x] = (IChar, inferUnaryOp types ILong x)
 
 inferOp2 types (LIntCh _) [x] = (IChar, inferUnaryOp types IInt x)
 
-inferOp2 types (LSExt ITNative ITBig) [x] = (Ref "Ljava/math/BigInteger;", inferUnaryOp types IInt x)
+inferOp2 types (LSExt ITNative ITBig) [x] = (inferredBigIntegerType, inferUnaryOp types IInt x)
 
-inferOp2 types (LSExt (ITFixed IT64) ITBig) [x] = (Ref "Ljava/math/BigInteger;", inferUnaryOp types ILong x)
+inferOp2 types (LSExt (ITFixed IT64) ITBig) [x] = (inferredBigIntegerType, inferUnaryOp types ILong x)
 
-inferOp2 types (LSExt (ITFixed _) ITBig) [x] = (Ref "Ljava/math/BigInteger;", inferUnaryOp types IInt x)
+inferOp2 types (LSExt (ITFixed _) ITBig) [x] = (inferredBigIntegerType, inferUnaryOp types IInt x)
 
 inferOp2 types (LTrunc ITNative (ITFixed IT64)) [x] = (ILong, inferUnaryOp types IInt x)
 
@@ -109,32 +58,32 @@ inferOp2 types (LTrunc (ITFixed IT64) (ITFixed IT32)) [x] = (IInt, inferUnaryOp 
 inferOp2 types (LTrunc (ITFixed IT64) (ITFixed IT16)) [x] = (IInt, inferUnaryOp types ILong x)
 inferOp2 types (LTrunc (ITFixed IT64) (ITFixed IT8)) [x] = (IInt, inferUnaryOp types ILong x)
 
-inferOp2 types (LTrunc ITBig ITNative) [x] = (IInt, inferUnaryOp types (Ref "Ljava/math/BigInteger;") x)
+inferOp2 types (LTrunc ITBig ITNative) [x] = (IInt, inferUnaryOp types (inferredBigIntegerType) x)
 
 inferOp2 types (LTrunc (ITFixed _) (ITFixed _)) [x] = (IInt, inferUnaryOp types IInt x)
 
-inferOp2 types LWriteStr [_, s] = (IInt, inferUnaryOp types (Ref "Ljava/lang/String;") s)
+inferOp2 types LWriteStr [_, s] = (IInt, inferUnaryOp types inferredStringType s)
 
-inferOp2 types LReadStr [_] = (Ref "Ljava/lang/String;", types)
+inferOp2 types LReadStr [_] = (inferredStringType, types)
 
-inferOp2 types LStrConcat [l,r] = (Ref "Ljava/lang/String;", inferBinaryOp types (Ref "Ljava/lang/String;") l r)
+inferOp2 types LStrConcat [l,r] = (inferredStringType, inferBinaryOp types (inferredStringType) l r)
 
 inferOp2 types LStrCons [l,r] =
     let typesWithLeft =  inferUnaryOp types IChar l
-    in  (Ref "Ljava/lang/String;", inferUnaryOp typesWithLeft (Ref "Ljava/lang/String;") r)
+    in  (inferredStringType, inferUnaryOp typesWithLeft (inferredStringType) r)
 
 inferOp2 types LStrSubstr [offset, len, str] =
     let typesWithOffset = inferUnaryOp types IInt offset
         typesWithLen = inferUnaryOp typesWithOffset IInt len
-    in (Ref "Ljava/lang/String;", inferUnaryOp typesWithLen (Ref "Ljava/lang/String;") str)
+    in (inferredStringType, inferUnaryOp typesWithLen (inferredStringType) str)
 
-inferOp2 types (LStrInt ITBig) [x] = (Ref "Ljava/math/BigInteger;", inferUnaryOp types (Ref "Ljava/lang/String;") x)
+inferOp2 types (LStrInt ITBig) [x] = (inferredBigIntegerType, inferUnaryOp types (inferredStringType) x)
 
-inferOp2 types (LStrInt (ITFixed IT8)) [x] = (IInt, inferUnaryOp types (Ref "Ljava/lang/String;") x)
+inferOp2 types (LStrInt (ITFixed IT8)) [x] = (IInt, inferUnaryOp types (inferredStringType) x)
 
-inferOp2 types (LStrInt _) [x] = (IInt, inferUnaryOp types (Ref "Ljava/lang/String;") x)
+inferOp2 types (LStrInt _) [x] = (IInt, inferUnaryOp types (inferredStringType) x)
 
-inferOp2 types LStrFloat [x] = (IDouble, inferUnaryOp types (Ref "Ljava/lang/String;") x)
+inferOp2 types LStrFloat [x] = (IDouble, inferUnaryOp types (inferredStringType) x)
 
 inferOp2 types (LSHL (ITFixed IT64)) [l, r] = (ILong, inferBinaryOp types ILong l r)
 
@@ -150,34 +99,34 @@ inferOp2 types (LASHR (ITFixed IT64)) [l, r] = (ILong, inferBinaryOp types ILong
 
 inferOp2 types (LASHR (ITFixed _)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 
-inferOp2 types LFork [x] = (inferredObjectType, types)
+inferOp2 types LFork [x] = (Ref futureClass, types)
 
-inferOp2 types LPar [x] = (inferredObjectType, types)
+inferOp2 types LPar [x] = (Ref objectClass, types)
 
-inferOp2 types (LIntFloat ITBig) [x] = (IDouble, inferUnaryOp types (Ref "Ljava/math/BigInteger;") x)
+inferOp2 types (LIntFloat ITBig) [x] = (IDouble, inferUnaryOp types (inferredBigIntegerType) x)
 
 inferOp2 types (LIntFloat ITNative) [x] = (IDouble, inferUnaryOp types IInt x)
 
-inferOp2 types (LFloatInt ITBig) [x] = (Ref "Ljava/math/BigInteger;", inferUnaryOp types IDouble x)
+inferOp2 types (LFloatInt ITBig) [x] = (inferredBigIntegerType, inferUnaryOp types IDouble x)
 
 inferOp2 types (LFloatInt ITNative) [x] = (IInt, inferUnaryOp types IDouble x)
 
 inferOp2 types op _ = (IUnknown, types)
 
 inferOpLLe : InferredTypeStore -> PrimFn -> List LVar -> (InferredType, InferredTypeStore)
-inferOpLLe types (LLe ITBig) [l, r] = (IBool, inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+inferOpLLe types (LLe ITBig) [l, r] = (IBool, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOpLLe types (LLe ITNative) [l, r] = (IBool, inferBinaryOp types IInt l r)
 inferOpLLe types (LLe (ITFixed IT64)) [l, r] = (IBool, inferBinaryOp types ILong l r)
 inferOpLLe types (LLe (ITFixed _)) [l, r] = (IBool, inferBinaryOp types IInt l r)
 
 inferOpLLt : InferredTypeStore -> PrimFn -> List LVar -> (InferredType, InferredTypeStore)
-inferOpLLt types (LLt ITBig) [l, r] = (IBool, inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+inferOpLLt types (LLt ITBig) [l, r] = (IBool, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOpLLt types (LLt ITNative) [l, r] = (IBool, inferBinaryOp types IInt l r)
 inferOpLLt types (LLt (ITFixed IT64)) [l, r] = (IBool, inferBinaryOp types ILong l r)
 inferOpLLt types (LLt (ITFixed _)) [l, r] = (IBool, inferBinaryOp types IInt l r)
 
 inferOpLGt : InferredTypeStore -> PrimFn -> List LVar -> (InferredType, InferredTypeStore)
-inferOpLGt types (LGt ITBig) [l, r] = (IBool, inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+inferOpLGt types (LGt ITBig) [l, r] = (IBool, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOpLGt types (LGt ITNative) [l, r] = (IBool, inferBinaryOp types IInt l r)
 inferOpLGt types (LGt (ITFixed IT64)) [l, r] = (IBool, inferBinaryOp types ILong l r)
 inferOpLGt types (LGt (ITFixed _)) [l, r] = (IBool, inferBinaryOp types IInt l r)
@@ -212,7 +161,7 @@ inferOp types (LGe (ITFixed _)) [l, r] = (IBool, inferBinaryOp types IInt l r)
 
 inferOp types (LPlus ATFloat) [l, r] = (IDouble, inferBinaryOp types IDouble l r)
 inferOp types (LPlus (ATInt ITBig)) [l, r] =
-    (Ref "Ljava/math/BigInteger;", inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (inferredBigIntegerType, inferBinaryOp types (inferredBigIntegerType) l r)
 
 inferOp types (LPlus (ATInt ITNative)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 inferOp types (LPlus (ATInt ITChar)) [l, r] = (IChar, inferBinaryOp types IChar l r)
@@ -223,7 +172,7 @@ inferOp types (LPlus (ATInt (ITFixed _))) [l, r] = (IInt, inferBinaryOp types II
 
 inferOp types (LMinus ATFloat) [l, r] = (IDouble, inferBinaryOp types IDouble l r)
 inferOp types (LMinus (ATInt ITBig)) [l, r] =
-    (Ref "Ljava/math/BigInteger;", inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (inferredBigIntegerType, inferBinaryOp types (inferredBigIntegerType) l r)
 
 inferOp types (LMinus (ATInt ITNative)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 inferOp types (LMinus (ATInt (ITFixed IT64))) [l, r] = (ILong, inferBinaryOp types ILong l r)
@@ -231,7 +180,7 @@ inferOp types (LMinus (ATInt (ITFixed _))) [l, r] = (IInt, inferBinaryOp types I
 
 inferOp types (LTimes ATFloat) [l, r] = (IDouble, inferBinaryOp types IDouble l r)
 inferOp types (LTimes (ATInt ITBig)) [l, r] =
-    (Ref "Ljava/math/BigInteger;", inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (inferredBigIntegerType, inferBinaryOp types (inferredBigIntegerType) l r)
 
 inferOp types (LTimes (ATInt ITNative)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 inferOp types (LTimes (ATInt (ITFixed IT64))) [l, r] = (ILong, inferBinaryOp types ILong l r)
@@ -240,7 +189,7 @@ inferOp types (LTimes (ATInt (ITFixed _))) [l, r] = (IInt, inferBinaryOp types I
 
 inferOp types (LSDiv ATFloat) [l, r] = (IDouble, inferBinaryOp types IDouble l r)
 inferOp types (LSDiv (ATInt ITBig)) [l, r] =
-    (Ref "Ljava/math/BigInteger;", inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (inferredBigIntegerType, inferBinaryOp types (inferredBigIntegerType) l r)
 
 inferOp types (LSDiv (ATInt ITNative)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 inferOp types (LSDiv (ATInt (ITFixed IT64))) [l, r] = (ILong, inferBinaryOp types ILong l r)
@@ -250,12 +199,12 @@ inferOp types (LUDiv ITNative) [l, r] = (IInt, inferBinaryOp types IInt l r)
 inferOp types (LUDiv (ITFixed IT64)) [l, r] = (ILong, inferBinaryOp types ILong l r)
 
 inferOp types (LUDiv ITBig) [l, r] =
-    (Ref "Ljava/math/BigInteger;", inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (inferredBigIntegerType, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOp types (LUDiv (ITFixed _)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 
 inferOp types (LSRem ATFloat) [l, r] = (IDouble, inferBinaryOp types IDouble l r)
 inferOp types (LSRem (ATInt ITBig)) [l, r] =
-    (Ref "Ljava/math/BigInteger;", inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (inferredBigIntegerType, inferBinaryOp types (inferredBigIntegerType) l r)
 
 inferOp types (LSRem (ATInt ITNative)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 inferOp types (LSRem (ATInt (ITFixed IT64))) [l, r] = (ILong, inferBinaryOp types ILong l r)
@@ -265,11 +214,11 @@ inferOp types (LURem (ITFixed IT64)) [l, r] = (ILong, inferBinaryOp types ILong 
 inferOp types (LURem ITNative) [l, r] = (IInt, inferBinaryOp types IInt l r)
 inferOp types (LURem (ITFixed IT32)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 inferOp types (LURem ITBig) [l, r] =
-    (Ref "Ljava/math/BigInteger;", inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (inferredBigIntegerType, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOp types (LURem (ITFixed _)) [l, r] = (IInt, inferBinaryOp types IInt l r)
 
 inferOp types (LEq ATFloat) [l, r] = (IBool, inferBinaryOp types IDouble l r)
-inferOp types (LEq (ATInt ITBig)) [l, r] = (IBool, inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+inferOp types (LEq (ATInt ITBig)) [l, r] = (IBool, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOp types (LEq (ATInt ITChar)) [l, r] = (IBool, inferBinaryOp types IChar l r)
 inferOp types (LEq (ATInt ITNative)) [l, r] = (IBool, inferBinaryOp types IInt l r)
 inferOp types (LEq (ATInt (ITFixed IT64))) [l, r] = (IBool, inferBinaryOp types ILong l r)
@@ -278,7 +227,7 @@ inferOp types (LEq (ATInt (ITFixed _))) [l, r] = (IBool, inferBinaryOp types IIn
 inferOp types (LSLt ATFloat) [l, r] = (IBool, inferBinaryOp types IDouble l r)
 inferOp types (LSLt (ATInt ITNative)) [l, r] = (IBool, inferBinaryOp types IInt l r)
 inferOp types (LSLt (ATInt ITBig)) [l, r] =
-    (IBool, inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (IBool, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOp types (LSLt (ATInt ITChar)) [l, r] = (IBool, inferBinaryOp types IChar l r)
 inferOp types (LSLt (ATInt (ITFixed IT64))) [l, r] = (IBool, inferBinaryOp types ILong l r)
 inferOp types (LSLt (ATInt (ITFixed _))) [l, r] = (IBool, inferBinaryOp types IInt l r)
@@ -286,7 +235,7 @@ inferOp types (LSLt (ATInt (ITFixed _))) [l, r] = (IBool, inferBinaryOp types II
 inferOp types (LSLe ATFloat) [l, r] = (IBool, inferBinaryOp types IDouble l r)
 inferOp types (LSLe (ATInt ITNative)) [l, r] = (IBool, inferBinaryOp types IInt l r)
 inferOp types (LSLe (ATInt ITBig)) [l, r] =
-    (IBool, inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (IBool, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOp types (LSLe (ATInt ITChar)) [l, r] = (IBool, inferBinaryOp types IChar l r)
 inferOp types (LSLe (ATInt (ITFixed IT64))) [l, r] = (IBool, inferBinaryOp types ILong l r)
 inferOp types (LSLe (ATInt (ITFixed _))) [l, r] = (IBool, inferBinaryOp types IInt l r)
@@ -294,7 +243,7 @@ inferOp types (LSLe (ATInt (ITFixed _))) [l, r] = (IBool, inferBinaryOp types II
 inferOp types (LSGt ATFloat) [l, r] = (IBool, inferBinaryOp types IDouble l r)
 inferOp types (LSGt (ATInt ITNative)) [l, r] = (IBool, inferBinaryOp types IInt l r)
 inferOp types (LSGt (ATInt ITBig)) [l, r] =
-    (IBool, inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (IBool, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOp types (LSGt (ATInt ITChar)) [l, r] = (IBool, inferBinaryOp types IChar l r)
 inferOp types (LSGt (ATInt (ITFixed IT64))) [l, r] = (IBool, inferBinaryOp types ILong l r)
 inferOp types (LSGt (ATInt (ITFixed _))) [l, r] = (IBool, inferBinaryOp types IInt l r)
@@ -302,30 +251,30 @@ inferOp types (LSGt (ATInt (ITFixed _))) [l, r] = (IBool, inferBinaryOp types II
 inferOp types (LSGe ATFloat) [l, r] = (IBool, inferBinaryOp types IDouble l r)
 inferOp types (LSGe (ATInt ITNative)) [l, r] = (IBool, inferBinaryOp types IInt l r)
 inferOp types (LSGe (ATInt ITBig)) [l, r] =
-    (IBool, inferBinaryOp types (Ref "Ljava/math/BigInteger;") l r)
+    (IBool, inferBinaryOp types (inferredBigIntegerType) l r)
 inferOp types (LSGe (ATInt ITChar)) [l, r] = (IBool, inferBinaryOp types IChar l r)
 inferOp types (LSGe (ATInt (ITFixed IT64))) [l, r] = (IBool, inferBinaryOp types ILong l r)
 inferOp types (LSGe (ATInt (ITFixed _))) [l, r] = (IBool, inferBinaryOp types IInt l r)
 
-inferOp types LStrEq [l,r] = (IBool, inferBinaryOp types (Ref "Ljava/lang/String;") l r)
+inferOp types LStrEq [l,r] = (IBool, inferBinaryOp types inferredStringType l r)
 
-inferOp types LStrRev [var] = (Ref "Ljava/lang/String;", inferUnaryOp types (Ref "Ljava/lang/String;") var)
+inferOp types LStrRev [var] = (inferredStringType, inferUnaryOp types inferredStringType var)
 
-inferOp types LStrLen [var] = (IInt, inferUnaryOp types (Ref "Ljava/lang/String;") var)
+inferOp types LStrLen [var] = (IInt, inferUnaryOp types inferredStringType var)
 
-inferOp types LStrLt [l, r] = (IBool, inferBinaryOp types (Ref "Ljava/lang/String;") l r)
+inferOp types LStrLt [l, r] = (IBool, inferBinaryOp types inferredStringType l r)
 
-inferOp types LStrHead [var] = (IChar, inferUnaryOp types (Ref "Ljava/lang/String;") var)
+inferOp types LStrHead [var] = (IChar, inferUnaryOp types inferredStringType var)
 
 inferOp types LStrIndex [string, index] =
-    let stringTyped = inferUnaryOp types (Ref "Ljava/lang/String;") string
+    let stringTyped = inferUnaryOp types (inferredStringType) string
         stringAndIndexTyped = inferUnaryOp stringTyped IInt index
     in (IChar, stringAndIndexTyped)
 
-inferOp types LStrTail [var] = (Ref "Ljava/lang/String;", inferUnaryOp types (Ref "Ljava/lang/String;") var)
+inferOp types LStrTail [var] = (inferredStringType, inferUnaryOp types (inferredStringType) var)
 
 inferOp types (LZExt ITNative ITBig) [var] =
-    (Ref "Ljava/math/BigInteger;", inferUnaryOp types IInt var)
+    (inferredBigIntegerType, inferUnaryOp types IInt var)
 
 inferOp types (LZExt (ITFixed IT8) ITNative) [x] = (IInt, inferUnaryOp types IInt x)
 inferOp types (LZExt (ITFixed IT16) ITNative) [x] = (IInt, inferUnaryOp types IInt x)
@@ -333,45 +282,11 @@ inferOp types (LZExt (ITFixed IT32) ITNative) [x] = (IInt, inferUnaryOp types II
 
 inferOp types op args = inferOp2 types op args
 
-inferForeignReturnDesc : TypeDescriptor -> InferredType
-inferForeignReturnDesc (ThrowableDescriptor _) = inferredObjectType
-inferForeignReturnDesc (FieldDescriptor FieldTyDescBoolean) = IBool
-inferForeignReturnDesc (FieldDescriptor FieldTyDescByte) = IInt
-inferForeignReturnDesc (FieldDescriptor FieldTyDescShort) = IInt
-inferForeignReturnDesc (FieldDescriptor FieldTyDescInt)     = IInt
-inferForeignReturnDesc (FieldDescriptor FieldTyDescChar)    = IChar
-inferForeignReturnDesc (FieldDescriptor FieldTyDescLong)    = ILong
-inferForeignReturnDesc (FieldDescriptor FieldTyDescFloat)   = IDouble
-inferForeignReturnDesc (FieldDescriptor FieldTyDescDouble)  = IDouble
-inferForeignReturnDesc (FieldDescriptor (FieldTyDescReference f)) = Ref (asmRefTyDesc f)
-inferForeignReturnDesc VoidDescriptor                       = IUnknown
-
 inferForeignArgDescs : InferredTypeStore -> List (FieldTypeDescriptor, LVar) -> InferredTypeStore
 inferForeignArgDescs types [] = types
-inferForeignArgDescs types ((FieldTyDescBoolean, x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types IBool x) rest
-inferForeignArgDescs types ((FieldTyDescByte, x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types IInt x) rest
-inferForeignArgDescs types ((FieldTyDescShort, x) :: rest) =
-  inferForeignArgDescs (inferUnaryOp types IInt x) rest
-inferForeignArgDescs types ((FieldTyDescInt, x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types IInt x) rest
-inferForeignArgDescs types ((FieldTyDescChar, x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types IChar x) rest
-inferForeignArgDescs types ((FieldTyDescLong, x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types ILong x) rest
-inferForeignArgDescs types ((FieldTyDescFloat, x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types IDouble x) rest
-inferForeignArgDescs types ((FieldTyDescDouble, x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types IDouble x) rest
-inferForeignArgDescs types (((FieldTyDescReference (IdrisExportDesc _)), x) :: rest) =
-    inferForeignArgDescs types rest
-inferForeignArgDescs types (((FieldTyDescReference NullableStrDesc), x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types (Ref "Ljava/lang/String;") x) rest
-inferForeignArgDescs types (((FieldTyDescReference (NullableRefDesc cname)), x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types (Ref ("L" ++ cname ++ ";")) x) rest
-inferForeignArgDescs types (((FieldTyDescReference refTy), x) :: rest) =
-    inferForeignArgDescs (inferUnaryOp types (Ref (asmRefTyDesc refTy)) x) rest
+inferForeignArgDescs types ((fieldTyDesc, x) :: rest) =
+    let inferredTy = fieldTypeDescriptorToInferredType fieldTyDesc
+    in inferForeignArgDescs (inferUnaryOp types inferredTy x) rest
 
 inferConstExp : InferredTypeStore -> Const -> (InferredType, InferredTypeStore)
 inferConstExp acc (B8 i) = (IInt, acc)
@@ -381,8 +296,8 @@ inferConstExp acc (B64 i) = (ILong, acc)
 inferConstExp acc (I i) = (IInt, acc)
 inferConstExp acc (Fl d) = (IDouble, acc)
 inferConstExp acc (Ch c) = (IChar, acc)
-inferConstExp acc (BI i) = (Ref "Ljava/math/BigInteger;", acc)
-inferConstExp acc (Str s) = (Ref "Ljava/lang/String;", acc)
+inferConstExp acc (BI i) = (inferredBigIntegerType, acc)
+inferConstExp acc (Str s) = (inferredStringType, acc)
 inferConstExp acc TheWorld = (IInt, acc)
 inferConstExp acc x = if isTypeConst x
               then (IInt, acc)
@@ -390,20 +305,22 @@ inferConstExp acc x = if isTypeConst x
 
 inferFunctionAppArgs : InferredTypeStore -> InferredTypeStore -> List LVar -> InferredTypeStore
 inferFunctionAppArgs calledFunctionArgTypes types args =
-    let lookupType = \argPos => fromMaybe IUnknown $ SortedMap.lookup (cast $ the Nat argPos) calledFunctionArgTypes
+    let lookupType = \argPos => fromMaybe inferredObjectType $ SortedMap.lookup (cast $ the Nat argPos) calledFunctionArgTypes
+        argsLength = length args
+        argIndices = if argsLength > 0 then [0 .. (Nat.pred argsLength)] else []
     in foldl
          (\acc, (pos, arg) => addType acc (locIndex arg) (lookupType pos))
          types
-         (List.zip [0 .. length args] args)
+         (List.zip argIndices args)
 
-combineTypes : InferredType -> List InferredType -> InferredType
-combineTypes ty [] = ty
-combineTypes IUnknown (IUnknown :: rest) = combineTypes IUnknown rest
-combineTypes IUnknown (ty :: rest) = combineTypes ty rest
-combineTypes ty (IUnknown :: rest) = combineTypes ty rest
-combineTypes prevTy (currTy :: rest) =
+combineTypes : List InferredType -> InferredType
+combineTypes [] = IUnknown
+combineTypes (ty :: rest) = go ty rest where
+  go : InferredType -> List InferredType -> InferredType
+  go prevTy [] = prevTy
+  go prevTy (currTy :: rest) =
     if prevTy == currTy then
-        combineTypes currTy rest
+        go currTy rest
     else
         inferredObjectType
 
@@ -417,7 +334,7 @@ mutual
 
     inferNullableIfElseTy : InferenceConfig -> InferredTypeStore -> LVar -> SExp -> SExp -> (InferredType, InferredTypeStore)
     inferNullableIfElseTy config acc (Loc i) trueAlt falseAlt =
-        let ifVarInferred = addType acc i IUnknown
+        let ifVarInferred = addType acc i inferredObjectType
             (falseRetTy, falseAltTypes) = inferExp config ifVarInferred falseAlt
             (trueRetTy, trueAltTypes) = inferExp config ifVarInferred trueAlt
         in (falseRetTy <+> trueRetTy, merge falseAltTypes trueAltTypes)
@@ -425,7 +342,15 @@ mutual
     inferAlt :InferenceConfig -> InferredTypeStore -> SAlt -> (InferredType, InferredTypeStore)
     inferAlt config types (SConstCase _ expr) = inferExp config types expr
     inferAlt config types (SDefaultCase expr) = inferExp config types expr
-    inferAlt config types (SConCase lv _ _ args expr) = inferExp config types expr
+    inferAlt config types (SConCase lv _ _ args expr) = inferExp config typesWithPropTypes expr where
+      argsLength : Int
+      argsLength = cast $ length args
+
+      typesWithPropTypes : InferredTypeStore
+      typesWithPropTypes = if argsLength == 0 then types else go types lv (pred argsLength) where
+        go : InferredTypeStore -> Int -> Int -> InferredTypeStore
+        go types lv 0 = addType types lv inferredObjectType
+        go types lv n = go (addType types (lv + n) inferredObjectType) lv (pred n)
 
     inferSwitch : InferenceConfig -> InferredTypeStore -> LVar -> List SAlt -> (InferredType, InferredTypeStore)
     inferSwitch config types (Loc e) alts =
@@ -440,34 +365,40 @@ mutual
                     IUnknown
             altTypes = inferAlt config (addType types e switchExprType) <$> alts
 
-        in (combineTypes IUnknown $ fst <$> altTypes, concat $ snd <$> altTypes)
+        in (combineTypes $ fst <$> altTypes, concat $ snd <$> altTypes)
 
     inferExp : InferenceConfig -> InferredTypeStore -> SExp -> (InferredType, InferredTypeStore)
     inferExp config acc (SV (Glob _)) = (inferredObjectType, acc)
     inferExp config acc (SV (Loc i)) = (fromMaybe IUnknown $ lookup i acc, acc)
-    inferExp config acc (SApp False f args) =
-      maybe (IUnknown, acc) inferArgs $ lookup (jname f) (functionTypes config) where
-        inferArgs : (InferredType, InferredTypeStore) -> (InferredType, InferredTypeStore)
-        inferArgs (retTy, argTys) = (retTy, inferFunctionAppArgs argTys acc args)
 
     inferExp config acc (SApp True f args) =
         let calledFunctionName = jname f
         in
           if calledFunctionName == functionName config then
             (IUnknown, acc)
-          else maybe (Ref rtThunkSig, acc) inferArgs $ lookup calledFunctionName (functionTypes config) where
+          else maybe (Ref thunkClass, acc) inferArgs $ lookup calledFunctionName (functionTypes config) where
              inferArgs : (InferredType, InferredTypeStore) -> (InferredType, InferredTypeStore)
-             inferArgs (_, argTys) = (Ref rtThunkSig, inferFunctionAppArgs argTys acc args)
+             inferArgs (_, argTys) = (Ref thunkClass, inferFunctionAppArgs argTys acc args)
+
+    inferExp config acc (SApp False f args) =
+      maybe (inferredObjectType, acc) inferArgs $ lookup (jname f) (functionTypes config) where
+        inferArgs : (InferredType, InferredTypeStore) -> (InferredType, InferredTypeStore)
+        inferArgs (retTy, argTys) = (retTy, inferFunctionAppArgs argTys acc args)
 
     inferExp config acc (SLet (Loc i) v sc) =
         let (vty, nacc) = inferExp config acc v
             naccWithI = addType nacc i vty
         in inferExp config naccWithI sc
+
     inferExp config acc (SUpdate _ e) = inferExp config acc e
     inferExp config acc (SProj (Loc v) i) = (inferredObjectType, addType acc v inferredIdrisObjectType)
 
     inferExp config acc (SCon _ 0 "Prelude.Bool.False" []) = (IBool, acc)
     inferExp config acc (SCon _ 1 "Prelude.Bool.True" []) = (IBool, acc)
+
+    inferExp config acc (SCon _ 0 "Prelude.Maybe.Nothing" []) = (inferredObjectType, acc)
+    inferExp config acc (SCon _ 1 "Prelude.Maybe.Just" [(Loc v)]) = (inferredObjectType, acc)
+
     inferExp config acc (SCon _ t _ args) = (inferredIdrisObjectType, acc)
     inferExp config acc (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
                              (SConCase _ 1 "Prelude.Bool.True" [] trueAlt) ::
@@ -498,8 +429,10 @@ mutual
                              _))
         = inferNullableIfElseTy config acc e nothingExpr defaultExpr
 
+    inferExp config acc (SCase _ e [SDefaultCase defaultExpr]) = inferExp config acc defaultExpr
     inferExp config acc (SCase _ e alts) = inferSwitch config acc e alts
 
+    inferExp config acc (SChkCase e [SDefaultCase defaultExpr]) = inferExp config acc defaultExpr
     inferExp config acc (SChkCase e alts) = inferSwitch config acc e alts
 
     inferExp config acc (SConst c) = inferConstExp acc c
@@ -508,14 +441,14 @@ mutual
 
     inferExp config acc SNothing = (IInt, acc)
 
-    inferExp config acc (SError x) = (IUnknown, acc)
+    inferExp config acc (SError x) = (inferredObjectType, acc)
 
     inferExp config acc (SForeign returns fdesc args) = case parseDescriptor returns fdesc args of
-        JLambda clazz _ => (Ref ("L" ++ clazz ++ ";"), acc)
+        JLambda clazz _ => (Ref clazz, acc)
         _ =>
             let argsWithTypes = (\(fdesc, lvar) => (fdescFieldDescriptor fdesc, lvar)) <$> args
                 returnDesc = fdescTypeDescriptor returns
-            in (inferForeignReturnDesc returnDesc, inferForeignArgDescs acc argsWithTypes)
+            in (typeDescriptorToInferredType returnDesc, inferForeignArgDescs acc argsWithTypes)
 
 inferFun : SortedMap JMethodName (InferredType, InferredTypeStore) -> SDecl -> InferredFunctionType
 inferFun types (SFun name args locs def) =

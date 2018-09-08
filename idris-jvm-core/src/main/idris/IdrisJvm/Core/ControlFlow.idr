@@ -4,6 +4,7 @@ import IdrisJvm.Core.Asm
 import IdrisJvm.Core.Common
 import IdrisJvm.Core.Constant
 import IdrisJvm.IR.Types
+import Data.SortedMap
 
 %access public export
 
@@ -44,7 +45,11 @@ isConstructorSwitchCases alts = all isConstructorSwitchCase alts where
     isConstructorSwitchCase _ = False
 
 mutual
-  cgSwitch : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> List SAlt -> Asm ()
+  cgSwitch : (InferredType -> Asm ())
+          -> ((InferredType -> Asm ()) -> SExp -> Asm ())
+          -> LVar
+          -> List SAlt
+          -> Asm ()
   cgSwitch ret cgBody e alts
     = if all isIntCase alts
         then do
@@ -64,7 +69,7 @@ mutual
 
           if isConstructorSwitch
             then switchConstructorExpr switchVar
-            else switchIntExpr switchVar
+            else switchIntExpr e
 
           LookupSwitch switchDefaultLbl labels exprs
           sequence_ $ the (List (Asm ())) $ caseToAlt <$> switch
@@ -77,7 +82,11 @@ mutual
                 nalts : List SAlt
                 nalts = nubBy f alts
 
-  cgIf : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> List SAlt -> Asm ()
+  cgIf : (InferredType -> Asm ())
+      -> ((InferredType -> Asm ()) -> SExp -> Asm ())
+      -> LVar
+      -> List SAlt
+      -> Asm ()
   cgIf ret cgBody e alts = do
        ifIndex <- FreshIfIndex
        let ifExpr = ifCasesWithLbls ifIndex alts
@@ -89,8 +98,8 @@ mutual
        Frame FSame 0 [] 0 []
      where
         gen : Nat
-           -> Lazy (Asm ())
-           -> (Lazy (Asm ()) -> SExp -> Asm ())
+           -> (InferredType -> Asm ())
+           -> ((InferredType -> Asm ()) -> SExp -> Asm ())
            -> LVar
            -> (String, String, Maybe (Asm ()), SAlt)
            -> Asm ()
@@ -100,8 +109,8 @@ mutual
                 ifExpr
 
   cgIfElseIfCase : Nat
-                -> Lazy (Asm ())
-                -> (Lazy (Asm ()) -> SExp -> Asm ())
+                -> (InferredType -> Asm ())
+                -> ((InferredType -> Asm ()) -> SExp -> Asm ())
                 -> LVar
                 -> String
                 -> String
@@ -119,29 +128,29 @@ mutual
     Goto $ ifEndLabel ifIndex
 
   cgElseCase : Nat
-          -> Lazy (Asm ())
-          -> (Lazy (Asm ()) -> SExp -> Asm ())
-          -> LVar
-          -> String
-          -> String
-          -> SAlt
-          -> Asm ()
+            -> (InferredType -> Asm ())
+            -> ((InferredType -> Asm ()) -> SExp -> Asm ())
+            -> LVar
+            -> String
+            -> String
+            -> SAlt
+            -> Asm ()
   cgElseCase ifIndex ret cgBody _ _ label (SDefaultCase expr) = do
     cgCase ret cgBody label expr
     Goto $ ifEndLabel ifIndex
 
-  cgCase : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> Label -> SExp -> Asm ()
+  cgCase : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> Label -> SExp -> Asm ()
   cgCase ret cgBody label expr = do
     LabelStart label
     addFrame
     cgBody ret expr
 
-  cgAltNonConCase : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> Label -> Nat -> SExp -> Asm ()
+  cgAltNonConCase : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> Label -> Nat -> SExp -> Asm ()
   cgAltNonConCase ret cgBody label si expr = do
     cgCase ret cgBody label expr
     Goto $ switchEndLabel si
 
-  cgAlt : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> Label -> Nat -> Int -> SAlt -> Asm ()
+  cgAlt : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> Label -> Nat -> Int -> SAlt -> Asm ()
   cgAlt ret cgBody label si _ (SConstCase _ expr) = cgAltNonConCase ret cgBody label si expr
 
   cgAlt ret cgBody label si _ (SDefaultCase expr) = cgAltNonConCase ret cgBody label si expr
@@ -164,9 +173,14 @@ mutual
       argsLength = length args
 
       extractConParams : Int -> Asm ()
-      extractConParams lv = case isLTE 1 argsLength of
-        Yes prf => sequence_ $ (uncurry project) <$> List.zip (natRange 0 (argsLength - 1)) (natRange (cast lv) ((cast lv) + (argsLength - 1)))
-        No contra => Pure ()
+      extractConParams lv = go 0 lv where
+        go : Int -> Int -> Asm ()
+        go i v =
+            if i == cast argsLength then
+                pure ()
+            else do
+                project (cast i) (cast v)
+                go (i + 1) (v + 1)
 
   conCase : SAlt -> Bool
   conCase (SConCase _ _ _ _ _) = True
@@ -177,7 +191,7 @@ mutual
   defaultCase _                = False
 
   csWithLbls : Nat -> List SAlt -> List (String, Maybe Int, SAlt)
-  csWithLbls si alts = sortBy compareCase $ List.zipWith label cs [0.. (length cs)] where
+  csWithLbls si alts = sortBy compareCase $ List.zipWith label cs [0 .. (pred $ length cs)] where
 
     cs : List (Maybe Int, SAlt)
     cs = zip (caseExpr <$> alts) alts
@@ -192,7 +206,7 @@ mutual
     compareCase _ _                             = EQ
 
   ifCasesWithLbls : Nat -> List SAlt -> List (String, Maybe (Asm ()), SAlt)
-  ifCasesWithLbls si alts = sortBy compareCase $ zipWith label cs [0..(length cs)] where
+  ifCasesWithLbls si alts = sortBy compareCase $ zipWith label cs [0 .. (pred $ length cs)] where
 
     cs : List (Maybe (Asm ()), SAlt)
     cs = zip (ifCaseExpr <$> alts) alts
@@ -230,10 +244,11 @@ mutual
    Checkcast idrisObjectType
    Field FGetField idrisObjectType "constructorId" "I"
 
-  switchIntExpr : Int -> Asm ()
-  switchIntExpr varIndex = do
-    Aload varIndex
-    InvokeMethod InvokeStatic utilClass "hash" "(Ljava/lang/Object;)I" False
+  switchIntExpr : LVar -> Asm ()
+  switchIntExpr var = do
+    locTypes <- GetFunctionLocTypes
+    let varTy = getLocTy locTypes var
+    loadVar locTypes varTy IInt var
 
   caseExpr : SAlt -> Maybe Int
   caseExpr (SConstCase t _) = Just $ constCaseExpr t where
@@ -268,8 +283,8 @@ mutual
     constCaseExpr Forgot = jerror "Constant Forgot cannot be compiled to 'if' yet"
   ifCaseExpr _ = Nothing
 
-cgIfElse : Lazy (Asm ())
-        -> (Lazy (Asm ()) -> SExp -> Asm ())
+cgIfElse : (InferredType -> Asm ())
+        -> ((InferredType -> Asm ()) -> SExp -> Asm ())
         -> LVar
         -> (Label -> Asm ())
         -> Maybe Int
@@ -284,7 +299,6 @@ cgIfElse ret cgBody e condition valueStore case1 case2 = do
     CreateLabel ifLabel
     CreateLabel elseLabel
     CreateLabel endLabel
-    Aload $ locIndex e
     condition elseLabel
     LabelStart ifLabel
     maybe (pure ()) store valueStore
@@ -301,16 +315,25 @@ cgIfElse ret cgBody e condition valueStore case1 case2 = do
        Aload $ locIndex e
        Astore loc
 
-cgIfNonNull : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> Int -> SExp -> SExp -> Asm ()
-cgIfNonNull ret cgBody e loc ifExp elseExp = cgIfElse ret cgBody e Ifnull (Just loc) ifExp elseExp
+cgIfNonNull : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> LVar -> Int -> SExp -> SExp -> Asm ()
+cgIfNonNull ret cgBody e loc ifExp elseExp = cgIfElse ret cgBody e condition (Just loc) ifExp elseExp where
+  condition : Label -> Asm ()
+  condition label = do
+    Aload $ locIndex e
+    Ifnull label
 
-cgIfNull : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()
-cgIfNull ret cgBody e ifExp elseExp = cgIfElse ret cgBody e Ifnonnull Nothing ifExp elseExp
+cgIfNull : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()
+cgIfNull ret cgBody e ifExp elseExp = cgIfElse ret cgBody e condition Nothing ifExp elseExp where
+  condition : Label -> Asm ()
+  condition label = do
+    Aload $ locIndex e
+    Ifnonnull label
 
-cgIfTrueElse : Lazy (Asm ()) -> (Lazy (Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()
+cgIfTrueElse : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()
 cgIfTrueElse ret cgBody e ifExp elseExp = cgIfElse ret cgBody e condition Nothing ifExp elseExp where
   condition : Label -> Asm ()
   condition elseLabel = do
-    Checkcast "java/lang/Boolean"
-    unboxBool
+    locTypes <- GetFunctionLocTypes
+    let conditionVarTy = getLocTy locTypes e
+    loadVar locTypes conditionVarTy IBool e
     Ifeq elseLabel

@@ -29,6 +29,11 @@ public class Runtime {
         return 0;
     }
 
+    public static int writeString(String s) {
+        System.out.print(s);
+        return 0;
+    }
+
     public static Object error(Object s) {
         throw new RuntimeException(s.toString());
     }
@@ -48,7 +53,7 @@ public class Runtime {
         if (obj instanceof IdrisObject) {
             return ((IdrisObject) obj).constructorId;
         } else {
-            return obj == null ? 0 : (Integer) obj;
+            return obj == null ? 0 : (int) obj;
         }
     }
 

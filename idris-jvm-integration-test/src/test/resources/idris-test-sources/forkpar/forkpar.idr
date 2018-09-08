@@ -15,9 +15,23 @@ fibonacci n =
       fibNat = fibNat1 + fibNat2
   in (fibNat * 2, fib1 + fib2)
 
+TimeUnitClass : JVM_NativeTy
+TimeUnitClass = Class "java/util/concurrent/TimeUnit"
+
+TimeUnit : Type
+TimeUnit = JVM_Native TimeUnitClass
+
+ConcurrentClass : JVM_NativeTy
+ConcurrentClass = Class "io/github/mmhelloworld/idrisjvm/runtime/Concurrent"
+
+seconds : TimeUnit
+seconds = unsafePerformIO $ getStaticField TimeUnitClass "SECONDS" (JVM_IO TimeUnit)
+
 shutdownExecutor : JVM_IO ()
-shutdownExecutor = javacall (Static clz "shutdownExecutor") (JVM_IO ()) where
-  clz = Class "io/github/mmhelloworld/idrisjvm/runtime/Concurrent"
+shutdownExecutor = invokeStatic ConcurrentClass "shutdownExecutor" (JVM_IO ())
+
+awaitTermination : Bits64 -> TimeUnit -> JVM_IO ()
+awaitTermination = invokeStatic ConcurrentClass "executorAwaitTermination" (Bits64 -> TimeUnit -> JVM_IO ())
 
 main : JVM_IO ()
 main = do
@@ -28,3 +42,4 @@ main = do
   fork $ printLn "fg"
   printLn "h"
   shutdownExecutor
+  awaitTermination 5 seconds

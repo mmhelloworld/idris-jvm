@@ -3,6 +3,7 @@ module IdrisJvm.Core.Foreign
 import IdrisJvm.Core.Asm
 import IdrisJvm.Core.Common
 import IdrisJvm.IR.Types
+import Data.SortedMap
 
 %access public export
 
@@ -24,16 +25,14 @@ data JForeign = JStatic String String
               | JInstanceOf String
 
 javaToIdris : TypeDescriptor -> Asm ()
-javaToIdris (FieldDescriptor FieldTyDescBoolean) = boxBool
-javaToIdris (FieldDescriptor FieldTyDescByte) =
-  InvokeMethod InvokeStatic utilClass "byteToIdrisBits8" "(B)Ljava/lang/Object;" False
-javaToIdris (FieldDescriptor FieldTyDescShort) =
-  InvokeMethod InvokeStatic utilClass "shortToIdrisBits16" "(S)Ljava/lang/Object;" False
-javaToIdris (FieldDescriptor FieldTyDescInt)     = boxInt
-javaToIdris (FieldDescriptor FieldTyDescChar)    = boxChar
-javaToIdris (FieldDescriptor FieldTyDescLong)    = boxLong
-javaToIdris (FieldDescriptor FieldTyDescFloat)   = do F2d; boxDouble
-javaToIdris (FieldDescriptor FieldTyDescDouble)  = boxDouble
+javaToIdris (FieldDescriptor FieldTyDescBoolean) = pure ()
+javaToIdris (FieldDescriptor FieldTyDescByte) = pure ()
+javaToIdris (FieldDescriptor FieldTyDescShort) = pure ()
+javaToIdris (FieldDescriptor FieldTyDescInt)     = pure ()
+javaToIdris (FieldDescriptor FieldTyDescChar)    = pure ()
+javaToIdris (FieldDescriptor FieldTyDescLong)    = pure ()
+javaToIdris (FieldDescriptor FieldTyDescFloat)   = pure ()
+javaToIdris (FieldDescriptor FieldTyDescDouble)  = pure ()
 javaToIdris VoidDescriptor                       = Aconstnull
 javaToIdris _                                    = pure ()
 
@@ -47,51 +46,7 @@ javaReturn (FieldDescriptor FieldTyDescChar)    = Ireturn
 javaReturn (FieldDescriptor FieldTyDescLong)    = Lreturn
 javaReturn (FieldDescriptor FieldTyDescFloat)   = Freturn
 javaReturn (FieldDescriptor FieldTyDescDouble)  = Dreturn
-javaReturn (FieldDescriptor (FieldTyDescReference (IdrisExportDesc cname)))
-  = let desc = "(Ljava/lang/Object;)L" ++ cname ++ ";"
-    in do InvokeMethod InvokeStatic cname "create" desc False
-          Areturn
 javaReturn _                                    = Areturn
-
-checkcast : String -> Asm ()
-checkcast "java/lang/Object" = pure ()
-checkcast cname              = Checkcast cname
-
-idrisDescToJava : TypeDescriptor -> Asm ()
-idrisDescToJava (FieldDescriptor FieldTyDescBoolean) = do
-  Checkcast "java/lang/Boolean"
-  unboxBool
-idrisDescToJava (FieldDescriptor FieldTyDescByte) =
-  InvokeMethod InvokeStatic utilClass "idrisBits8ToByte" "(Ljava/lang/Object;)B" False
-idrisDescToJava (FieldDescriptor FieldTyDescShort) =
-  InvokeMethod InvokeStatic utilClass "idrisBits16ToShort" "(Ljava/lang/Object;)S" False
-idrisDescToJava (FieldDescriptor FieldTyDescInt) = do Checkcast "java/lang/Integer"; unboxInt
-idrisDescToJava (FieldDescriptor FieldTyDescChar) = do Checkcast "java/lang/Character"; unboxChar
-idrisDescToJava (FieldDescriptor FieldTyDescLong) = do Checkcast "java/lang/Long"; unboxLong
-idrisDescToJava (FieldDescriptor FieldTyDescFloat)
-  = do Checkcast "java/lang/Double"
-       InvokeMethod InvokeVirtual "java/lang/Double" "floatValue" "()F" False
-idrisDescToJava (FieldDescriptor FieldTyDescDouble) = do Checkcast "java/lang/Double"; unboxDouble
-idrisDescToJava (FieldDescriptor (FieldTyDescReference (IdrisExportDesc _))) = pure () -- converted using factory method on the exported type
-idrisDescToJava (FieldDescriptor (FieldTyDescReference NullableStrDesc)) = Checkcast "java/lang/String"
-idrisDescToJava (FieldDescriptor (FieldTyDescReference (NullableRefDesc cname))) = checkcast cname
-idrisDescToJava (FieldDescriptor (FieldTyDescReference refTy)) = checkcast $ refTyClassName refTy
-idrisDescToJava VoidDescriptor = pure ()
-idrisDescToJava ty = jerror $ "unknown type: " ++ show ty
-
-idrisToJava : List (FieldTypeDescriptor, LVar) -> Asm ()
-idrisToJava = sequence_ . map f where
-  f : (FieldTypeDescriptor, LVar) -> Asm ()
-  f (ty, v) = do
-    Aload $ locIndex v
-    idrisDescToJava (FieldDescriptor ty)
-
-idrisToJavaLoadArray : List (FieldTypeDescriptor, LVar) -> Asm ()
-idrisToJavaLoadArray = sequence_ . intersperse Aaload . map f where
-  f : (FieldTypeDescriptor, LVar) -> Asm ()
-  f (ty, v) = do
-    Aload $ locIndex v
-    idrisDescToJava (FieldDescriptor ty)
 
 mutual
   fdescFieldDescriptor : FDesc -> FieldTypeDescriptor
@@ -143,6 +98,24 @@ parseExportedClassName desc
        (c :: "extends" :: p :: "implements" :: intfs) => (c, p, intfs)
        _ => jerror $ "invalid class descriptor in export: " ++ desc
 
+fieldTypeDescriptorToInferredType : FieldTypeDescriptor -> InferredType
+fieldTypeDescriptorToInferredType FieldTyDescByte             = IByte
+fieldTypeDescriptorToInferredType FieldTyDescChar             = IChar
+fieldTypeDescriptorToInferredType FieldTyDescShort            = IShort
+fieldTypeDescriptorToInferredType FieldTyDescBoolean          = IBool
+fieldTypeDescriptorToInferredType FieldTyDescDouble           = IDouble
+fieldTypeDescriptorToInferredType FieldTyDescFloat            = IFloat
+fieldTypeDescriptorToInferredType FieldTyDescInt              = IInt
+fieldTypeDescriptorToInferredType FieldTyDescLong             = ILong
+fieldTypeDescriptorToInferredType (FieldTyDescReference (ArrayDesc elemTy))
+    = IArray $ fieldTypeDescriptorToInferredType elemTy
+fieldTypeDescriptorToInferredType (FieldTyDescReference refTy) = Ref (refTyClassName refTy)
+
+typeDescriptorToInferredType : TypeDescriptor -> InferredType
+typeDescriptorToInferredType (ThrowableDescriptor _) = inferredObjectType
+typeDescriptorToInferredType VoidDescriptor          = IUnknown
+typeDescriptorToInferredType (FieldDescriptor fieldTyDesc) = fieldTypeDescriptorToInferredType fieldTyDesc
+
 loadJavaVar : Int -> FieldTypeDescriptor -> Asm ()
 loadJavaVar index FieldTyDescBoolean = Iload index
 loadJavaVar index FieldTyDescByte    = Iload index
@@ -155,7 +128,37 @@ loadJavaVar index FieldTyDescDouble  = Dload index
 loadJavaVar index (FieldTyDescReference (IdrisExportDesc cname)) = do
   Aload index
   InvokeMethod InvokeVirtual cname "getValue" "()Ljava/lang/Object;" False
+  checkcast idrisObjectType
 loadJavaVar index _                  = Aload index
+
+storeJavaVar : Int -> FieldTypeDescriptor -> Asm ()
+storeJavaVar index FieldTyDescBoolean = Istore index
+storeJavaVar index FieldTyDescByte    = Istore index
+storeJavaVar index FieldTyDescShort   = Istore index
+storeJavaVar index FieldTyDescInt     = Istore index
+storeJavaVar index FieldTyDescChar    = Istore index
+storeJavaVar index FieldTyDescLong    = Lstore index
+storeJavaVar index FieldTyDescFloat   = Fstore index
+storeJavaVar index FieldTyDescDouble  = Dstore index
+storeJavaVar index _                  = Astore index
+
+idrisToJava : List (FieldTypeDescriptor, LVar) -> Asm ()
+idrisToJava vars = do
+    locTypes <- GetFunctionLocTypes
+    sequence_ $ map (f locTypes) vars
+  where
+    f :  InferredTypeStore -> (FieldTypeDescriptor, LVar) -> Asm ()
+    f locTypes (ty, v) = do
+      let vTy = getLocTy locTypes v
+      loadVar locTypes vTy (fieldTypeDescriptorToInferredType ty) v
+
+idrisToJavaLoadArray : List (FieldTypeDescriptor, LVar) -> Asm ()
+idrisToJavaLoadArray = sequence_ . intersperse Aaload . map f where
+  f : (FieldTypeDescriptor, LVar) -> Asm ()
+  f (ty, v) = do
+    locTypes <- GetFunctionLocTypes
+    let vTy = getLocTy locTypes v
+    loadVar locTypes vTy (fieldTypeDescriptorToInferredType ty) v
 
 parseDescriptor : FDesc -> FDesc -> List (FDesc, LVar) -> JForeign
 parseDescriptor returns ffi argsDesc = tryParseStaticMethodDescriptor returns ffi argsDesc where
@@ -300,7 +303,6 @@ anewarray FieldTyDescByte          = Anewbytearray
 anewarray FieldTyDescChar          = Anewchararray
 anewarray FieldTyDescShort         = Anewshortarray
 anewarray FieldTyDescBoolean       = Anewbooleanarray
-anewarray FieldTyDescArray         = jerror $ "array is not a valid element type for a single dimensional array"
 anewarray FieldTyDescDouble        = Anewdoublearray
 anewarray FieldTyDescFloat         = Anewfloatarray
 anewarray FieldTyDescInt           = Anewintarray
@@ -312,7 +314,6 @@ arrayStore FieldTyDescByte = Bastore
 arrayStore FieldTyDescChar = Castore
 arrayStore FieldTyDescShort = Sastore
 arrayStore FieldTyDescBoolean = Bastore
-arrayStore FieldTyDescArray = Aastore
 arrayStore FieldTyDescDouble = Dastore
 arrayStore FieldTyDescFloat = Fastore
 arrayStore FieldTyDescInt = Iastore
@@ -324,7 +325,6 @@ arrayLoad FieldTyDescByte                                = Baload
 arrayLoad FieldTyDescChar                                = Caload
 arrayLoad FieldTyDescShort                               = Saload
 arrayLoad FieldTyDescBoolean                             = Baload
-arrayLoad FieldTyDescArray                               = Aaload
 arrayLoad FieldTyDescDouble                              = Daload
 arrayLoad FieldTyDescFloat                               = Faload
 arrayLoad FieldTyDescInt                                 = Iaload
@@ -350,63 +350,67 @@ invokeDynamic implClassName implMethodName interfaceMethodName invokeDynamicDesc
                         ]
   in InvokeDynamic interfaceMethodName invokeDynamicDesc metafactoryHandle metafactoryArgs
 
-invokeDynamicForThunk : ClassName -> MethodName -> Nat -> Asm ()
-invokeDynamicForThunk cname implMethodName nArgs =
-  let invokeDynamicDesc = "(" ++ repeatObjectDesc nArgs ++ ")" ++ rtThunkSig
-      implMethodDesc = sig nArgs
-      samDesc = "()" ++ classSig "java/lang/Object"
-      instantiatedMethodDesc = samDesc
-  in invokeDynamic cname implMethodName "call" invokeDynamicDesc samDesc implMethodDesc instantiatedMethodDesc
-
-loadArgsForLambdaTargetMethod : Nat -> Asm ()
-loadArgsForLambdaTargetMethod nArgs = case isLTE 1 nArgs of
-    Yes prf => sequence_ (map (Aload . cast) [0 .. (Nat.(-) nArgs 1)])
-    No contra => Pure ()
-
-createLambdaForThunk : JMethodName -> List LVar -> (MethodName -> Asm ()) -> Asm ()
-createLambdaForThunk caller args lambdaCode = do
+createLambdaForThunk : JMethodName -> JMethodName -> List LVar -> (MethodName -> Asm ()) -> Asm ()
+createLambdaForThunk caller targetFname args lambdaCode = do
+  let nArgs = length args
+  locTypes <- GetFunctionLocTypes
+  (_, targetLocTys) <- getFunctionType targetFname
   let cname = jmethClsName caller
   lambdaIndex <- FreshLambdaIndex cname
   let implMethodName = sep "$" ["lambda", jmethName caller, show lambdaIndex]
-  let argNums = map locIndex args
-  sequence_ . map Aload $ argNums
-  invokeDynamicForThunk cname implMethodName (List.length args)
+  loadVars locTypes targetLocTys args
+  let targetArgTys = if nArgs > 0 then getLocTy targetLocTys <$> (Loc . cast <$> [ 0 .. Nat.pred nArgs]) else []
+  let invokeDynamicDesc = getInferredFunDesc targetArgTys (Ref thunkClass)
+  let implMethodDesc = getInferredFunDesc targetArgTys (Ref "java/lang/Object")
+  let samDesc = "()" ++ classSig "java/lang/Object"
+  let instantiatedMethodDesc = samDesc
+  invokeDynamic cname implMethodName "call" invokeDynamicDesc samDesc implMethodDesc instantiatedMethodDesc
   lambdaCode implMethodName
 
-createLambdaForJavaFunction : JMethodName ->
-                              JMethodName ->
-                              List FieldTypeDescriptor ->
-                              TypeDescriptor ->
-                              List FieldTypeDescriptor ->
-                              TypeDescriptor ->
-                              (MethodName -> Asm ()) ->
-                              Asm ()
+createLambdaForJavaFunction : JMethodName
+                           -> JMethodName
+                           -> List FieldTypeDescriptor
+                           -> TypeDescriptor
+                           -> List FieldTypeDescriptor
+                           -> TypeDescriptor
+                           -> (MethodName -> Asm ())
+                           -> Asm ()
 createLambdaForJavaFunction caller (MkJMethodName interfaceName interfaceMethodName) interfaceMethodArgs interfaceMethodReturns implMethodArgs implMethodReturns lambdaCode = do
   let cname = jmethClsName caller
   lambdaIndex <- FreshLambdaIndex cname
   let implMethodName = sep "$" ["lambda", jmethName caller, show lambdaIndex]
-  let invokeDynamicDesc = "(Ljava/lang/Object;)" ++ classSig interfaceName -- takes idris function as input, returns an instance of Java interface
+  -- takes idris function as input, returns an instance of Java interface
+  let invokeDynamicDesc = "(Ljava/lang/Object;)" ++ classSig interfaceName
   let samDesc = asmMethodDesc $ MkMethodDescriptor interfaceMethodArgs interfaceMethodReturns
   let objectDesc = FieldTyDescReference $ ClassDesc "java/lang/Object"
   let implMethodDesc = asmMethodDesc $
-    MkMethodDescriptor (objectDesc :: implMethodArgs) implMethodReturns -- first objectDesc is for idris function capture
+    -- first objectDesc is for idris function capture
+    MkMethodDescriptor (objectDesc :: implMethodArgs) implMethodReturns
   let instantiatedMethodDesc = asmMethodDesc $ MkMethodDescriptor implMethodArgs implMethodReturns
   invokeDynamic cname implMethodName interfaceMethodName invokeDynamicDesc samDesc implMethodDesc instantiatedMethodDesc
   lambdaCode implMethodName
 
-createWrapperForThunkLambda : JMethodName -> ClassName -> MethodName -> Nat -> Asm ()
-createWrapperForThunkLambda (MkJMethodName cname fname) callerCname lambdaMethodName nArgs = do
-  let desc = sig nArgs
-  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName desc Nothing Nothing [] []
+createWrapperForThunkLambda : JMethodName -> ClassName -> MethodName -> List LVar -> Asm ()
+createWrapperForThunkLambda fname@(MkJMethodName cname mname) callerCname lambdaMethodName args = do
+  (targetRetTy, targetLocTys) <- getFunctionType fname
+  let nArgs = the Int $ cast $ length args
+  let argNums = if nArgs > 0 then [ 0 .. pred nArgs] else []
+  let syntheticMethodArgs = Loc <$> argNums
+  let targetArgTys = getLocTy targetLocTys <$> syntheticMethodArgs
+  let syntheticMethodArgTys = SortedMap.fromList $ List.zip argNums targetArgTys
+  let implMethodDesc = getInferredFunDesc targetArgTys (Ref "java/lang/Object")
+  let targetMethodDesc = getInferredFunDesc targetArgTys targetRetTy
+  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName implMethodDesc Nothing Nothing [] []
   MethodCodeStart
-  loadArgsForLambdaTargetMethod nArgs
-  InvokeMethod InvokeStatic cname fname desc False -- invoke the target method
+  loadVars syntheticMethodArgTys targetLocTys syntheticMethodArgs
+  InvokeMethod InvokeStatic cname mname targetMethodDesc False
+  box targetRetTy
   Areturn
   MaxStackAndLocal (-1) (-1)
   MethodCodeEnd
 
-createLambdaWrapper : ClassName -> MethodName -> Nat -> Asm () -> Asm ()
-createLambdaWrapper callerCname lambdaMethodName nArgs body = do
+createExceptionLambdaWrapper : ClassName -> MethodName -> Nat -> Asm () -> Asm ()
+createExceptionLambdaWrapper callerCname lambdaMethodName nArgs body = do
   let desc = sig nArgs
   CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName desc Nothing Nothing [] []
   MethodCodeStart
@@ -417,17 +421,22 @@ createLambdaWrapper callerCname lambdaMethodName nArgs body = do
 
 createWrapperForJavaLambda : ClassName -> MethodName -> List FieldTypeDescriptor -> TypeDescriptor -> Asm ()
 createWrapperForJavaLambda callerCname lambdaMethodName argDescs returnDesc = do
-    let objectDesc = FieldTyDescReference $ ClassDesc "java/lang/Object"
-    let descriptor = asmMethodDesc $ MkMethodDescriptor (objectDesc :: argDescs) returnDesc
+    let descriptor = asmMethodDesc $ MkMethodDescriptor locDescs returnDesc
     CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName descriptor Nothing Nothing [] []
     MethodCodeStart
     when (isNil argDescs) $ do
       Aconstnull
       Dup
-    Aload 0
+    (applyRetTy, applyLocTys) <- applyFnType
+    let applyArgTys = take 2 (values applyLocTys)
+    let (applyArg0 :: _ :: _) = applyArgTys
+    loadVar locTys inferredObjectType applyArg0 (Loc 0)
     applyArgs 1 argDescs
-    InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
-    idrisDescToJava returnDesc
+    if (isThunk applyRetTy || isObject applyRetTy) then do
+        InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
+        cgCast inferredObjectType (typeDescriptorToInferredType returnDesc)
+    else
+        cgCast applyRetTy (typeDescriptorToInferredType returnDesc)
     javaReturn returnDesc
     MaxStackAndLocal (-1) (-1)
     MethodCodeEnd
@@ -435,27 +444,55 @@ createWrapperForJavaLambda callerCname lambdaMethodName argDescs returnDesc = do
     idrisApplyMethod : JMethodName
     idrisApplyMethod = jname "{APPLY_0}"
 
+    locDescs : List FieldTypeDescriptor
+    locDescs = (FieldTyDescReference $ ClassDesc "java/lang/Object") :: argDescs
+
+    locTys : InferredTypeStore
+    locTys = SortedMap.fromList $ List.zip argVars $ fieldTypeDescriptorToInferredType <$> locDescs where
+        argVars : List Int
+        argVars = [0 .. (pred . cast $ length locDescs)]
+
+    applyFnClassName : String
+    applyFnClassName = jmethClsName idrisApplyMethod
+
+    applyFnMethodName : String
+    applyFnMethodName = jmethName idrisApplyMethod
+
+    applyFnType : Asm (InferredType, InferredTypeStore)
+    applyFnType = getFunctionType idrisApplyMethod
+
+    callIoType : Asm (InferredType, InferredTypeStore)
+    callIoType = getFunctionType (jname "call__IO")
+
     applyArgs : Nat -> List FieldTypeDescriptor -> Asm ()
-    applyArgs (S Z) [] = InvokeMethod InvokeStatic "main/Main" "call__IO" (sig 3) False
+    applyArgs (S Z) [] = do
+        (callIoRetTy, callIoLocTys) <- callIoType
+        let callIoArgTys = take 3 $ (values callIoLocTys)
+        let callIoDesc = getInferredFunDesc callIoArgTys callIoRetTy
+        InvokeMethod InvokeStatic "main/Main" "call__IO" callIoDesc False
     applyArgs index (argDesc :: argDescs) = do
-      loadJavaVar (cast index) argDesc
-      javaToIdris $ FieldDescriptor argDesc
-      let MkJMethodName applyFnClassName applyFnJName = idrisApplyMethod
-      InvokeMethod InvokeStatic applyFnClassName applyFnJName (sig 2) False
+      (applyRetTy, applyArgVarAndTys) <- applyFnType
+      let applyLocTys = SortedMap.values applyArgVarAndTys
+      let applyArgTys = take 2 applyLocTys
+      let (_ :: applyArg1 :: _) = applyArgTys
+      loadVar locTys (fieldTypeDescriptorToInferredType argDesc) applyArg1 (Loc $ cast index)
+      let applyFnDesc = getInferredFunDesc applyArgTys applyRetTy
+      InvokeMethod InvokeStatic applyFnClassName applyFnMethodName applyFnDesc False
       applyArgs (index + 1) argDescs
     applyArgs _ _ = pure ()
 
 createThunk : JMethodName -> JMethodName -> List LVar -> Asm ()
 createThunk caller@(MkJMethodName callerCname _) fname args = do
-  let nArgs = List.length args
-  let lambdaCode = \lambdaMethodName => Subroutine $ createWrapperForThunkLambda fname callerCname lambdaMethodName nArgs
-  createLambdaForThunk caller args lambdaCode
+  let lambdaCode =
+    \lambdaMethodName =>
+      Subroutine $ createWrapperForThunkLambda fname callerCname lambdaMethodName args
+  createLambdaForThunk caller fname args lambdaCode
 
-createExceptionHandlerThunk : JMethodName -> List (FieldTypeDescriptor, LVar) -> Asm () -> Asm ()
-createExceptionHandlerThunk caller@(MkJMethodName callerCname _) argsWithTypes body = do
-  let nArgs = List.length argsWithTypes
-  let lambdaCode = \lambdaMethodName => Subroutine $ createLambdaWrapper callerCname lambdaMethodName nArgs body
-  createLambdaForThunk caller (snd <$> argsWithTypes) lambdaCode
+createExceptionHandlerThunk : JMethodName -> JMethodName -> List LVar -> Asm () -> Asm ()
+createExceptionHandlerThunk caller@(MkJMethodName callerCname _) targetFname args body = do
+  let nArgs = List.length args
+  let lambdaCode = \lambdaMethodName => Subroutine $ createExceptionLambdaWrapper callerCname lambdaMethodName nArgs body
+  createLambdaForThunk caller targetFname args lambdaCode
 
 createJvmFunctionalObject : LVar -> JMethodName -> JMethodName -> FDesc -> FDesc -> Asm ()
 createJvmFunctionalObject idrisFunction caller@(MkJMethodName callerCname _) interfaceMethod interfaceFnTy lambdaTy  = do
@@ -468,19 +505,29 @@ createJvmFunctionalObject idrisFunction caller@(MkJMethodName callerCname _) int
   createLambdaForJavaFunction caller interfaceMethod interfaceMethodArgDescs interfaceMethodReturnDesc implMethodArgDescs implMethodReturnDesc lambdaCode
 
 createWrapperForThunkParLambda : JMethodName -> ClassName -> MethodName -> Nat -> Asm ()
-createWrapperForThunkParLambda (MkJMethodName cname fname) callerCname lambdaMethodName nArgs = do
-  let desc = sig nArgs
-  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName desc Nothing Nothing [] []
+createWrapperForThunkParLambda fname@(MkJMethodName cname mname) callerCname lambdaMethodName nArgs = do
+  (targetRetTy, targetLocTys) <- getFunctionType fname
+
+  let argNums = the (List Int) $ if nArgs > 0 then [0 .. Prelude.pred $ cast nArgs] else []
+  let syntheticMethodArgs = Loc <$> argNums
+  let targetArgTys = getLocTy targetLocTys <$> syntheticMethodArgs
+  let syntheticMethodArgTys = SortedMap.fromList $ List.zip argNums targetArgTys
+  let implMethodDesc = getInferredFunDesc targetArgTys (Ref "java/lang/Object")
+  let targetMethodDesc = getInferredFunDesc targetArgTys targetRetTy
+  CreateMethod [Private, Static, Synthetic] callerCname lambdaMethodName implMethodDesc Nothing Nothing [] []
   MethodCodeStart
-  loadArgsForLambdaTargetMethod nArgs
-  InvokeMethod InvokeStatic cname fname desc False -- invoke the target method
+  loadVars syntheticMethodArgTys targetLocTys syntheticMethodArgs
+  InvokeMethod InvokeStatic cname mname targetMethodDesc False -- invoke the target method
+  box targetRetTy
   Astore 1
   Aload 1
   InstanceOf idrisObjectType
   CreateLabel "elseLabel"
   Ifeq "elseLabel"
   Aload 1
-  InvokeMethod InvokeStatic cname fname "(Ljava/lang/Object;)Ljava/lang/Object;" False
+  cgCast targetRetTy inferredIdrisObjectType
+  InvokeMethod InvokeStatic cname mname targetMethodDesc False
+  box targetRetTy
   Areturn
   LabelStart "elseLabel"
   Frame FAppend 1 ["java/lang/Object"] 0 []
@@ -493,4 +540,4 @@ createParThunk : JMethodName -> JMethodName -> List LVar -> Asm ()
 createParThunk caller@(MkJMethodName callerCname _) fname args = do
   let nArgs = List.length args
   let lambdaCode = \lambdaMethodName => Subroutine $ createWrapperForThunkParLambda fname callerCname lambdaMethodName nArgs
-  createLambdaForThunk caller args lambdaCode
+  createLambdaForThunk caller fname args lambdaCode

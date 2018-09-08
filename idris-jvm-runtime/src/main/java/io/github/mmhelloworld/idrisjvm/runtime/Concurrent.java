@@ -5,6 +5,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.Runtime.getRuntime;
@@ -32,7 +33,7 @@ public class Concurrent {
         };
     }
 
-    public static Object fork(Thunk thunk) {
+    public static Future<Object> fork(Thunk thunk) {
         return executor.submit(asCallable(thunk));
     }
 

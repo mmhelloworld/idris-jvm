@@ -18,30 +18,18 @@ newBigInteger i = do
   Ldc $ StringConst i
   InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
-cgConst : Const -> Asm ()
-cgConst (B8 i) = do
-  Iconst $ prim__zextB8_Int i
-  boxInt
-cgConst (B16 i) = do
-  Iconst $ prim__zextB16_Int i
-  boxInt
-cgConst (B32 i) = do
-  Iconst i
-  boxInt
-cgConst (B64 i) = do
-  Ldc $ LongConst i
-  boxLong
-cgConst (I i) = do Iconst i; boxInt
-cgConst (Fl d) = do
-  Ldc $ DoubleConst d
-  boxDouble
-cgConst (Ch c) = do
-  Iconst (cast c)
-  InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
-cgConst (BI i) = newBigInteger i
-cgConst (Str s) = Ldc $ StringConst s
-cgConst TheWorld = do Iconst 0; boxInt
-cgConst x = if isTypeConst x
-              then do Iconst 0; boxInt
+cgConst : (InferredType -> Asm ()) -> Const -> Asm ()
+cgConst ret (B8 i) = do Iconst $ prim__zextB8_Int i; ret IInt
+cgConst ret (B16 i) = do Iconst $ prim__zextB16_Int i; ret IInt
+cgConst ret (B32 i) = do Iconst i; ret IInt
+cgConst ret (B64 i) = do Ldc $ LongConst i; ret ILong
+cgConst ret (I i) = do Iconst i; ret IInt
+cgConst ret (Fl d) = do Ldc $ DoubleConst d; ret IDouble
+cgConst ret (Ch c) = do Iconst (cast c); ret IChar
+cgConst ret (BI i) = do newBigInteger i; ret inferredBigIntegerType
+cgConst ret (Str s) = do Ldc $ StringConst s; ret inferredStringType
+cgConst ret TheWorld = do Iconst 0; ret IInt
+cgConst ret x = if isTypeConst x
+              then do Iconst 0; ret IInt
               else jerror $ "Constant " ++ show x ++ " not compilable yet"
 

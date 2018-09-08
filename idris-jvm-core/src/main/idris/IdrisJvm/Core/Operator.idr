@@ -7,560 +7,615 @@ import IdrisJvm.IR.Types
 
 %access public export
 
-compareObj : MethodName -> LVar -> LVar -> Asm ()
-compareObj fn l r = do
-  Aload $ locIndex l
-  Aload $ locIndex r
-  InvokeMethod InvokeStatic utilClass fn "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
-
-loadLocalIntWithCast : LVar -> Asm ()
-loadLocalIntWithCast var = do
-  Aload $ locIndex var
-  InvokeMethod InvokeStatic utilClass "asInt" "(Ljava/lang/Object;)I" False
-
-loadLocalLongWithCast : LVar -> Asm ()
-loadLocalLongWithCast var = do
-  Aload $ locIndex var
-  Checkcast "java/lang/Long"
-  unboxLong
-
-loadLocalDoubleWithCast : LVar -> Asm ()
-loadLocalDoubleWithCast var = do
-  Aload $ locIndex var
-  Checkcast "java/lang/Double"
-  unboxDouble
-
-binaryIntOp : Asm () -> LVar -> LVar -> Asm ()
-binaryIntOp ops l r = do
-  loadLocalIntWithCast l
-  loadLocalIntWithCast r
+binaryOp : InferredType -> (InferredType -> Asm ()) -> Asm () -> LVar -> LVar -> Asm ()
+binaryOp ty ret ops l r = do
+  locTypes <- GetFunctionLocTypes
+  let lTy = getLocTy locTypes l
+  let rTy = getLocTy locTypes r
+  loadVar locTypes lTy ty l
+  loadVar locTypes rTy ty r
   ops
-  boxInt
+  ret ty
 
-binaryLongOp : Asm () -> LVar -> LVar -> Asm ()
-binaryLongOp ops l r = do
-  loadLocalLongWithCast l
-  loadLocalLongWithCast r
+unaryOp : InferredType -> (InferredType -> Asm ()) -> Asm () -> LVar -> Asm ()
+unaryOp ty ret ops x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy ty x
   ops
-  boxLong
+  ret ty
 
-unaryIntOp : Asm () -> LVar -> Asm ()
-unaryIntOp ops x = do
-  loadLocalIntWithCast x
-  ops
-  boxInt
-
-unaryLongOp : Asm () -> LVar -> Asm ()
-unaryLongOp ops x = do
-  loadLocalLongWithCast x
-  ops
-  boxLong
-
-binaryDoubleOp : Asm () -> LVar -> LVar -> Asm ()
-binaryDoubleOp ops l r = do
-  loadLocalDoubleWithCast l
-  loadLocalDoubleWithCast r
-  ops
-  boxDouble
-
-signExtendToBigInteger : LVar -> Asm ()
-signExtendToBigInteger var = do
-  Aload $ locIndex var
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-
+compareOp : InferredType -> (InferredType -> Asm ()) -> MethodName -> LVar -> LVar -> Asm ()
+compareOp ty ret fn l r = do
+  locTypes <- GetFunctionLocTypes
+  let lTy = getLocTy locTypes l
+  let rTy = getLocTy locTypes r
+  loadVar locTypes lTy ty l
+  loadVar locTypes rTy ty r
+  let tyDesc = inferredTypeToFieldTypeDesc ty
+  let fnDesc = asmMethodDesc $ MkMethodDescriptor [tyDesc, tyDesc] (FieldDescriptor FieldTyDescBoolean)
+  InvokeMethod InvokeStatic utilClass fn fnDesc False
+  ret IBool
+    
 cgExternalOp : String -> List LVar -> Asm ()
 cgExternalOp op _ =
   if op == "prim__null"
     then Aconstnull
     else invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
 
-cgOpLLe : PrimFn -> List LVar -> Asm ()
-cgOpLLe (LLe ITBig) [l, r] = compareObj "bigIntegerLessThanOrEqualTo" l r
-cgOpLLe (LLe ITNative) [l, r] = compareObj "uintLessThanOrEqualTo" l r
-cgOpLLe (LLe (ITFixed IT8)) [l, r] = compareObj "uintLessThanOrEqualTo" l r
-cgOpLLe (LLe (ITFixed IT16)) [l, r] = compareObj "uintLessThanOrEqualTo" l r
-cgOpLLe (LLe (ITFixed IT32)) [l, r] = compareObj "uintLessThanOrEqualTo" l r
-cgOpLLe (LLe (ITFixed IT64)) [l, r] = compareObj "ulongLessThanOrEqualTo" l r
+cgOpLLe : (InferredType -> Asm ()) -> IntTy -> List LVar -> Asm ()
+cgOpLLe ret ITBig [l, r] = compareOp inferredBigIntegerType ret "bigIntegerLessThanOrEqualTo" l r
+cgOpLLe ret ITNative [l, r] = compareOp IInt ret "uintLessThanOrEqualTo" l r
+cgOpLLe ret (ITFixed IT8) [l, r] =  compareOp IInt ret "uintLessThanOrEqualTo" l r
+cgOpLLe ret (ITFixed IT16) [l, r] = compareOp IInt ret "uintLessThanOrEqualTo" l r
+cgOpLLe ret (ITFixed IT32) [l, r] = compareOp IInt ret "uintLessThanOrEqualTo" l r
+cgOpLLe ret (ITFixed IT64) [l, r] = compareOp ILong ret "ulongLessThanOrEqualTo" l r
 
-cgOpLLt : PrimFn -> List LVar -> Asm ()
-cgOpLLt (LLt ITBig) [l, r] = compareObj "bigIntegerLessThan" l r
-cgOpLLt (LLt ITNative) [l, r] = compareObj "uintLessThan" l r
-cgOpLLt (LLt (ITFixed IT8)) [l, r] = compareObj "uintLessThan" l r
-cgOpLLt (LLt (ITFixed IT16)) [l, r] = compareObj "uintLessThan" l r
-cgOpLLt (LLt (ITFixed IT32)) [l, r] = compareObj "uintLessThan" l r
-cgOpLLt (LLt (ITFixed IT64)) [l, r] = compareObj "ulongLessThan" l r
+cgOpLLt : (InferredType -> Asm ()) -> IntTy -> List LVar -> Asm ()
+cgOpLLt ret ITBig [l, r] = compareOp inferredBigIntegerType ret "bigIntegerLessThan" l r
+cgOpLLt ret ITNative [l, r] = compareOp IInt ret "uintLessThan" l r
+cgOpLLt ret (ITFixed IT8) [l, r] = compareOp IInt ret "uintLessThan" l r
+cgOpLLt ret (ITFixed IT16) [l, r] = compareOp IInt ret "uintLessThan" l r
+cgOpLLt ret (ITFixed IT32) [l, r] = compareOp IInt ret "uintLessThan" l r
+cgOpLLt ret (ITFixed IT64) [l, r] = compareOp ILong ret "ulongLessThan" l r
 
-cgOpLGt : PrimFn -> List LVar -> Asm ()
-cgOpLGt (LGt ITBig) [l, r] = compareObj "bigIntegerGreaterThan" l r
-cgOpLGt (LGt ITNative) [l, r] = compareObj "uintGreaterThan" l r
-cgOpLGt (LGt (ITFixed IT8)) [l, r] = compareObj "uintGreaterThan" l r
-cgOpLGt (LGt (ITFixed IT16)) [l, r] = compareObj "uintGreaterThan" l r
-cgOpLGt (LGt (ITFixed IT32)) [l, r] = compareObj "uintGreaterThan" l r
-cgOpLGt (LGt (ITFixed IT64)) [l, r] = compareObj "ulongGreaterThan" l r
+cgOpLGt : (InferredType -> Asm ()) -> IntTy -> List LVar -> Asm ()
+cgOpLGt ret ITBig [l, r] = compareOp inferredBigIntegerType ret "bigIntegerGreaterThan" l r
+cgOpLGt ret ITNative [l, r] = compareOp IInt ret "uintGreaterThan" l r
+cgOpLGt ret (ITFixed IT8) [l, r] = compareOp IInt ret "uintGreaterThan" l r
+cgOpLGt ret (ITFixed IT16) [l, r] = compareOp IInt ret "uintGreaterThan" l r
+cgOpLGt ret (ITFixed IT32) [l, r] = compareOp IInt ret "uintGreaterThan" l r
+cgOpLGt ret (ITFixed IT64) [l, r] = compareOp ILong ret "ulongGreaterThan" l r
 
-cgOpLPlusBig : LVar -> LVar -> Asm ()
-cgOpLPlusBig lvar rvar = do
-  Aload $ locIndex lvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  Aload $ locIndex rvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  InvokeMethod InvokeVirtual "java/math/BigInteger" "add"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+cgOpLGe : (InferredType -> Asm ()) -> IntTy -> List LVar -> Asm ()
+cgOpLGe ret ITBig [l, r] = compareOp inferredBigIntegerType ret "bigIntegerGreaterThanOrEqualTo" l r
+cgOpLGe ret ITNative [l, r] = compareOp IInt ret "uintGreaterThanOrEqualTo" l r
+cgOpLGe ret (ITFixed IT8) [l, r] = compareOp IInt ret "uintGreaterThanOrEqualTo" l r
+cgOpLGe ret (ITFixed IT16) [l, r] = compareOp IInt ret "uintGreaterThanOrEqualTo" l r
+cgOpLGe ret (ITFixed IT32) [l, r] = compareOp IInt ret "uintGreaterThanOrEqualTo" l r
+cgOpLGe ret (ITFixed IT64) [l, r] = compareOp ILong ret "ulongGreaterThanOrTo" l r
 
-cgOpLPlusChar : LVar -> LVar -> Asm ()
-cgOpLPlusChar lvar rvar = do
-  Aload $ locIndex lvar
-  Checkcast "java/lang/Character"
-  InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
-  Aload $ locIndex rvar
-  Checkcast "java/lang/Character"
-  InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
-  Iadd
-  I2c
-  InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+cgOpLPlus : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLPlus ret ATFloat [l, r] = binaryOp IDouble ret Dadd l r
+cgOpLPlus ret (ATInt ITBig) [lvar, rvar] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "add"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op lvar rvar
+cgOpLPlus ret (ATInt ITNative) [l, r] = binaryOp IInt ret Iadd l r
+cgOpLPlus ret (ATInt ITChar) [lvar, rvar] =
+  let ops = do Iadd; I2c
+  in binaryOp IChar ret ops lvar rvar
+cgOpLPlus ret (ATInt (ITFixed IT64)) [l, r] = binaryOp ILong ret Ladd l r
+cgOpLPlus ret (ATInt (ITFixed IT8)) [l, r] =
+  let ops = do Iadd; Iconst 256; Irem
+  in binaryOp IInt ret ops l r
+cgOpLPlus ret (ATInt (ITFixed _)) [l, r] = binaryOp IInt ret Iadd l r
 
-cgOpLMinusBig : LVar -> LVar -> Asm ()
-cgOpLMinusBig lvar rvar = do
-  Aload $ locIndex lvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  Aload $ locIndex rvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  InvokeMethod InvokeVirtual "java/math/BigInteger" "subtract"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+cgOpLMinus : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLMinus ret ATFloat [l, r] = binaryOp IDouble ret Dsub l r
+cgOpLMinus ret (ATInt ITBig) [lvar, rvar] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "subtract"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op lvar rvar
+cgOpLMinus ret (ATInt ITNative) [l, r] = binaryOp IInt ret Isub l r
+cgOpLMinus ret (ATInt (ITFixed IT64)) [l, r] = binaryOp ILong ret Lsub l r
+cgOpLMinus ret (ATInt (ITFixed _)) [l, r] = binaryOp IInt ret Isub l r
 
-cgOpLTimesBig : LVar -> LVar -> Asm ()
-cgOpLTimesBig lvar rvar = do
-  Aload $ locIndex lvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  Aload $ locIndex rvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  InvokeMethod InvokeVirtual "java/math/BigInteger" "multiply"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+cgOpLTimes : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLTimes ret ATFloat [l, r] = binaryOp IDouble ret Dmul l r
+cgOpLTimes ret (ATInt ITBig) [lvar, rvar] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "multiply"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op lvar rvar
+cgOpLTimes ret (ATInt ITNative) [l, r] = binaryOp IInt ret Imul l r
+cgOpLTimes ret (ATInt (ITFixed IT64)) [l, r] = binaryOp ILong ret Lmul l r
+cgOpLTimes ret (ATInt (ITFixed IT8)) [l, r] = binaryOp IInt ret ops l r where
+  ops = do Imul; Iconst 256; Irem
+cgOpLTimes ret (ATInt (ITFixed _)) [l, r] = binaryOp IInt ret Imul l r
 
-cgOpLSDivBig : LVar -> LVar -> Asm ()
-cgOpLSDivBig lvar rvar = do
-  Aload $ locIndex lvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  Aload $ locIndex rvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  InvokeMethod InvokeVirtual "java/math/BigInteger" "divide"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+cgOpLSDiv : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLSDiv ret ATFloat [l, r] = binaryOp IDouble ret Ddiv l r
+cgOpLSDiv ret (ATInt ITBig) [lvar, rvar] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "divide"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op lvar rvar
+cgOpLSDiv ret (ATInt ITNative) [l, r] = binaryOp IInt ret Idiv l r
+cgOpLSDiv ret (ATInt (ITFixed IT64)) [l, r] = binaryOp ILong ret Ldiv l r
+cgOpLSDiv ret (ATInt (ITFixed _)) [l, r] = binaryOp IInt ret Idiv l r
 
-cgOpLSRemBig : LVar -> LVar -> Asm ()
-cgOpLSRemBig lvar rvar = do
-  Aload $ locIndex lvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  Aload $ locIndex rvar
-  InvokeMethod InvokeStatic utilClass "asBigInt" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
-  InvokeMethod InvokeVirtual "java/math/BigInteger" "mod"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+cgOpLUDiv : (InferredType -> Asm ()) -> IntTy -> List LVar -> Asm ()
+cgOpLUDiv ret ITNative [l, r] = binaryOp IInt ret udiv l r where
+  udiv = InvokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
+cgOpLUDiv ret (ITFixed IT32) [l, r] = binaryOp IInt ret udiv l r where
+  udiv = InvokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
+cgOpLUDiv ret (ITFixed IT64) [l, r] = binaryOp ILong ret udiv l r where
+  udiv = InvokeMethod InvokeStatic "java/lang/Long" "divideUnsigned" "(JJ)J" False
+cgOpLUDiv ret ITBig [lvar, rvar] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "divide"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op lvar rvar
+cgOpLUDiv ret (ITFixed _) [l, r] = binaryOp IInt ret Idiv l r
 
-cgOpLStrRev : LVar -> Asm ()
-cgOpLStrRev var = do
+cgOpLSRem : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLSRem ret ATFloat [l, r] = binaryOp IDouble ret Drem l r
+cgOpLSRem ret (ATInt ITBig) [lvar, rvar] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "mod"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op lvar rvar
+cgOpLSRem ret (ATInt ITNative) [l, r] = binaryOp IInt ret Irem l r
+cgOpLSRem ret (ATInt (ITFixed IT64)) [l, r] = binaryOp ILong ret Lrem l r
+cgOpLSRem ret (ATInt (ITFixed _)) [l, r] = binaryOp IInt ret Irem l r
+
+cgOpLURem : (InferredType -> Asm ()) -> IntTy -> List LVar -> Asm ()
+cgOpLURem ret (ITFixed IT64) [l, r] = binaryOp ILong ret urem l r where
+  urem = InvokeMethod InvokeStatic "java/lang/Long" "remainderUnsigned" "(JJ)J" False
+cgOpLURem ret ITNative [l, r] = binaryOp IInt ret urem l r where
+  urem = InvokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
+cgOpLURem ret (ITFixed IT32) [l, r] = binaryOp IInt ret urem l r where
+  urem = InvokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
+cgOpLURem ret ITBig [lvar, rvar] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "mod"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op lvar rvar
+cgOpLURem ret (ITFixed _) [l, r] = binaryOp IInt ret Irem l r
+
+cgOpLEq : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLEq ret ATFloat [l, r] = compareOp IDouble ret "doubleEquals" l r
+cgOpLEq ret (ATInt ITBig) [l, r] = compareOp inferredBigIntegerType ret "bigIntegerEquals" l r
+cgOpLEq ret (ATInt (ITFixed IT64)) [l, r] = compareOp ILong ret "longEquals" l r
+cgOpLEq ret (ATInt ITChar) [l, r] = compareOp IChar ret "charEquals" l r
+cgOpLEq ret (ATInt _) [l, r] = compareOp IInt ret "intEquals" l r
+
+cgOpLSLt : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLSLt ret ATFloat [l, r] = compareOp IDouble ret "doubleLessThan" l r
+cgOpLSLt ret (ATInt ITNative) [l, r] = compareOp IInt ret "intLessThan" l r
+cgOpLSLt ret (ATInt ITBig) [l, r] = compareOp inferredBigIntegerType ret "bigIntegerLessThan" l r
+cgOpLSLt ret (ATInt ITChar) [l, r] = compareOp IChar ret "charLessThan" l r
+cgOpLSLt ret (ATInt (ITFixed IT64)) [l, r] = compareOp ILong ret "longLessThan" l r
+cgOpLSLt ret (ATInt (ITFixed _)) [l, r] = compareOp IInt ret "intLessThan" l r
+
+cgOpLSLe : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLSLe ret ATFloat [l, r] = compareOp IDouble ret "doubleLessThanOrEqualTo" l r
+cgOpLSLe ret (ATInt ITNative) [l, r] = compareOp IInt ret "intLessThanOrEqualTo" l r
+cgOpLSLe ret (ATInt ITBig) [l, r] = compareOp inferredBigIntegerType ret "bigIntegerLessThanOrEqualTo" l r
+cgOpLSLe ret (ATInt ITChar) [l, r] = compareOp IChar ret "charLessThanOrEqualTo" l r
+cgOpLSLe ret (ATInt (ITFixed IT64)) [l, r] = compareOp ILong ret "longLessThanOrEqualTo" l r
+cgOpLSLe ret (ATInt (ITFixed _)) [l, r] = compareOp IInt ret "intLessThanOrEqualTo" l r
+
+cgOpLSGt : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLSGt ret ATFloat [l, r] = compareOp IDouble ret "doubleGreaterThan" l r
+cgOpLSGt ret (ATInt ITNative) [l, r] = compareOp IInt ret "intGreaterThan" l r
+cgOpLSGt ret (ATInt ITBig) [l, r] = compareOp inferredBigIntegerType ret "bigIntegerGreaterThan" l r
+cgOpLSGt ret (ATInt ITChar) [l, r] = compareOp IChar ret "charGreaterThan" l r
+cgOpLSGt ret (ATInt (ITFixed IT64)) [l, r] = compareOp ILong ret "longGreaterThan" l r
+cgOpLSGt ret (ATInt (ITFixed _)) [l, r] = compareOp IInt ret "intGreaterThan" l r
+
+cgOpLSGe : (InferredType -> Asm ()) -> ArithTy -> List LVar -> Asm ()
+cgOpLSGe ret ATFloat [l, r] = compareOp IDouble ret "doubleGreaterThanOrEqualTo" l r
+cgOpLSGe ret (ATInt ITNative) [l, r] = compareOp IInt ret "intGreaterThanOrEqualTo" l r
+cgOpLSGe ret (ATInt ITBig) [l, r] = compareOp inferredBigIntegerType ret "bigIntegerGreaterThanOrEqualTo" l r
+cgOpLSGe ret (ATInt ITChar) [l, r] = compareOp IChar ret "charGreaterThanOrEqualTo" l r
+cgOpLSGe ret (ATInt (ITFixed IT64)) [l, r] = compareOp ILong ret "longGreaterThanOrEqualTo" l r
+cgOpLSGe ret (ATInt (ITFixed _)) [l, r] = compareOp IInt ret "intGreaterThanOrEqualTo" l r
+
+cgOpLZExt : (InferredType -> Asm ()) -> IntTy -> IntTy -> List LVar -> Asm ()
+cgOpLZExt ret ITNative ITBig [var] = do
+  locTypes <- GetFunctionLocTypes
+  let varTy = getLocTy locTypes var
+  loadVar locTypes varTy IInt var
+  I2l
+  InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
+  ret inferredBigIntegerType
+cgOpLZExt ret (ITFixed IT8) ITNative [var] = do
+  locTypes <- GetFunctionLocTypes
+  let varTy = getLocTy locTypes var
+  loadVar locTypes varTy IInt var
+  ret IInt
+cgOpLZExt ret (ITFixed IT16) ITNative [var] = do
+  locTypes <- GetFunctionLocTypes
+  let varTy = getLocTy locTypes var
+  loadVar locTypes varTy IInt var
+  ret IInt
+cgOpLZExt ret (ITFixed IT32) ITNative [var] = do
+  locTypes <- GetFunctionLocTypes
+  let varTy = getLocTy locTypes var
+  loadVar locTypes varTy IInt var
+  ret IInt
+
+cgOpLStrRev : (InferredType -> Asm ()) -> LVar -> Asm ()
+cgOpLStrRev ret var = do
   New "java/lang/StringBuilder"
   Dup
-  Aload $ locIndex var
-  Checkcast "java/lang/String"
+  locTypes <- GetFunctionLocTypes
+  let varTy = getLocTy locTypes var
+  loadVar locTypes varTy inferredStringType var
   InvokeMethod InvokeSpecial "java/lang/StringBuilder" "<init>" "(Ljava/lang/String;)V" False
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "reverse" "()Ljava/lang/StringBuilder;" False
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOpLStrLen : LVar -> Asm ()
-cgOpLStrLen var = do
-  Aload $ locIndex var
-  Checkcast "java/lang/String"
+cgOpLStrLen : (InferredType -> Asm ()) -> LVar -> Asm ()
+cgOpLStrLen ret var = do
+  locTypes <- GetFunctionLocTypes
+  let varTy = getLocTy locTypes var
+  loadVar locTypes varTy inferredStringType var
   InvokeMethod InvokeVirtual "java/lang/String" "length" "()I" False
-  boxInt
+  ret IInt
 
-cgOpLStrHead : LVar -> Asm ()
-cgOpLStrHead var = do
-  Aload $ locIndex var
-  Checkcast "java/lang/String"
+cgOpLStrHead : (InferredType -> Asm ()) -> LVar -> Asm ()
+cgOpLStrHead ret var = do
+  locTypes <- GetFunctionLocTypes
+  let varTy = getLocTy locTypes var
+  loadVar locTypes varTy inferredStringType var
   Iconst 0
   InvokeMethod InvokeVirtual "java/lang/String" "charAt" "(I)C" False
-  InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+  ret IChar
 
-cgOpLStrIndex : LVar -> LVar -> Asm ()
-cgOpLStrIndex string index = do
-  Aload $ locIndex string
-  Checkcast "java/lang/String"
-  Aload $ locIndex index
-  Checkcast "java/lang/Integer"
-  InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
+cgOpLStrIndex : (InferredType -> Asm ()) -> LVar -> LVar -> Asm ()
+cgOpLStrIndex ret string index = do
+  locTypes <- GetFunctionLocTypes
+  let stringTy = getLocTy locTypes string
+  loadVar locTypes stringTy inferredStringType string
+  let indexTy = getLocTy locTypes index
+  loadVar locTypes indexTy IInt index
   InvokeMethod InvokeVirtual "java/lang/String" "charAt" "(I)C" False
-  InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+  ret IChar
 
-cgOpLStrTail : LVar -> Asm ()
-cgOpLStrTail var = do
-  Aload $ locIndex var
-  Checkcast "java/lang/String"
+cgOpLStrTail : (InferredType -> Asm ()) -> LVar -> Asm ()
+cgOpLStrTail ret var = do
+  locTypes <- GetFunctionLocTypes
+  let varTy = getLocTy locTypes var
+  loadVar locTypes varTy inferredStringType var
   Iconst 1
   InvokeMethod InvokeVirtual "java/lang/String" "substring" "(I)Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOpLStrConcat : LVar -> LVar -> Asm ()
-cgOpLStrConcat l r = do
+cgOpLStrConcat : (InferredType -> Asm ()) -> LVar -> LVar -> Asm ()
+cgOpLStrConcat ret l r = do
   New "java/lang/StringBuilder"
   Dup
   InvokeMethod InvokeSpecial "java/lang/StringBuilder" "<init>" "()V" False
-  Aload $ locIndex l
-  Checkcast "java/lang/String"
+  locTypes <- GetFunctionLocTypes
+  let lTy = getLocTy locTypes l
+  loadVar locTypes lTy inferredStringType l
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "append" "(Ljava/lang/String;)Ljava/lang/StringBuilder;" False
-  Aload $ locIndex r
-  InvokeMethod InvokeVirtual "java/lang/StringBuilder" "append" "(Ljava/lang/Object;)Ljava/lang/StringBuilder;" False
+  let rTy = getLocTy locTypes r
+  loadVar locTypes rTy inferredStringType r
+  InvokeMethod InvokeVirtual "java/lang/StringBuilder" "append" "(Ljava/lang/String;)Ljava/lang/StringBuilder;" False
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOpLStrCons : LVar -> LVar -> Asm ()
-cgOpLStrCons l r = do
+cgOpLStrCons : (InferredType -> Asm ()) -> LVar -> LVar -> Asm ()
+cgOpLStrCons ret l r = do
   New "java/lang/StringBuilder"
   Dup
   InvokeMethod InvokeSpecial "java/lang/StringBuilder" "<init>" "()V" False
-  Aload $ locIndex l
-  InvokeMethod InvokeVirtual "java/lang/StringBuilder" "append" "(Ljava/lang/Object;)Ljava/lang/StringBuilder;" False
-  Aload $ locIndex r
-  Checkcast "java/lang/String"
+  locTypes <- GetFunctionLocTypes
+  let lTy = getLocTy locTypes l
+  loadVar locTypes lTy IChar l
+  InvokeMethod InvokeVirtual "java/lang/StringBuilder" "append" "(C)Ljava/lang/StringBuilder;" False
+  let rTy = getLocTy locTypes r
+  loadVar locTypes rTy inferredStringType r
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "append" "(Ljava/lang/String;)Ljava/lang/StringBuilder;" False
   InvokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOpLStrSubstr : LVar -> LVar -> LVar -> Asm ()
-cgOpLStrSubstr offset len str = do
-  Aload $ locIndex str
-  Checkcast "java/lang/String"
-  Aload $ locIndex offset
-  Checkcast "java/lang/Integer"
-  unboxInt
-  Aload $ locIndex offset
-  Checkcast "java/lang/Integer"
-  unboxInt
-  Aload $ locIndex len
-  Checkcast "java/lang/Integer"
-  unboxInt
+cgOpLStrSubstr : (InferredType -> Asm ()) -> LVar -> LVar -> LVar -> Asm ()
+cgOpLStrSubstr ret offset len str = do
+  locTypes <- GetFunctionLocTypes
+  let strTy = getLocTy locTypes str
+  loadVar locTypes strTy inferredStringType str
+  let offsetTy = getLocTy locTypes offset
+  loadVar locTypes offsetTy IInt offset
+  loadVar locTypes offsetTy IInt offset
+  let lenTy = getLocTy locTypes len
+  loadVar locTypes lenTy IInt len
   Iadd
   InvokeMethod InvokeVirtual "java/lang/String" "substring" "(II)Ljava/lang/String;" False
+  ret inferredStringType
+
+cgOpIntToBigInteger : (InferredType -> Asm ()) -> LVar -> Asm ()
+cgOpIntToBigInteger ret x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IInt x
+  I2l
+  InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf"  "(J)Ljava/math/BigInteger;" False
+  ret inferredBigIntegerType
 
 cgOpNotImplemented : PrimFn -> Asm ()
 cgOpNotImplemented op = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
 
 -- cgOp split into two to avoid JVM's "Method code too large" error.
-cgOp2 : PrimFn -> List LVar -> Asm ()
-cgOp2 (LIntStr (ITFixed IT32)) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Integer"
-  InvokeMethod InvokeStatic "java/lang/Integer" "toUnsignedString" "(I)Ljava/lang/String;" False
+cgOp2 : (InferredType -> Asm ()) -> PrimFn -> List LVar -> Asm ()
+cgOp2 ret (LIntStr ITBig) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredBigIntegerType x
+  InvokeMethod InvokeVirtual "java/math/BigInteger" "toString" "()Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOp2 (LIntStr (ITFixed IT64)) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Long"
+cgOp2 ret (LIntStr (ITFixed IT64)) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy ILong x
   InvokeMethod InvokeStatic "java/lang/Long" "toUnsignedString" "(J)Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOp2 (LIntStr _) [x] = do
-  Aload $ locIndex x
-  InvokeMethod InvokeStatic "java/util/Objects" "toString" "(Ljava/lang/Object;)Ljava/lang/String;" False
+cgOp2 ret (LIntStr _) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IInt x
+  InvokeMethod InvokeStatic "java/lang/Integer" "toString" "(I)Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOp2 LFloatStr [x] = do
-  Aload $ locIndex x
-  InvokeMethod InvokeStatic "java/util/Objects" "toString" "(Ljava/lang/Object;)Ljava/lang/String;" False
+cgOp2 ret LFloatStr [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IDouble x
+  InvokeMethod InvokeStatic "java/lang/Double" "toString" "(D)Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOp2 (LChInt ITBig) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Character"
-  InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
+cgOp2 ret (LChInt ITBig) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IChar x
   I2l
   InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf"  "(J)Ljava/math/BigInteger;" False
+  ret inferredBigIntegerType
 
-cgOp2 (LChInt (ITFixed IT64)) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Character"
-  InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
+cgOp2 ret (LChInt (ITFixed IT64)) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IChar x
   I2l
-  InvokeMethod InvokeStatic "java/lang/Long" "valueOf" "(J)Ljava/lang/Long;" False
+  ret ILong
 
-cgOp2 (LChInt _) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Character"
-  InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
-  InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
+cgOp2 ret (LChInt _) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IChar x
+  ret IInt
 
-cgOp2 (LIntCh ITBig) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/math/BigInteger"
+cgOp2 ret (LIntCh ITBig) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredBigIntegerType x
   InvokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
   I2c
-  InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+  ret IChar
 
-cgOp2 (LIntCh (ITFixed IT64)) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Long"
-  InvokeMethod InvokeVirtual "java/lang/Long" "longValue" "()J" False
+cgOp2 ret (LIntCh (ITFixed IT64)) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy ILong x
   L2i
   I2c
-  InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+  ret IChar
 
-cgOp2 (LIntCh _) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Integer"
-  InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
+cgOp2 ret (LIntCh _) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IInt x
   I2c
-  InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+  ret IChar
 
-cgOp2 (LSExt ITNative ITBig) [x] = signExtendToBigInteger x
+cgOp2 ret (LSExt ITNative ITBig) [x] = cgOpIntToBigInteger ret x
 
-cgOp2 (LSExt (ITFixed from) ITBig) [x] = signExtendToBigInteger x
+cgOp2 ret (LSExt (ITFixed IT64) ITBig) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy ILong x
+  InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf"  "(J)Ljava/math/BigInteger;" False
+  ret inferredBigIntegerType
 
-cgOp2 (LTrunc ITNative (ITFixed IT64)) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Integer"
-  InvokeMethod InvokeVirtual "java/lang/Integer" "longValue" "()J" False
-  boxLong
+cgOp2 ret (LSExt (ITFixed _) ITBig) [x] = cgOpIntToBigInteger ret x
 
-cgOp2 (LTrunc (ITFixed IT64) (ITFixed IT32)) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Long"
-  InvokeMethod InvokeVirtual "java/lang/Long" "intValue" "()I" False
-  boxInt
+cgOp2 ret (LTrunc ITNative (ITFixed IT64)) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IInt x
+  I2l
+  ret ILong
 
-cgOp2 (LTrunc ITBig ITNative) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/math/BigInteger"
+cgOp2 ret (LTrunc (ITFixed IT64) (ITFixed _)) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy ILong x
+  L2i
+  ret IInt
+
+cgOp2 ret (LTrunc ITBig ITNative) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredBigIntegerType x
   InvokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
-  boxInt
+  ret IInt
 
-cgOp2 (LTrunc (ITFixed _) (ITFixed _)) [x] = Aload $ locIndex x
+cgOp2 ret (LTrunc (ITFixed _) (ITFixed _)) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IInt x
+  ret IInt
 
-cgOp2 LWriteStr [_, s] = do
-  Aload $ locIndex s
-  InvokeMethod InvokeStatic (rtClass "Runtime") "writeString" "(Ljava/lang/Object;)Ljava/lang/Integer;" False
+cgOp2 ret LWriteStr [_, x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredStringType x
+  InvokeMethod InvokeStatic (rtClass "Runtime") "writeString" "(Ljava/lang/String;)I" False
+  ret IInt
 
-cgOp2 LReadStr [_] = InvokeMethod InvokeStatic (rtClass "Runtime") "readString" "()Ljava/lang/String;" False
+cgOp2 ret LReadStr [_] = do
+  InvokeMethod InvokeStatic (rtClass "Runtime") "readString" "()Ljava/lang/String;" False
+  ret inferredStringType
 
-cgOp2 LStrConcat [l,r] = cgOpLStrConcat l r
+cgOp2 ret LStrConcat [l,r] = cgOpLStrConcat ret l r
 
-cgOp2 LStrCons [l,r] = cgOpLStrCons l r
+cgOp2 ret LStrCons [l,r] = cgOpLStrCons ret l r
 
-cgOp2 LStrSubstr [offset, len, str] = cgOpLStrSubstr offset len str
+cgOp2 ret LStrSubstr [offset, len, str] = cgOpLStrSubstr ret offset len str
 
-cgOp2 (LStrInt ITBig) [x] = do
+cgOp2 ret (LStrInt ITBig) [x] = do
   New "java/math/BigInteger"
   Dup
-  Aload $ locIndex x
-  Checkcast "java/lang/String"
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredStringType x
   InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
+  ret inferredBigIntegerType
 
-cgOp2 (LStrInt (ITFixed IT8)) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/String"
+cgOp2 ret (LStrInt (ITFixed IT8)) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredStringType x
   Iconst 16
   InvokeMethod InvokeStatic "java/lang/Integer" "parseInt" "(Ljava/lang/String;I)I" False
-  boxInt
+  ret IInt
 
-cgOp2 (LStrInt _) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/String"
+cgOp2 ret (LStrInt _) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredStringType x
   InvokeMethod InvokeStatic "java/lang/Integer" "parseInt" "(Ljava/lang/String;)I" False
-  boxInt
+  ret IInt
 
-cgOp2 LStrFloat [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/String"
+cgOp2 ret LStrFloat [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredStringType x
   InvokeMethod InvokeStatic "java/lang/Double" "parseDouble" "(Ljava/lang/String;)D" False
-  boxDouble
+  ret IDouble
 
-cgOp2 (LSHL (ITFixed IT64)) [x, y] = binaryLongOp ops x y where
+cgOp2 ret (LSHL (ITFixed IT64)) [x, y] = binaryOp ILong ret ops x y where
   ops = do L2i; Lshl
 
-cgOp2 (LSHL (ITFixed IT8)) [x, y] = binaryIntOp ops x y where
+cgOp2 ret (LSHL (ITFixed IT8)) [x, y] = binaryOp IInt ret ops x y where
   ops = do Ishl; Iconst 256; Irem
 
-cgOp2 (LSHL (ITFixed _)) [x, y] = binaryIntOp Ishl x y
+cgOp2 ret (LSHL (ITFixed _)) [x, y] = binaryOp IInt ret Ishl x y
 
-cgOp2 (LLSHR (ITFixed IT64)) [x, y] = binaryLongOp ops x y where
+cgOp2 ret (LLSHR (ITFixed IT64)) [x, y] = binaryOp ILong ret ops x y where
   ops = do L2i; Lushr
 
-cgOp2 (LLSHR (ITFixed _)) [x, y] = binaryIntOp Iushr x y
+cgOp2 ret (LLSHR (ITFixed _)) [x, y] = binaryOp IInt ret Iushr x y
 
-cgOp2 (LASHR (ITFixed IT64)) [x, y] = binaryLongOp ops x y where
+cgOp2 ret (LASHR (ITFixed IT64)) [x, y] = binaryOp ILong ret ops x y where
   ops = do L2i; Lshr
 
-cgOp2 (LASHR (ITFixed _)) [x, y] = binaryIntOp Ishr x y
+cgOp2 ret (LASHR (ITFixed _)) [x, y] = binaryOp IInt ret Ishr x y
 
-cgOp2 LFork [x] = do
+cgOp2 ret LFork [x] = do
   caller <- GetFunctionName
   createThunk caller (jname "{EVAL_0}") [x]
-  InvokeMethod InvokeStatic (rtClass "Concurrent") "fork" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+  InvokeMethod InvokeStatic (rtClass "Concurrent") "fork" ("(" ++ rtThunkSig ++ ")" ++ classSig futureClass) False
+  ret (Ref futureClass)
 
-cgOp2 LPar [x] = do
+cgOp2 ret LPar [x] = do
   caller <- GetFunctionName
   createParThunk caller (jname "{EVAL_0}") [x]
-  InvokeMethod InvokeStatic (rtClass "Concurrent") "par" ("(" ++ rtThunkSig ++ ")Ljava/lang/Object;") False
+  InvokeMethod InvokeStatic (rtClass "Concurrent") "par" ("(" ++ rtThunkSig ++ ")" ++ classSig objectClass) False
+  ret (Ref objectClass)
 
-cgOp2 (LIntFloat ITBig) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/math/BigInteger"
+cgOp2 ret (LIntFloat ITBig) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredBigIntegerType x
   InvokeMethod InvokeVirtual "java/math/BigInteger" "doubleValue" "()D" False
-  boxDouble
+  ret IDouble
 
-cgOp2 (LIntFloat ITNative) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Integer"
-  InvokeMethod InvokeVirtual "java/lang/Integer" "doubleValue" "()D" False
-  boxDouble
+cgOp2 ret (LIntFloat ITNative) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IInt x
+  I2d
+  ret IDouble
 
-cgOp2 (LFloatInt ITBig) [x] = do
+cgOp2 ret (LFloatInt ITBig) [x] = do
   New "java/math/BigDecimal"
   Dup
-  Aload $ locIndex x
-  Checkcast "java/lang/Double"
-  unboxDouble
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IDouble x
   InvokeMethod InvokeSpecial "java/math/BigDecimal" "<init>" "(D)V" False
   InvokeMethod InvokeVirtual "java/math/BigDecimal" "toBigInteger" "()Ljava/math/BigInteger;" False
+  ret inferredBigIntegerType
 
-cgOp2 (LFloatInt ITNative) [x] = do
-  Aload $ locIndex x
-  Checkcast "java/lang/Double"
-  InvokeMethod InvokeVirtual "java/lang/Double" "intValue" "()I" False
-  boxInt
+cgOp2 ret (LFloatInt ITNative) [x] = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IDouble x
+  D2i
+  ret IInt
 
-cgOp2 (LExternal externalOp) args = cgExternalOp externalOp args
+cgOp2 _ (LExternal externalOp) args = cgExternalOp externalOp args
 
-cgOp2 op _ = cgOpNotImplemented op
+cgOp2 ret op _ = cgOpNotImplemented op
 
-cgOp : PrimFn -> List LVar -> Asm ()
-cgOp (LAnd (ITFixed IT64)) [l, r] = binaryLongOp Land l r
-cgOp (LAnd (ITFixed _)) [l, r] = binaryIntOp Iand l r
-cgOp (LAnd ITNative) [l, r] = binaryIntOp Iand l r
+cgOp : (InferredType -> Asm ()) -> PrimFn -> List LVar -> Asm ()
+cgOp ret (LAnd (ITFixed IT64)) [l, r] = binaryOp ILong ret Land l r
+cgOp ret (LAnd (ITFixed _)) [l, r] = binaryOp IInt ret Iand l r
+cgOp ret (LAnd ITNative) [l, r] = binaryOp IInt ret Iand l r
+cgOp ret (LAnd ITBig) [l, r] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "and"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op l r
 
-cgOp (LOr (ITFixed IT64)) [l, r] = binaryLongOp Lor l r
-cgOp (LOr (ITFixed _)) [l, r] = binaryIntOp Ior l r
-cgOp (LOr ITNative) [l, r] = binaryIntOp Ior l r
+cgOp ret (LOr (ITFixed IT64)) [l, r] = binaryOp ILong ret Lor l r
+cgOp ret (LOr (ITFixed _)) [l, r] = binaryOp IInt ret Ior l r
+cgOp ret (LOr ITNative) [l, r] = binaryOp IInt ret Ior l r
+cgOp ret (LOr ITBig) [l, r] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "or"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op l r
 
-cgOp (LXOr (ITFixed IT64)) [l, r] = binaryLongOp Lxor l r
-cgOp (LXOr (ITFixed _)) [l, r] = binaryIntOp Ixor l r
-cgOp (LXOr ITNative) [l, r] = binaryIntOp Ixor l r
+cgOp ret (LXOr (ITFixed IT64)) [l, r] = binaryOp ILong ret Lxor l r
+cgOp ret (LXOr (ITFixed _)) [l, r] = binaryOp IInt ret Ixor l r
+cgOp ret (LXOr ITNative) [l, r] = binaryOp IInt ret Ixor l r
+cgOp ret (LXOr ITBig) [l, r] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "xor"  "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+  in binaryOp inferredBigIntegerType ret op l r
 
-cgOp (LCompl (ITFixed IT64)) [x] = unaryLongOp Lcompl x
-cgOp (LCompl (ITFixed _)) [x] = unaryIntOp Icompl x
-cgOp (LCompl ITNative) [x] = unaryIntOp Icompl x
+cgOp ret (LCompl (ITFixed IT64)) [x] = unaryOp ILong ret Lcompl x
+cgOp ret (LCompl (ITFixed _)) [x] = unaryOp IInt ret Icompl x
+cgOp ret (LCompl ITNative) [x] = unaryOp IInt ret Icompl x
 
-cgOp llt@(LLt _) args = cgOpLLt llt args
+cgOp ret (LLt intTy) args = cgOpLLt ret intTy args
 
-cgOp lle@(LLe _) args = cgOpLLe lle args
+cgOp ret (LLe intTy) args = cgOpLLe ret intTy args
 
-cgOp lgt@(LGt _) args = cgOpLGt lgt args
+cgOp ret (LGt intTy) args = cgOpLGt ret intTy args
 
-cgOp (LGe ITBig) [l, r] = cgOp (LSGe (ATInt ITBig)) [l, r]
-cgOp (LGe ITNative) [l, r] = compareObj "uintGreaterThanOrEqualTo" l r
-cgOp (LGe (ITFixed IT8)) [l, r] = compareObj "uintGreaterThanOrEqualTo" l r
-cgOp (LGe (ITFixed IT16)) [l, r] = compareObj "uintGreaterThanOrEqualTo" l r
-cgOp (LGe (ITFixed IT32)) [l, r] = compareObj "uintGreaterThanOrEqualTo" l r
-cgOp (LGe (ITFixed IT64)) [l, r] = compareObj "ulongGreaterThanOrTo" l r
+cgOp ret (LGe intTy) args = cgOpLGe ret intTy args
 
-cgOp (LPlus ATFloat) [l, r] = binaryDoubleOp Dadd l r
-cgOp (LPlus (ATInt ITBig)) [lvar, rvar] = cgOpLPlusBig lvar rvar
+cgOp ret (LPlus arithTy) args = cgOpLPlus ret arithTy args
 
-cgOp (LPlus (ATInt ITNative)) [l, r] = binaryIntOp Iadd l r
-cgOp (LPlus (ATInt ITChar)) [lvar, rvar] = cgOpLPlusChar lvar rvar
+cgOp ret (LMinus arithTy) args = cgOpLMinus ret arithTy args
 
-cgOp (LPlus (ATInt (ITFixed IT64))) [l, r] = binaryLongOp Ladd l r
-cgOp (LPlus (ATInt (ITFixed IT8))) [l, r] = binaryIntOp ops l r where
-  ops = do Iadd; Iconst 256; Irem
-cgOp (LPlus (ATInt (ITFixed _))) [l, r] = binaryIntOp Iadd l r
+cgOp ret (LTimes arithTy) args = cgOpLTimes ret arithTy args
 
-cgOp (LMinus ATFloat) [l, r] = binaryDoubleOp Dsub l r
-cgOp (LMinus (ATInt ITBig)) [lvar, rvar] = cgOpLMinusBig lvar rvar
+cgOp ret (LSDiv arithTy) args = cgOpLSDiv ret arithTy args
 
-cgOp (LMinus (ATInt ITNative)) [l, r] = binaryIntOp Isub l r
-cgOp (LMinus (ATInt (ITFixed IT64))) [l, r] = binaryLongOp Lsub l r
-cgOp (LMinus (ATInt (ITFixed _))) [l, r] = binaryIntOp Isub l r
+cgOp ret (LUDiv arithTy) args = cgOpLUDiv ret arithTy args
 
-cgOp (LTimes ATFloat) [l, r] = binaryDoubleOp Dmul l r
-cgOp (LTimes (ATInt ITBig)) [lvar, rvar] = cgOpLTimesBig lvar rvar
+cgOp ret (LSRem arithTy) args = cgOpLSRem ret arithTy args
 
-cgOp (LTimes (ATInt ITNative)) [l, r] = binaryIntOp Imul l r
-cgOp (LTimes (ATInt (ITFixed IT64))) [l, r] = binaryLongOp Lmul l r
-cgOp (LTimes (ATInt (ITFixed IT8))) [l, r] = binaryIntOp ops l r where
-  ops = do Imul; Iconst 256; Irem
-cgOp (LTimes (ATInt (ITFixed _))) [l, r] = binaryIntOp Imul l r
+cgOp ret (LURem intTy) args = cgOpLURem ret intTy args
 
-cgOp (LSDiv ATFloat) [l, r] = binaryDoubleOp Ddiv l r
-cgOp (LSDiv (ATInt ITBig)) [lvar, rvar] = cgOpLSDivBig lvar rvar
+cgOp ret (LEq arithTy) args = cgOpLEq ret arithTy args
 
-cgOp (LSDiv (ATInt ITNative)) [l, r] = binaryIntOp Idiv l r
-cgOp (LSDiv (ATInt (ITFixed IT64))) [l, r] = binaryLongOp Ldiv l r
-cgOp (LSDiv (ATInt (ITFixed _))) [l, r] = binaryIntOp Idiv l r
+cgOp ret (LSLt arithTy) args = cgOpLSLt ret arithTy args
 
-cgOp (LUDiv ITNative) [l, r] = binaryIntOp udiv l r where
-  udiv = InvokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
-cgOp (LUDiv (ITFixed IT32)) [l, r] = binaryIntOp udiv l r where
-  udiv = InvokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
-cgOp (LUDiv (ITFixed IT64)) [l, r] = binaryLongOp udiv l r where
-  udiv = InvokeMethod InvokeStatic "java/lang/Long" "divideUnsigned" "(JJ)J" False
-cgOp (LUDiv ITBig) args = cgOp (LSDiv (ATInt ITBig)) args
-cgOp (LUDiv (ITFixed _)) [l, r] = binaryIntOp Idiv l r
+cgOp ret (LSLe arithTy) args = cgOpLSLe ret arithTy args
 
-cgOp (LSRem ATFloat) [l, r] = binaryDoubleOp Drem l r
-cgOp (LSRem (ATInt ITBig)) [lvar, rvar] = cgOpLSRemBig lvar rvar
+cgOp ret (LSGt arithTy) args = cgOpLSGt ret arithTy args
 
-cgOp (LSRem (ATInt ITNative)) [l, r] = binaryIntOp Irem l r
-cgOp (LSRem (ATInt (ITFixed IT64))) [l, r] = binaryLongOp Lrem l r
-cgOp (LSRem (ATInt (ITFixed _))) [l, r] = binaryIntOp Irem l r
+cgOp ret (LSGe arithTy) args = cgOpLSGe ret arithTy args
 
-cgOp (LURem (ITFixed IT64)) [l, r] = binaryLongOp urem l r where
-  urem = InvokeMethod InvokeStatic "java/lang/Long" "remainderUnsigned" "(JJ)J" False
-cgOp (LURem ITNative) [l, r] = binaryIntOp urem l r where
-  urem = InvokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
-cgOp (LURem (ITFixed IT32)) [l, r] = binaryIntOp urem l r where
-  urem = InvokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
-cgOp (LURem ITBig) args = cgOp (LSRem (ATInt ITBig)) args
-cgOp (LURem (ITFixed _)) [l, r] = binaryIntOp Irem l r
+cgOp ret LStrEq [l,r] = compareOp inferredStringType ret "stringEquals" l r
 
-cgOp (LEq ATFloat) [l, r] = compareObj "objectEquals" l r
-cgOp (LEq (ATInt _)) [l, r] = compareObj "objectEquals" l r
+cgOp ret LStrRev [var] = cgOpLStrRev ret var
 
-cgOp (LSLt ATFloat) [l, r] = compareObj "doubleLessThan" l r
-cgOp (LSLt (ATInt ITNative)) [l, r] = compareObj "intLessThan" l r
-cgOp (LSLt (ATInt ITBig)) [l, r] = compareObj "bigIntegerLessThan" l r
-cgOp (LSLt (ATInt ITChar)) [l, r] = compareObj "charLessThan" l r
-cgOp (LSLt (ATInt (ITFixed IT64))) [l, r] = compareObj "longLessThan" l r
-cgOp (LSLt (ATInt (ITFixed _))) [l, r] = compareObj "intLessThan" l r
+cgOp ret LStrLen [var] = cgOpLStrLen ret var
 
-cgOp (LSLe ATFloat) [l, r] = compareObj "doubleLessThanOrEqualTo" l r
-cgOp (LSLe (ATInt ITNative)) [l, r] = compareObj "intLessThanOrEqualTo" l r
-cgOp (LSLe (ATInt ITBig)) [l, r] = compareObj "bigIntegerLessThanOrEqualTo" l r
-cgOp (LSLe (ATInt ITChar)) [l, r] = compareObj "charLessThanOrEqualTo" l r
-cgOp (LSLe (ATInt (ITFixed IT64))) [l, r] = compareObj "longLessThanOrEqualTo" l r
-cgOp (LSLe (ATInt (ITFixed _))) [l, r] = compareObj "intLessThanOrEqualTo" l r
+cgOp ret LStrLt [l, r] = compareOp inferredStringType ret "stringLessThan" l r
 
-cgOp (LSGt ATFloat) [l, r] = compareObj "doubleGreaterThan" l r
-cgOp (LSGt (ATInt ITNative)) [l, r] = compareObj "intGreaterThan" l r
-cgOp (LSGt (ATInt ITBig)) [l, r] = compareObj "bigIntegerGreaterThan" l r
-cgOp (LSGt (ATInt ITChar)) [l, r] = compareObj "charGreaterThan" l r
-cgOp (LSGt (ATInt (ITFixed IT64))) [l, r] = compareObj "longGreaterThan" l r
-cgOp (LSGt (ATInt (ITFixed _))) [l, r] = compareObj "intGreaterThan" l r
+cgOp ret LStrHead [var] = cgOpLStrHead ret var
 
-cgOp (LSGe ATFloat) [l, r] = compareObj "doubleGreaterThanOrEqualTo" l r
-cgOp (LSGe (ATInt ITNative)) [l, r] = compareObj "intGreaterThanOrEqualTo" l r
-cgOp (LSGe (ATInt ITBig)) [l, r] = compareObj "bigIntegerGreaterThanOrEqualTo" l r
-cgOp (LSGe (ATInt ITChar)) [l, r] = compareObj "charGreaterThanOrEqualTo" l r
-cgOp (LSGe (ATInt (ITFixed IT64))) [l, r] = compareObj "longGreaterThanOrEqualTo" l r
-cgOp (LSGe (ATInt (ITFixed _))) [l, r] = compareObj "intGreaterThanOrEqualTo" l r
+cgOp ret LStrIndex [string, index] = cgOpLStrIndex ret string index
 
-cgOp LStrEq [l,r] = compareObj "objectEquals" l r
+cgOp ret LStrTail [var] = cgOpLStrTail ret var
 
-cgOp LStrRev [var] = cgOpLStrRev var
+cgOp ret (LZExt from to) args = cgOpLZExt ret from to args
 
-cgOp LStrLen [var] = cgOpLStrLen var
-
-cgOp LStrLt [l, r] = compareObj "stringLessThan" l r
-
-cgOp LStrHead [var] = cgOpLStrHead var
-
-cgOp LStrIndex [string, index] = cgOpLStrIndex string index
-
-cgOp LStrTail [var] = cgOpLStrTail var
-
-cgOp (LZExt ITNative ITBig) [var] = do
-  Aload $ locIndex var
-  Checkcast "java/lang/Integer"
-  InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
-  I2l
-  InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
-
-cgOp (LZExt (ITFixed IT8) ITNative) [x] = Aload $ locIndex x
-cgOp (LZExt (ITFixed IT16) ITNative) [x] = Aload $ locIndex x
-cgOp (LZExt (ITFixed IT32) ITNative) [x] = Aload $ locIndex x
-
-cgOp op args = cgOp2 op args
+cgOp ret op args = cgOp2 ret op args

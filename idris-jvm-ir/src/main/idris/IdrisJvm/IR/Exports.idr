@@ -20,6 +20,12 @@ consSDecl = (::)
 emptySDecl : List SDecl
 emptySDecl = []
 
+consExportIFace : ExportIFace -> List ExportIFace -> List ExportIFace
+consExportIFace = (::)
+
+emptyExportIFace : List ExportIFace
+emptyExportIFace = []
+
 consString : String -> List String -> List String
 emptyListString : List String
 

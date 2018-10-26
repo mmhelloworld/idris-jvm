@@ -7,6 +7,7 @@ AnnotationTypeName = String
 
 data AnnotationValue = AnnInt Int
                      | AnnString String
+                     | AnnEnum String String
                      | AnnArray (List AnnotationValue)
 
 AnnotationNameValuePair : Type
@@ -53,7 +54,8 @@ mutual
                  | ExportInstance String
                  | ExportDefault -- Export an instance method with idris function name
                  | Anns (List Annotation)
-                 | ExportInstanceWithAnn String (List Annotation)
+                 | ExportStaticWithAnn String (List Annotation) (List (List Annotation))
+                 | ExportInstanceWithAnn String (List Annotation) (List (List Annotation))
 
   data JVM_IntTypes : Type -> Type where
       JVM_IntChar   : JVM_IntTypes Char
@@ -319,3 +321,10 @@ catchNonFatal t = not (instanceOf VirtualMachineErrorClass t
                  && instanceOf ThreadDeathClass t
                  && instanceOf InterruptedExceptionClass t
                  && instanceOf LinkageErrorClass t)
+
+term syntax "<@@>" [anns] = Fun classWith (Anns anns)
+term syntax "<@>" [name] [attrs] = Ann name attrs
+term syntax "<@..>" [values] = AnnArray values
+term syntax "<@s>" [value] = AnnString value
+term syntax "<@enum>" [ty] [value] = AnnEnum ty value
+term syntax [name] "<@:>" [value] = (name, value)

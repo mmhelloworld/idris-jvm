@@ -101,7 +101,7 @@ public class IdrisJvmCodegenLauncher {
         ResponseEntity<String> response = restTemplate.postForEntity("http://localhost:" + port,
                 new HttpEntity<>(endpointArgs), String.class);
         if (!response.getStatusCode().is2xxSuccessful()) {
-            System.err.println(response.getBody());
+            throw new RuntimeException(response.getBody());
         }
     }
 

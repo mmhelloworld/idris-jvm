@@ -241,8 +241,7 @@ mutual
   switchConstructorExpr : Int -> Asm ()
   switchConstructorExpr varIndex = do
    Aload varIndex
-   Checkcast idrisObjectType
-   Field FGetField idrisObjectType "constructorId" "I"
+   InvokeMethod InvokeStatic (rtClass "Runtime") "constructorIndex" "(Ljava/lang/Object;)I" False
 
   switchIntExpr : LVar -> Asm ()
   switchIntExpr var = do

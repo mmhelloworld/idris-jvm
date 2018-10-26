@@ -58,7 +58,9 @@ inferOp2 types (LTrunc (ITFixed IT64) (ITFixed IT32)) [x] = (IInt, inferUnaryOp 
 inferOp2 types (LTrunc (ITFixed IT64) (ITFixed IT16)) [x] = (IInt, inferUnaryOp types ILong x)
 inferOp2 types (LTrunc (ITFixed IT64) (ITFixed IT8)) [x] = (IInt, inferUnaryOp types ILong x)
 
-inferOp2 types (LTrunc ITBig ITNative) [x] = (IInt, inferUnaryOp types (inferredBigIntegerType) x)
+inferOp2 types (LTrunc ITBig (ITFixed IT64)) [x] = (ILong, inferUnaryOp types inferredBigIntegerType x)
+inferOp2 types (LTrunc ITBig (ITFixed _)) [x] = (IInt, inferUnaryOp types inferredBigIntegerType x)
+inferOp2 types (LTrunc ITBig ITNative) [x] = (IInt, inferUnaryOp types inferredBigIntegerType x)
 
 inferOp2 types (LTrunc (ITFixed _) (ITFixed _)) [x] = (IInt, inferUnaryOp types IInt x)
 

@@ -34,6 +34,11 @@ public class Runtime {
         return 0;
     }
 
+    public static String substring(String s, int offset, int len) {
+        int toIndex = offset + len;
+        return toIndex >= s.length() ? s.substring(offset) : s.substring(offset, toIndex);
+    }
+
     public static Object error(Object s) {
         throw new RuntimeException(s.toString());
     }
@@ -50,10 +55,12 @@ public class Runtime {
     }
 
     public static int constructorIndex(Object obj) {
-        if (obj instanceof IdrisObject) {
+        if (obj == null) {
+            return 0;
+        } else if (obj instanceof IdrisObject) {
             return ((IdrisObject) obj).constructorId;
         } else {
-            return obj == null ? 0 : (int) obj;
+            return (int) obj;
         }
     }
 

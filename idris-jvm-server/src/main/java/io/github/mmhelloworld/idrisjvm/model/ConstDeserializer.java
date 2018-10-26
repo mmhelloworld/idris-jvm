@@ -1,13 +1,13 @@
 package io.github.mmhelloworld.idrisjvm.model;
 
+import IdrisJvm.Core.export.Codegen;
+import IdrisJvm.IR.export.ArithTy;
+import IdrisJvm.IR.export.Const;
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import IdrisJvm.Core.export.Codegen;
-import IdrisJvm.IR.export.ArithTy;
 
 import java.io.IOException;
 
@@ -27,13 +27,13 @@ import static IdrisJvm.Core.export.Codegen.voidType;
 import static IdrisJvm.Core.export.Codegen.worldType;
 import static java.lang.String.format;
 
-public class ConstDeserializer extends StdDeserializer<IdrisJvm.IR.export.Const> {
+public class ConstDeserializer extends StdDeserializer<Const> {
 
-    public static final IdrisJvm.IR.export.Const STR_TYPE = strType();
-    public static final IdrisJvm.IR.export.Const WORLD_TYPE = worldType();
-    public static final IdrisJvm.IR.export.Const THE_WORLD = theWorld();
-    public static final IdrisJvm.IR.export.Const VOID_TYPE = voidType();
-    public static final IdrisJvm.IR.export.Const FORGOT = forgot();
+    public static final Const STR_TYPE = strType();
+    public static final Const WORLD_TYPE = worldType();
+    public static final Const THE_WORLD = theWorld();
+    public static final Const VOID_TYPE = voidType();
+    public static final Const FORGOT = forgot();
 
     public ConstDeserializer() {
         this(null);
@@ -44,8 +44,8 @@ public class ConstDeserializer extends StdDeserializer<IdrisJvm.IR.export.Const>
     }
 
     @Override
-    public IdrisJvm.IR.export.Const deserialize(final JsonParser jsonParser, final DeserializationContext deserializationContext)
-        throws IOException, JsonProcessingException {
+    public Const deserialize(final JsonParser jsonParser, final DeserializationContext deserializationContext)
+        throws IOException {
         final JsonNode node = jsonParser.getCodec().readTree(jsonParser);
         final ObjectMapper mapper = Context.getMapper();
         if (node.isObject()) {
@@ -91,7 +91,7 @@ public class ConstDeserializer extends StdDeserializer<IdrisJvm.IR.export.Const>
         throw new RuntimeException("An object representing Const expected but was " + jsonParser.getCurrentName());
     }
 
-    private IdrisJvm.IR.export.Const deserializeChar(final JsonNode node) {
+    private Const deserializeChar(final JsonNode node) {
         final String strValue = node.asText();
         final char value;
 

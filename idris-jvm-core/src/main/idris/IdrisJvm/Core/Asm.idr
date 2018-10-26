@@ -246,6 +246,7 @@ mutual
 
   data AnnotationValue = AnnInt Int
                        | AnnString String
+                       | AnnEnum String String
                        | AnnArray (List AnnotationValue)
 
   data HandleTag = HGetField

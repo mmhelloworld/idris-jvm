@@ -1,5 +1,9 @@
 package IdrisJvm.Core;
 
+import IdrisJvm.Core.AnnotationValue.AnnArray;
+import IdrisJvm.Core.AnnotationValue.AnnEnum;
+import IdrisJvm.Core.AnnotationValue.AnnInt;
+import IdrisJvm.Core.AnnotationValue.AnnString;
 import IdrisJvm.Core.JBsmArg.JBsmArgGetType;
 import IdrisJvm.Core.JBsmArg.JBsmArgHandle;
 import org.apache.logging.log4j.LogManager;
@@ -298,11 +302,25 @@ public class Assembler {
         env.put(labelName, label);
     }
 
-    private void handleCreateMethod(final MethodVisitor mv, List<Annotation> annotations) {
+    private void handleCreateMethod(final MethodVisitor mv, List<Annotation> annotations,
+                                    List<List<Annotation>> parametersAnnotations) {
         annotations.forEach(annotation -> {
             final AnnotationVisitor av = mv.visitAnnotation(annotation.getName(), true);
-            annotation.getProperties().forEach(prop -> addPropertyToAnnotation(av, prop));
+            annotation.getProperties().forEach(prop -> visitAnnotationProperty(av, prop.getName(), prop.getValue()));
+            av.visitEnd();
         });
+
+        for (int index = 0; index < parametersAnnotations.size(); index++) {
+            int parameterIndex = index;
+            List<Annotation> parameterAnnotations = parametersAnnotations.get(parameterIndex);
+            parameterAnnotations.forEach(paramAnnotation -> {
+                final AnnotationVisitor av = mv.visitParameterAnnotation(parameterIndex, paramAnnotation.getName(), true);
+                paramAnnotation.getProperties().forEach(prop -> visitAnnotationProperty(av, prop.getName(),
+                        prop.getValue()));
+                av.visitEnd();
+            });
+        }
+
     }
 
 
@@ -325,12 +343,12 @@ public class Assembler {
         });
         final String[] exceptionsArr = exceptions == null ? null : exceptions.toArray(new String[exceptions.size()]);
         mv = cw.visitMethod(
-            acc,
-            methodName,
-            desc,
-            sig,
-            exceptionsArr);
-        handleCreateMethod(mv, annotations);
+                acc,
+                methodName,
+                desc,
+                sig,
+                exceptionsArr);
+        handleCreateMethod(mv, annotations, paramAnnotations);
     }
 
     private String getClassNameLastPart(String className) {
@@ -421,7 +439,7 @@ public class Assembler {
         } else if (n == 1) {
             mv.visitInsn(FCONST_1);
         } else {
-            mv.visitLdcInsn((float)n);
+            mv.visitLdcInsn((float) n);
         }
     }
 
@@ -439,11 +457,11 @@ public class Assembler {
 
     public void frame(int frameType, int nLocal, List<String> local, int nStack, List<String> stack) {
         mv.visitFrame(
-            frameType,
-            nLocal,
-            local.stream().map(this::toOpcode).toArray(),
-            nStack,
-            stack.stream().map(this::toOpcode).toArray()
+                frameType,
+                nLocal,
+                local.stream().map(this::toOpcode).toArray(),
+                nStack,
+                stack.stream().map(this::toOpcode).toArray()
         );
     }
 
@@ -616,11 +634,11 @@ public class Assembler {
 
     public void invokeMethod(int invocType, String className, String methodName, String desc, boolean isInterface) {
         mv.visitMethodInsn(
-            invocType,
-            className,
-            methodName,
-            desc,
-            isInterface);
+                invocType,
+                className,
+                methodName,
+                desc,
+                isInterface);
     }
 
     public void invokeDynamic(String methodName, String desc, JHandle handle, List<JBsmArg> invokeDynamicArgs) {
@@ -640,10 +658,10 @@ public class Assembler {
         }
 
         mv.visitInvokeDynamicInsn(
-            methodName,
-            desc,
-            getAsmHandle(handle),
-            bsmArgs
+                methodName,
+                desc,
+                getAsmHandle(handle),
+                bsmArgs
         );
     }
 
@@ -761,11 +779,11 @@ public class Assembler {
     public void lookupSwitch(String defaultLabel, List<String> caseLabels, List<Integer> cases) {
         final int[] casesArr = cases.stream().mapToInt(n -> n).toArray();
         mv.visitLookupSwitchInsn(
-            (Label) env.get(defaultLabel),
-            casesArr,
-            caseLabels.stream()
-                .map(s -> (Label) env.get(s))
-                .toArray(Label[]::new)
+                (Label) env.get(defaultLabel),
+                casesArr,
+                caseLabels.stream()
+                        .map(s -> (Label) env.get(s))
+                        .toArray(Label[]::new)
         );
     }
 
@@ -872,43 +890,51 @@ public class Assembler {
                                       final List<String> interfaces,
                                       final List<Annotation> annotations) {
         cw.visit(version,
-            access,
-            className,
-            signature,
-            parentClassName,
-            interfaces.toArray(new String[interfaces.size()]));
+                access,
+                className,
+                signature,
+                parentClassName,
+                interfaces.toArray(new String[0]));
         cws.put(className, cw);
 
         annotations.forEach(annotation -> {
             AnnotationVisitor av = cw.visitAnnotation(annotation.getName(), true);
-            annotation.getProperties().forEach(prop -> addPropertyToAnnotation(av, prop));
+            annotation.getProperties().forEach(prop -> visitAnnotationProperty(av, prop.getName(), prop.getValue()));
             av.visitEnd();
         });
     }
 
-    private void addPropertyToAnnotation(final AnnotationVisitor av, final AnnotationProperty prop) {
-        final JAnnotationValue.AnnotationValueType propType = prop.getValue().getType();
-        switch (propType) {
+    private void visitAnnotationProperty(AnnotationVisitor annotationVisitor, String name, AnnotationValue value) {
+        switch (value.getType()) {
             case AnnString:
-                JAnnotationValue.JAnnString annStr = (JAnnotationValue.JAnnString) prop.getValue();
-                av.visit(prop.getName(), annStr.getValue());
+                AnnString annString = (AnnString) value;
+                annotationVisitor.visit(name, annString.getValue());
+                break;
+            case AnnEnum:
+                AnnEnum annEnum = (AnnEnum) value;
+                annotationVisitor.visitEnum(name, annEnum.getEnumTy(), annEnum.getValue());
                 break;
             case AnnInt:
-                JAnnotationValue.JAnnInt annInt = (JAnnotationValue.JAnnInt) prop.getValue();
-                av.visit(prop.getName(), annInt.getValue());
+                AnnInt annInt = (AnnInt) value;
+                annotationVisitor.visit(name, annInt.getValue());
                 break;
             case AnnArray:
+                AnnArray annArray = (AnnArray) value;
+                AnnotationVisitor arrayPropertyVisitor = annotationVisitor.visitArray(name);
+                annArray.getValues()
+                        .forEach(propertyValue -> visitAnnotationProperty(arrayPropertyVisitor, null, propertyValue));
+                arrayPropertyVisitor.visitEnd();
                 break;
         }
     }
 
     private Handle getAsmHandle(JHandle handle) {
         return new Handle(
-            handle.getTag(),
-            handle.getCname(),
-            handle.getMname(),
-            handle.getDesc(),
-            handle.isIntf()
+                handle.getTag(),
+                handle.getCname(),
+                handle.getMname(),
+                handle.getDesc(),
+                handle.isIntf()
         );
     }
 

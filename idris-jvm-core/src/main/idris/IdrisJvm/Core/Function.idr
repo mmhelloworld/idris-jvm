@@ -185,7 +185,11 @@ mutual
     ret IBool
 
   cgBody ret (SCon _ 0 "Prelude.Maybe.Nothing" []) = do Aconstnull; ret inferredObjectType
-  cgBody ret (SCon _ 1 "Prelude.Maybe.Just" [(Loc v)]) = do Aload v; ret inferredObjectType
+  cgBody ret (SCon _ 1 "Prelude.Maybe.Just" [var]) = do
+    locTypes <- GetFunctionLocTypes
+    let varTy = getLocTy locTypes var
+    loadVar locTypes varTy inferredObjectType var
+    ret inferredObjectType
 
   cgBody ret (SCon _ t _ args) = do createIdrisObject t args; ret inferredIdrisObjectType
 
@@ -521,10 +525,11 @@ mutual
     = let MkJMethodName sourceCname sourceMname = jname n
       in exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args [] []
 
-  cgExport cname parent (ExportFun n (FApp "ExportInstanceWithAnn" [FStr mname, FApp ":" annDescs]) returns args)
+  cgExport cname parent (ExportFun n (FApp "ExportInstanceWithAnn" [FStr mname, FApp "::" annDescs, paramAnnDescs]) returns args)
     = let MkJMethodName sourceCname sourceMname = jname n
           anns = join $ parseAnnotations <$> annDescs
-      in exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args anns []
+          paramAnns = parseParamAnnotations paramAnnDescs
+      in exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args anns paramAnns
 
   cgExport _ _ exportDef = jerror $ "Unsupported export definition: " ++ show exportDef
 
@@ -748,7 +753,7 @@ mutual
       desc = asmTypeDesc $ fdescTypeDescriptor typeDesc
 
   parseAnnotations : FDesc -> List Annotation
-  parseAnnotations (FApp ":" [FCon "Annotation", FApp "Ann" [FStr annTypeName, attr], rest])
+  parseAnnotations (FApp "::" [FCon "Annotation", FApp "Ann" [FStr annTypeName, attr], rest])
     = let typeDesc = "L" ++ annTypeName ++ ";"
       in (MkAnnotation typeDesc (parseAnnotationAttr attr)) :: parseAnnotations rest
 
@@ -760,8 +765,13 @@ mutual
   parseAnnotations (FCon "Annotation") = []
   parseAnnotations desc = jerror $ "parseAnnotation: not implemented: " ++ show desc
 
+  parseParamAnnotations : FDesc -> List (List Annotation)
+  parseParamAnnotations (FApp "::" [FApp "List" [FCon "Annotation"], ann, rest])
+    = parseAnnotations ann :: parseParamAnnotations rest
+  parseParamAnnotations (FApp "Nil" [FApp "List" [FCon "Annotation"]]) = []
+
   parseAnnotationAttr : FDesc -> List AnnotationProperty
-  parseAnnotationAttr (FApp ":" [ FApp "Pair" [ FUnknown, FCon "AnnotationValue" ]
+  parseAnnotationAttr (FApp "::" [ FApp "Pair" [ FUnknown, FCon "AnnotationValue" ]
                                  , FApp "MkPair" [ FUnknown
                                                , FCon "AnnotationValue"
                                                , FStr attrName
@@ -774,9 +784,17 @@ mutual
   parseAnnotationAttr (FApp "Nil" [ FCon "AnnotationNameValuePair" ]) = []
   parseAnnotationAttr desc = jerror $ "Annotation attribute value not yet supported: " ++ show desc
 
+  parseAnnArrayElements : List FDesc -> List AnnotationValue
+  parseAnnArrayElements [] = []
+  parseAnnArrayElements [FApp "::" (FCon "AnnotationValue" :: value :: values)] =
+    parseAnnotationValue value :: parseAnnArrayElements values
+  parseAnnArrayElements [FApp "Nil" [FCon "AnnotationValue"]] = []
+
   parseAnnotationValue : FDesc -> AnnotationValue
-  parseAnnotationValue (FApp "AnnString" [ FStr value]) = AnnString value
-  parseAnnotationValue desc = jerror $ "Annotation value not yet supported: " ++ show desc
+  parseAnnotationValue (FApp "AnnString" [FStr value]) = AnnString value
+  parseAnnotationValue (FApp "AnnEnum" [FStr enum, FStr value]) = AnnEnum (asmRefTyDesc (ClassDesc enum)) value
+  parseAnnotationValue (FApp "AnnArray" values) = AnnArray (parseAnnArrayElements values)
+  parseAnnotationValue desc = jerror $ "Invalid or unsupported annotation value: " ++ show desc
 
   findTailCallApps : List String -> SExp -> List String
   findTailCallApps acc (SApp tailCall f _) = if tailCall then f :: acc else acc

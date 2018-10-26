@@ -2,15 +2,15 @@ package IdrisJvm.Core;
 
 class AnnotationProperty {
     private final String name;
-    private final JAnnotationValue value;
+    private final AnnotationValue value;
 
     public AnnotationProperty(final String name,
-                              final JAnnotationValue value) {
+                              final AnnotationValue value) {
         this.name = name;
         this.value = value;
     }
 
-    public JAnnotationValue getValue() {
+    public AnnotationValue getValue() {
         return value;
     }
 

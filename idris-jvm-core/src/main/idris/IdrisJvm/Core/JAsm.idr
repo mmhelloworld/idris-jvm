@@ -12,22 +12,25 @@ Assembler : Type
 Assembler = javaClass "IdrisJvm/Core/Assembler"
 
 JAnnotation : Type
-JAnnotation = javaClass "IdrisJvm/Core/JAnnotation"
+JAnnotation = javaClass "IdrisJvm/Core/Annotation"
 
 JAnnString : Type
-JAnnString = javaClass "IdrisJvm/Core/JAnnotationValue$JAnnString"
+JAnnString = javaClass "IdrisJvm/Core/AnnotationValue$AnnString"
+
+JAnnEnum : Type
+JAnnEnum = javaClass "IdrisJvm/Core/AnnotationValue$AnnEnum"
 
 JAnnInt : Type
-JAnnInt = javaClass "IdrisJvm/Core/JAnnotationValue$JAnnInt"
+JAnnInt = javaClass "IdrisJvm/Core/AnnotationValue$AnnInt"
 
 JAnnArray : Type
-JAnnArray = javaClass "IdrisJvm/Core/JAnnotationValue$JAnnArray"
+JAnnArray = javaClass "IdrisJvm/Core/AnnotationValue$AnnArray"
 
 JAnnotationProperty : Type
-JAnnotationProperty = javaClass "IdrisJvm/Core/JAnnotationProperty"
+JAnnotationProperty = javaClass "IdrisJvm/Core/AnnotationProperty"
 
 JAnnotationValue: Type
-JAnnotationValue = javaClass "IdrisJvm/Core/JAnnotationValue"
+JAnnotationValue = javaClass "IdrisJvm/Core/AnnotationValue"
 
 JHandle: Type
 JHandle = javaClass "IdrisJvm/Core/JHandle"
@@ -47,6 +50,7 @@ toJClassOpts ComputeFrames = 2
 
 toJAnnotationValue : Asm.AnnotationValue -> JVM_IO JAnnotationValue
 toJAnnotationValue (AnnString s) = believe_me <$> FFI.new (String -> JVM_IO JAnnString) s
+toJAnnotationValue (AnnEnum enum s) = believe_me <$> FFI.new (String -> String -> JVM_IO JAnnEnum) enum s
 toJAnnotationValue (AnnInt n) = believe_me <$> FFI.new (Int -> JVM_IO JAnnInt) n
 toJAnnotationValue (AnnArray values) = do
   jvalues <- ArrayList.fromList !(sequence $ toJAnnotationValue <$> values)
@@ -159,7 +163,7 @@ runAsm state assembler Caload           = singleInst state $ invokeInstance "cal
 runAsm state assembler Castore          = singleInst state $ invokeInstance "castore" (Assembler -> JVM_IO ()) assembler
 runAsm state assembler (Checkcast desc) = singleInst state $ invokeInstance "checkcast" (Assembler -> String -> JVM_IO ()) assembler desc
 runAsm state assembler (ClassCodeStart version access className sig parent intf anns) = singleInst state $ do
-  let janns = toJAnnotation <$> anns
+  janns <- sequence $ toJAnnotation <$> anns
   interfaces <- ArrayList.fromList intf
   annotations <- ArrayList.fromList janns
   invokeInstance

@@ -300,11 +300,9 @@ cgOpLStrSubstr ret offset len str = do
   loadVar locTypes strTy inferredStringType str
   let offsetTy = getLocTy locTypes offset
   loadVar locTypes offsetTy IInt offset
-  loadVar locTypes offsetTy IInt offset
   let lenTy = getLocTy locTypes len
   loadVar locTypes lenTy IInt len
-  Iadd
-  InvokeMethod InvokeVirtual "java/lang/String" "substring" "(II)Ljava/lang/String;" False
+  InvokeMethod InvokeStatic (rtClass "Runtime") "substring" "(Ljava/lang/String;II)Ljava/lang/String;" False
   ret inferredStringType
 
 cgOpIntToBigInteger : (InferredType -> Asm ()) -> LVar -> Asm ()
@@ -315,6 +313,14 @@ cgOpIntToBigInteger ret x = do
   I2l
   InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf"  "(J)Ljava/math/BigInteger;" False
   ret inferredBigIntegerType
+
+cgOpBigIntegerToInt : (InferredType -> Asm ()) -> LVar -> Asm ()
+cgOpBigIntegerToInt ret x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredBigIntegerType x
+  InvokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
+  ret IInt
 
 cgOpNotImplemented : PrimFn -> Asm ()
 cgOpNotImplemented op = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
@@ -418,12 +424,16 @@ cgOp2 ret (LTrunc (ITFixed IT64) (ITFixed _)) [x] = do
   L2i
   ret IInt
 
-cgOp2 ret (LTrunc ITBig ITNative) [x] = do
+cgOp2 ret (LTrunc ITBig (ITFixed IT64)) [x] = do
   locTypes <- GetFunctionLocTypes
   let xTy = getLocTy locTypes x
   loadVar locTypes xTy inferredBigIntegerType x
-  InvokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
-  ret IInt
+  InvokeMethod InvokeVirtual "java/math/BigInteger" "longValue" "()J" False
+  ret ILong
+
+cgOp2 ret (LTrunc ITBig (ITFixed _)) [x] = cgOpBigIntegerToInt ret x
+
+cgOp2 ret (LTrunc ITBig ITNative) [x] = cgOpBigIntegerToInt ret x
 
 cgOp2 ret (LTrunc (ITFixed _) (ITFixed _)) [x] = do
   locTypes <- GetFunctionLocTypes
@@ -542,7 +552,7 @@ cgOp2 ret (LFloatInt ITNative) [x] = do
 
 cgOp2 _ (LExternal externalOp) args = cgExternalOp externalOp args
 
-cgOp2 ret op _ = cgOpNotImplemented op
+cgOp2 ret op _ = do cgOpNotImplemented op; ret IUnknown
 
 cgOp : (InferredType -> Asm ()) -> PrimFn -> List LVar -> Asm ()
 cgOp ret (LAnd (ITFixed IT64)) [l, r] = binaryOp ILong ret Land l r

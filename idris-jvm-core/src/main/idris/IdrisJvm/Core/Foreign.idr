@@ -307,7 +307,7 @@ anewarray FieldTyDescDouble        = Anewdoublearray
 anewarray FieldTyDescFloat         = Anewfloatarray
 anewarray FieldTyDescInt           = Anewintarray
 anewarray FieldTyDescLong          = Anewlongarray
-anewarray (FieldTyDescReference f) = Anewarray $ asmRefTyDesc f
+anewarray (FieldTyDescReference f) = Anewarray $ refTyClassName f
 
 arrayStore : FieldTypeDescriptor -> Asm ()
 arrayStore FieldTyDescByte = Bastore

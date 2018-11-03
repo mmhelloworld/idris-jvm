@@ -1,28 +1,35 @@
 sudo: required
-
 language: java
-
 cache:
   directories:
-  - $HOME/.m2
-
+  - "$HOME/.m2"
 services:
-  - docker
-
+- docker
 jdk:
-  - oraclejdk8
-
+- oraclejdk8
 env:
-  - IDRIS_JVM_HOME=${HOME}/bin/idris-jvm
-
+- IDRIS_JVM_HOME=${HOME}/bin/idris-jvm
 before_install:
-  - docker pull mmhelloworld/idris:1.3.1
-  - mkdir -p $HOME/bin/idris-packages $IDRIS_JVM_HOME
-  - wget https://github.com/mmhelloworld/idris-jvm/releases/download/v1.0-SNAPSHOT-20180909/idris-jvm-1.0-SNAPSHOT-20180909.zip
-  - unzip -o idris-jvm-*.zip -d $HOME/bin
-  - export PATH=`pwd`/bin/travis:$IDRIS_JVM_HOME/codegen/bin:$HOME/.local/bin:$PATH
-  - export PROJECT_ROOT=`pwd`
-  - docker run --name idris mmhelloworld/idris:1.3.1 idris -v && docker cp idris:/.stack-work/install/x86_64-linux/lts-11.22/8.2.2/share/x86_64-linux-ghc-8.2.2/idris-1.3.1/libs/. $HOME/bin/idris-packages && docker rm idris
-
+- docker pull mmhelloworld/idris:1.3.1
+- mkdir -p $HOME/bin/idris-packages $IDRIS_JVM_HOME
+- wget https://github.com/mmhelloworld/idris-jvm/releases/download/v1.0-SNAPSHOT-20180909/idris-jvm-1.0-SNAPSHOT-20180909.zip
+- unzip -o idris-jvm-*.zip -d $HOME/bin
+- export PATH=`pwd`/bin/travis:$IDRIS_JVM_HOME/codegen/bin:$HOME/.local/bin:$PATH
+- export PROJECT_ROOT=`pwd`
+- docker run --name idris mmhelloworld/idris:1.3.1 idris -v && docker cp idris:/.stack-work/install/x86_64-linux/lts-11.22/8.2.2/share/x86_64-linux-ghc-8.2.2/idris-1.3.1/libs/.
+  $HOME/bin/idris-packages && docker rm idris
 script:
-  - mvn -pl :idris-jvm-integration-test test -B
+- mvn -pl :idris-jvm-integration-test test -B
+before_deploy:
+- git config --local user.name mmhelloworld
+- git config --local user.email $USER_EMAIL
+- git tag "$(date +'%Y%m%d%H%M%S')-$(git log --format=%h -1)"
+deploy:
+  provider: releases
+  api_key:
+    secure: JOEh38/PSBll1YFcQVSghyl5c6GaLHLl5W5hR66MLMrMfvn+zSN+fI3yAgHzD4vPzR82EqTORVWRir/axjQ1EZfVik9+moTwPAwiaTqN6KUu/yTEyFAei/kJNZTnF2YxJtVQLO+30IojonxQpN+aHDW3vYp/MaReuYzbv+Ocfcg+s1EvMl/8aDL2ZGuNLPVOdV3Z0LZZfQjXtUA99SGKrpHswd+o0SKYiokmcl8u1DlnpElpF1VAOyyi1MK+C2bFFxY0TXkkx0oBj3ZZaLhmZkw/VVS3n72tCejExgKTEM908+TlM9XbVIHwGaAFX4e9mJvPWNrrpjZxMg7JdrcmMbqeEcBUoifmRgE9HdI/w1BKJ1kKxQLGdZ2czIMgPiN0tKRquVxlbzoaLrx+hthjPv9yBkKtEROI33DdP/GrE1K9mphqYflJltJL75622yiIO92ounal/GkImOibndwQYkz7cGa9NqEzJb2cJ+9wjBIflhcWc6HET3K1S6+EhJehDQgAcg7fVjdrvfPVBGs5/8X56V0DKeGV+ctb8/r2sX5h+gp5nsp454p2pYXWCs0yIm65aOTz600ohgICPRCJ8MOf/0otldAK2ja64xKsHEEQm3i6V4PDXzNg1SHkSIdNvNIbc53bwGnddrxyx4DlVJsQWPHQJgfF9rd+p2WpGWM=
+  file: idris-jvm-codegen-launcher/target/idris-jvm.zip
+  skip_cleanup: true
+  on:
+    repo: mmhelloworld/idris-jvm
+    tags: true

@@ -11,6 +11,9 @@ namespace TimeUnit
   TimeUnit : Type
   TimeUnit = JVM_Native TimeUnitClass
 
+  seconds : TimeUnit
+  seconds = unsafePerformIO $ getStaticField TimeUnitClass "SECONDS" (JVM_IO TimeUnit)
+
   microseconds : TimeUnit
   microseconds = unsafePerformIO $ getStaticField TimeUnitClass "MICROSECONDS" (JVM_IO TimeUnit)
 

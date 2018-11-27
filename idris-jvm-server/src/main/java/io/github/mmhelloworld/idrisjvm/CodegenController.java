@@ -25,6 +25,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -35,7 +36,6 @@ import static java.util.Collections.emptyList;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 import static org.objectweb.asm.Opcodes.ACC_STATIC;
 import static org.objectweb.asm.Opcodes.INVOKESTATIC;
-import static org.objectweb.asm.Opcodes.PUTSTATIC;
 import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
 @RestController
@@ -54,6 +54,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
 
     @RequestMapping(method = POST)
     public void compile(@RequestBody String[] args) {
+        LOGGER.info("Processing with args: " + Arrays.toString(args));
         JsonFactory jsonfactory = new JsonFactory();
         jsonfactory.setCodec(mapper);
         List<String> argsList = stripArgs(asList(args));
@@ -152,8 +153,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
             emptyList(), emptyList());
         assembler.methodCodeStart();
         assembler.aload(0);
-        assembler.invokeMethod(INVOKESTATIC, "java/util/Arrays", "asList", "([Ljava/lang/Object;)Ljava/util/List;", false);
-        assembler.field(PUTSTATIC, "io/github/mmhelloworld/idrisjvm/runtime/Runtime", "programArgs", "Ljava/util/List;");
+        assembler.invokeMethod(INVOKESTATIC, "io/github/mmhelloworld/idrisjvm/runtime/Runtime", "setProgramArgs", "([Ljava/lang/String;)V", false);
         assembler.invokeMethod(INVOKESTATIC, classAndMethodName[0], classAndMethodName[1], "()Lio/github/mmhelloworld/idrisjvm/runtime/Thunk;", false);
         assembler.pop();
         assembler.asmReturn();

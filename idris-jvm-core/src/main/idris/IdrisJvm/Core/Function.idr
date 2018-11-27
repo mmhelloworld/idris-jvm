@@ -223,9 +223,14 @@ mutual
                          _))
     = cgIfNull ret cgBody e nothingExpr defaultExpr
 
+  cgBody ret (SCase _ e [SConCase lv _ _ args expr]) = cgConCase ret cgBody (locIndex e) lv args expr
+
   cgBody ret (SCase _ e [SDefaultCase defaultCaseExpr]) = cgBody ret defaultCaseExpr
 
-  cgBody ret (SCase _ e alts) = cgSwitch ret cgBody e alts
+  cgBody ret (SCase _ e alts) =
+    if any defaultCase alts
+        then cgSwitch ret cgBody e alts
+        else cgSwitch ret cgBody e (alts ++ [SDefaultCase SNothing])
 
   cgBody ret (SChkCase e [SDefaultCase defaultCaseExpr]) = cgBody ret defaultCaseExpr
 
@@ -235,7 +240,7 @@ mutual
 
   cgBody ret (SOp op args) = cgOp ret op args
 
-  cgBody ret SNothing = do Iconst 0; ret IInt
+  cgBody ret SNothing = do Aconstnull; ret inferredObjectType
 
   cgBody ret (SError x) = do invokeError (show x); ret IUnknown
 
@@ -260,6 +265,9 @@ mutual
     retVoidOrBoxed VoidDescriptor = Aconstnull
     retVoidOrBoxed returnDesc = box (inferredRetTy returnDesc)
 
+    synthenticMethodArgTys : InferredTypeStore
+    synthenticMethodArgTys = SortedMap.fromList $ List.zip targetArgIndices $ replicate argsLength inferredObjectType
+
     targetLocTys : InferredTypeStore
     targetLocTys =
       let targetArgTys = List.zip targetArgIndices $ fst <$> args
@@ -270,8 +278,9 @@ mutual
       ThrowableDescriptor returnDesc => do
         locTys <- GetFunctionLocTypes
         let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> args) returnDesc
+        let arity = length args
         let lambdaBody = do
-          loadVars locTys targetLocTys lambdaArgVars
+          loadVars synthenticMethodArgTys targetLocTys lambdaArgVars
           InvokeMethod InvokeStatic clazz fn descriptor False
           retVoidOrBoxed returnDesc
         caller <- GetFunctionName
@@ -308,7 +317,7 @@ mutual
         let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
         locTys <- GetFunctionLocTypes
         let lambdaBody = do
-          loadVars locTys targetLocTys lambdaArgVars
+          loadVars synthenticMethodArgTys targetLocTys lambdaArgVars
           InvokeMethod InvokeVirtual clazz fn descriptor False
           retVoidOrBoxed returnDesc
         caller <- GetFunctionName
@@ -348,7 +357,7 @@ mutual
           locTys <- GetFunctionLocTypes
           let descriptor = asmMethodDesc $ MkMethodDescriptor (fdescFieldDescriptor . fst <$> drop 1 args) returnDesc
           let lambdaBody = do
-            loadVars locTys targetLocTys lambdaArgVars
+            loadVars synthenticMethodArgTys targetLocTys lambdaArgVars
             InvokeMethod InvokeInterface clazz fn descriptor True
             retVoidOrBoxed returnDesc
           caller <- GetFunctionName
@@ -371,7 +380,7 @@ mutual
         let lambdaBody = do
           New clazz
           Dup
-          loadVars locTys targetLocTys lambdaArgVars
+          loadVars synthenticMethodArgTys targetLocTys lambdaArgVars
           InvokeMethod InvokeSpecial clazz "<init>" descriptor False
         caller <- GetFunctionName
         let targetMethodName = MkJMethodName clazz "<init>"

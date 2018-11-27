@@ -2,14 +2,18 @@ package idrisjvmffi
 
 pkgs = effects
 
-modules = IdrisJvm.FFI
+modules = IdrisJvm.Data.Buffer
+        , IdrisJvm.FFI
         , IdrisJvm.IO
+        , IdrisJvm.File
         , IdrisJvm.JvmImport
         , IdrisJvm.System
         , Java.Util.Concurrent
         , Java.Util.Function
         , Java.Util.Stream
         , IdrisJvm.Effects
+        , Java.IO
         , Java.Lang
+        , Java.Nio
         , Java.Util
         , Java.Math

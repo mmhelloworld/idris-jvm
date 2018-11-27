@@ -113,6 +113,10 @@ inferOp2 types (LFloatInt ITBig) [x] = (inferredBigIntegerType, inferUnaryOp typ
 
 inferOp2 types (LFloatInt ITNative) [x] = (IInt, inferUnaryOp types IDouble x)
 
+inferOp2 types LSystemInfo [x] = (inferredStringType, inferUnaryOp types IInt x)
+
+inferOp2 types LCrash [x] = (IUnknown, inferUnaryOp types inferredStringType x)
+
 inferOp2 types op _ = (IUnknown, types)
 
 inferOpLLe : InferredTypeStore -> PrimFn -> List LVar -> (InferredType, InferredTypeStore)
@@ -341,10 +345,8 @@ mutual
             (trueRetTy, trueAltTypes) = inferExp config ifVarInferred trueAlt
         in (falseRetTy <+> trueRetTy, merge falseAltTypes trueAltTypes)
 
-    inferAlt :InferenceConfig -> InferredTypeStore -> SAlt -> (InferredType, InferredTypeStore)
-    inferAlt config types (SConstCase _ expr) = inferExp config types expr
-    inferAlt config types (SDefaultCase expr) = inferExp config types expr
-    inferAlt config types (SConCase lv _ _ args expr) = inferExp config typesWithPropTypes expr where
+    inferAltConCase : InferenceConfig -> InferredTypeStore -> Int -> List String -> SExp -> (InferredType, InferredTypeStore)
+    inferAltConCase config types lv args expr = inferExp config typesWithPropTypes expr where
       argsLength : Int
       argsLength = cast $ length args
 
@@ -354,11 +356,16 @@ mutual
         go types lv 0 = addType types lv inferredObjectType
         go types lv n = go (addType types (lv + n) inferredObjectType) lv (pred n)
 
+    inferAlt :InferenceConfig -> InferredTypeStore -> SAlt -> (InferredType, InferredTypeStore)
+    inferAlt config types (SConstCase _ expr) = inferExp config types expr
+    inferAlt config types (SDefaultCase expr) = inferExp config types expr
+    inferAlt config types (SConCase lv _ _ args expr) = inferAltConCase config types lv args expr
+
     inferSwitch : InferenceConfig -> InferredTypeStore -> LVar -> List SAlt -> (InferredType, InferredTypeStore)
     inferSwitch config types (Loc e) alts =
         let switchExprType =
                 if isConstructorSwitchCases alts then
-                    inferredIdrisObjectType
+                    inferredObjectType
                 else if isIntSwitchCases alts then
                     IInt
                 else if isCharSwitchCases alts then
@@ -431,8 +438,14 @@ mutual
                              _))
         = inferNullableIfElseTy config acc e nothingExpr defaultExpr
 
+    inferExp config acc (SCase _ e [SConCase lv _ _ args expr]) = inferAltConCase config acc lv args expr
+
     inferExp config acc (SCase _ e [SDefaultCase defaultExpr]) = inferExp config acc defaultExpr
-    inferExp config acc (SCase _ e alts) = inferSwitch config acc e alts
+
+    inferExp config acc (SCase _ e alts) =
+        if any defaultCase alts
+            then inferSwitch config acc e alts
+            else inferSwitch config acc e (alts ++ [SDefaultCase SNothing])
 
     inferExp config acc (SChkCase e [SDefaultCase defaultExpr]) = inferExp config acc defaultExpr
     inferExp config acc (SChkCase e alts) = inferSwitch config acc e alts
@@ -441,7 +454,7 @@ mutual
 
     inferExp config acc (SOp op args) = inferOp acc op args
 
-    inferExp config acc SNothing = (IInt, acc)
+    inferExp config acc SNothing = (inferredObjectType, acc)
 
     inferExp config acc (SError x) = (inferredObjectType, acc)
 

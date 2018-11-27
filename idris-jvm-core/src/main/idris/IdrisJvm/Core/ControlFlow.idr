@@ -150,23 +150,20 @@ mutual
     cgCase ret cgBody label expr
     Goto $ switchEndLabel si
 
-  cgAlt : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> Label -> Nat -> Int -> SAlt -> Asm ()
-  cgAlt ret cgBody label si _ (SConstCase _ expr) = cgAltNonConCase ret cgBody label si expr
-
-  cgAlt ret cgBody label si _ (SDefaultCase expr) = cgAltNonConCase ret cgBody label si expr
-
-  cgAlt ret cgBody label si sv (SConCase lv _ _ args expr) = do
-      LabelStart label
-      addFrame
+  cgConCase : (InferredType -> Asm ())
+            -> ((InferredType -> Asm ()) -> SExp -> Asm ())
+            -> Int
+            -> Int
+            -> List String
+            -> SExp
+            -> Asm ()
+  cgConCase ret cgBody idrisObject lv args expr = do
       extractConParams lv
       cgBody ret expr
-
-      Goto $ switchEndLabel si
-
     where
       project : Nat -> Nat -> Asm ()
       project i v = do
-        idrisObjectProperty sv (cast i)
+        idrisObjectProperty idrisObject (cast i)
         Astore $ cast v
 
       argsLength : Nat
@@ -181,6 +178,17 @@ mutual
             else do
                 project (cast i) (cast v)
                 go (i + 1) (v + 1)
+
+  cgAlt : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> Label -> Nat -> Int -> SAlt -> Asm ()
+  cgAlt ret cgBody label si _ (SConstCase _ expr) = cgAltNonConCase ret cgBody label si expr
+
+  cgAlt ret cgBody label si _ (SDefaultCase expr) = cgAltNonConCase ret cgBody label si expr
+
+  cgAlt ret cgBody label si sv (SConCase lv _ _ args expr) = do
+      LabelStart label
+      addFrame
+      cgConCase ret cgBody sv lv args expr
+      Goto $ switchEndLabel si
 
   conCase : SAlt -> Bool
   conCase (SConCase _ _ _ _ _) = True

@@ -11,6 +11,9 @@ namespace Collector
   Collector = javaInterface "java/util/stream/Collector"
 
 namespace Collectors
+  collectorsClass : String
+  collectorsClass = "java/util/stream/Collectors"
+
   CollectorsClass : JVM_NativeTy
   CollectorsClass = Class "java/util/stream/Collectors"
 
@@ -21,8 +24,11 @@ namespace Collectors
   toList = invokeStatic CollectorsClass "toList" (JVM_IO Collector)
 
 namespace JStream
+  streamClass : String
+  streamClass = "java/util/stream/Stream"
+
   JStreamInterface : JVM_NativeTy
-  JStreamInterface = Interface "java/util/stream/Stream"
+  JStreamInterface = Interface streamClass
 
   JStream : Type
   JStream = JVM_Native JStreamInterface

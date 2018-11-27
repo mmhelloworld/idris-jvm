@@ -3,26 +3,12 @@ module Main
 import IdrisJvm.IO
 import IdrisJvm.JvmImport
 import Java.Lang
+import Java.Util
 
 %access public export
 
 %language TypeProviders
 %language ElabReflection
-
-stringClass: String
-stringClass = "java/lang/String"
-
-listInterface: String
-listInterface = "java/util/List"
-
-arrayListClass: String
-arrayListClass = "java/util/ArrayList"
-
-collectionInterface : String
-collectionInterface = "java/util/Collection"
-
-systemClass: String
-systemClass = "java/lang/System"
 
 comparatorClass : String
 comparatorClass = "java/util/Comparator"
@@ -39,16 +25,13 @@ stringBuilderClass = "java/lang/StringBuilder"
 objectsClass : String
 objectsClass = "java/util/Objects"
 
-integerClass : String
-integerClass = "java/lang/Integer"
-
 jdkimport [
     (systemClass, ["getProperty", "setProperty"]),
     (stringClass, ["substring", "CASE_INSENSITIVE_ORDER", "valueOf"]),
     (integerClass, ["parseInt"]),
     (comparatorClass, ["compare"]),
     (arrayListClass, ["<init>", "add"]),
-    (listInterface, ["get"]),
+    (listClass, ["get"]),
     (collectionsClass, ["max"]),
     (stringBuilderClass, ["<init>", "toString"]),
     (objectsClass, ["toString"]),
@@ -66,18 +49,6 @@ IllegalArgumentExceptionClass = Class "java/lang/IllegalArgumentException"
 
 SecurityExceptionClass : JVM_NativeTy
 SecurityExceptionClass = Class "java/lang/SecurityException"
-
-ArrayListClass : JVM_NativeTy
-ArrayListClass = Class arrayListClass
-
-ListInterface : JVM_NativeTy
-ListInterface = Interface listInterface
-
-CollectionInterface : JVM_NativeTy
-CollectionInterface = Interface collectionInterface
-
-ArrayListClass inherits CollectionInterface
-ArrayListClass inherits ListInterface
 
 objectToString : Inherits Object obj => obj -> JVM_IO String
 objectToString obj = (objectsClass <.!> "toString") $ believe_me obj
@@ -99,7 +70,7 @@ main = do
 
   -- exception handling
   propValue <- try ((systemClass <.> "getProperty(?java/lang/String)") Nothing) [
-    ([catch IllegalArgumentExceptionClass, catch NullPointerExceptionClass], \t =>
+    ([jcatch IllegalArgumentExceptionClass, jcatch NullPointerExceptionClass], \t =>
         do
           printLn "property name is null or empty"
           pure Nothing
@@ -118,7 +89,7 @@ main = do
   putStrLn !(either objectToString (pure . show) noSecondCharException)
 
   s <- (stringClass <.> "substring(int)") "Foobar" 1
-  putStrLn !(either throw (pure . show) s) -- rethrowing
+  putStrLn !(either jthrow (pure . show) s) -- rethrowing
 
   -- Unsafe instance method
   printLn $ !((stringClass <.!> "substring(int)") "Foobar" 1)
@@ -131,7 +102,7 @@ main = do
 
   -- Unsafe constructor
   list <- arrayListClass <.!> "<init>()"
-  exceptionOrMaybeFirstItem <- (listInterface <.> "get") list 0
+  exceptionOrMaybeFirstItem <- (listClass <.> "get") list 0
   putStrLn !(either objectToString (maybe (pure "") objectToString) exceptionOrMaybeFirstItem)
 
   arrayList <- arrayListClass <.!> "<init>()"

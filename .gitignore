@@ -3,6 +3,7 @@
 
 # Idris
 *.ibc
+.idrisjvmtypes*
 
 # IDE
 .idea

@@ -116,11 +116,37 @@ metafactoryDesc =
 unrolledConstructorPropsCount : Nat
 unrolledConstructorPropsCount = 10
 
-idrisObjectProperty : Int -> Int -> Asm ()
-idrisObjectProperty object propertyIndex = do
-  Aload object
-  Iconst propertyIndex
-  InvokeMethod InvokeStatic idrisObjectType "getProperty" "(Ljava/lang/Object;I)Ljava/lang/Object;" False
+inferredTypeToFieldTypeDesc : InferredType -> FieldTypeDescriptor
+inferredTypeToFieldTypeDesc IBool = FieldTyDescBoolean
+inferredTypeToFieldTypeDesc IByte = FieldTyDescByte
+inferredTypeToFieldTypeDesc IChar = FieldTyDescChar
+inferredTypeToFieldTypeDesc IShort = FieldTyDescShort
+inferredTypeToFieldTypeDesc IInt = FieldTyDescInt
+inferredTypeToFieldTypeDesc ILong = FieldTyDescLong
+inferredTypeToFieldTypeDesc IFloat = FieldTyDescFloat
+inferredTypeToFieldTypeDesc IDouble = FieldTyDescDouble
+inferredTypeToFieldTypeDesc (Ref refTy) = FieldTyDescReference (ClassDesc refTy)
+inferredTypeToFieldTypeDesc IUnknown = FieldTyDescReference (ClassDesc "java/lang/Object")
+inferredTypeToFieldTypeDesc (IArray elemTy) = FieldTyDescReference (ArrayDesc $ inferredTypeToFieldTypeDesc elemTy)
+
+getInferredTyDesc : InferredType -> String
+getInferredTyDesc = asmFieldTypeDesc . inferredTypeToFieldTypeDesc
+
+toFrameLocalVarType : InferredType -> String
+toFrameLocalVarType IBool = "INTEGER"
+toFrameLocalVarType IByte = "INTEGER"
+toFrameLocalVarType IChar = "INTEGER"
+toFrameLocalVarType IShort = "INTEGER"
+toFrameLocalVarType IInt = "INTEGER"
+toFrameLocalVarType ILong = "LONG"
+toFrameLocalVarType IFloat = "FLOAT"
+toFrameLocalVarType IDouble = "DOUBLE"
+toFrameLocalVarType (Ref clsName) = clsName
+toFrameLocalVarType (IArray elemTy) = "[" ++ getInferredTyDesc elemTy
+toFrameLocalVarType _ = "java/lang/Object"
+
+toFrameLocalVarTypes : InferredTypeStore -> List String
+toFrameLocalVarTypes types = toFrameLocalVarType <$> (values types)
 
 fullFrame : Asm ()
 fullFrame = do
@@ -155,22 +181,6 @@ invokeError x = do
 
 getPrimitiveClass : String -> Asm ()
 getPrimitiveClass clazz = Field FGetStatic clazz "TYPE" "Ljava/lang/Class;"
-
-inferredTypeToFieldTypeDesc : InferredType -> FieldTypeDescriptor
-inferredTypeToFieldTypeDesc IBool = FieldTyDescBoolean
-inferredTypeToFieldTypeDesc IByte = FieldTyDescByte
-inferredTypeToFieldTypeDesc IChar = FieldTyDescChar
-inferredTypeToFieldTypeDesc IShort = FieldTyDescShort
-inferredTypeToFieldTypeDesc IInt = FieldTyDescInt
-inferredTypeToFieldTypeDesc ILong = FieldTyDescLong
-inferredTypeToFieldTypeDesc IFloat = FieldTyDescFloat
-inferredTypeToFieldTypeDesc IDouble = FieldTyDescDouble
-inferredTypeToFieldTypeDesc (Ref refTy) = FieldTyDescReference (ClassDesc refTy)
-inferredTypeToFieldTypeDesc IUnknown = FieldTyDescReference (ClassDesc "java/lang/Object")
-inferredTypeToFieldTypeDesc (IArray elemTy) = FieldTyDescReference (ArrayDesc $ inferredTypeToFieldTypeDesc elemTy)
-
-getInferredTyDesc : InferredType -> String
-getInferredTyDesc = asmFieldTypeDesc . inferredTypeToFieldTypeDesc
 
 getInferredFunDesc : List InferredType -> InferredType -> String
 getInferredFunDesc [] retTy = "()" ++ getInferredTyDesc retTy
@@ -513,37 +523,53 @@ storeVar IFloat (Ref _) var = boxStore boxFloat var
 storeVar IDouble IUnknown var = boxStore boxDouble var
 storeVar IDouble (Ref _) var = boxStore boxDouble var
 
-storeVar IUnknown IBool var = storeVarWithWordSize (\index => do unboxBool; Istore index) var
-storeVar (Ref _) IBool var = storeVarWithWordSize (\index => do unboxBool; Istore index) var
+storeVar IUnknown IBool var = storeVarWithWordSize (\index => do cgCast IUnknown IBool; Istore index) var
+storeVar srcTy@(Ref _) IBool var = storeVarWithWordSize (\index => do cgCast srcTy IBool; Istore index) var
 
-storeVar IUnknown IByte var = storeVarWithWordSize (\index => do unboxByte; Istore index) var
-storeVar (Ref _) IByte var = storeVarWithWordSize (\index => do unboxByte; Istore index) var
+storeVar IUnknown IByte var = storeVarWithWordSize (\index => do cgCast IUnknown IByte; Istore index) var
+storeVar srcTy@(Ref _) IByte var = storeVarWithWordSize (\index => do cgCast srcTy IByte; Istore index) var
 
-storeVar IUnknown IChar var = storeVarWithWordSize (\index => do unboxChar; Istore index) var
-storeVar (Ref _) IChar var = storeVarWithWordSize (\index => do unboxChar; Istore index) var
+storeVar IUnknown IChar var = storeVarWithWordSize (\index => do cgCast IUnknown IChar; Istore index) var
+storeVar srcTy@(Ref _) IChar var = storeVarWithWordSize (\index => do cgCast srcTy IChar; Istore index) var
 
-storeVar IUnknown IShort var = storeVarWithWordSize (\index => do unboxShort; Istore index) var
-storeVar (Ref _) IShort var = storeVarWithWordSize (\index => do unboxShort; Istore index) var
+storeVar IUnknown IShort var = storeVarWithWordSize (\index => do cgCast IUnknown IShort; Istore index) var
+storeVar srcTy@(Ref _) IShort var = storeVarWithWordSize (\index => do cgCast srcTy IShort; Istore index) var
 
-storeVar IUnknown IInt var = storeVarWithWordSize (\index => do unboxInt; Istore index) var
-storeVar (Ref _) IInt var = storeVarWithWordSize (\index => do unboxInt; Istore index) var
+storeVar IUnknown IInt var = storeVarWithWordSize (\index => do cgCast IUnknown IInt; Istore index) var
+storeVar srcTy@(Ref _) IInt var = storeVarWithWordSize (\index => do cgCast srcTy IInt; Istore index) var
 
-storeVar IUnknown ILong var = storeVarWithWordSize (\index => do unboxLong; Lstore index) var
-storeVar (Ref _) ILong var = storeVarWithWordSize (\index => do unboxLong; Lstore index) var
+storeVar IUnknown ILong var = storeVarWithWordSize (\index => do cgCast IUnknown ILong; Lstore index) var
+storeVar srcTy@(Ref _) ILong var = storeVarWithWordSize (\index => do cgCast srcTy ILong; Lstore index) var
 
-storeVar IUnknown IFloat var = storeVarWithWordSize (\index => do unboxFloat; Fstore index) var
-storeVar (Ref _) IFloat var = storeVarWithWordSize (\index => do unboxFloat; Fstore index) var
+storeVar IUnknown IFloat var = storeVarWithWordSize (\index => do cgCast IUnknown IFloat; Fstore index) var
+storeVar srcTy@(Ref _) IFloat var = storeVarWithWordSize (\index => do cgCast srcTy IFloat; Fstore index) var
 
-storeVar IUnknown IDouble var = storeVarWithWordSize (\index => do unboxDouble; Dstore index) var
-storeVar (Ref _) IDouble var = storeVarWithWordSize (\index => do unboxDouble; Dstore index) var
+storeVar IUnknown IDouble var = storeVarWithWordSize (\index => do cgCast IUnknown IDouble; Dstore index) var
+storeVar srcTy@(Ref _) IDouble var = storeVarWithWordSize (\index => do cgCast srcTy IDouble; Dstore index) var
 
 storeVar IUnknown arr@(IArray elemTy) var =
     storeVarWithWordSize (\index => do Checkcast $ getInferredTyDesc arr; Astore index) var
 storeVar (Ref _) arr@(IArray elemTy) var =
     storeVarWithWordSize (\index => do Checkcast $ getInferredTyDesc arr; Astore index) var
 
-storeVar (Ref _) (Ref _) var = do types <- GetFunctionLocTypes; opWithWordSize types Astore var
+storeVar IUnknown targetTy@(Ref _) var = do
+    types <- GetFunctionLocTypes
+    cgCast IUnknown targetTy
+    opWithWordSize types Astore var
+
+storeVar srcTy@(Ref _) targetTy@(Ref _) var = do
+    types <- GetFunctionLocTypes
+    cgCast srcTy targetTy
+    opWithWordSize types Astore var
+
 storeVar _ _ var = do types <- GetFunctionLocTypes; opWithWordSize types Astore var
+
+idrisObjectProperty : Int -> Int -> Asm ()
+idrisObjectProperty object propertyIndex = do
+  locTypes <- GetFunctionLocTypes
+  loadVar locTypes inferredObjectType inferredObjectType (Loc object)
+  Iconst propertyIndex
+  InvokeMethod InvokeStatic idrisObjectType "getProperty" "(Ljava/lang/Object;I)Ljava/lang/Object;" False
 
 assign : (lhs: List LVar) -> (rhs: List LVar) -> Asm ()
 assign lhs rhs = do

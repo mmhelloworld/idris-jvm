@@ -21,7 +21,19 @@ getLine : JVM_IO String
 getLine = getLine'
 
 putCh : Char -> JVM_IO ()
-putCh ch = PrintStream.printCh !System.out ch
+putCh ch = PrintStream.printCh System.stdout ch
 
 getCh : JVM_IO Char
 getCh = invokeStatic RuntimeClass "readChar" (JVM_IO Char)
+
+putChar : Char -> JVM_IO ()
+putChar ch = PrintStream.printCh System.stdout ch
+
+getChar : JVM_IO Char
+getChar = invokeStatic RuntimeClass "readChar" (JVM_IO Char)
+
+jputChar : Char -> JVM_IO ()
+jputChar ch = PrintStream.printCh System.stdout ch
+
+jgetChar : JVM_IO Char
+jgetChar = invokeStatic RuntimeClass "readChar" (JVM_IO Char)

@@ -2,6 +2,9 @@ module IdrisJvm.FFI
 
 %access public export
 
+export
+data IORef a = MkIORef a
+
 AnnotationTypeName : Type
 AnnotationTypeName = String
 
@@ -191,8 +194,9 @@ new : (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
 new ty = javacall New ty
 
 %inline
+total
 newArray : (elemTy: Type) -> {auto jvmElemTy: JVM_Types elemTy} -> Nat -> JVM_IO (JVM_Array elemTy)
-newArray elemTy size = javacall NewArray (Int -> JVM_IO $ JVM_Array elemTy) (cast size)
+newArray elemTy size = assert_total $ javacall NewArray (Int -> JVM_IO $ JVM_Array elemTy) (cast size)
 
 %inline
 setArray : (ty : Type) -> {auto fty : FTy FFI_JVM [] ty} -> ty
@@ -280,8 +284,8 @@ classLit s = unsafePerformIO $ javacall (ClassLiteral s) (JVM_IO JClass)
 RuntimeClass : JVM_NativeTy
 RuntimeClass = Class "io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 
-throw : Inherits Throwable t => t -> JVM_IO a
-throw t = believe_me $ invokeStatic RuntimeClass "rethrow" (Throwable -> JVM_IO Object) (believe_me t)
+jthrow : Inherits Throwable t => t -> JVM_IO a
+jthrow t = believe_me $ invokeStatic RuntimeClass "rethrow" (Throwable -> JVM_IO Object) (believe_me t)
 
 VirtualMachineErrorClass : JVM_NativeTy
 VirtualMachineErrorClass = Class "java/lang/VirtualMachineError"
@@ -300,7 +304,7 @@ ThreadDeathClass inherits ThrowableClass
 InterruptedExceptionClass inherits ThrowableClass
 LinkageErrorClass inherits ThrowableClass
 
-term syntax catch [clazz] = \t => instanceOf clazz t
+term syntax jcatch [clazz] = \t => instanceOf clazz t
 
 try : JVM_IO (JVM_Throwable a) -> List (List (Throwable -> Bool), Throwable -> JVM_IO a) -> JVM_IO a
 try action handlers = do
@@ -308,12 +312,32 @@ try action handlers = do
     either (go handlers) pure value
   where
     go : List (List (Throwable -> Bool), Throwable -> JVM_IO a) -> Throwable -> JVM_IO a
-    go [] t = throw t
+    go [] t = jthrow t
     go ((ps, handler) :: handlers) t =
       if any (\p => p t) ps then
         handler t
       else
         go handlers t
+
+Ref : Type
+Ref = JVM_Native (Class ("io/github/mmhelloworld/idrisjvm/runtime/Ref"))
+
+export
+newIORef : a -> JVM_IO (IORef a)
+newIORef val = (MkIORef . believe_me) <$> FFI.new (Object -> JVM_IO Ref) (believe_me val)
+
+export
+readIORef : IORef a -> JVM_IO a
+readIORef (MkIORef ref) = believe_me <$> invokeInstance "getValue" (Ref -> JVM_IO Object) (believe_me ref)
+
+export
+writeIORef : IORef a -> a -> JVM_IO ()
+writeIORef (MkIORef ref) val = invokeInstance "setValue" (Ref -> Object -> JVM_IO ()) (believe_me ref) (believe_me val)
+
+export
+Show Throwable where
+  show throwable = unsafePerformIO $ invokeStatic RuntimeClass "showThrowable"
+                     (Throwable -> JVM_IO String) throwable
 
 -- Inspired by Scala's NonFatal
 catchNonFatal : Throwable -> Bool

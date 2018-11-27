@@ -37,11 +37,43 @@ compareOp ty ret fn l r = do
   InvokeMethod InvokeStatic utilClass fn fnDesc False
   ret IBool
     
-cgExternalOp : String -> List LVar -> Asm ()
-cgExternalOp op _ =
+cgExternalOp : (InferredType -> Asm ()) -> String -> List LVar -> Asm ()
+cgExternalOp ret op _ =
   if op == "prim__null"
-    then Aconstnull
-    else invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
+    then do Aconstnull; ret IUnknown
+    else do invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"; ret IUnknown
+
+lcrash : (InferredType -> Asm ()) -> LVar -> Asm ()
+lcrash ret x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredStringType x
+  InvokeMethod InvokeStatic (rtClass "Runtime") "crash" "(Ljava/lang/String;)Ljava/lang/Object;" False
+  ret IUnknown
+
+lsystemInfo : (InferredType -> Asm ()) -> LVar -> Asm ()
+lsystemInfo ret x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IInt x
+  InvokeMethod InvokeStatic (rtClass "Runtime") "systemInfo" "(I)Ljava/lang/String;" False
+  ret inferredStringType
+
+cgOpStrToInt : (InferredType -> Asm ()) -> LVar -> Asm ()
+cgOpStrToInt ret x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredStringType x
+  InvokeMethod InvokeStatic "java/lang/Integer" "parseInt" "(Ljava/lang/String;)I" False
+  ret IInt
+
+cgOpStrToDouble : (InferredType -> Asm ()) -> LVar -> Asm ()
+cgOpStrToDouble ret x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy inferredStringType x
+  InvokeMethod InvokeStatic "java/lang/Double" "parseDouble" "(Ljava/lang/String;)D" False
+  ret IDouble
 
 cgOpLLe : (InferredType -> Asm ()) -> IntTy -> List LVar -> Asm ()
 cgOpLLe ret ITBig [l, r] = compareOp inferredBigIntegerType ret "bigIntegerLessThanOrEqualTo" l r
@@ -322,6 +354,16 @@ cgOpBigIntegerToInt ret x = do
   InvokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
   ret IInt
 
+cgOpBigIntegerUnaryIntOp : (InferredType -> Asm ()) -> Asm () -> LVar -> LVar -> Asm ()
+cgOpBigIntegerUnaryIntOp ret op x y = do
+  locTypes <- GetFunctionLocTypes
+  let lTy = getLocTy locTypes x
+  let rTy = getLocTy locTypes y
+  loadVar locTypes lTy inferredBigIntegerType x
+  loadVar locTypes rTy IInt y
+  op
+  ret inferredBigIntegerType
+
 cgOpNotImplemented : PrimFn -> Asm ()
 cgOpNotImplemented op = invokeError $ "OPERATOR " ++ show op ++ " NOT IMPLEMENTED!"
 
@@ -475,19 +517,9 @@ cgOp2 ret (LStrInt (ITFixed IT8)) [x] = do
   InvokeMethod InvokeStatic "java/lang/Integer" "parseInt" "(Ljava/lang/String;I)I" False
   ret IInt
 
-cgOp2 ret (LStrInt _) [x] = do
-  locTypes <- GetFunctionLocTypes
-  let xTy = getLocTy locTypes x
-  loadVar locTypes xTy inferredStringType x
-  InvokeMethod InvokeStatic "java/lang/Integer" "parseInt" "(Ljava/lang/String;)I" False
-  ret IInt
+cgOp2 ret (LStrInt _) [x] = cgOpStrToInt ret x
 
-cgOp2 ret LStrFloat [x] = do
-  locTypes <- GetFunctionLocTypes
-  let xTy = getLocTy locTypes x
-  loadVar locTypes xTy inferredStringType x
-  InvokeMethod InvokeStatic "java/lang/Double" "parseDouble" "(Ljava/lang/String;)D" False
-  ret IDouble
+cgOp2 ret LStrFloat [x] = cgOpStrToDouble ret x
 
 cgOp2 ret (LSHL (ITFixed IT64)) [x, y] = binaryOp ILong ret ops x y where
   ops = do L2i; Lshl
@@ -497,15 +529,27 @@ cgOp2 ret (LSHL (ITFixed IT8)) [x, y] = binaryOp IInt ret ops x y where
 
 cgOp2 ret (LSHL (ITFixed _)) [x, y] = binaryOp IInt ret Ishl x y
 
+cgOp2 ret (LSHL ITBig) [x, y] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "shiftLeft" "(I)Ljava/math/BigInteger;" False
+  in cgOpBigIntegerUnaryIntOp ret op x y
+
 cgOp2 ret (LLSHR (ITFixed IT64)) [x, y] = binaryOp ILong ret ops x y where
   ops = do L2i; Lushr
 
 cgOp2 ret (LLSHR (ITFixed _)) [x, y] = binaryOp IInt ret Iushr x y
 
+cgOp2 ret (LLSHR ITBig) [x, y] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "shiftRight" "(I)Ljava/math/BigInteger;" False
+  in cgOpBigIntegerUnaryIntOp ret op x y
+
 cgOp2 ret (LASHR (ITFixed IT64)) [x, y] = binaryOp ILong ret ops x y where
   ops = do L2i; Lshr
 
 cgOp2 ret (LASHR (ITFixed _)) [x, y] = binaryOp IInt ret Ishr x y
+
+cgOp2 ret (LASHR ITBig) [x, y] =
+  let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "shiftRight" "(I)Ljava/math/BigInteger;" False
+  in cgOpBigIntegerUnaryIntOp ret op x y
 
 cgOp2 ret LFork [x] = do
   caller <- GetFunctionName
@@ -550,7 +594,11 @@ cgOp2 ret (LFloatInt ITNative) [x] = do
   D2i
   ret IInt
 
-cgOp2 _ (LExternal externalOp) args = cgExternalOp externalOp args
+cgOp2 ret LSystemInfo [x] = lsystemInfo ret x
+
+cgOp2 ret LCrash [x] = lcrash ret x
+
+cgOp2 ret (LExternal externalOp) args = cgExternalOp ret externalOp args
 
 cgOp2 ret op _ = do cgOpNotImplemented op; ret IUnknown
 

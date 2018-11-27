@@ -25,5 +25,8 @@ namespace BigInteger
   add : BigInteger -> BigInteger -> BigInteger
   add b1 b2 = unsafePerformIO $ invokeInstance "add" (BigInteger -> BigInteger -> JVM_IO BigInteger) b1 b2
 
+  valueOf : Bits64 -> BigInteger
+  valueOf val = unsafePerformIO $ invokeStatic BigIntegerClass "valueOf" (Bits64 -> JVM_IO BigInteger) val
+
 Show BigInteger where
   show = BigInteger.toString

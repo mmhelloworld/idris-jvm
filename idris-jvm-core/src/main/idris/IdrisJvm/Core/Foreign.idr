@@ -116,32 +116,6 @@ typeDescriptorToInferredType (ThrowableDescriptor _) = inferredObjectType
 typeDescriptorToInferredType VoidDescriptor          = IUnknown
 typeDescriptorToInferredType (FieldDescriptor fieldTyDesc) = fieldTypeDescriptorToInferredType fieldTyDesc
 
-loadJavaVar : Int -> FieldTypeDescriptor -> Asm ()
-loadJavaVar index FieldTyDescBoolean = Iload index
-loadJavaVar index FieldTyDescByte    = Iload index
-loadJavaVar index FieldTyDescShort   = Iload index
-loadJavaVar index FieldTyDescInt     = Iload index
-loadJavaVar index FieldTyDescChar    = Iload index
-loadJavaVar index FieldTyDescLong    = Lload index
-loadJavaVar index FieldTyDescFloat   = Fload index
-loadJavaVar index FieldTyDescDouble  = Dload index
-loadJavaVar index (FieldTyDescReference (IdrisExportDesc cname)) = do
-  Aload index
-  InvokeMethod InvokeVirtual cname "getValue" "()Ljava/lang/Object;" False
-  checkcast idrisObjectType
-loadJavaVar index _                  = Aload index
-
-storeJavaVar : Int -> FieldTypeDescriptor -> Asm ()
-storeJavaVar index FieldTyDescBoolean = Istore index
-storeJavaVar index FieldTyDescByte    = Istore index
-storeJavaVar index FieldTyDescShort   = Istore index
-storeJavaVar index FieldTyDescInt     = Istore index
-storeJavaVar index FieldTyDescChar    = Istore index
-storeJavaVar index FieldTyDescLong    = Lstore index
-storeJavaVar index FieldTyDescFloat   = Fstore index
-storeJavaVar index FieldTyDescDouble  = Dstore index
-storeJavaVar index _                  = Astore index
-
 idrisToJava : List (FieldTypeDescriptor, LVar) -> Asm ()
 idrisToJava vars = do
     locTypes <- GetFunctionLocTypes

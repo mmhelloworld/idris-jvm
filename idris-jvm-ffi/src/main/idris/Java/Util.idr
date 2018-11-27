@@ -7,9 +7,14 @@ import Java.Util.Stream
 %access public export
 
 namespace Collection
+  collectionClass : String
+  collectionClass = "java/util/Collection"
+
+  CollectionInterface : JVM_NativeTy
+  CollectionInterface = Interface collectionClass
 
   Collection : Type
-  Collection = javaInterface "java/util/Collection"
+  Collection = JVM_Native CollectionInterface
 
   stream : Inherits Collection collection => collection -> JVM_IO JStream
   stream collection = invokeInstance "stream" (Collection -> JVM_IO JStream) (believe_me collection)
@@ -74,8 +79,14 @@ namespace Iterator
       else pure []
 
 namespace JList
+  listClass: String
+  listClass = "java/util/List"
+
+  ListInterface : JVM_NativeTy
+  ListInterface = Interface listClass
+
   JList : Type
-  JList = javaInterface "java/util/List"
+  JList = JVM_Native ListInterface
 
   Inherits Collection JList where {}
 
@@ -89,9 +100,14 @@ namespace JList
   iterator list = invokeInstance "iterator" (JList -> JVM_IO Iterator) (believe_me list)
 
 namespace ArrayList
+  arrayListClass: String
+  arrayListClass = "java/util/ArrayList"
+
+  ArrayListClass : JVM_NativeTy
+  ArrayListClass = Class arrayListClass
 
   ArrayList : Type
-  ArrayList = javaClass "java/util/ArrayList"
+  ArrayList = JVM_Native ArrayListClass
 
   Inherits Collection ArrayList where {}
   Inherits JList ArrayList where {}
@@ -133,3 +149,15 @@ namespace Objects
 
   isNull : Inherits Object that => that -> JVM_IO Bool
   isNull obj = invokeStatic ObjectsClass "isNull" (Object -> JVM_IO Bool) (believe_me obj)
+
+namespace Scanner
+    scannerClass : JVM_NativeTy
+    scannerClass = Class "java/util/Scanner"
+
+    Scanner : Type
+    Scanner = JVM_Native scannerClass
+
+    hasNext : Scanner -> JVM_IO Bool
+    hasNext = invokeInstance "hasNext" (Scanner -> JVM_IO Bool)
+
+    Inherits Closeable Scanner where {}

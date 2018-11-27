@@ -24,8 +24,11 @@ namespace Character
   CharacterClass = Class "java/lang/Character"
 
 namespace JInteger
+  integerClass : String
+  integerClass = "java/lang/Integer"
+
   IntegerClass : JVM_NativeTy
-  IntegerClass = Class "java/lang/Integer"
+  IntegerClass = Class integerClass
 
   JInteger : Type
   JInteger = JVM_Native IntegerClass
@@ -62,6 +65,9 @@ namespace Long
   valueOf : Bits64 -> Long
   valueOf n = unsafePerformIO $ invokeStatic LongClass "valueOf" (Bits64 -> JVM_IO Long) n
 
+  intValue : Bits64 -> Int
+  intValue n = unsafePerformIO $ invokeInstance "intValue" (Long -> JVM_IO Int) (Long.valueOf n)
+
 namespace JDouble
   DoubleClass : JVM_NativeTy
   DoubleClass = Class "java/lang/Double"
@@ -92,6 +98,29 @@ namespace Math
   maxFloat : JFloat -> JFloat -> JFloat
   maxFloat a b = unsafePerformIO $ invokeStatic MathClass "max" (JFloat -> JFloat -> JVM_IO JFloat) a b
 
+namespace Closeable
+
+  Closeable : Type
+  Closeable = JVM_Native (Interface "java/io/Closeable")
+
+  close : Inherits Closeable closeable => closeable -> JVM_IO ()
+  close closeable = invokeInstance "close" (Closeable -> JVM_IO ()) (believe_me closeable)
+
+namespace Flushable
+
+  Flushable : Type
+  Flushable = JVM_Native (Interface "java/io/Flushable")
+
+  flush : Inherits Flushable flushable => flushable -> JVM_IO ()
+  flush flushable = invokeInstance "flush" (Flushable -> JVM_IO ()) (believe_me flushable)
+
+namespace InputStream
+
+  InputStream : Type
+  InputStream = JVM_Native (Class "java/io/InputStream")
+
+  Inherits Closeable InputStream where {}
+
 namespace PrintStream
 
   PrintStream : Type
@@ -103,10 +132,15 @@ namespace PrintStream
   printCh : PrintStream -> Char -> JVM_IO ()
   printCh = invokeInstance "print" (PrintStream -> Char -> JVM_IO ())
 
+  Inherits Flushable PrintStream where {}
+
 namespace System
 
+  systemClass : String
+  systemClass = "java/lang/System"
+
   SystemClass : JVM_NativeTy
-  SystemClass = Class "java/lang/System"
+  SystemClass = Class systemClass
 
   getProperty : String -> JVM_IO (Maybe String)
   getProperty = invokeStatic SystemClass "getProperty" (String -> JVM_IO (Maybe String))
@@ -122,8 +156,20 @@ namespace System
   getPropertyWithDefault : String -> String -> JVM_IO String
   getPropertyWithDefault = invokeStatic SystemClass "getProperty" (String -> String -> JVM_IO String)
 
-  out : JVM_IO PrintStream
-  out = getStaticField SystemClass "out" (JVM_IO PrintStream)
+  stdout : PrintStream
+  stdout = unsafePerformIO $ getStaticField SystemClass "out" (JVM_IO PrintStream)
+
+  stderr : PrintStream
+  stderr = unsafePerformIO $ getStaticField SystemClass "err" (JVM_IO PrintStream)
+
+  stdin : InputStream
+  stdin = unsafePerformIO $ getStaticField SystemClass "in" (JVM_IO InputStream)
+
+  lineSeparator : JVM_IO String
+  lineSeparator = invokeStatic SystemClass "lineSeparator" (JVM_IO String)
+
+  exit : Int -> JVM_IO ()
+  exit = invokeStatic SystemClass "exit" (Int -> JVM_IO ())
 
 namespace Runnable
   Runnable : Type
@@ -167,8 +213,11 @@ namespace Thread
 
 namespace JavaString
 
+  stringClass : String
+  stringClass = "java/lang/String"
+
   StringClass : JVM_NativeTy
-  StringClass = Class "java/lang/String"
+  StringClass = Class stringClass
 
   StringArray : Type
   StringArray = JVM_Array String
@@ -191,6 +240,12 @@ namespace JavaString
   longToString : Bits64 -> String
   longToString b = unsafePerformIO $ invokeStatic LongClass "toString" (Bits64 -> JVM_IO String) b
 
+  getBytes : String -> JVM_IO (JVM_Array Bits8)
+  getBytes str = invokeInstance "getBytes" (String -> String -> JVM_IO (JVM_Array Bits8)) str "UTF-8"
+
+  format : String -> JVM_Array Object -> String
+  format fmt args = unsafePerformIO $ invokeStatic StringClass "format" (String -> JVM_Array Object -> JVM_IO String) fmt args
+
 %inline
 vectToArray : Vect n elemTy -> {auto jvmType: JVM_Types elemTy} -> JVM_IO (JVM_Array elemTy)
 vectToArray {elemTy} xs
@@ -207,6 +262,27 @@ vectToArray {elemTy} xs
         go arr 0 xs
       where
         go : JVM_Array elemTy -> Int -> Vect m elemTy -> JVM_IO (JVM_Array elemTy)
+        go arr index [] = pure arr
+        go arr index (x :: xs) = do
+          setArray' arr index x
+          go arr (index + 1) xs
+
+%inline
+listToArray : List elemTy -> {auto jvmType: JVM_Types elemTy} -> JVM_IO (JVM_Array elemTy)
+listToArray {elemTy} xs
+    = listToArray' xs
+        (newArray elemTy (length xs))
+        (setArray (JVM_Array elemTy -> Int -> elemTy -> JVM_IO ()))
+  where
+    listToArray' : List elemTy
+                -> JVM_IO (JVM_Array elemTy)
+                -> (JVM_Array elemTy -> Int -> elemTy -> JVM_IO ())
+                -> JVM_IO (JVM_Array elemTy)
+    listToArray' xs createArray setArray' = do
+        arr <- createArray
+        go arr 0 xs
+      where
+        go : JVM_Array elemTy -> Int -> List elemTy -> JVM_IO (JVM_Array elemTy)
         go arr index [] = pure arr
         go arr index (x :: xs) = do
           setArray' arr index x

@@ -94,6 +94,8 @@ public class Util {
     public static int toInt(Object that) {
         if (that instanceof Integer) {
             return (int) that;
+        } else if (that instanceof BigInteger) {
+            return ((BigInteger) that).intValueExact();
         } else if (that instanceof Character) {
             return (char) that;
         } else if (that instanceof Boolean) {
@@ -110,6 +112,7 @@ public class Util {
 
     public static boolean toBoolean(Object that) {
         if (that == null) {
+            System.out.println("null in toBoolean");
             return false;
         } else if (that instanceof Integer) {
             return ((Integer) that) != 0;

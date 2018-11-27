@@ -94,7 +94,8 @@ public class IdrisToJavaNameConverter {
         if (className.isEmpty()) {
             return DEFAULT_CLASS_NAME;
         } else if (className.contains(".")) {
-            return className.replaceAll("\\.", "/");
+            return className.replaceAll("\\.", "/")
+                    .replaceAll("([^/]+)/", "I\\$$1/");
         } else {
             return DEFAULT_PACKAGE_NAME + "/" + className;
         }

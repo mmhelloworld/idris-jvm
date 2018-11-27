@@ -1,7 +1,7 @@
 module IdrisJvm.JvmImport
 
 import System
-import IdrisJvm.FFI
+import public IdrisJvm.IO
 
 %dynamic "libc"
 

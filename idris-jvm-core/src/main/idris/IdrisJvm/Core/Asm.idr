@@ -94,28 +94,10 @@ Show InferredType where
     show IUnknown = "unknown"
 
 Semigroup InferredType where
-  IUnknown <+> known = known
-  known <+> IUnknown = known
   ty1 <+> ty2 = if ty1 == ty2 then ty1 else inferredObjectType
 
 Monoid InferredType where
   neutral = IUnknown
-
-toFrameLocalVarType : InferredType -> String
-toFrameLocalVarType IBool = "INTEGER"
-toFrameLocalVarType IByte = "INTEGER"
-toFrameLocalVarType IChar = "INTEGER"
-toFrameLocalVarType IShort = "INTEGER"
-toFrameLocalVarType IInt = "INTEGER"
-toFrameLocalVarType ILong = "LONG"
-toFrameLocalVarType IFloat = "FLOAT"
-toFrameLocalVarType IDouble = "DOUBLE"
-toFrameLocalVarType (Ref clsName) = clsName
-toFrameLocalVarType (IArray elemTy) = "[" ++ toFrameLocalVarType elemTy
-toFrameLocalVarType _ = "java/lang/Object"
-
-toFrameLocalVarTypes : InferredTypeStore -> List String
-toFrameLocalVarTypes types = toFrameLocalVarType <$> (values types)
 
 isPrimitive : InferredType -> Bool
 isPrimitive IBool = True

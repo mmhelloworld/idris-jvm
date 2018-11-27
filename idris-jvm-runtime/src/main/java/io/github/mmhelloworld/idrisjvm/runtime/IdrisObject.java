@@ -174,7 +174,7 @@ public class IdrisObject {
                 return idrisObject.properties[propertyIndex - UNROLLED_PROPS_COUNT];
             }
         } else {
-            return obj;
+            return -1;
         }
     }
 

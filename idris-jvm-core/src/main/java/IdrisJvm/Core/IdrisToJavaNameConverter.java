@@ -42,7 +42,6 @@ public class IdrisToJavaNameConverter {
         replacements.put('|', "pipe");
         replacements.put('}', "rbrace");
         replacements.put('~', "tilde");
-
     }
 
     private static final String DEFAULT_PACKAGE_NAME = "main";
@@ -95,7 +94,7 @@ public class IdrisToJavaNameConverter {
             return DEFAULT_CLASS_NAME;
         } else if (className.contains(".")) {
             return className.replaceAll("\\.", "/")
-                    .replaceAll("([^/]+)/", "I\\$$1/");
+                    .replaceAll("([^/]+)/", "I\\_$1/");
         } else {
             return DEFAULT_PACKAGE_NAME + "/" + className;
         }

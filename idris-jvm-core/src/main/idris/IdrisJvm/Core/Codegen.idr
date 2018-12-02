@@ -37,8 +37,8 @@ group n xs =
     let (ys, zs) = splitAt n xs
     in  ys :: group n zs
 
-splitApplyFunction : SDecl -> List SDecl
-splitApplyFunction (SFun fname args n (SChkCase var cases)) =
+splitApplyFunction : String -> List String -> Int -> LVar -> List SAlt -> List SDecl
+splitApplyFunction fname args n var cases =
   let cs = group 100 cases
       len = List.length cs
   in map (callNextFn fname args n var len) . List.zip [0 .. pred len] $ cs where
@@ -56,7 +56,7 @@ splitApplyFunction (SFun fname args n (SChkCase var cases)) =
 splitLargeFunctions : List SDecl -> List SDecl
 splitLargeFunctions decls = decls >>= f where
   f : SDecl -> List SDecl
-  f decl@(SFun "{APPLY_0}" _ _ _) = splitApplyFunction decl
+  f decl@(SFun "{APPLY_0}" args n (SChkCase var cases)) = splitApplyFunction "{APPLY_0}" args n var cases
   f decl = [decl]
 
 inferFuns : SortedMap JMethodName (InferredType, InferredTypeStore)
@@ -72,6 +72,18 @@ inferFuns initial decls = go SortedMap.empty decls where
             newAcc = SortedMap.insert fname (retTy, argTys) acc
         in go newAcc rest
 
+createMainMethod : String -> JMethodName -> Asm ()
+createMainMethod signature (MkJMethodName className methodName) = do
+    CreateMethod [Public, Static] className "main" "([Ljava/lang/String;)V" Nothing Nothing [] []
+    MethodCodeStart
+    Aload 0
+    InvokeMethod InvokeStatic (rtClass "Runtime") "setProgramArgs" "([Ljava/lang/String;)V" False
+    InvokeMethod InvokeStatic className methodName signature False
+    Pop
+    Return
+    MaxStackAndLocal (-1) (-1)
+    MethodCodeEnd
+
 generateMethods' : Assembler -> List SDecl -> List ExportIFace -> JVM_IO ()
 generateMethods' assembler decls exports = do
     let smallDecls = splitLargeFunctions decls
@@ -79,6 +91,10 @@ generateMethods' assembler decls exports = do
     let functionTypesByName = inferFuns functionTypesByNameStage1 smallDecls
     types <- generateMethodsWithTypes functionTypesByName smallDecls
     generateExportsWithTypes types exports
+    let asmState = MkAsmState [] types SortedMap.empty IUnknown
+    (_, _) <- runAsm asmState assembler
+        (createMainMethod "()Lio/github/mmhelloworld/idrisjvm/runtime/Thunk;" (jname "{runMain_0}"))
+    pure ()
   where
     generateMethodsWithTypes : SortedMap JMethodName (InferredType, InferredTypeStore) -> List SDecl
                             -> JVM_IO (SortedMap JMethodName (InferredType, InferredTypeStore))

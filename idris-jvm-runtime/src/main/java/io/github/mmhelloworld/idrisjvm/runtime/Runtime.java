@@ -190,9 +190,7 @@ public class Runtime {
 
     public static int constructorIndex(Object obj) {
         final int constructor;
-        if (obj == null) {
-            constructor = -1;
-        } else if (obj instanceof IdrisObject) {
+        if (obj instanceof IdrisObject) {
             constructor = ((IdrisObject) obj).constructorId;
         } else if (obj instanceof Integer) {
             constructor = (int) obj;

@@ -1,7 +1,6 @@
 package io.github.mmhelloworld.idrisjvm;
 
 import IdrisJvm.Core.Assembler;
-import IdrisJvm.Core.IdrisToJavaNameConverter;
 import IdrisJvm.Core.export.Codegen;
 import IdrisJvm.IR.export.ExportIFace;
 import IdrisJvm.IR.export.SDecl;
@@ -32,10 +31,6 @@ import java.util.List;
 import static com.fasterxml.jackson.core.JsonToken.END_ARRAY;
 import static com.fasterxml.jackson.core.JsonToken.END_OBJECT;
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyList;
-import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
-import static org.objectweb.asm.Opcodes.ACC_STATIC;
-import static org.objectweb.asm.Opcodes.INVOKESTATIC;
 import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
 @RestController
@@ -63,7 +58,6 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
             JsonParser parser = jsonfactory.createParser(source);
             Assembler assembler = new Assembler();
             codegen(parser, assembler);
-            addMainMethod(assembler);
             assembler.classCodeEnd(getOutputFile(argsList).getPath());
             parser.close();
         } catch (Exception e) {
@@ -145,20 +139,6 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
             }
         }
         return decls;
-    }
-
-    private void addMainMethod(final Assembler assembler) {
-        final String[] classAndMethodName = IdrisToJavaNameConverter.idrisClassMethodName("{runMain_0}").split(",");
-        assembler.createMethod(ACC_PUBLIC + ACC_STATIC, "main/Main", "main", "([Ljava/lang/String;)V", null, null,
-            emptyList(), emptyList());
-        assembler.methodCodeStart();
-        assembler.aload(0);
-        assembler.invokeMethod(INVOKESTATIC, "io/github/mmhelloworld/idrisjvm/runtime/Runtime", "setProgramArgs", "([Ljava/lang/String;)V", false);
-        assembler.invokeMethod(INVOKESTATIC, classAndMethodName[0], classAndMethodName[1], "()Lio/github/mmhelloworld/idrisjvm/runtime/Thunk;", false);
-        assembler.pop();
-        assembler.asmReturn();
-        assembler.maxStackAndLocal(-1, -1);
-        assembler.methodCodeEnd();
     }
 
     private File getSourceFile(final List<String> args) {

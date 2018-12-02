@@ -166,10 +166,15 @@ mutual
   cgBody ret (SApp False f args) = cgSApp ret False f args
 
   cgBody ret (SLet i v sc) = do
-    locTys <- GetFunctionLocTypes
-    let iTy = getLocTy locTys i
-    cgBody (\vTy => storeVar vTy iTy i) v
-    cgBody ret sc
+      locTys <- GetFunctionLocTypes
+      let iTy = getLocTy locTys i
+      assign iTy
+      cgBody ret sc
+    where
+      assign : InferredType -> Asm ()
+      assign iTy = case v of
+                     SNothing => do Aconstnull; storeVar inferredObjectType iTy i
+                     _ => cgBody (\vTy => storeVar vTy iTy i) v
 
   cgBody ret (SUpdate _ e) = cgBody ret e
 
@@ -240,7 +245,9 @@ mutual
 
   cgBody ret (SOp op args) = cgOp ret op args
 
-  cgBody ret SNothing = do Aconstnull; ret inferredObjectType
+  cgBody ret SNothing = do
+    invokeError "Unexpected case encountered. This could be due to non-exhaustive patterns."
+    ret inferredObjectType
 
   cgBody ret (SError x) = do invokeError (show x); ret IUnknown
 

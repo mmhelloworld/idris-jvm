@@ -68,14 +68,18 @@ public class Util {
     }
 
     public static boolean equals(Object a, Object b) {
-        if (a.getClass().isAssignableFrom(b.getClass())) {
-            return Objects.equals(a, b);
-        } else if (a instanceof BigInteger && b instanceof Integer) {
-            return a.equals(BigInteger.valueOf((Integer) b));
-        } else if (a instanceof Integer && b instanceof BigInteger) {
-            return b.equals(BigInteger.valueOf((Integer) a));
+        boolean isEqual = Objects.equals(a, b);
+
+        if (isEqual) {
+            return true;
         } else {
-            return Objects.equals(a, b);
+            if (a instanceof BigInteger && b instanceof Integer) {
+                return Objects.equals(a, BigInteger.valueOf((Integer) b));
+            } else if (a instanceof Integer && b instanceof BigInteger) {
+                return Objects.equals(b, BigInteger.valueOf((Integer) a));
+            } else {
+                return false;
+            }
         }
     }
 

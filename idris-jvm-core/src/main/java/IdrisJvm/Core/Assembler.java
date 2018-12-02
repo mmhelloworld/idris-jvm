@@ -261,7 +261,7 @@ public class Assembler {
         cws.entrySet().parallelStream().forEach(e -> {
             String className = e.getKey();
             ClassWriter classWriter = e.getValue();
-            LOGGER.info(" writing class file {} in directory {}", className, outputClassFileDir);
+            LOGGER.info("Writing class file {} in directory {}", className, outputClassFileDir);
             File outFile = new File(outputClassFileDir, className + ".class");
             new File(outFile.getParent()).mkdirs();
             try (OutputStream out = new FileOutputStream(outFile)) {

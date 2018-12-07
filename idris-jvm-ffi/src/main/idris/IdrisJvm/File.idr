@@ -102,7 +102,6 @@ closeFile (MkFile file _) = Channel.close file
 closeFile _ = pure ()
 
 export
--- Not possible in JVM
 changeDir : String -> JVM_IO Bool
 changeDir = invokeStatic RuntimeClass "changeDir" (String -> JVM_IO Bool)
 

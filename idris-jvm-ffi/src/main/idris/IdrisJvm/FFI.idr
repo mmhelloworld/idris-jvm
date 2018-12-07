@@ -68,7 +68,8 @@ mutual
       JVM_IntBits32 : JVM_IntTypes Bits32
       JVM_IntBits64 : JVM_IntTypes Bits64
 
-  data JFloat = Float Double
+  data JFloat : Type where
+      Float : (d : Double) -> JFloat
 
   ||| Supported JVM function types
   data JVM_FnTypes : Type -> Type where
@@ -109,6 +110,8 @@ Show JFloat where
   show (Float d) = show d
 
 %used MkJVMFunctionalObject lambdaFunctionTy
+
+%used Float d
 
 %inline
 javacall : (fname : JVM_FfiFn) -> (ty : Type) ->

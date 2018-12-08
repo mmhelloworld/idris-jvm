@@ -597,3 +597,8 @@ unwrapExportedIO = do
   cgCast inferredObjectType lastArgTy
   InvokeMethod InvokeStatic "main/Main" "call__IO" desc False
   InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
+
+aload : Int -> Asm ()
+aload index = do
+  types <- GetFunctionLocTypes
+  opWithWordSize types Aload (Loc index)

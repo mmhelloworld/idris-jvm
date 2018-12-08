@@ -120,7 +120,7 @@ mutual
   cgIfElseIfCase ifIndex ret cgBody e nextLabel label ifExpr (SConstCase _ expr) = do
     LabelStart label
     addFrame
-    Aload $ locIndex e
+    aload $ locIndex e
     ifExpr
     InvokeMethod InvokeStatic utilClass "equals" "(Ljava/lang/Object;Ljava/lang/Object;)Z" False
     Ifeq nextLabel
@@ -164,7 +164,7 @@ mutual
       project : Nat -> Nat -> Asm ()
       project i v = do
         idrisObjectProperty idrisObject (cast i)
-        Astore $ cast v
+        storeVarWithWordSize Astore (Loc $ cast v)
 
       argsLength : Nat
       argsLength = length args
@@ -248,7 +248,7 @@ mutual
 
   switchConstructorExpr : Int -> Asm ()
   switchConstructorExpr varIndex = do
-   Aload varIndex
+   aload varIndex
    InvokeMethod InvokeStatic (rtClass "Runtime") "constructorIndex" "(Ljava/lang/Object;)I" False
 
   switchIntExpr : LVar -> Asm ()
@@ -319,21 +319,21 @@ cgIfElse ret cgBody e condition valueStore case1 case2 = do
   where
     store : Int -> Asm ()
     store loc = do
-       Aload $ locIndex e
-       Astore loc
+       aload $ locIndex e
+       storeVarWithWordSize Astore (Loc loc)
 
 cgIfNonNull : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> LVar -> Int -> SExp -> SExp -> Asm ()
 cgIfNonNull ret cgBody e loc ifExp elseExp = cgIfElse ret cgBody e condition (Just loc) ifExp elseExp where
   condition : Label -> Asm ()
   condition label = do
-    Aload $ locIndex e
+    aload $ locIndex e
     Ifnull label
 
 cgIfNull : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()
 cgIfNull ret cgBody e ifExp elseExp = cgIfElse ret cgBody e condition Nothing ifExp elseExp where
   condition : Label -> Asm ()
   condition label = do
-    Aload $ locIndex e
+    aload $ locIndex e
     Ifnonnull label
 
 cgIfTrueElse : (InferredType -> Asm ()) -> ((InferredType -> Asm ()) -> SExp -> Asm ()) -> LVar -> SExp -> SExp -> Asm ()

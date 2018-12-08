@@ -428,7 +428,7 @@ mutual
         let value = last rest
         let indices = init rest
         let valueDesc = fdescFieldDescriptor (fst value)
-        Aload $ locIndex arr
+        aload $ locIndex arr
         Checkcast $ refTyClassName (fdescRefDescriptor arrFDesc)
         idrisToJavaLoadArray $ (\(fdesc, lvar) => (fdescFieldDescriptor fdesc, lvar)) <$> indices
         idrisToJava [(valueDesc, snd value)]
@@ -439,7 +439,7 @@ mutual
 
     cgForeign JGetArray = case args of
       ((arrFDesc, arr) :: indices@(index :: restIndices)) => do
-        Aload $ locIndex arr
+        aload $ locIndex arr
         Checkcast $ refTyClassName (fdescRefDescriptor arrFDesc)
         idrisToJavaLoadArray $ (\(fdesc, lvar) => (fdescFieldDescriptor fdesc, lvar)) <$> indices
         let returnDesc = fdescTypeDescriptor returns
@@ -449,7 +449,7 @@ mutual
 
     cgForeign JArrayLength = case args of
       [(arrFDesc, arr)] => do
-        Aload $ locIndex arr
+        aload $ locIndex arr
         Checkcast $ refTyClassName (fdescRefDescriptor arrFDesc)
         Arraylength
         ret IInt
@@ -686,13 +686,15 @@ mutual
       methBody nLocVars =
             if shouldEliminateTco
             then do
+              types <- GetFunctionLocTypes
               Iconst 1
-              Istore tailRecVarIndex
+              let tailRecVar = Loc tailRecVarIndex
+              opWithWordSize types Istore tailRecVar
               CreateLabel tailRecStartLabelName
               LabelStart tailRecStartLabelName
               UpdateShouldDescribeFrame True
               addFrame
-              Iload tailRecVarIndex
+              opWithWordSize types Iload tailRecVar
               CreateLabel tailRecEndLabelName
               Ifeq tailRecEndLabelName
               cgBody ret def

@@ -475,7 +475,7 @@ createJvmFunctionalObject idrisFunction caller@(MkJMethodName callerCname _) int
   let implMethodReturnDesc = fdescFunctionRetDescriptor lambdaTy
   let interfaceMethodReturnDesc = fdescFunctionRetDescriptor interfaceFnTy
   let lambdaCode = \implMethodName => Subroutine $ createWrapperForJavaLambda callerCname implMethodName implMethodArgDescs implMethodReturnDesc
-  Aload $ locIndex idrisFunction
+  aload $ locIndex idrisFunction
   createLambdaForJavaFunction caller interfaceMethod interfaceMethodArgDescs interfaceMethodReturnDesc implMethodArgDescs implMethodReturnDesc lambdaCode
 
 createWrapperForThunkParLambda : JMethodName -> ClassName -> MethodName -> Nat -> Asm ()

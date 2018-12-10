@@ -169,7 +169,7 @@ readFile pathStr = assert_total $ do
       Right Nothing => pure $ Left . believe_me $ !(unableToReadFile pathStr)
       Right (Just lines) => do
         joiningCollector <- (collectorsClass <.!> "joining(java/lang/CharSequence)") $ believe_me !(lineSeparator)
-        pure . Right $ believe_me !((streamClass <.!> "collect") lines joiningCollector)
+        pure . Right $ believe_me !((streamClass <.!> "collect(java/util/stream/Collector)") lines joiningCollector)
 
 export
 writeFile : String -> String -> JVM_IO (Either FileError ())

@@ -3,7 +3,7 @@ module IdrisJvm.JvmImport
 import System
 import public IdrisJvm.IO
 
-%dynamic "libc"
+%dynamic "libc", "msvcrt"
 
 %access public export
 
@@ -153,7 +153,7 @@ jvmImport cmd importList = do
     system cmd
     Right str <- readFile ".idrisjvmtypes"
         | Left err => pure (Error $ show err)
-    let errOrffiDescs = sequence $ parseJvmOutput <$> lines str
+    let errOrffiDescs = sequence $ parseJvmOutput <$> (filter (not . (== "")) $ lines str)
     pure $ either Error Provide errOrffiDescs
   where
 

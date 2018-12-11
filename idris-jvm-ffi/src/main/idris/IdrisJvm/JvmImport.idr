@@ -153,7 +153,7 @@ jvmImport cmd importList = do
     system cmd
     Right str <- readFile ".idrisjvmtypes"
         | Left err => pure (Error $ show err)
-    let errOrffiDescs = sequence $ parseJvmOutput <$> (filter (not . (== "")) $ lines str)
+    let errOrffiDescs = sequence $ parseJvmOutput <$> (filter (/= "") $ lines str)
     pure $ either Error Provide errOrffiDescs
   where
 
@@ -175,7 +175,7 @@ jvmImport cmd importList = do
       | _ = Left $ "Unable to parse invocation type: " ++ invStr
 
     parseJvmOutput : String -> Either String JvmFfiDesc
-    parseJvmOutput desc = case filter (not . (== "")) $ Strings.split (== ',') desc of
+    parseJvmOutput desc = case filter (/= "") $ Strings.split (== ',') desc of
       "c" :: returns :: args => do
         jtype <- parseEType returns
         args <- parseArgs args
@@ -438,7 +438,7 @@ j ffiDescs safety ty fname = do
         ". Did you forget to import?"]
 
       argTypes : Elab (String, Maybe (List EType))
-      argTypes = case filter (not . (== "")) $ Strings.split (== '(') fname of
+      argTypes = case filter (/= "") $ Strings.split (== '(') fname of
         [methodName] => pure (methodName, Nothing)
         methodName :: rest :: _ => case Strings.split (== ')') rest of
           "" :: _ => pure (methodName, Just [])

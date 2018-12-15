@@ -587,17 +587,6 @@ assign lhs rhs = do
       storeVar lhsTy lhsTy lhs
       go types lhsRest rhsRest
 
-unwrapExportedIO : Asm ()
-unwrapExportedIO = do
-  let fname = MkJMethodName "main/Main" "call__IO"
-  (retTy, locTys) <- getFunctionType fname
-  let argTys = getLocTy locTys <$> the (List LVar) [Loc 0, Loc 1, Loc 2]
-  let (_ :: _ :: lastArgTy :: _) = argTys
-  let desc = getInferredFunDesc argTys retTy
-  cgCast inferredObjectType lastArgTy
-  InvokeMethod InvokeStatic "main/Main" "call__IO" desc False
-  InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
-
 aload : Int -> Asm ()
 aload index = do
   types <- GetFunctionLocTypes

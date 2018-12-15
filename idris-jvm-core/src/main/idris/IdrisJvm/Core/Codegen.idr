@@ -13,7 +13,7 @@ import Data.SortedMap
 
 %access public export
 
-generateDependencyMethods : Assembler -> AsmState -> JVM_IO (SortedMap JMethodName (InferredType, InferredTypeStore))
+generateDependencyMethods : Assembler -> AsmState -> JVM_IO (SortedMap JMethodName InferredFunctionType)
 generateDependencyMethods assembler state@(MkAsmState [] _ _ _) = pure (functionTypes state)
 generateDependencyMethods assembler state@(MkAsmState (subroutine :: restSubroutines) _ _ _) = do
   let asmState = record { subroutines = [] } state
@@ -21,8 +21,8 @@ generateDependencyMethods assembler state@(MkAsmState (subroutine :: restSubrout
   let nextState = record { subroutines $= (restSubroutines ++) } newState
   generateDependencyMethods assembler nextState
 
-generateMethod : Assembler -> SortedMap JMethodName (InferredType, InferredTypeStore) -> SDecl
-              -> JVM_IO (SortedMap JMethodName (InferredType, InferredTypeStore))
+generateMethod : Assembler -> SortedMap JMethodName InferredFunctionType -> SDecl
+              -> JVM_IO (SortedMap JMethodName InferredFunctionType)
 generateMethod assembler functionTypes (SFun name args locs def) = do
   let jmethodName = jname name
   let fname = jmethName jmethodName
@@ -59,21 +59,23 @@ splitLargeFunctions decls = decls >>= f where
   f decl@(SFun "{APPLY_0}" args n (SChkCase var cases)) = splitApplyFunction "{APPLY_0}" args n var cases
   f decl = [decl]
 
-inferFuns : SortedMap JMethodName (InferredType, InferredTypeStore)
+inferFuns : SortedMap JMethodName InferredFunctionType
          -> List SDecl
-         -> SortedMap JMethodName (InferredType, InferredTypeStore)
+         -> SortedMap JMethodName InferredFunctionType
 inferFuns initial decls = go SortedMap.empty decls where
-    go : SortedMap JMethodName (InferredType, InferredTypeStore)
+    go : SortedMap JMethodName InferredFunctionType
       -> List SDecl
-      -> SortedMap JMethodName (InferredType, InferredTypeStore)
+      -> SortedMap JMethodName InferredFunctionType
     go acc [] = acc
     go acc (decl :: rest) =
-        let (MkInferredFunctionType fname retTy argTys) = inferFun initial decl
-            newAcc = SortedMap.insert fname (retTy, argTys) acc
+        let ftype = inferFun initial decl
+            newAcc = SortedMap.insert (functionName ftype) ftype acc
         in go newAcc rest
 
-createMainMethod : String -> JMethodName -> Asm ()
-createMainMethod signature (MkJMethodName className methodName) = do
+createMainMethod : Asm ()
+createMainMethod = do
+    let signature = "()Lio/github/mmhelloworld/idrisjvm/runtime/Thunk;"
+    let MkJMethodName className methodName = jname "{runMain_0}"
     CreateMethod [Public, Static] className "main" "([Ljava/lang/String;)V" Nothing Nothing [] []
     MethodCodeStart
     Aload 0
@@ -92,22 +94,21 @@ generateMethods' assembler decls exports = do
     types <- generateMethodsWithTypes functionTypesByName smallDecls
     generateExportsWithTypes types exports
     let asmState = MkAsmState [] types SortedMap.empty IUnknown
-    (_, _) <- runAsm asmState assembler
-        (createMainMethod "()Lio/github/mmhelloworld/idrisjvm/runtime/Thunk;" (jname "{runMain_0}"))
+    _ <- runAsm asmState assembler createMainMethod
     pure ()
   where
-    generateMethodsWithTypes : SortedMap JMethodName (InferredType, InferredTypeStore) -> List SDecl
-                            -> JVM_IO (SortedMap JMethodName (InferredType, InferredTypeStore))
+    generateMethodsWithTypes : SortedMap JMethodName InferredFunctionType -> List SDecl
+                            -> JVM_IO (SortedMap JMethodName InferredFunctionType)
     generateMethodsWithTypes types [] = pure types
     generateMethodsWithTypes types (decl :: rest) = do
         newTypes <- generateMethod assembler types decl
         generateMethodsWithTypes newTypes rest
 
-    generateExportsWithTypes : SortedMap JMethodName (InferredType, InferredTypeStore) -> List ExportIFace -> JVM_IO ()
+    generateExportsWithTypes : SortedMap JMethodName InferredFunctionType -> List ExportIFace -> JVM_IO ()
     generateExportsWithTypes types [] = pure ()
     generateExportsWithTypes types (exportIface :: exports) = do
         let asmState = MkAsmState [] types SortedMap.empty IUnknown
-        (_, _) <- runAsm asmState assembler $ exportCode exportIface
+        (_, _) <- runAsm asmState assembler $ exportCode types exportIface
         generateExportsWithTypes types exports
 
 generateMethods : Assembler -> List SDecl -> List ExportIFace -> JVM_IO ()

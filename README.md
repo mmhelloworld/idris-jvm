@@ -2,7 +2,7 @@
 
 [![Join the chat at https://gitter.im/mmhelloworld/idris-jvm](https://badges.gitter.im/mmhelloworld/idris-jvm.svg)](https://gitter.im/mmhelloworld/idris-jvm?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Build Status](https://travis-ci.org/mmhelloworld/idris-jvm.svg?branch=master)](https://travis-ci.org/mmhelloworld/idris-jvm)
 
-JVM bytecode backend for Idris
+JVM bytecode back end for Idris
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ JVM bytecode backend for Idris
 2. Java 8
 
 ## Install
-1. Download and extract JVM bytecode backend from [here](https://github.com/mmhelloworld/idris-jvm/releases). Make sure to download the release corresponding to your Idris version.
+1. Download and extract JVM bytecode back end from [here](https://github.com/mmhelloworld/idris-jvm/releases). Make sure to download the release corresponding to your Idris version.
 1. From the extracted directory, run `idris-jvm/bin/install` to install Idris packages for idris-jvm.
 1. Add `<IDRIS_JVM_EXTRACTED_DIRECTORY>/idris-jvm/codegen/bin` to `PATH`.
 

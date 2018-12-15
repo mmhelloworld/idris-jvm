@@ -127,7 +127,7 @@ toJbsmArg (BsmArgHandle handle) = do
 record AsmState where
   constructor MkAsmState
   subroutines : List (Asm ())
-  functionTypes : SortedMap JMethodName (InferredType, InferredTypeStore)
+  functionTypes : SortedMap JMethodName InferredFunctionType
   functionLocTypes : InferredTypeStore
   functionRetType : InferredType
 

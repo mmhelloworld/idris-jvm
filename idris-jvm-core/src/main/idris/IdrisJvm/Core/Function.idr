@@ -502,52 +502,53 @@ mutual
         InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
     ret targetRetTy
 
-  exportCode : ExportIFace -> Asm ()
-  exportCode (MkExportIFace "IdrisJvm.FFI.FFI_JVM" exportedClassName exportItems) = do
+  exportCode : SortedMap JMethodName InferredFunctionType -> ExportIFace -> Asm ()
+  exportCode types (MkExportIFace "IdrisJvm.FFI.FFI_JVM" exportedClassName exportItems) = do
       let (cls, parent, intf) = parseExportedClassName exportedClassName
       let (classAnns, otherExports) = parseClassAnnotations exportItems
       CreateClass ComputeMaxs
       ClassCodeStart 52 Public cls Nothing parent intf classAnns
       SourceInfo "IdrisGenerated.idr"
       when (not $ hasConstructorExport exportItems) $ defaultConstructor cls parent
-      sequence_ $ (cgExport cls parent) <$> otherExports
-  exportCode e = jerror $ "Unsupported Export: " ++ show e
+      sequence_ $ (cgExport types cls parent) <$> otherExports
+  exportCode _ e = jerror $ "Unsupported Export: " ++ show e
 
-  cgExport : ClassName -> ClassName -> Export -> Asm ()
-  cgExport _ _ (ExportData (FStr exportedType)) = createClassForIdrisType exportedType
+  cgExport : SortedMap JMethodName InferredFunctionType -> ClassName -> ClassName -> Export -> Asm ()
+  cgExport _ _ _ (ExportData (FStr exportedType)) = createClassForIdrisType exportedType
 
-  cgExport cname _ (ExportFun _ (FApp "ExportInstanceField" [FStr fieldName]) typeDesc _)
+  cgExport _ cname _ (ExportFun _ (FApp "ExportInstanceField" [FStr fieldName]) typeDesc _)
     = createField [Public] cname fieldName typeDesc
 
-  cgExport cname _ (ExportFun _ (FApp "ExportStaticField" [FStr fieldName]) typeDesc _)
+  cgExport _ cname _ (ExportFun _ (FApp "ExportStaticField" [FStr fieldName]) typeDesc _)
     = createField [Public, Static] cname fieldName typeDesc
 
-  cgExport cname parent (ExportFun n (FApp "Super" [FStr superMethodName]) returns args)
-    = exportFun cname (jmethName (jname n)) parent superMethodName ExportCallSuper parent returns args [] []
+  cgExport types cname parent (ExportFun n (FApp "Super" [FStr superMethodName]) returns args)
+    = exportFun types cname (jmethName (jname n)) parent superMethodName ExportCallSuper parent returns args [] []
 
-  cgExport cname parent (ExportFun n (FApp "ExportStatic" [FStr mname]) returns args)
+  cgExport types cname parent (ExportFun n (FApp "ExportStatic" [FStr mname]) returns args)
     = let MkJMethodName sourceCname sourceMname = jname n
-      in exportFun cname mname sourceCname sourceMname ExportCallStatic parent returns args [] []
+      in exportFun types cname mname sourceCname sourceMname ExportCallStatic parent returns args [] []
 
-  cgExport cname parent (ExportFun n (FCon "ExportDefault") returns args)
+  cgExport types cname parent (ExportFun n (FCon "ExportDefault") returns args)
     = let MkJMethodName sourceCname sourceMname = jname n
-      in exportFun cname sourceMname sourceCname sourceMname ExportCallInstance parent returns args [] []
+      in exportFun types cname sourceMname sourceCname sourceMname ExportCallInstance parent returns args [] []
 
-  cgExport cname parent (ExportFun n (FCon "Constructor") returns args)
+  cgExport types cname parent (ExportFun n (FCon "Constructor") returns args)
     = let MkJMethodName sourceCname sourceMname = jname n
-      in exportFun cname "<init>" sourceCname sourceMname ExportCallConstructor parent returns args [] []
+      in exportFun types cname "<init>" sourceCname sourceMname ExportCallConstructor parent returns args [] []
 
-  cgExport cname parent (ExportFun n (FApp "ExportInstance" [FStr mname]) returns args)
+  cgExport types cname parent (ExportFun n (FApp "ExportInstance" [FStr mname]) returns args)
     = let MkJMethodName sourceCname sourceMname = jname n
-      in exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args [] []
+      in exportFun types cname mname sourceCname sourceMname ExportCallInstance parent returns args [] []
 
-  cgExport cname parent (ExportFun n (FApp "ExportInstanceWithAnn" [FStr mname, FApp "::" annDescs, paramAnnDescs]) returns args)
+  cgExport types cname parent
+      (ExportFun n (FApp "ExportInstanceWithAnn" [FStr mname, FApp "::" annDescs, paramAnnDescs]) returns args)
     = let MkJMethodName sourceCname sourceMname = jname n
           anns = join $ parseAnnotations <$> annDescs
           paramAnns = parseParamAnnotations paramAnnDescs
-      in exportFun cname mname sourceCname sourceMname ExportCallInstance parent returns args anns paramAnns
+      in exportFun types cname mname sourceCname sourceMname ExportCallInstance parent returns args anns paramAnns
 
-  cgExport _ _ exportDef = jerror $ "Unsupported export definition: " ++ show exportDef
+  cgExport _ _ _ exportDef = jerror $ "Unsupported export definition: " ++ show exportDef
 
   parseClassAnnotations : List Export -> (List Annotation, List Export)
   parseClassAnnotations exports@(ExportFun n (FApp "Anns" desc) _ _:: rest) =
@@ -566,66 +567,92 @@ mutual
             cgCast inferredObjectType argTy
         Nothing => loadVar argTys (getLocTy argTys loc) argTy loc
 
-  exportFun : ClassName
-               -> MethodName
-               -> ClassName
-               -> MethodName
-               -> ExportCall
-               -> ClassName
-               -> FDesc
-               -> List FDesc
-               -> List Annotation
-               -> List (List Annotation)
-               -> Asm ()
-  exportFun targetCname targetMethName sourceCname sourceMname exportCall parent returns args anns paramAnns = do
-    let isStatic = exportCall == ExportCallStatic
-    let argsLength = length args
-    let accessMods = if isStatic then [Public, Static] else [Public]
-    let argStartIndex = the Int $ if isStatic then 0 else 1 -- drop `this` for instance methods
-    let isSuperExport = exportCall == ExportCallSuper
-    let isConstructor = exportCall == ExportCallConstructor
-    let isIo = isExportIO returns
-    let argDescs = fdescFieldDescriptor <$> (if isStatic then args else drop 1 args) -- for instance method, drop `this`
-    let returnDesc = if isConstructor then VoidDescriptor else fdescTypeDescriptor returns
-    let mdesc = asmMethodDesc $ MkMethodDescriptor argDescs returnDesc
-    let argIndices = intRange argStartIndex (cast argsLength)
-    let exportedArgs = filter (\(index, arg) => isExportedDesc arg) $ List.zip argIndices argDescs
-    let targetArgTys = SortedMap.fromList $ List.zip argIndices $ fieldTypeDescriptorToInferredType <$> argDescs
-    let f = \toTy, index => loadExportFunArgs exportedArgs targetArgTys toTy index
-    (sourceRetTy, sourceLocTyStore) <- getFunctionType (MkJMethodName sourceCname sourceMname)
-    let sourceLocTys = values sourceLocTyStore
-    let sourceArgTys = List.take (length argDescs) $ (if isStatic then sourceLocTys else drop 1 sourceLocTys)
-    let loadArgs = sequence_ $ List.zipWith f sourceArgTys argIndices
-    let invType = if isSuperExport then InvokeSpecial else InvokeStatic
-    let sourceMdesc = if isSuperExport
-                          then asmMethodDesc $ MkMethodDescriptor argDescs returnDesc
-                          else getInferredFunDesc (take argsLength $ values sourceLocTyStore) sourceRetTy
-
-    CreateMethod accessMods targetCname targetMethName mdesc Nothing Nothing anns paramAnns
-    MethodCodeStart
-    when isConstructor $ do -- Call matching super Constructor
-      Aload 0 -- load "this"
+  exportFun : SortedMap JMethodName InferredFunctionType
+           -> ClassName
+           -> MethodName
+           -> ClassName
+           -> MethodName
+           -> ExportCall
+           -> ClassName
+           -> FDesc
+           -> List FDesc
+           -> List Annotation
+           -> List (List Annotation)
+           -> Asm ()
+  exportFun types targetCname targetMethName sourceCname sourceMname exportCall parent returns args anns paramAnns = do
+      let isStatic = exportCall == ExportCallStatic
+      let sourceMethodName = MkJMethodName sourceCname sourceMname
+      let argsLength = length args
+      let sourceMethodArity = maybe argsLength arity (lookup sourceMethodName types)
+      let accessMods = if isStatic then [Public, Static] else [Public]
+      let argStartIndex = the Int $ if isStatic then 0 else 1 -- drop `this` for instance methods
+      let isSuperExport = exportCall == ExportCallSuper
+      let isConstructor = exportCall == ExportCallConstructor
+      let isIo = isExportIO returns
+      let argDescs = fdescFieldDescriptor <$> (if isStatic then args else drop 1 args) -- for instance method, drop `this`
+      let returnDesc = if isConstructor then VoidDescriptor else fdescTypeDescriptor returns
+      let mdesc = asmMethodDesc $ MkMethodDescriptor argDescs returnDesc
+      let argIndices = intRange argStartIndex (cast argsLength)
+      let exportedArgs = filter (\(index, arg) => isExportedDesc arg) $ List.zip argIndices argDescs
+      let targetArgTys = SortedMap.fromList $ List.zip argIndices $ fieldTypeDescriptorToInferredType <$> argDescs
+      let f = \toTy, index => loadExportFunArgs exportedArgs targetArgTys toTy index
+      (sourceRetTy, sourceLocTyStore) <- getFunctionType (MkJMethodName sourceCname sourceMname)
+      let sourceLocTys = values sourceLocTyStore
+      let sourceArgTys = List.take (length argDescs) $ (if isStatic then sourceLocTys else drop 1 sourceLocTys)
+      let loadArgs = sequence_ $ List.zipWith f sourceArgTys argIndices
+      let invType = if isSuperExport then InvokeSpecial else InvokeStatic
+      let shouldApplyCallIo = argsLength == sourceMethodArity
+      let sourceMdesc = if isSuperExport
+                            then asmMethodDesc $ MkMethodDescriptor argDescs returnDesc
+                            else getInferredFunDesc (take sourceMethodArity $ values sourceLocTyStore) sourceRetTy
+      let nullAdditionalArgs = the (Asm ()) $ case isLTE argsLength sourceMethodArity of
+          Yes smaller =>
+              let diff = sourceMethodArity - argsLength
+              in case diff of
+                   Z => pure ()
+                   n => sequence_ $ replicate n Aconstnull
+          No _ => pure ()
+      CreateMethod accessMods targetCname targetMethName mdesc Nothing Nothing anns paramAnns
+      MethodCodeStart
+      when isConstructor $ do -- Call matching super Constructor
+        Aload 0 -- load "this"
+        loadArgs
+        InvokeMethod InvokeSpecial parent "<init>" mdesc False
+      when (not isSuperExport && isIo && shouldApplyCallIo) $ do
+        Aconstnull -- Setup the 2 null args for "call__IO"
+        Dup
+      when (not isStatic) $ Aload 0 -- load "this"
       loadArgs
-      InvokeMethod InvokeSpecial parent "<init>" mdesc False
-    when (not isSuperExport && isIo) $ do
-      Aconstnull -- Setup the 2 null args for "call__IO"
-      Dup
-    when (not isStatic) $ Aload 0 -- load "this"
-    loadArgs
-    InvokeMethod invType sourceCname sourceMname sourceMdesc False
-    let isPossibleThunk = isThunk sourceRetTy || isObject sourceRetTy
-    when (not isSuperExport && isPossibleThunk) $
-        InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
-    when (not isSuperExport && isIo) unwrapExportedIO
-    case returnDesc of
-        (FieldDescriptor (FieldTyDescReference (IdrisExportDesc cname))) =>
-            let desc = "(Ljava/lang/Object;)L" ++ cname ++ ";"
-            in InvokeMethod InvokeStatic cname "create" desc False
-        _ => when (not isSuperExport && (isPossibleThunk || isIo)) $
-                cgCast inferredObjectType (typeDescriptorToInferredType returnDesc)
-    javaReturn returnDesc
-    MaxStackAndLocal (-1) (-1)
-    MethodCodeEnd
+      nullAdditionalArgs
+      InvokeMethod invType sourceCname sourceMname sourceMdesc False
+      let isPossibleThunk = isThunk sourceRetTy || isObject sourceRetTy
+      when (not isSuperExport && isPossibleThunk) $
+          InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
+      when (not isSuperExport && isIo) $ unwrapExportedIO sourceRetTy shouldApplyCallIo
+      case returnDesc of
+          (FieldDescriptor (FieldTyDescReference (IdrisExportDesc cname))) =>
+              let desc = "(Ljava/lang/Object;)L" ++ cname ++ ";"
+              in InvokeMethod InvokeStatic cname "create" desc False
+          _ => when (not isSuperExport && (isPossibleThunk || isIo)) $
+                  cgCast inferredObjectType (typeDescriptorToInferredType returnDesc)
+      javaReturn returnDesc
+      MaxStackAndLocal (-1) (-1)
+      MethodCodeEnd
+    where
+      unwrapExportedIO : InferredType -> (shouldApplyCallIo: Bool) -> Asm ()
+      unwrapExportedIO sourceRetTy shouldApplyCallIo =
+        if shouldApplyCallIo then do
+          let fname = MkJMethodName "main/Main" "call__IO"
+          (retTy, locTys) <- getFunctionType fname
+          let argTys = getLocTy locTys <$> the (List LVar) [Loc 0, Loc 1, Loc 2]
+          let (_ :: _ :: lastArgTy :: _) = argTys
+          let desc = getInferredFunDesc argTys retTy
+          cgCast sourceRetTy lastArgTy
+          InvokeMethod InvokeStatic "main/Main" "call__IO" desc False
+          InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
+        else do
+          cgCast sourceRetTy inferredObjectType
+          InvokeMethod InvokeStatic (rtClass "Runtime") "unwrap" (sig 1) False
 
   cgFun : List Access -> String -> ClassName -> MethodName -> List String -> Int -> SExp -> Asm ()
   cgFun access idrisName clsName fname args locs def = do
@@ -633,7 +660,8 @@ mutual
       UpdateFunctionName jMethodName
       functionTypes <- GetFunctionTypes
       let (retTy, types, nLocVars) = calculateFunctionType jMethodName functionTypes
-      UpdateFunctionTypes $ SortedMap.insert jMethodName (retTy, types) functionTypes
+      UpdateFunctionTypes $ SortedMap.insert jMethodName
+        (MkInferredFunctionType jMethodName retTy types arity) functionTypes
       UpdateFunctionLocTypes types
       UpdateFunctionRetType retTy
       UpdateLocalVarCount $ cast (if shouldEliminateTco then nLocVars + 2 else nLocVars + 1)
@@ -655,8 +683,11 @@ mutual
       MaxStackAndLocal (-1) (-1)
       MethodCodeEnd
     where
+      arity : Nat
+      arity = length args
+
       nArgs : Int
-      nArgs = cast $ length args
+      nArgs = cast arity
 
       getLocalVarCount : InferredTypeStore -> Int
       getLocalVarCount locTys = case keys locTys of
@@ -667,10 +698,12 @@ mutual
       shouldEliminateTco = any (== idrisName) (findTailCallApps [] def)
 
       calculateFunctionType : JMethodName
-                           -> SortedMap JMethodName (InferredType, InferredTypeStore)
+                           -> SortedMap JMethodName InferredFunctionType
                            -> (InferredType, InferredTypeStore, Int)
       calculateFunctionType fname types =
-        let (retTy, localTys) = fromMaybe (IUnknown, SortedMap.empty) $ lookup fname types
+        let MkInferredFunctionType _ retTy localTys _ =
+                fromMaybe (MkInferredFunctionType fname IUnknown SortedMap.empty arity)
+                  $ lookup fname types
             nLocVars = getLocalVarCount localTys
             resultVarIndex = nLocVars
             tailRecVarIndex = nLocVars + 1

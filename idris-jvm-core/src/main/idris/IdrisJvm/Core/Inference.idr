@@ -356,7 +356,7 @@ mutual
         go types lv 0 = addType types lv inferredObjectType
         go types lv n = go (addType types (lv + n) inferredObjectType) lv (pred n)
 
-    inferAlt :InferenceConfig -> InferredTypeStore -> SAlt -> (InferredType, InferredTypeStore)
+    inferAlt : InferenceConfig -> InferredTypeStore -> SAlt -> (InferredType, InferredTypeStore)
     inferAlt config types (SConstCase _ expr) = inferExp config types expr
     inferAlt config types (SDefaultCase expr) = inferExp config types expr
     inferAlt config types (SConCase lv _ _ args expr) = inferAltConCase config types lv args expr
@@ -386,13 +386,13 @@ mutual
           if calledFunctionName == functionName config then
             (IUnknown, acc)
           else maybe (Ref thunkClass, acc) inferArgs $ lookup calledFunctionName (functionTypes config) where
-             inferArgs : (InferredType, InferredTypeStore) -> (InferredType, InferredTypeStore)
-             inferArgs (_, argTys) = (Ref thunkClass, inferFunctionAppArgs argTys acc args)
+             inferArgs : InferredFunctionType -> (InferredType, InferredTypeStore)
+             inferArgs fty = (Ref thunkClass, inferFunctionAppArgs (locsType fty) acc args)
 
     inferExp config acc (SApp False f args) =
       maybe (inferredObjectType, acc) inferArgs $ lookup (jname f) (functionTypes config) where
-        inferArgs : (InferredType, InferredTypeStore) -> (InferredType, InferredTypeStore)
-        inferArgs (retTy, argTys) = (retTy, inferFunctionAppArgs argTys acc args)
+        inferArgs : InferredFunctionType -> (InferredType, InferredTypeStore)
+        inferArgs fty = (returnType fty, inferFunctionAppArgs (locsType fty) acc args)
 
     inferExp config acc (SLet (Loc i) v sc) =
         let (vty, nacc) = inferExp config acc v
@@ -465,10 +465,10 @@ mutual
                 returnDesc = fdescTypeDescriptor returns
             in (typeDescriptorToInferredType returnDesc, inferForeignArgDescs acc argsWithTypes)
 
-inferFun : SortedMap JMethodName (InferredType, InferredTypeStore) -> SDecl -> InferredFunctionType
+inferFun : SortedMap JMethodName InferredFunctionType -> SDecl -> InferredFunctionType
 inferFun types (SFun name args locs def) =
   let jmethodName = jname name
       config = MkInferenceConfig jmethodName types
-      initialArgsTypes = fromMaybe SortedMap.empty $ snd <$> lookup jmethodName types
-      (returnType, argsType) = inferExp config initialArgsTypes def
-  in MkInferredFunctionType jmethodName returnType argsType
+      initialArgsTypes = fromMaybe SortedMap.empty $ locsType <$> lookup jmethodName types
+      (returnType, locsType) = inferExp config initialArgsTypes def
+  in MkInferredFunctionType jmethodName returnType locsType (length args)

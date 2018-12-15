@@ -32,7 +32,8 @@ record InferredFunctionType where
     constructor MkInferredFunctionType
     functionName : JMethodName
     returnType : InferredType
-    argsType : InferredTypeStore
+    locsType : InferredTypeStore
+    arity : Nat
 
 rtClass : String -> String
 rtClass c = "io/github/mmhelloworld/idrisjvm/runtime/" ++ c
@@ -64,7 +65,7 @@ inferredIdrisObjectType = Ref idrisObjectType
 record InferenceConfig where
   constructor MkInferenceConfig
   functionName : JMethodName
-  functionTypes : SortedMap JMethodName (InferredType, InferredTypeStore)
+  functionTypes : SortedMap JMethodName InferredFunctionType
 
 Eq InferredType where
   IBool == IBool = True
@@ -382,7 +383,7 @@ data Asm : Type -> Type where
     GetFunctionName : Asm JMethodName
     GetFunctionLocTypes : Asm InferredTypeStore
     GetFunctionRetType : Asm InferredType
-    GetFunctionTypes : Asm (SortedMap JMethodName (InferredType, InferredTypeStore))
+    GetFunctionTypes : Asm (SortedMap JMethodName InferredFunctionType)
     GetLocalVarCount : Asm Nat
     Goto : Label -> Asm ()
     I2b : Asm ()
@@ -456,7 +457,7 @@ data Asm : Type -> Type where
     UpdateFunctionName : JMethodName -> Asm ()
     UpdateFunctionLocTypes : InferredTypeStore -> Asm ()
     UpdateFunctionRetType : InferredType -> Asm ()
-    UpdateFunctionTypes : SortedMap JMethodName (InferredType, InferredTypeStore) -> Asm ()
+    UpdateFunctionTypes : SortedMap JMethodName InferredFunctionType -> Asm ()
     UpdateLocalVarCount : Nat -> Asm ()
     UpdateShouldDescribeFrame : Bool -> Asm ()
     UpdateSwitchIndex : Nat -> Asm ()
@@ -481,7 +482,8 @@ Applicative Asm where
 
 getFunctionType : JMethodName -> Asm (InferredType, InferredTypeStore)
 getFunctionType fname =
-  fromMaybe (IUnknown, SortedMap.empty) . SortedMap.lookup fname <$> GetFunctionTypes
+  maybe (IUnknown, SortedMap.empty) (\fty => (returnType fty, locsType fty))
+    . SortedMap.lookup fname <$> GetFunctionTypes
 
 isExportedDesc : FieldTypeDescriptor -> Bool
 isExportedDesc (FieldTyDescReference (IdrisExportDesc _)) = True

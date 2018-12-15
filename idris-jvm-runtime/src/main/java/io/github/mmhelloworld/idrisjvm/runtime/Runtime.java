@@ -40,7 +40,7 @@ import static java.util.stream.Collectors.toSet;
 public class Runtime {
     private static final boolean isPosix = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
     private static final Map<Integer, PosixFilePermission> modeToPermissions = new HashMap<>();
-    public static List<String> programArgs = emptyList();
+    private static List<String> programArgs = emptyList();
     private static BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in, UTF_8));
     private static String workingDir = System.getProperty("user.dir");
     private static boolean isStdinEof = false;

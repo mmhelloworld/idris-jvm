@@ -12,7 +12,7 @@ env:
 before_install:
 - docker pull mmhelloworld/idris:1.3.1
 - mkdir -p $HOME/bin/idris-packages $IDRIS_JVM_HOME
-- wget https://github.com/mmhelloworld/idris-jvm/releases/download/v1.0-SNAPSHOT-20181208/idris-jvm.zip
+- wget https://github.com/mmhelloworld/idris-jvm/releases/download/v1.0-SNAPSHOT-20181215/idris-jvm.zip
 - unzip -o idris-jvm.zip -d $HOME/bin
 - export PATH=`pwd`/bin/travis:$IDRIS_JVM_HOME/codegen/bin:$HOME/.local/bin:$PATH
 - export PROJECT_ROOT=`pwd`

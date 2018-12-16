@@ -86,8 +86,8 @@ createMainMethod = do
     MaxStackAndLocal (-1) (-1)
     MethodCodeEnd
 
-generateMethods' : Assembler -> List SDecl -> List ExportIFace -> JVM_IO ()
-generateMethods' assembler decls exports = do
+generateMethods : Assembler -> List SDecl -> List ExportIFace -> JVM_IO ()
+generateMethods assembler decls exports = do
     let smallDecls = splitLargeFunctions decls
     let functionTypesByNameStage1 = inferFuns SortedMap.empty smallDecls
     let functionTypesByName = inferFuns functionTypesByNameStage1 smallDecls
@@ -110,9 +110,6 @@ generateMethods' assembler decls exports = do
         let asmState = MkAsmState [] types SortedMap.empty IUnknown
         (_, _) <- runAsm asmState assembler $ exportCode types exportIface
         generateExportsWithTypes types exports
-
-generateMethods : Assembler -> List SDecl -> List ExportIFace -> JVM_IO ()
-generateMethods assembler functions exports = generateMethods' assembler functions exports
 
 exports : FFI_Export FFI_JVM "IdrisJvm/Core/export/Codegen" []
 exports =

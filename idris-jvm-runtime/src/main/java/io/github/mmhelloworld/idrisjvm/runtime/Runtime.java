@@ -70,7 +70,7 @@ public class Runtime {
     public static String readString() throws IOException {
         String line = stdin.readLine();
         isStdinEof = line == null;
-        return line;
+        return isStdinEof ? "" : line;
     }
 
     public static void flushStdout() {

@@ -8,7 +8,7 @@ data IORef a = MkIORef a
 AnnotationTypeName : Type
 AnnotationTypeName = String
 
-data AnnotationValue = AnnInt Int
+data AnnotationValue = AnnInt String -- FFI Descriptor can only take String
                      | AnnString String
                      | AnnEnum String String
                      | AnnArray (List AnnotationValue)
@@ -57,7 +57,11 @@ mutual
                  | ExportInstance String
                  | ExportDefault -- Export an instance method with idris function name
                  | Anns (List Annotation)
+
+                 -- Export a static method with method annotations and parameter annotations
                  | ExportStaticWithAnn String (List Annotation) (List (List Annotation))
+
+                 -- Export an instance method with method annotations and parameter annotations
                  | ExportInstanceWithAnn String (List Annotation) (List (List Annotation))
 
   data JVM_IntTypes : Type -> Type where
@@ -353,5 +357,6 @@ term syntax "<@@>" [anns] = Fun classWith (Anns anns)
 term syntax "<@>" [name] [attrs] = Ann name attrs
 term syntax "<@..>" [values] = AnnArray values
 term syntax "<@s>" [value] = AnnString value
+term syntax "<@i>" [value] = AnnInt value -- Descriptor can only take string
 term syntax "<@enum>" [ty] [value] = AnnEnum ty value
 term syntax [name] "<@:>" [value] = (name, value)

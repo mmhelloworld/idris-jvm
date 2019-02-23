@@ -4,7 +4,7 @@ import lombok.ToString;
 
 import java.util.List;
 
-abstract class AnnotationValue {
+public abstract class AnnotationValue {
     private final AnnotationValueType type;
 
     private AnnotationValue(final AnnotationValueType type) {

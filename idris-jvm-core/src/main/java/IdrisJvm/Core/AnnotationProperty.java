@@ -1,6 +1,6 @@
 package IdrisJvm.Core;
 
-class AnnotationProperty {
+public class AnnotationProperty {
     private final String name;
     private final AnnotationValue value;
 

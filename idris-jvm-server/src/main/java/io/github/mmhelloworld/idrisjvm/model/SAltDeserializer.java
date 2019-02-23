@@ -1,15 +1,14 @@
 package io.github.mmhelloworld.idrisjvm.model;
 
+import IdrisJvm.Core.export.Codegen;
+import IdrisJvm.IR.export.Const;
+import IdrisJvm.IR.export.SAlt;
+import IdrisJvm.IR.export.SExp;
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import IdrisJvm.IR.export.Const;
-import IdrisJvm.Core.export.Codegen;
-import IdrisJvm.IR.export.SAlt;
-import IdrisJvm.IR.export.SExp;
 
 import java.io.IOException;
 import java.util.List;
@@ -31,7 +30,7 @@ public class SAltDeserializer extends StdDeserializer<SAlt> {
 
     @Override
     public SAlt deserialize(final JsonParser jsonParser, final DeserializationContext deserializationContext)
-        throws IOException, JsonProcessingException {
+        throws IOException {
         final JsonNode node = jsonParser.getCodec().readTree(jsonParser);
         final ObjectMapper mapper = Context.getMapper();
 

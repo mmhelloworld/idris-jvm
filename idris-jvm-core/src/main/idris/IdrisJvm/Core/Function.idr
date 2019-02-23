@@ -548,6 +548,13 @@ mutual
           paramAnns = parseParamAnnotations paramAnnDescs
       in exportFun types cname mname sourceCname sourceMname ExportCallInstance parent returns args anns paramAnns
 
+  cgExport types cname parent
+        (ExportFun n (FApp "ExportStaticWithAnn" [FStr mname, FApp "::" annDescs, paramAnnDescs]) returns args)
+    = let MkJMethodName sourceCname sourceMname = jname n
+          anns = join $ parseAnnotations <$> annDescs
+          paramAnns = parseParamAnnotations paramAnnDescs
+      in exportFun types cname mname sourceCname sourceMname ExportCallStatic parent returns args anns paramAnns
+
   cgExport _ _ _ exportDef = jerror $ "Unsupported export definition: " ++ show exportDef
 
   parseClassAnnotations : List Export -> (List Annotation, List Export)
@@ -843,6 +850,7 @@ mutual
 
   parseAnnotationValue : FDesc -> AnnotationValue
   parseAnnotationValue (FApp "AnnString" [FStr value]) = AnnString value
+  parseAnnotationValue (FApp "AnnInt" [FStr value]) = AnnInt $ cast value
   parseAnnotationValue (FApp "AnnEnum" [FStr enum, FStr value]) = AnnEnum (asmRefTyDesc (ClassDesc enum)) value
   parseAnnotationValue (FApp "AnnArray" values) = AnnArray (parseAnnArrayElements values)
   parseAnnotationValue desc = jerror $ "Invalid or unsupported annotation value: " ++ show desc

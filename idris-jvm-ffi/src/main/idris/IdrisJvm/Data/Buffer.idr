@@ -3,6 +3,8 @@ module IdrisJvm.Data.Buffer
 import IdrisJvm.IO
 import IdrisJvm.File
 import Java.Nio
+import IdrisJvm.FileChannelIo
+import IdrisJvm.ClientServerSocket
 
 %hide Prelude.File.File
 
@@ -121,15 +123,33 @@ export
 getString : Buffer -> (loc : Int) -> (len : Int) -> JVM_IO String
 getString b loc len = invokeInstance "getString" (IdrisBuffer -> Int -> Int -> JVM_IO String) (rawdata b) loc len
 
+export
+readBufferFromReadableByteChannel :
+    Inherits ReadableByteChannel channel => channel -> Buffer -> (maxbytes : Int) -> JVM_IO Buffer
+readBufferFromReadableByteChannel channel buf max = do
+    numread <- invokeInstance "readFromFile" (IdrisBuffer -> ReadableByteChannel -> Int -> Int -> JVM_IO Int)
+                       (rawdata buf) (believe_me channel) (location buf) max
+    pure (record { location $= (+numread) } buf)
+
+export
+writeBufferToWritableByteChannel :
+    Inherits WritableByteChannel channel => channel -> Buffer -> (maxbytes : Int) -> JVM_IO Buffer
+writeBufferToWritableByteChannel channel buf max = do
+    let maxwrite = size buf - location buf
+    let max' = if maxwrite < max then maxwrite else max
+    invokeInstance "writeToFile" (IdrisBuffer -> WritableByteChannel -> Int -> Int -> JVM_IO ())
+            (rawdata buf) (believe_me channel) (location buf) max'
+    pure (record { location $= (+max') } buf)
+
 ||| Read 'maxbytes' into the buffer from a file, returning a new
 ||| buffer with the 'locaton' pointer moved along
 export
 total
 readBufferFromFile : File -> Buffer -> (maxbytes : Int) -> JVM_IO Buffer
-readBufferFromFile (MkFile file path) buf max = do
-    numread <- invokeInstance "readFromFile" (IdrisBuffer -> FileChannel -> Int -> Int -> JVM_IO Int)
-                       (rawdata buf) file (location buf) max
-    pure (record { location $= (+numread) } buf)
+readBufferFromFile (MkFile fileChannelIo) buf max =
+    readBufferFromReadableByteChannel fileChannelIo buf max
+readBufferFromFile (MkFileClientServerSocket clientServerSocket) buf max =
+    readBufferFromReadableByteChannel clientServerSocket buf max
 readBufferFromFile _ buf max = pure buf
 
 ||| Write 'maxbytes' from the buffer from a file, returning a new
@@ -137,12 +157,8 @@ readBufferFromFile _ buf max = pure buf
 export
 total
 writeBufferToFile : File -> Buffer -> (maxbytes : Int) -> JVM_IO Buffer
-writeBufferToFile (MkFile file path) buf max
-    = do let maxwrite = size buf - location buf
-         let max' = if maxwrite < max then maxwrite else max
-         invokeInstance "writeToFile" (IdrisBuffer -> FileChannel -> Int -> Int -> JVM_IO ())
-                 (rawdata buf) file (location buf) max'
-         pure (record { location $= (+max') } buf)
+writeBufferToFile (MkFile channel) buf max = writeBufferToWritableByteChannel channel buf max
+writeBufferToFile (MkFileClientServerSocket channel) buf max = writeBufferToWritableByteChannel channel buf max
 writeBufferToFile _ buf max = pure buf
 
 ||| Return the contents of the buffer as a list

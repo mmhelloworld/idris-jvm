@@ -54,5 +54,14 @@
                 </executions>
             </plugin>
         </plugins>
+
     </build>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.mmhelloworld</groupId>
+            <artifactId>idris-jvm-io</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
 </project>

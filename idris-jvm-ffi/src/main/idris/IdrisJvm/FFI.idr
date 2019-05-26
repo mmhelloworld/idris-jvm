@@ -90,6 +90,7 @@ mutual
       JVM_Str         : JVM_Types String
       JVM_Double      : JVM_Types Double
       JVM_Float       : JVM_Types JFloat
+      JVM_BigInteger  : JVM_Types Integer
       JVM_Unit        : JVM_Types ()
       JVM_NullableStr : JVM_Types (Maybe String)
       JVM_Nullable    : JVM_Types (Maybe (JVM_Native t))
@@ -163,6 +164,8 @@ namespace Object
 
 Inherits Object String where {}
 Inherits Object (Maybe String) where {}
+
+Inherits Object Integer where {}
 
 Inherits Object (JVM_Native t) where {}
 Inherits Object (Maybe (JVM_Native t)) where {}

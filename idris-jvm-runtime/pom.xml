@@ -10,4 +10,31 @@
 
     <artifactId>idris-jvm-runtime</artifactId>
     <name>Idris JVM Runtime</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.mmhelloworld</groupId>
+            <artifactId>idris-jvm-io</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <configuration>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

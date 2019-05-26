@@ -1,11 +1,12 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
-import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -19,6 +20,7 @@ public final class IdrisBuffer {
 
     public IdrisBuffer(int size) {
         this.buffer = ByteBuffer.allocate(size);
+        this.buffer.order(ByteOrder.LITTLE_ENDIAN);
     }
 
     public int size() {
@@ -118,7 +120,7 @@ public final class IdrisBuffer {
         writeToFile(FileChannel.open(file.toPath(), WRITE, CREATE, TRUNCATE_EXISTING), loc, len);
     }
 
-    public int readFromFile(FileChannel file, int loc, int len) throws IOException {
+    public int readFromFile(ReadableByteChannel file, int loc, int len) throws IOException {
         int size = size();
         if (loc >= 0 && loc < size) {
             if (loc + len > size) {
@@ -139,7 +141,7 @@ public final class IdrisBuffer {
         }
     }
 
-    public void writeToFile(FileChannel file, int loc, int len) throws IOException {
+    public void writeToFile(WritableByteChannel file, int loc, int len) throws IOException {
         int size = size();
         if (loc >= 0 && loc < size) {
             if (loc + len > size) {

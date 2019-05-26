@@ -63,17 +63,7 @@ namespace Path
 Show Path where
     show path = unsafePerformIO $ invokeInstance "toString" (Path -> JVM_IO String) path
 
-namespace Files
-    filesClass : String
-    filesClass = "java/nio/file/Files"
-
-    FilesClass : JVM_NativeTy
-    FilesClass = Class filesClass
-
-    Files : Type
-    Files = JVM_Native FilesClass
-
-namespace Files
+namespace Paths
     pathsClass : String
     pathsClass = "java/nio/file/Paths"
 
@@ -96,6 +86,30 @@ namespace Channel
     close : Inherits Channel channel => channel -> JVM_IO ()
     close channel = invokeInstance "close" (Channel -> JVM_IO ()) (believe_me channel)
 
+namespace ReadableByteChannel
+    readableByteChannelClass : String
+    readableByteChannelClass = "java/nio/channels/ReadableByteChannel"
+
+    ReadableByteChannelClass : JVM_NativeTy
+    ReadableByteChannelClass = Interface readableByteChannelClass
+
+    ReadableByteChannel : Type
+    ReadableByteChannel = JVM_Native ReadableByteChannelClass
+
+    Inherits Channel ReadableByteChannel where {}
+
+namespace WritableByteChannel
+    writableByteChannelClass : String
+    writableByteChannelClass = "java/nio/channels/WritableByteChannel"
+
+    WritableByteChannelClass : JVM_NativeTy
+    WritableByteChannelClass = Interface writableByteChannelClass
+
+    WritableByteChannel : Type
+    WritableByteChannel = JVM_Native WritableByteChannelClass
+
+    Inherits Channel WritableByteChannel where {}
+
 namespace SeekableByteChannel
     seekableByteChannelClass : String
     seekableByteChannelClass = "java/nio/channels/SeekableByteChannel"
@@ -105,15 +119,30 @@ namespace SeekableByteChannel
 
     Inherits Channel SeekableByteChannel where {}
 
- namespace FileChannel
-     fileChannelClass : String
-     fileChannelClass = "java/nio/channels/FileChannel"
+namespace SocketChannel
+    socketChannelClass : String
+    socketChannelClass = "java/nio/channels/SocketChannel"
 
-     FileChannel : Type
-     FileChannel = JVM_Native (Class fileChannelClass)
+    SocketChannel : Type
+    SocketChannel = JVM_Native (Class socketChannelClass)
 
-     Inherits Channel FileChannel where {}
-     Inherits SeekableByteChannel FileChannel where {}
+    Inherits Channel SocketChannel where {}
+    Inherits ReadableByteChannel SocketChannel where {}
+    Inherits WritableByteChannel SocketChannel where {}
+
+namespace FileChannel
+    fileChannelClass : String
+    fileChannelClass = "java/nio/channels/FileChannel"
+
+    FileChannelClass : JVM_NativeTy
+    FileChannelClass = Interface fileChannelClass
+
+    FileChannel : Type
+    FileChannel = JVM_Native FileChannelClass
+
+    Inherits Channel FileChannel where {}
+    Inherits ReadableByteChannel FileChannel where {}
+    Inherits WritableByteChannel FileChannel where {}
 
 namespace FileAttribute
     fileAttributeClass : String

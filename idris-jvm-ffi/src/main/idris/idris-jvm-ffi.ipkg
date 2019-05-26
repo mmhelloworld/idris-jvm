@@ -6,6 +6,9 @@ modules = IdrisJvm.Data.Buffer
         , IdrisJvm.FFI
         , IdrisJvm.IO
         , IdrisJvm.File
+        , IdrisJvm.Files
+        , IdrisJvm.FileChannelIo
+        , IdrisJvm.ClientServerSocket
         , IdrisJvm.JvmImport
         , IdrisJvm.System
         , Java.Util.Concurrent

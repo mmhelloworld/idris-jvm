@@ -9,29 +9,21 @@ import Java.Nio
 import Java.IO
 import Java.Util
 import Java.Util.Concurrent
-
-%language TypeProviders
-%language ElabReflection
+import IdrisJvm.ClientServerSocket
+import IdrisJvm.FileChannelIo
+import IdrisJvm.Files
+import IdrisJvm.System
 
 %hide Prelude.File.File
 %hide Prelude.File.FileError
 %hide Java.IO.File.File
 
-jdkimport [
-    (stringClass, ["getBytes"]),
-    (pathsClass, ["get"]),
-    (fileChannelClass, ["open"]),
-    (filesClass, ["lines", "write", "readAttributes", "createDirectory"]),
-    (fileTimeClass, ["to"]),
-    (streamClass, ["collect"]),
-    (collectorsClass, ["joining"])
-  ]
-
 public export
 data File = MkFileStdin
           | MkFileStdout
           | MkFileStderr
-          | MkFile FileChannel Path
+          | MkFile FileChannelIo
+          | MkFileClientServerSocket ClientServerSocket
 
 public export
 FileError : Type
@@ -68,14 +60,13 @@ export
 total
 openFile : (f : String) -> (m : Mode) -> JVM_IO (Either FileError File)
 openFile f m = assert_total $ do
-      path <- invokeStatic RuntimeClass "createPath" (String -> JVM_IO Path) f
+      path <- Files.createPath f
       ensureParentDir path
       openOptions <- listToArray (modeToOpenOption m)
-      exceptionOrFile <- (fileChannelClass <.> "open(java/nio/file/Path,Array 1 i java/nio/file/OpenOption)") path openOptions
+      exceptionOrFile <- FileChannelIo.open path openOptions
       case exceptionOrFile of
         Left exception => pure $ Left $ believe_me exception
-        Right Nothing => pure $ Left . believe_me $ !(unableToOpenFile f)
-        Right (Just file) => pure $ Right (MkFile file path)
+        Right file => pure $ Right (MkFile file)
    where
      hasWriteMode : Bool
      hasWriteMode = case m of
@@ -91,54 +82,75 @@ openFile f m = assert_total $ do
          case optParent of
             Nothing => pure ()
             Just pathDir => do
-              _ <- invokeStatic FilesClass "createDirectories" (Path -> JVM_Array FileAttribute -> JVM_IO Path) pathDir
-                     !(newArray FileAttribute 0)
+              Files.createDirectories pathDir
               pure ()
        else pure ()
+export
+getChar : File -> JVM_IO Char
+getChar (MkFile fileChannelIo) = getChar fileChannelIo
+getChar (MkFileClientServerSocket clientServerSocket) = getChar clientServerSocket
+getChar MkFileStdin = IO.getChar
+getChar _ = do
+    putStrLn "Unable to read a character"
+    exit 1
+
+export
+getLine : File -> JVM_IO String
+getLine (MkFile fileChannelIo) = getLine fileChannelIo
+getLine (MkFileClientServerSocket clientServerSocket) = ClientServerSocket.getLine clientServerSocket
+getLine MkFileStdin = IO.getLine
+getLine _ = do
+    putStrLn "Unable to read a line"
+    exit 1
+
+export
+writeString : File -> String -> JVM_IO ()
+writeString (MkFile fileChannelIo) str = writeString fileChannelIo str
+writeString (MkFileClientServerSocket socket) str = writeString socket str
+writeString MkFileStdout str = print str
+writeString _ _ = pure ()
 
 export
 closeFile : File -> JVM_IO ()
-closeFile (MkFile file _) = Channel.close file
+closeFile (MkFile file) = FileChannelIo.close file
+closeFile (MkFileClientServerSocket clientServerSocket) = ClientServerSocket.close clientServerSocket
 closeFile _ = pure ()
 
 export
 changeDir : String -> JVM_IO Bool
-changeDir = invokeStatic RuntimeClass "changeDir" (String -> JVM_IO Bool)
+changeDir = Files.changeDir
 
 export
 getTemporaryFileName : JVM_IO String
-getTemporaryFileName = invokeStatic RuntimeClass "getTemporaryFileName" (JVM_IO String)
+getTemporaryFileName = Files.getTemporaryFileName
 
 export
 chmod : String -> Int -> JVM_IO ()
-chmod f m = invokeStatic RuntimeClass "chmod" (String -> Int -> JVM_IO ()) f m
+chmod = Files.chmod
 
 export
 total
 createDir : String -> JVM_IO (Either FileError ())
-createDir d = assert_total $ do
-  path <- invokeStatic RuntimeClass "createPath" (String -> JVM_IO Path) d
-  exceptionOrPath <- (filesClass <.> "createDirectory") path !(newArray FileAttribute 0)
-  pure $ const () <$> exceptionOrPath
+createDir d = assert_total $ Files.createDirectory d
 
 export
 currentDir : JVM_IO String
-currentDir = invokeStatic RuntimeClass "getWorkingDir" (JVM_IO String)
+currentDir = Files.getWorkingDir
 
 -- This is returning Int to conform to Idris fileSize function type
 -- even though Java's FileChannel returns long
 export
 fileSize : File -> JVM_IO (Either FileError Int)
-fileSize (MkFile f _) = do
-  exceptionOrSize <- invokeInstance "size" (FileChannel -> JVM_IO (JVM_Throwable Bits64)) f
+fileSize (MkFile f) = do
+  exceptionOrSize <- FileChannelIo.size f
   case exceptionOrSize of
     Left exception => pure $ Left $ believe_me exception
     Right size => pure $ Right $ Long.intValue size
-fileSize _ = pure . Left . believe_me $ !(IOException.new "Cannot determine size for stdin/stdout/stderr")
+fileSize _ = pure . Left . believe_me $ !(IOException.new "Cannot determine size")
 
 export
 fflush : File -> JVM_IO ()
-fflush (MkFile file _) = invokeInstance "force" (FileChannel -> Bool -> JVM_IO ()) file True
+fflush (MkFile file) = FileChannelIo.flush file
 fflush MkFileStdout = invokeStatic RuntimeClass "flushStdout" (JVM_IO ())
 fflush MkFileStderr = invokeStatic RuntimeClass "flushStderr" (JVM_IO ())
 fflush _ = pure ()
@@ -161,61 +173,38 @@ stderr = MkFileStderr
 export
 total
 readFile : String -> JVM_IO (Either FileError String)
-readFile pathStr = assert_total $ do
-    path <- invokeStatic RuntimeClass "createPath" (String -> JVM_IO Path) pathStr
-    exceptionOrlines <- (filesClass <.> "lines(java/nio/file/Path)") path
-    case exceptionOrlines of
-      Left exception => pure $ Left exception
-      Right Nothing => pure $ Left . believe_me $ !(unableToReadFile pathStr)
-      Right (Just lines) => do
-        joiningCollector <- (collectorsClass <.!> "joining(java/lang/CharSequence)") $ believe_me !(lineSeparator)
-        pure . Right $ believe_me !((streamClass <.!> "collect(java/util/stream/Collector)") lines joiningCollector)
+readFile pathStr = assert_total $ Files.readFile pathStr
 
 export
 writeFile : String -> String -> JVM_IO (Either FileError ())
-writeFile file content = do
-  path <- invokeStatic RuntimeClass "createPath" (String -> JVM_IO Path) file
-  bytes <- (stringClass <.!> "getBytes(java/lang/String)") content "UTF-8"
-  exceptionOrPath <- (filesClass <.> "write(java/nio/file/Path,Array 1 byte,Array 1 i java/nio/file/OpenOption)") path
-            bytes !(newArray OpenOption 0)
-  pure $ either (const . Left . believe_me $ !(unableToWriteFile file)) (const $ Right ()) exceptionOrPath
+writeFile file content = Files.writeFile file content
 
 export
 fileModifiedTime : File -> JVM_IO (Either FileError Integer)
-fileModifiedTime (MkFile _ path) = do
-    attrs <- (filesClass <.!> "readAttributes(java/nio/file/Path,java/lang/Class,Array 1 java/nio/file/LinkOption)")
-               path (classLit basicFileAttributesClass) !(newArray LinkOption 0)
-    fileTime <- invokeInstance "lastModifiedTime" (BasicFileAttributes -> JVM_IO FileTime) attrs
-    seconds <- (fileTimeClass <.!> "to") fileTime TimeUnit.seconds
-    pure . Right $ believe_me $ BigInteger.valueOf seconds
-fileModifiedTime _ = pure . Left $ believe_me !(IOException.new "Cannot get file modified time for stdin, stdout or stderr")
+fileModifiedTime (MkFile file) = FileChannelIo.getFileModifiedTime file
+fileModifiedTime _ = pure . Left $ believe_me !(IOException.new "Cannot get file modified time")
 
 export
 fileAccessTime : File -> JVM_IO (Either FileError Integer)
-fileAccessTime (MkFile _ path) = do
-    attrs <- (filesClass <.!> "readAttributes(java/nio/file/Path,java/lang/Class,Array 1 java/nio/file/LinkOption)")
-                path (classLit basicFileAttributesClass) !(newArray LinkOption 0)
-    fileTime <- invokeInstance "lastAccessTime" (BasicFileAttributes -> JVM_IO FileTime) attrs
-    seconds <- (fileTimeClass <.!> "to") fileTime TimeUnit.seconds
-    pure . Right $ believe_me $ BigInteger.valueOf seconds
-fileAccessTime _ = pure . Left $ believe_me !(IOException.new "Cannot get file access time for stdin, stdout or stderr")
+fileAccessTime (MkFile file) = FileChannelIo.getFileAccessTime file
+fileAccessTime _ = pure . Left $ believe_me !(IOException.new "Cannot get file access time")
 
 export
 fileStatusTime : File -> JVM_IO (Either FileError Integer)
-fileStatusTime (MkFile _ path) = do
-    attrs <- (filesClass <.!> "readAttributes(java/nio/file/Path,java/lang/Class,Array 1 java/nio/file/LinkOption)")
-               path (classLit basicFileAttributesClass) !(newArray LinkOption 0)
-    fileTime <- invokeInstance "creationTime" (BasicFileAttributes -> JVM_IO FileTime) attrs
-    seconds <- (fileTimeClass <.!> "to") fileTime TimeUnit.seconds
-    pure . Right $ believe_me $ BigInteger.valueOf seconds
-fileStatusTime _ = pure . Left $ believe_me !(IOException.new "Cannot get file status time for stdin, stdout or stderr")
+fileStatusTime (MkFile file) = FileChannelIo.getFileStatusTime file
+fileStatusTime _ = pure . Left $ believe_me !(IOException.new "Cannot get file status time")
 
 ||| Check if a file handle has reached the end
 export
 fEOF : File -> JVM_IO Bool
-fEOF (MkFile file _) = do
-  position <- invokeInstance "position" (FileChannel -> JVM_IO Bits64) file
-  size <- invokeInstance "size" (FileChannel -> JVM_IO Bits64) file
-  pure (position == size)
+fEOF (MkFile file) = FileChannelIo.isEof file
 fEOF MkFileStdin = invokeStatic RuntimeClass "isStdinEof" (JVM_IO Bool)
 fEOF _ = pure False
+
+export
+socketListenAndAccept : Int -> JVM_IO (Either String File)
+socketListenAndAccept port = do
+    byteBufferIoOrError <- ClientServerSocket.listenAndAccept port
+    case byteBufferIoOrError of
+        Left throwable => Left <$> Objects.toString throwable
+        Right byteBufferIo => pure . Right $ MkFileClientServerSocket byteBufferIo

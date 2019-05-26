@@ -18,6 +18,7 @@
         <module>idris-jvm-server</module>
         <module>idris-jvm-codegen-launcher</module>
         <module>idris-jvm-integration-test</module>
+        <module>idris-jvm-io</module>
     </modules>
 
     <properties>
@@ -29,6 +30,7 @@
         <maven-compiler-plugin.version>3.6.1</maven-compiler-plugin.version>
         <maven-jar-plugin.version>3.0.2</maven-jar-plugin.version>
         <maven-install-plugin.version>2.5.2</maven-install-plugin.version>
+        <maven-shade-plugin.version>3.2.1</maven-shade-plugin.version>
         <maven-surefire-plugin.version>2.20</maven-surefire-plugin.version>
         <exec-maven-plugin.version>1.5.0</exec-maven-plugin.version>
         <maven-assembly-plugin.version>3.0.0</maven-assembly-plugin.version>
@@ -43,14 +45,6 @@
                 <version>${spring-boot-dependencies.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
-            </dependency>
-
-            <dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-bom</artifactId>
-                <version>${log4j.version}</version>
-                <scope>import</scope>
-                <type>pom</type>
             </dependency>
 
             <dependency>
@@ -85,8 +79,8 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>${maven-compiler-plugin.version}</version>
                     <configuration>
-                        <source>1.8</source>
-                        <target>1.8</target>
+                        <source>${java.version}</source>
+                        <target>${java.version}</target>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -96,7 +90,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-shade-plugin</artifactId>
-                    <version>3.1.0</version>
+                    <version>${maven-shade-plugin.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

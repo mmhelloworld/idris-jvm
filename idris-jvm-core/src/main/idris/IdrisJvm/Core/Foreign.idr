@@ -61,6 +61,7 @@ mutual
   fdescFieldDescriptor (FCon "JVM_Bool") = FieldTyDescBoolean
 
   fdescFieldDescriptor (FCon "JVM_Str") = FieldTyDescReference $ ClassDesc "java/lang/String"
+  fdescFieldDescriptor (FCon "JVM_BigInteger") = FieldTyDescReference $ ClassDesc "java/math/BigInteger"
   fdescFieldDescriptor fdesc = FieldTyDescReference $ fdescRefDescriptor fdesc
 
   fdescRefDescriptor : FDesc -> ReferenceTypeDescriptor
@@ -73,6 +74,7 @@ mutual
   fdescRefDescriptor desc@(FApp "JVM_Nullable" [FApp "Interface" [FStr typeName]]) = NullableRefDesc typeName
 
   fdescRefDescriptor (FCon "JVM_Str") = ClassDesc "java/lang/String"
+  fdescRefDescriptor (FCon "JVM_BigInteger") = ClassDesc "java/math/BigInteger"
   fdescRefDescriptor (FStr exportedType) = IdrisExportDesc exportedType
   fdescRefDescriptor (FCon "JVM_NullableStr") = NullableStrDesc
   fdescRefDescriptor desc = jerror $ "Invalid reference type descriptor: " ++ show desc

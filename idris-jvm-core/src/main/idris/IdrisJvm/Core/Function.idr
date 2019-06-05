@@ -9,6 +9,7 @@ import IdrisJvm.Core.Operator
 import IdrisJvm.Core.Inference
 import IdrisJvm.IR.Types
 import Data.SortedMap
+import Java.Lang
 
 %access public export
 
@@ -133,6 +134,63 @@ initializeLocalVars [] = pure ()
 initializeLocalVars ((var, ty) :: vars) = do
     initializeInferredVar ty var
     initializeLocalVars vars
+
+mutual
+  parseAnnotation : FDesc -> Annotation
+  parseAnnotation (FApp "Ann" [FStr annTypeName, attr]) =
+    let typeDesc = "L" ++ annTypeName ++ ";"
+    in (MkAnnotation typeDesc (parseAnnotationAttr attr))
+  parseAnnotation desc = jerror $ "Unable to parse annotation: " ++ show desc
+
+  parseAnnotations : FDesc -> List Annotation
+  parseAnnotations (FApp "::" [FCon "Annotation", desc, rest])
+    = parseAnnotation desc :: parseAnnotations rest
+
+  parseAnnotations (FApp "Nil" [FCon "Annotation"]) = []
+
+  parseAnnotations (FCon "Annotation") = []
+
+  parseAnnotations desc = parseAnnotation desc :: []
+
+  parseParamAnnotations : FDesc -> List (List Annotation)
+  parseParamAnnotations (FApp "::" [FApp "List" [FCon "Annotation"], ann, rest])
+    = parseAnnotations ann :: parseParamAnnotations rest
+  parseParamAnnotations (FApp "Nil" [FApp "List" [FCon "Annotation"]]) = []
+
+  parseAnnotationAttr : FDesc -> List AnnotationProperty
+  parseAnnotationAttr (FApp "::" [ FApp "Pair" [ FUnknown, FCon "AnnotationValue" ]
+                                 , FApp "MkPair" [ FUnknown
+                                                 , FCon "AnnotationValue"
+                                                 , FStr attrName
+                                                 , annValueDesc
+                                                 ]
+                                  , rest
+                                  ])
+    = (attrName, parseAnnotationValue annValueDesc) :: parseAnnotationAttr rest
+  parseAnnotationAttr (FApp "Nil" [ FApp "Pair" [ FUnknown , FCon "AnnotationValue"]]) = []
+  parseAnnotationAttr desc = jerror $ "Annotation attribute value not yet supported: " ++ show desc
+
+  parseAnnArrayElements : List FDesc -> List AnnotationValue
+  parseAnnArrayElements [] = []
+  parseAnnArrayElements [FApp "::" (FCon "AnnotationValue" :: value :: values)] =
+    parseAnnotationValue value :: parseAnnArrayElements values
+  parseAnnArrayElements [FApp "Nil" [FCon "AnnotationValue"]] = []
+
+  parseAnnotationValue : FDesc -> AnnotationValue
+  parseAnnotationValue (FApp "AnnString" [FStr value]) = AnnString value
+  parseAnnotationValue (FApp "AnnInt" [FStr value]) = AnnInt $ cast value
+  parseAnnotationValue (FApp "AnnBoolean" [FStr value]) = AnnBoolean $ (value == "true")
+  parseAnnotationValue (FApp "AnnByte" [FStr value]) = AnnByte $ Byte.parseByte value
+  parseAnnotationValue (FApp "AnnChar" [FStr value]) = AnnChar $ strHead value
+  parseAnnotationValue (FApp "AnnShort" [FStr value]) = AnnShort $ Short.parseShort value
+  parseAnnotationValue (FApp "AnnLong" [FStr value]) = AnnLong $ Long.parseLong value
+  parseAnnotationValue (FApp "AnnFloat" [FStr value]) = AnnFloat $ JDouble.parseDouble value
+  parseAnnotationValue (FApp "AnnDouble" [FStr value]) = AnnDouble $ JDouble.parseDouble value
+  parseAnnotationValue (FApp "AnnClass" [FStr value]) = AnnClass value
+  parseAnnotationValue (FApp "AnnEnum" [FStr enum, FStr value]) = AnnEnum (asmRefTyDesc (ClassDesc enum)) value
+  parseAnnotationValue (FApp "AnnArray" values) = AnnArray (parseAnnArrayElements values)
+  parseAnnotationValue (FApp "AnnAnnotation" [ann]) = AnnAnnotation (parseAnnotation ann)
+  parseAnnotationValue desc = jerror $ "Invalid or unsupported annotation value: " ++ show desc
 
 mutual
 
@@ -809,51 +867,6 @@ mutual
       FieldEnd
     where
       desc = asmTypeDesc $ fdescTypeDescriptor typeDesc
-
-  parseAnnotations : FDesc -> List Annotation
-  parseAnnotations (FApp "::" [FCon "Annotation", FApp "Ann" [FStr annTypeName, attr], rest])
-    = let typeDesc = "L" ++ annTypeName ++ ";"
-      in (MkAnnotation typeDesc (parseAnnotationAttr attr)) :: parseAnnotations rest
-
-  parseAnnotations (FApp "Ann" [FStr annTypeName, attr])
-    = let typeDesc = "L" ++ annTypeName ++ ";"
-      in MkAnnotation typeDesc (parseAnnotationAttr attr) :: []
-
-  parseAnnotations (FApp "Nil" [FCon "Annotation"]) = []
-  parseAnnotations (FCon "Annotation") = []
-  parseAnnotations desc = jerror $ "parseAnnotation: not implemented: " ++ show desc
-
-  parseParamAnnotations : FDesc -> List (List Annotation)
-  parseParamAnnotations (FApp "::" [FApp "List" [FCon "Annotation"], ann, rest])
-    = parseAnnotations ann :: parseParamAnnotations rest
-  parseParamAnnotations (FApp "Nil" [FApp "List" [FCon "Annotation"]]) = []
-
-  parseAnnotationAttr : FDesc -> List AnnotationProperty
-  parseAnnotationAttr (FApp "::" [ FApp "Pair" [ FUnknown, FCon "AnnotationValue" ]
-                                 , FApp "MkPair" [ FUnknown
-                                               , FCon "AnnotationValue"
-                                               , FStr attrName
-                                               , annValueDesc
-                                               ]
-                                  , rest
-                                  ])
-    = (attrName, parseAnnotationValue annValueDesc) :: parseAnnotationAttr rest
-  parseAnnotationAttr (FApp "Nil" [ FApp "Pair" [ FUnknown , FCon "AnnotationValue"]]) = []
-  parseAnnotationAttr (FApp "Nil" [ FCon "AnnotationNameValuePair" ]) = []
-  parseAnnotationAttr desc = jerror $ "Annotation attribute value not yet supported: " ++ show desc
-
-  parseAnnArrayElements : List FDesc -> List AnnotationValue
-  parseAnnArrayElements [] = []
-  parseAnnArrayElements [FApp "::" (FCon "AnnotationValue" :: value :: values)] =
-    parseAnnotationValue value :: parseAnnArrayElements values
-  parseAnnArrayElements [FApp "Nil" [FCon "AnnotationValue"]] = []
-
-  parseAnnotationValue : FDesc -> AnnotationValue
-  parseAnnotationValue (FApp "AnnString" [FStr value]) = AnnString value
-  parseAnnotationValue (FApp "AnnInt" [FStr value]) = AnnInt $ cast value
-  parseAnnotationValue (FApp "AnnEnum" [FStr enum, FStr value]) = AnnEnum (asmRefTyDesc (ClassDesc enum)) value
-  parseAnnotationValue (FApp "AnnArray" values) = AnnArray (parseAnnArrayElements values)
-  parseAnnotationValue desc = jerror $ "Invalid or unsupported annotation value: " ++ show desc
 
   findTailCallApps : List String -> SExp -> List String
   findTailCallApps acc (SApp tailCall f _) = if tailCall then f :: acc else acc

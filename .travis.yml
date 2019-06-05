@@ -19,6 +19,8 @@ before_install:
 - docker run --name idris mmhelloworld/idris:1.3.1 idris -v && docker cp idris:/.stack-work/install/x86_64-linux/lts-11.22/8.2.2/share/x86_64-linux-ghc-8.2.2/idris-1.3.1/libs/.
   $HOME/bin/idris-packages && docker rm idris
 script:
+- lsof -ti ":$(cat $IDRIS_JVM_HOME/.idrisjvmport)" | xargs --no-run-if-empty kill
+- unzip -o idris-jvm-codegen-launcher/target/idris-jvm.zip -d $HOME/bin
 - mvn -pl :idris-jvm-integration-test test -B
 before_deploy:
 - git config --local user.name mmhelloworld

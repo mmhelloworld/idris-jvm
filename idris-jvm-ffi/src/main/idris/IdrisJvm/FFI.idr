@@ -2,22 +2,6 @@ module IdrisJvm.FFI
 
 %access public export
 
-export
-data IORef a = MkIORef a
-
-AnnotationTypeName : Type
-AnnotationTypeName = String
-
-data AnnotationValue = AnnInt String -- FFI Descriptor can only take String
-                     | AnnString String
-                     | AnnEnum String String
-                     | AnnArray (List AnnotationValue)
-
-AnnotationNameValuePair : Type
-AnnotationNameValuePair = (String, AnnotationValue)
-
-data Annotation = Ann AnnotationTypeName (List AnnotationNameValuePair)
-
 data JVM_NativeTy = Class String
                   | Interface String
 
@@ -32,6 +16,22 @@ Throwable = JVM_Native ThrowableClass
 
 JVM_Throwable : Type -> Type
 JVM_Throwable t = Either Throwable t
+
+mutual
+    data AnnotationValue = AnnInt String -- FFI Descriptor can only take String
+                         | AnnBoolean String
+                         | AnnByte String
+                         | AnnChar String
+                         | AnnShort String
+                         | AnnLong String
+                         | AnnFloat String
+                         | AnnDouble String
+                         | AnnEnum String String
+                         | AnnClass String
+                         | AnnAnnotation Annotation
+                         | AnnArray (List AnnotationValue)
+
+    data Annotation = Ann String (List (String, AnnotationValue))
 
 mutual
   data JVM_FfiFn = Static JVM_NativeTy String
@@ -174,6 +174,9 @@ Inherits ObjectArray (JVM_Array t) where {}
 
 implicit subtyping : Inherits (JVM_Native t) (JVM_Native s) => JVM_Native s -> JVM_Native t
 subtyping = believe_me
+
+implicit subtypingInIo : Inherits (JVM_Native super) (JVM_Native sub) => JVM_IO (JVM_Native sub) -> JVM_IO (JVM_Native super)
+subtypingInIo sub = believe_me <$> sub
 
 implicit stringIsAnObject : String -> Object
 stringIsAnObject = believe_me
@@ -333,6 +336,9 @@ Ref : Type
 Ref = JVM_Native (Class ("io/github/mmhelloworld/idrisjvm/runtime/Ref"))
 
 export
+data IORef a = MkIORef a
+
+export
 newIORef : a -> JVM_IO (IORef a)
 newIORef val = (MkIORef . believe_me) <$> FFI.new (Object -> JVM_IO Ref) (believe_me val)
 
@@ -356,10 +362,18 @@ catchNonFatal t = not (instanceOf VirtualMachineErrorClass t
                  && instanceOf InterruptedExceptionClass t
                  && instanceOf LinkageErrorClass t)
 
-term syntax "<@@>" [anns] = Fun classWith (Anns anns)
 term syntax "<@>" [name] [attrs] = Ann name attrs
-term syntax "<@..>" [values] = AnnArray values
 term syntax "<@s>" [value] = AnnString value
-term syntax "<@i>" [value] = AnnInt value -- Descriptor can only take string
+term syntax "<@i>" [value] = AnnInt value
+term syntax "<@by>" [value] = AnnByte value
+term syntax "<@b>" [value] = AnnBoolean value
+term syntax "<@ch>" [value] = AnnChar value
+term syntax "<@sh>" [value] = AnnShort value
+term syntax "<@l>" [value] = AnnLong value
+term syntax "<@f>" [value] = AnnFloat value
+term syntax "<@d>" [value] = AnnDouble value
+term syntax "<@c>" [value] = AnnClass value
 term syntax "<@enum>" [ty] [value] = AnnEnum ty value
+term syntax "<@..>" [values] = AnnArray values
+term syntax "<@@>" [ann] = AnnAnnotation ann
 term syntax [name] "<@:>" [value] = (name, value)

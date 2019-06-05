@@ -1,8 +1,17 @@
 package IdrisJvm.Core;
 
+import IdrisJvm.Core.AnnotationValue.AnnAnnotation;
 import IdrisJvm.Core.AnnotationValue.AnnArray;
+import IdrisJvm.Core.AnnotationValue.AnnBoolean;
+import IdrisJvm.Core.AnnotationValue.AnnByte;
+import IdrisJvm.Core.AnnotationValue.AnnChar;
+import IdrisJvm.Core.AnnotationValue.AnnClass;
+import IdrisJvm.Core.AnnotationValue.AnnDouble;
 import IdrisJvm.Core.AnnotationValue.AnnEnum;
+import IdrisJvm.Core.AnnotationValue.AnnFloat;
 import IdrisJvm.Core.AnnotationValue.AnnInt;
+import IdrisJvm.Core.AnnotationValue.AnnLong;
+import IdrisJvm.Core.AnnotationValue.AnnShort;
 import IdrisJvm.Core.AnnotationValue.AnnString;
 import IdrisJvm.Core.JBsmArg.JBsmArgGetType;
 import IdrisJvm.Core.JBsmArg.JBsmArgHandle;
@@ -317,7 +326,7 @@ public class Assembler {
             parameterAnnotations.forEach(paramAnnotation -> {
                 final AnnotationVisitor av = mv.visitParameterAnnotation(parameterIndex, paramAnnotation.getName(), true);
                 paramAnnotation.getProperties().forEach(prop -> visitAnnotationProperty(av, prop.getName(),
-                        prop.getValue()));
+                    prop.getValue()));
                 av.visitEnd();
             });
         }
@@ -344,11 +353,11 @@ public class Assembler {
         });
         final String[] exceptionsArr = exceptions == null ? null : exceptions.toArray(new String[exceptions.size()]);
         mv = cw.visitMethod(
-                acc,
-                methodName,
-                desc,
-                sig,
-                exceptionsArr);
+            acc,
+            methodName,
+            desc,
+            sig,
+            exceptionsArr);
         handleCreateMethod(mv, annotations, paramAnnotations);
     }
 
@@ -458,11 +467,11 @@ public class Assembler {
 
     public void frame(int frameType, int nLocal, List<String> local, int nStack, List<String> stack) {
         mv.visitFrame(
-                frameType,
-                nLocal,
-                local.stream().map(this::toOpcode).toArray(),
-                nStack,
-                stack.stream().map(this::toOpcode).toArray()
+            frameType,
+            nLocal,
+            local.stream().map(this::toOpcode).toArray(),
+            nStack,
+            stack.stream().map(this::toOpcode).toArray()
         );
     }
 
@@ -635,11 +644,11 @@ public class Assembler {
 
     public void invokeMethod(int invocType, String className, String methodName, String desc, boolean isInterface) {
         mv.visitMethodInsn(
-                invocType,
-                className,
-                methodName,
-                desc,
-                isInterface);
+            invocType,
+            className,
+            methodName,
+            desc,
+            isInterface);
     }
 
     public void invokeDynamic(String methodName, String desc, JHandle handle, List<JBsmArg> invokeDynamicArgs) {
@@ -659,10 +668,10 @@ public class Assembler {
         }
 
         mv.visitInvokeDynamicInsn(
-                methodName,
-                desc,
-                getAsmHandle(handle),
-                bsmArgs
+            methodName,
+            desc,
+            getAsmHandle(handle),
+            bsmArgs
         );
     }
 
@@ -780,11 +789,11 @@ public class Assembler {
     public void lookupSwitch(String defaultLabel, List<String> caseLabels, List<Integer> cases) {
         final int[] casesArr = cases.stream().mapToInt(n -> n).toArray();
         mv.visitLookupSwitchInsn(
-                (Label) env.get(defaultLabel),
-                casesArr,
-                caseLabels.stream()
-                        .map(s -> (Label) env.get(s))
-                        .toArray(Label[]::new)
+            (Label) env.get(defaultLabel),
+            casesArr,
+            caseLabels.stream()
+                .map(s -> (Label) env.get(s))
+                .toArray(Label[]::new)
         );
     }
 
@@ -891,18 +900,21 @@ public class Assembler {
                                       final List<String> interfaces,
                                       final List<Annotation> annotations) {
         cw.visit(version,
-                access,
-                className,
-                signature,
-                parentClassName,
-                interfaces.toArray(new String[0]));
+            access,
+            className,
+            signature,
+            parentClassName,
+            interfaces.toArray(new String[0]));
         cws.put(className, cw);
 
-        annotations.forEach(annotation -> {
-            AnnotationVisitor av = cw.visitAnnotation(annotation.getName(), true);
-            annotation.getProperties().forEach(prop -> visitAnnotationProperty(av, prop.getName(), prop.getValue()));
-            av.visitEnd();
-        });
+        annotations.forEach(annotation ->
+            visitAnnotation(annotation, cw.visitAnnotation(annotation.getName(), true)));
+    }
+
+    private void visitAnnotation(Annotation annotation, AnnotationVisitor av) {
+        annotation.getProperties()
+            .forEach(prop -> visitAnnotationProperty(av, prop.getName(), prop.getValue()));
+        av.visitEnd();
     }
 
     private void visitAnnotationProperty(AnnotationVisitor annotationVisitor, String name, AnnotationValue value) {
@@ -919,23 +931,123 @@ public class Assembler {
                 AnnInt annInt = (AnnInt) value;
                 annotationVisitor.visit(name, annInt.getValue());
                 break;
+            case AnnBoolean:
+                AnnBoolean annBoolean = (AnnBoolean) value;
+                annotationVisitor.visit(name, annBoolean.getValue());
+                break;
+            case AnnByte:
+                AnnByte annByte = (AnnByte) value;
+                annotationVisitor.visit(name, annByte.getValue());
+                break;
+            case AnnChar:
+                AnnChar annChar = (AnnChar) value;
+                annotationVisitor.visit(name, annChar.getValue());
+                break;
+            case AnnShort:
+                AnnShort annShort = (AnnShort) value;
+                annotationVisitor.visit(name, annShort.getValue());
+                break;
+            case AnnLong:
+                AnnLong annLong = (AnnLong) value;
+                annotationVisitor.visit(name, annLong.getValue());
+                break;
+            case AnnFloat:
+                AnnFloat annFloat = (AnnFloat) value;
+                annotationVisitor.visit(name, (float) annFloat.getValue());
+                break;
+            case AnnDouble:
+                AnnDouble annDouble = (AnnDouble) value;
+                annotationVisitor.visit(name, annDouble.getValue());
+                break;
+            case AnnClass:
+                AnnClass annClass = (AnnClass) value;
+                String typeDescriptor = annClass.getValue();
+                Type type = getType(typeDescriptor);
+                annotationVisitor.visit(name, type);
+                break;
             case AnnArray:
                 AnnArray annArray = (AnnArray) value;
                 AnnotationVisitor arrayPropertyVisitor = annotationVisitor.visitArray(name);
                 annArray.getValues()
-                        .forEach(propertyValue -> visitAnnotationProperty(arrayPropertyVisitor, null, propertyValue));
+                    .forEach(propertyValue -> visitAnnotationProperty(arrayPropertyVisitor, null, propertyValue));
                 arrayPropertyVisitor.visitEnd();
+                break;
+            case AnnAnnotation:
+                AnnAnnotation annAnnotation = (AnnAnnotation) value;
+                Annotation annotation = annAnnotation.getValue();
+                visitAnnotation(annotation, annotationVisitor.visitAnnotation(name, annotation.getName()));
                 break;
         }
     }
 
+    private static Type getType(String typeDescriptor) {
+        switch (typeDescriptor) {
+            case "boolean":
+                return Type.BOOLEAN_TYPE;
+            case "byte":
+                return Type.BYTE_TYPE;
+            case "char":
+                return Type.CHAR_TYPE;
+            case "short":
+                return Type.SHORT_TYPE;
+            case "int":
+                return Type.INT_TYPE;
+            case "long":
+                return Type.LONG_TYPE;
+            case "float":
+                return Type.FLOAT_TYPE;
+            case "double":
+                return Type.DOUBLE_TYPE;
+            case "void":
+                return Type.VOID_TYPE;
+            default:
+                if (typeDescriptor.endsWith("[]")) {
+                    return Type.getObjectType(getArrayDescriptor(typeDescriptor));
+                } else {
+                    return Type.getObjectType(typeDescriptor);
+                }
+        }
+
+    }
+
+    private static String getArrayDescriptor(String str) {
+        int stack = 0;
+        int dimension = 0;
+        for (int i = str.length() - 1; i >= 0; i--) {
+            char ch = str.charAt(i);
+            int delta = ch == ']' ? 1 : (ch == '[' ? -1 : 0);
+            if (delta == 0) {
+                if (stack != 0) {
+                    throw new IllegalArgumentException("Invalid array descriptor " + str);
+                }
+                return createArrayDescriptor(str.substring(0, i + 1), dimension);
+            }
+            stack = stack + delta;
+            if (stack == 0) {
+                dimension++;
+            } else if (stack != 1) {
+                throw new IllegalArgumentException("Invalid array descriptor " + str);
+            }
+        }
+        throw new IllegalArgumentException("Invalid array descriptor " + str);
+    }
+
+    private static String createArrayDescriptor(String elementTypeName, int dimension) {
+        String elementTypeDesc = getType(elementTypeName).getDescriptor();
+        StringBuilder arrayDesc = new StringBuilder();
+        for (int i = 0; i < dimension; i++) {
+            arrayDesc.append('[');
+        }
+        return arrayDesc + elementTypeDesc;
+    }
+
     private Handle getAsmHandle(JHandle handle) {
         return new Handle(
-                handle.getTag(),
-                handle.getCname(),
-                handle.getMname(),
-                handle.getDesc(),
-                handle.isIntf()
+            handle.getTag(),
+            handle.getCname(),
+            handle.getMname(),
+            handle.getDesc(),
+            handle.isIntf()
         );
     }
 

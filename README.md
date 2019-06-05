@@ -16,37 +16,47 @@ JVM bytecode back end for Idris
 
 ## Example
 
-* pythag.idr
+* helloworld.idr
 
     ```idris
     module Main
-
-    pythag : Int -> List (Int, Int, Int)
-    pythag max = [(x, y, z) | z <- [1..max], y <- [1..z], x <- [1..y],
-                              x * x + y *y == z * z]
-
-    main : IO ()
-    main = print (pythag 50)
+    
+    import IdrisJvm.IO
+    
+    data Tree a = Leaf
+                | Node (Tree a) a (Tree a)
+    
+    inorder : Tree a -> List a
+    inorder Leaf = []
+    inorder (Node left a right) = inorder left ++ [a] ++ inorder right
+    
+    tree : Tree String
+    tree = Node
+            (Node
+              (Node Leaf "3" Leaf)
+              "+"
+              (Node Leaf "7" Leaf))
+            "/"
+            (Node Leaf "2" Leaf)
+    
+    main : JVM_IO ()
+    main = printLn $ inorder tree
     ```
 
 * Compiling
-    * On Linux/Mac OS:  `$ idris --portable-codegen jvm pythag.idr -o target`
-    * On Windows:  `idris --portable-codegen jvm.bat pythag.idr -o target`
+    * On Linux/Mac OS:  `$ idris --portable-codegen jvm -p idrisjvmffi helloworld.idr -o target`
+    * On Windows:  `idris --portable-codegen jvm.bat -p idrisjvmffi helloworld.idr -o target`
 
 * Running
     * On Linux/Mac OS:  `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm/idris-jvm-runtime.jar:target main.Main`
     * On Windows:  `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm/idris-jvm-runtime.jar;target main.Main`
 
-## Status
+## Features
 
-* All Idris types are supported. Idris `Int` is mapped to Java primitive `int`. Idris `String` is mapped to Java `String`. Idris `Integer` is represented as Java `BigInteger`.
+* Idris basic types are mapped to Java types. Idris `Int` is mapped to Java primitive `int`. Idris `String` is mapped to Java `String`. Idris `Integer` is represented as Java `BigInteger`.
 Idris `Double` is mapped to Java `double`. Idris `Bits8`, `Bits16`, `Bits32` are mapped to Java `int`.
 Idris `Bits64` is mapped to Java `long`.
 
-* **FFI - Calling Java from Idris:** From Idris, invoking Java static methods, instance methods, constructors are all supported.
-See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integration-test/src/test/resources/idris-test-sources/ffi/ffi.idr) for an example.
-
-* **FFI: Calling Idris from Java:** Idris functions can be exported as Java instance methods, static methods and constructors. The exported class with Idris implementations can also extend a Java class and implement interfaces. It can also have static and instance fields and the field values can be set from Idris. Idris types (monomorphic, for example, `List Int`) can also be exported as a Java class. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integration-test/src/test/resources/idris-test-sources/ffi/ffi.idr) for an example.
 * **Tail recursion** is eliminated using JVM's `GOTO`. For the following code, `sum 50000` wouldn't blow up the stack.
     ```idris
     sum : Nat -> Nat
@@ -60,14 +70,22 @@ See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integ
 
     ```idris
     mutual
-      evenT : Nat -> IO Bool
-      evenT Z = pure True
-      evenT (S k) = oddT k
-
-      oddT : Nat -> IO Bool
-      oddT Z = pure False
-      oddT (S k) = evenT k
+      evenT : Nat -> JVM_IO ()
+      evenT Z = printLn True
+      evenT (S k) = do
+        setProperty "bar" (show k)
+        oddT k
+    
+      oddT : Nat -> JVM_IO ()
+      oddT Z = printLn False
+      oddT (S k) = do
+        setProperty "foo" (show k)
+        evenT k
     ```
+* **FFI - Calling Java from Idris:** From Idris, invoking Java static methods, instance methods, constructors are all supported.
+See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integration-test/src/test/resources/idris-test-sources/ffi/ffi.idr) for an example.
+
+* **FFI: Calling Idris from Java:** Idris functions can be exported as Java instance methods, static methods and constructors. The exported class with Idris implementations can extend a Java class and implement interfaces. It can have static and instance fields and the field values can be set from Idris. Idris types (monomorphic, for example, `List Int`) can also be exported as a Java class. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integration-test/src/test/resources/idris-test-sources/ffi/ffi.idr) for an example.
 
 * **Idris functions as Java lambdas:** Idris functions can be passed as Java lambdas in FFI. JVM's `invokedynamic` instruction is used to create target functional interface objects just like how javac does. 
 
@@ -82,8 +100,10 @@ main = ArrayList.fromList ["foobar", "hello", "world"] >>=
        printLn
 ```
 
-* Idris primitives `par` and `fork` for running in parallel and creating threads are supported using Java's `ForkJoin` and `ExecutorService`. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integration-test/src/test/resources/idris-test-sources/forkpar/forkpar.idr) for an example.
-
 * `Maybe` type can be used in an FFI function to avoid Java `null` getting into Idris code. `Maybe` used in an
 argument position will pass `null` to the Java code if the value is `Nothing` otherwise the unwrapped value will be passed to
 Java. In the similar way, `Maybe` type used in the return type position would return `Nothing` if the FFI function returns `null` otherwise returns the actual value in `Just`.
+
+* Idris functions can be exported with Java annotations. This enables Idris to be used in Java's annotation based libraries
+such as Java Microbenchmark Harness, Spring Boot etc.
+See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integration-test/src/test/resources/idris-test-sources/ffi/ffi.idr#280) for an example.

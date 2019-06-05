@@ -23,14 +23,53 @@ JAnnEnum = javaClass "IdrisJvm/Core/AnnotationValue$AnnEnum"
 JAnnInt : Type
 JAnnInt = javaClass "IdrisJvm/Core/AnnotationValue$AnnInt"
 
+JAnnBoolean : Type
+JAnnBoolean = javaClass "IdrisJvm/Core/AnnotationValue$AnnBoolean"
+
+JAnnByte : Type
+JAnnByte = javaClass "IdrisJvm/Core/AnnotationValue$AnnByte"
+
+JAnnChar : Type
+JAnnChar = javaClass "IdrisJvm/Core/AnnotationValue$AnnChar"
+
+JAnnShort : Type
+JAnnShort = javaClass "IdrisJvm/Core/AnnotationValue$AnnShort"
+
+JAnnLong : Type
+JAnnLong = javaClass "IdrisJvm/Core/AnnotationValue$AnnLong"
+
+JAnnFloat : Type
+JAnnFloat = javaClass "IdrisJvm/Core/AnnotationValue$AnnFloat"
+
+JAnnDouble : Type
+JAnnDouble = javaClass "IdrisJvm/Core/AnnotationValue$AnnDouble"
+
+JAnnClass : Type
+JAnnClass = javaClass "IdrisJvm/Core/AnnotationValue$AnnClass"
+
 JAnnArray : Type
 JAnnArray = javaClass "IdrisJvm/Core/AnnotationValue$AnnArray"
+
+JAnnAnnotation : Type
+JAnnAnnotation = javaClass "IdrisJvm/Core/AnnotationValue$AnnAnnotation"
 
 JAnnotationProperty : Type
 JAnnotationProperty = javaClass "IdrisJvm/Core/AnnotationProperty"
 
 JAnnotationValue: Type
 JAnnotationValue = javaClass "IdrisJvm/Core/AnnotationValue"
+
+Inherits JAnnotationValue JAnnInt where {}
+Inherits JAnnotationValue JAnnBoolean where {}
+Inherits JAnnotationValue JAnnByte where {}
+Inherits JAnnotationValue JAnnChar where {}
+Inherits JAnnotationValue JAnnShort where {}
+Inherits JAnnotationValue JAnnLong where {}
+Inherits JAnnotationValue JAnnFloat where {}
+Inherits JAnnotationValue JAnnDouble where {}
+Inherits JAnnotationValue JAnnEnum where {}
+Inherits JAnnotationValue JAnnClass where {}
+Inherits JAnnotationValue JAnnAnnotation where {}
 
 JHandle: Type
 JHandle = javaClass "IdrisJvm/Core/JHandle"
@@ -48,23 +87,35 @@ toJClassOpts : ClassOpts -> Int
 toJClassOpts ComputeMaxs = 1
 toJClassOpts ComputeFrames = 2
 
-toJAnnotationValue : Asm.AnnotationValue -> JVM_IO JAnnotationValue
-toJAnnotationValue (AnnString s) = believe_me <$> FFI.new (String -> JVM_IO JAnnString) s
-toJAnnotationValue (AnnEnum enum s) = believe_me <$> FFI.new (String -> String -> JVM_IO JAnnEnum) enum s
-toJAnnotationValue (AnnInt n) = believe_me <$> FFI.new (Int -> JVM_IO JAnnInt) n
-toJAnnotationValue (AnnArray values) = do
-  jvalues <- ArrayList.fromList !(sequence $ toJAnnotationValue <$> values)
-  believe_me <$> FFI.new (JList -> JVM_IO JAnnArray) (believe_me jvalues)
+mutual
+    toJAnnotationValue : Asm.AnnotationValue -> JVM_IO JAnnotationValue
+    toJAnnotationValue (AnnString s) = believe_me <$> FFI.new (String -> JVM_IO JAnnString) s
+    toJAnnotationValue (AnnEnum enum s) = believe_me <$> FFI.new (String -> String -> JVM_IO JAnnEnum) enum s
+    toJAnnotationValue (AnnInt n) = believe_me <$> FFI.new (Int -> JVM_IO JAnnInt) n
+    toJAnnotationValue (AnnBoolean n) = believe_me <$> FFI.new (Bool -> JVM_IO JAnnBoolean) n
+    toJAnnotationValue (AnnByte n) = believe_me <$> FFI.new (Bits8 -> JVM_IO JAnnByte) n
+    toJAnnotationValue (AnnChar n) = believe_me <$> FFI.new (Char -> JVM_IO JAnnChar) n
+    toJAnnotationValue (AnnShort n) = believe_me <$> FFI.new (Bits16 -> JVM_IO JAnnShort) n
+    toJAnnotationValue (AnnLong n) = believe_me <$> FFI.new (Bits64 -> JVM_IO JAnnLong) n
+    toJAnnotationValue (AnnFloat n) = believe_me <$> FFI.new (Double -> JVM_IO JAnnFloat) n
+    toJAnnotationValue (AnnDouble n) = believe_me <$> FFI.new (Double -> JVM_IO JAnnDouble) n
+    toJAnnotationValue (AnnClass n) = believe_me <$> FFI.new (String -> JVM_IO JAnnClass) n
+    toJAnnotationValue (AnnAnnotation n) = do
+        jAnn <- toJAnnotation n
+        FFI.new (JAnnotation -> JVM_IO JAnnAnnotation) jAnn
+    toJAnnotationValue (AnnArray values) = do
+      jvalues <- ArrayList.fromList !(sequence $ toJAnnotationValue <$> values)
+      believe_me <$> FFI.new (JList -> JVM_IO JAnnArray) (believe_me jvalues)
 
-toJAnnotationProperty : Asm.AnnotationProperty -> JVM_IO JAnnotationProperty
-toJAnnotationProperty (name, annValue) = do
-  jAnnotationValue <- toJAnnotationValue annValue
-  FFI.new (String -> JAnnotationValue -> JVM_IO JAnnotationProperty) name jAnnotationValue
+    toJAnnotationProperty : Asm.AnnotationProperty -> JVM_IO JAnnotationProperty
+    toJAnnotationProperty (name, annValue) = do
+      jAnnotationValue <- toJAnnotationValue annValue
+      FFI.new (String -> JAnnotationValue -> JVM_IO JAnnotationProperty) name jAnnotationValue
 
-toJAnnotation : Asm.Annotation -> JVM_IO JAnnotation
-toJAnnotation (MkAnnotation name props) = do
-  jprops <- ArrayList.fromList !(sequence $ toJAnnotationProperty <$> props)
-  FFI.new (String -> JList -> JVM_IO JAnnotation) name (believe_me jprops)
+    toJAnnotation : Asm.Annotation -> JVM_IO JAnnotation
+    toJAnnotation (MkAnnotation name props) = do
+      jprops <- ArrayList.fromList !(sequence $ toJAnnotationProperty <$> props)
+      FFI.new (String -> JList -> JVM_IO JAnnotation) name (believe_me jprops)
 
 toJFieldInitialValue : FieldInitialValue -> Object
 toJFieldInitialValue (IntField n) = believe_me $ JInteger.valueOf n

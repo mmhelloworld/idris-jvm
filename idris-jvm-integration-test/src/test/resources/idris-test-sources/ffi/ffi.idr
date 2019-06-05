@@ -9,6 +9,11 @@ import Java.Util.Function
 import Java.Util.Stream
 import Data.Vect
 
+term syntax "<@TestAnn>" [attrs] = <@> "idrisjvm/integrationtest/TestAnn" attrs
+term syntax "<@TestAnn2>" [attrs] = <@> "idrisjvm/integrationtest/TestAnn2" attrs
+
+term syntax "<@TimeUnit>" [timeUnit] = <@enum> "java/util/concurrent/TimeUnit" timeUnit
+
 IdrisThreadClass : JVM_NativeTy
 IdrisThreadClass = Class "hello/IdrisThread"
 
@@ -272,6 +277,64 @@ exports1 =
   Fun Main.run ExportDefault $
   Fun getThreadName (Super "getName") $
   Fun Main.jmain (ExportStatic "main") $
+  Fun helloFromIdris (ExportStaticWithAnn "helloWithAnnotation"
+      -- method annotations
+      [
+        -- method annotation 1
+        <@TestAnn> [
+          ("intValue", <@i> "5"),
+          ("byteValue", <@by> "5"),
+          ("charValue", <@ch> "a"),
+          ("booleanValue", <@b> "false"),
+          ("shortValue", <@sh> "45"),
+          ("longValue", <@l> "2324"),
+          ("floatValue", <@f> "1.32"),
+          ("doubleValue", <@d> "4.2323"),
+          ("enumValue", <@TimeUnit> "SECONDS"),
+          ("annValue", <@@> <@TestAnn2> [
+              ("shortValue", <@sh> "45")
+              ]),
+          ("annValues", <@..> [
+              <@@> <@TestAnn2> [
+                  ("shortValue", <@sh> "45"),
+                  ("classValue", <@c> "int[][]")
+                  ],
+              <@@> <@TestAnn2> [
+                  ("enumValue", <@TimeUnit> "MILLISECONDS")
+                  ]
+              ])
+        ],
+
+        -- method annotation 2
+        <@TestAnn2> []
+      ]
+
+      [
+        -- parameter 1 annotations
+        [
+            -- parameter 1 - annotation 1
+            <@TestAnn> [
+                  ("doubleValue", <@d> "4.2323"),
+                  ("enumValue", <@TimeUnit> "SECONDS"),
+                  ("annValue", <@@> <@TestAnn2> [
+                      ("shortValue", <@sh> "45")
+                      ]),
+                  ("annValues", <@..> [
+                      <@@> <@TestAnn2> [
+                          ("shortValue", <@sh> "45")
+                          ],
+                      <@@> <@TestAnn2> [
+                          ("enumValue", <@TimeUnit> "MILLISECONDS")
+                          ]
+                      ])
+                  ],
+            -- parameter 1 - annotation 2
+            <@TestAnn2> []
+        ],
+
+        -- parameter 2 annotations
+        [<@TestAnn2> []]
+      ])
   End
 
 exports2 : FFI_Export FFI_JVM "hello/JExportTest" []

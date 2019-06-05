@@ -10,6 +10,9 @@ public class IdrisToJavaNameConverter {
     private static final Pattern endsWithNonDotsPattern = Pattern.compile("(.*?)\\.([^.]+)$");
     private static final Pattern endsWithDotsPattern = Pattern.compile("(.*?)\\.(\\.*)$");
     private static final Map<Character, String> replacements = new HashMap<>();
+    private static final String DEFAULT_PACKAGE_NAME = "main";
+    private static final String DEFAULT_CLASS_NAME = DEFAULT_PACKAGE_NAME + "/Main";
+    private static final String DEFAULT_METHOD_NAME = "main";
 
     static {
         replacements.put(' ', "space");
@@ -43,10 +46,6 @@ public class IdrisToJavaNameConverter {
         replacements.put('}', "rbrace");
         replacements.put('~', "tilde");
     }
-
-    private static final String DEFAULT_PACKAGE_NAME = "main";
-    private static final String DEFAULT_CLASS_NAME = DEFAULT_PACKAGE_NAME + "/Main";
-    private static final String DEFAULT_METHOD_NAME = "main";
 
     public static String idrisClassMethodName(String idrisName) {
         final Matcher matcher = pattern.matcher(idrisName);
@@ -94,7 +93,7 @@ public class IdrisToJavaNameConverter {
             return DEFAULT_CLASS_NAME;
         } else if (className.contains(".")) {
             return className.replaceAll("\\.", "/")
-                    .replaceAll("([^/]+)/", "I\\_$1/");
+                .replaceAll("([^/]+)/", "I\\_$1/");
         } else {
             return DEFAULT_PACKAGE_NAME + "/" + className;
         }

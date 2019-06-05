@@ -1,7 +1,10 @@
-package idrisjvm;
+package idrisjvm.integrationtest;
 
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -15,6 +18,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.lang.ProcessBuilder.Redirect;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
@@ -24,7 +28,9 @@ import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
 import static java.lang.Boolean.parseBoolean;
+import static java.lang.String.format;
 import static java.lang.System.getProperty;
+import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.stream.Collectors.toList;
 import static org.hamcrest.CoreMatchers.hasItems;
@@ -33,8 +39,8 @@ import static org.junit.Assert.assertThat;
 @RunWith(Parameterized.class)
 public class IdrisJvmTest {
     private static final String IDRIS_JVM_HOME = Optional.ofNullable(System.getProperty("IDRIS_JVM_HOME"))
-            .orElseGet(() -> Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
-                    .orElseGet(() -> System.getProperty("user.home")));
+        .orElseGet(() -> Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
+            .orElseGet(() -> System.getProperty("user.home")));
 
     private static File testOutputRootDir;
     private static String runtimeJarPath;
@@ -47,6 +53,33 @@ public class IdrisJvmTest {
 
     @Parameter(2)
     public File expectedOutputFile;
+
+    @Rule
+    public TestWatcher testWatcher = new TestWatcher() {
+        @Override
+        protected void failed(Throwable e, Description description) {
+            printCodegenServerLog();
+        }
+
+        private void printCodegenServerLog() {
+            Path logPath = Paths.get(IDRIS_JVM_HOME, "codegen", "idris-jvm-server.log");
+            try {
+                Files.lines(logPath)
+                    .forEach(System.err::println);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        protected void succeeded(Description description) {
+        }
+
+        @Override
+        protected void starting(Description description) {
+            System.out.printf("Starting %s%n", description.getDisplayName());
+        }
+    };
 
     @Parameters(name = "{0}")
     public static Collection<Object[]> data() throws IOException {
@@ -61,7 +94,10 @@ public class IdrisJvmTest {
     @BeforeClass
     public static void beforeClass() {
         if (shouldStartIdrisJvmServer()) {
-            getPortFile().delete();
+            boolean isDeleted = getPortFile().delete();
+            if (!isDeleted) {
+                throw new RuntimeException(format("Unable to remove port file %s", getPortFile()));
+            }
         }
         testOutputRootDir = new File(getProperty("test.output", getProperty("user.dir")));
         runtimeJarPath = Paths.get(getProperty("runtime.jar.path")).toString();
@@ -80,7 +116,7 @@ public class IdrisJvmTest {
         List<String> actualOutput = readFile(jvmOut);
         List<String> expectedOutput = readFile(expectedOutputFile);
 
-        assertThat(actualOutput, hasItems(expectedOutput.toArray(new String[expectedOutput.size()])));
+        assertThat(actualOutput, hasItems(expectedOutput.toArray(new String[0])));
     }
 
     private static boolean shouldStartIdrisJvmServer() {
@@ -130,7 +166,9 @@ public class IdrisJvmTest {
 
     private static Stream<? extends File> getTestDirs(final Resource resource) {
         try {
-            return Arrays.stream(resource.getFile().listFiles());
+            File[] files = resource.getFile().listFiles();
+            requireNonNull(files);
+            return Arrays.stream(files);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

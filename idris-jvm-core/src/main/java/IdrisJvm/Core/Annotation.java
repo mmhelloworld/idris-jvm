@@ -2,7 +2,7 @@ package IdrisJvm.Core;
 
 import java.util.List;
 
-public class Annotation{
+public class Annotation {
     private final String name;
     private final List<AnnotationProperty> properties;
 

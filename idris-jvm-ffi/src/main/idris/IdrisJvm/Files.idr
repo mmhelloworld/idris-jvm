@@ -39,3 +39,6 @@ namespace Files
   createPath : String -> JVM_IO Path
   createPath = invokeStatic FilesClass "createPath" (String -> JVM_IO Path)
 
+  deleteIfExists : Path -> JVM_IO Bool
+  deleteIfExists = invokeStatic FilesClass "deleteIfExists" (Path -> JVM_IO Bool)
+

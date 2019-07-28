@@ -1,6 +1,9 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
+import io.github.mmhelloworld.idrisjvm.io.Files;
+
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -131,7 +134,8 @@ public class Runtime {
 
     public static int runCommand(String command) throws IOException, InterruptedException {
         String[] cmdarray = parseCommand(command).toArray(new String[0]);
-        ProcessBuilder processBuilder = new ProcessBuilder(cmdarray).inheritIO();
+        ProcessBuilder processBuilder = new ProcessBuilder(cmdarray)
+                .directory(new File(Files.getWorkingDir()));
         return processBuilder.start().waitFor();
     }
 

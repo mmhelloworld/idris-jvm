@@ -33,14 +33,13 @@ import static java.lang.System.getProperty;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.stream.Collectors.toList;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @RunWith(Parameterized.class)
 public class IdrisJvmTest {
     private static final String IDRIS_JVM_HOME = Optional.ofNullable(System.getProperty("IDRIS_JVM_HOME"))
-        .orElseGet(() -> Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
-            .orElseGet(() -> System.getProperty("user.home")));
+            .orElseGet(() -> Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
+                    .orElseGet(() -> System.getProperty("user.home")));
 
     private static File testOutputRootDir;
     private static String runtimeJarPath;
@@ -65,7 +64,7 @@ public class IdrisJvmTest {
             Path logPath = Paths.get(IDRIS_JVM_HOME, "codegen", "idris-jvm-server.log");
             try {
                 Files.lines(logPath)
-                    .forEach(System.err::println);
+                        .forEach(System.err::println);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -86,9 +85,9 @@ public class IdrisJvmTest {
         final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         final Resource[] resources = resolver.getResources("idris-test-sources");
         return Arrays.stream(resources)
-            .flatMap(IdrisJvmTest::getTestDirs)
-            .map(IdrisJvmTest::getTestFiles)
-            .collect(toList());
+                .flatMap(IdrisJvmTest::getTestDirs)
+                .map(IdrisJvmTest::getTestFiles)
+                .collect(toList());
     }
 
     @BeforeClass
@@ -116,7 +115,8 @@ public class IdrisJvmTest {
         List<String> actualOutput = readFile(jvmOut);
         List<String> expectedOutput = readFile(expectedOutputFile);
 
-        assertThat(actualOutput, hasItems(expectedOutput.toArray(new String[0])));
+        assertThat(actualOutput)
+                .containsExactlyInAnyOrder(expectedOutput.toArray(new String[0]));
     }
 
     private static boolean shouldStartIdrisJvmServer() {
@@ -125,7 +125,7 @@ public class IdrisJvmTest {
 
     private void compile(final File testOutputDir, final File compilerOut) throws IOException, InterruptedException {
         ProcessBuilder idrisCompilerProcessBuilder = new ProcessBuilder("idris", "--portable-codegen", "jvm", "-p",
-            "idrisjvmffi", "-p", "effects", sourceFile.getPath(), "-o", testOutputDir.getPath());
+                "idrisjvmffi", "-p", "effects", sourceFile.getPath(), "-o", testOutputDir.getPath());
         idrisCompilerProcessBuilder.directory(testOutputDir);
 
         idrisCompilerProcessBuilder.redirectErrorStream(true);

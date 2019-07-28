@@ -146,6 +146,9 @@ interface Inherits a b where {}
 
 Inherits (JVM_Native t) (JVM_Native t) where {}
 
+IdrisObject : Type
+IdrisObject = javaClass "io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"
+
 namespace Object
   ObjectClass : JVM_NativeTy
   ObjectClass = Class "java/lang/Object"

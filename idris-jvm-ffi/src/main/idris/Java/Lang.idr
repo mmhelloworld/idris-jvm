@@ -270,7 +270,7 @@ vectToArray {elemTy} xs
 %inline
 listToArray : List elemTy -> {auto jvmType: JVM_Types elemTy} -> JVM_IO (JVM_Array elemTy)
 listToArray {elemTy} xs
-    = listToArray' xs
+    = assert_total $ listToArray' xs
         (newArray elemTy (length xs))
         (setArray (JVM_Array elemTy -> Int -> elemTy -> JVM_IO ()))
   where

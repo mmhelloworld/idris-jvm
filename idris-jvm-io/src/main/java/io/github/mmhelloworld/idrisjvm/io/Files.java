@@ -1,5 +1,6 @@
 package io.github.mmhelloworld.idrisjvm.io;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -59,18 +60,34 @@ public final class Files {
     }
 
     public static Path createPath(String pathStr) {
+        return createPath(pathStr, workingDir);
+    }
+
+    private static Path createPath(String pathStr, String workingDir) {
+        if (pathStr.isEmpty()) {
+            return Paths.get(workingDir);
+        }
+
         Path path = Paths.get(pathStr);
+        final Path resolvedPath;
         if (path.isAbsolute()) {
-            return path;
+            resolvedPath = path;
         } else {
-            if (pathStr.equals(".")) {
-                return Paths.get(workingDir);
-            } else if (pathStr.equals("..")) {
-                return Paths.get(workingDir).getParent();
+            if (pathStr.startsWith("../")) {
+                resolvedPath = createPath(pathStr.substring("../".length()),
+                        Paths.get(workingDir).getParent().toString());
+            } else if (pathStr.startsWith("..")) {
+                resolvedPath = createPath(pathStr.substring("..".length()),
+                        Paths.get(workingDir).getParent().toString());
+            } else if (pathStr.startsWith("./")) {
+                resolvedPath = createPath(pathStr.substring("./".length()), workingDir);
+            } else if (pathStr.startsWith(".")) {
+                resolvedPath = createPath(pathStr.substring(".".length()), workingDir);
             } else {
-                return Paths.get(workingDir, pathStr);
+                resolvedPath = Paths.get(workingDir, pathStr);
             }
         }
+        return resolvedPath;
     }
 
     public static void createDirectory(String pathString) throws IOException {

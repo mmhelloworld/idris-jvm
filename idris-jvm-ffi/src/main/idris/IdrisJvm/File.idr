@@ -34,6 +34,10 @@ FileReadError : FileError
 FileReadError = believe_me $ unsafePerformIO $ IOException.new "File Read Error"
 
 export
+GenericFileError : Int -> FileError
+GenericFileError errNo = believe_me $ unsafePerformIO $ IOException.new $ "Generic File Error " ++ show errNo
+
+export
 unableToOpenFile : String -> JVM_IO IOException
 unableToOpenFile fileName = IOException.new ("Unable to open file: " ++ fileName)
 
@@ -208,3 +212,9 @@ socketListenAndAccept port = do
     case byteBufferIoOrError of
         Left throwable => Left <$> Objects.toString throwable
         Right byteBufferIo => pure . Right $ MkFileClientServerSocket byteBufferIo
+
+export
+fRemove : (s : String) -> JVM_IO Bool
+fRemove f = do
+    path <- Files.createPath f
+    deleteIfExists path

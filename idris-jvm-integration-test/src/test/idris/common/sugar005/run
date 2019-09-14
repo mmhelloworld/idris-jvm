@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ As.idr -o sugar005
+./sugar005
+rm -f sugar005 *.ibc

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+OPTS="--consolewidth infinite --nocolour"
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ $OPTS --check TestLambdaImpossible
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ $OPTS --check --warnpartial TestLambdaPossible
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ $OPTS --check TestLambdaPossible2
+rm -f *.ibc

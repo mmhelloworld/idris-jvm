@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour tutorial006a.idr --check
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour tutorial006b.idr --check
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour tutorial006c.idr -p effects --check
+rm -f *.ibc

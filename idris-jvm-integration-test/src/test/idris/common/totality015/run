@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ totality015.idr --check
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ totality015a.idr --check
+rm -f *.ibc

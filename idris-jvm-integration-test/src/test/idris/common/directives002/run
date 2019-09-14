@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ directives002.idr --check --nocolour
+
+rm -f directives002 *.ibc

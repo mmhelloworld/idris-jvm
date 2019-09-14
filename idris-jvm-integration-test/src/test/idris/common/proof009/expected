@@ -1,0 +1,26 @@
+Warning: this interactive prover is deprecated and will be removed in a future release. Please see :elab for a similar feature that will replace it.
+
+
+----------                 Goal:                  ----------
+{hole_0} : Int -> Int -> Int
+-Main.arhs> ----------              Other goals:              ----------
+{hole_0}
+----------              Assumptions:              ----------
+ x : Int
+----------                 Goal:                  ----------
+{hole_1} : Int -> Int
+-Main.arhs> ----------              Other goals:              ----------
+{hole_1},{hole_0}
+----------              Assumptions:              ----------
+ x : Int
+ y : Int
+----------                 Goal:                  ----------
+{hole_2} : Int
+-Main.arhs> arhs: No more goals.
+-Main.arhs> Proof completed!
+Main.arhs = proof
+  intro x
+  intros
+  trivial
+
+

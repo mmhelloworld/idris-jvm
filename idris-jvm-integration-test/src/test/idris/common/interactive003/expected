@@ -1,0 +1,5 @@
+ys
+x :: app xs ys
+[]
+f x y :: vzipWith f xs ys
+0 :: word_length xs

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour forkpar.idr -o forkpar
+./forkpar
+rm -f forkpar forkpar.ibc

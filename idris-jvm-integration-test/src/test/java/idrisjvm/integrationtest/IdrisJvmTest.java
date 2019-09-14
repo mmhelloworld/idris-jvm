@@ -1,5 +1,6 @@
 package idrisjvm.integrationtest;
 
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
@@ -9,8 +10,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -20,35 +19,40 @@ import java.lang.ProcessBuilder.Redirect;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-import static java.io.File.pathSeparator;
-import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
 import static java.lang.System.getProperty;
-import static java.util.Objects.requireNonNull;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.util.Comparator.comparing;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 @RunWith(Parameterized.class)
 public class IdrisJvmTest {
     private static final String IDRIS_JVM_HOME = Optional.ofNullable(System.getProperty("IDRIS_JVM_HOME"))
-            .orElseGet(() -> Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
-                    .orElseGet(() -> System.getProperty("user.home")));
-
-    private static File testOutputRootDir;
-    private static String runtimeJarPath;
+        .orElseGet(() -> Optional.ofNullable(System.getenv("IDRIS_JVM_HOME"))
+            .orElseGet(() -> System.getProperty("user.home")));
+    private static final Pattern FAILED_TEST_PATTERN = Pattern.compile("test\\[([^]]+)].*");
+    private static Path failedLogPath;
 
     @Parameter
     public String testName;
 
     @Parameter(1)
-    public File sourceFile;
+    public File testDir;
 
     @Parameter(2)
     public File expectedOutputFile;
@@ -57,16 +61,11 @@ public class IdrisJvmTest {
     public TestWatcher testWatcher = new TestWatcher() {
         @Override
         protected void failed(Throwable e, Description description) {
-            printCodegenServerLog();
-        }
-
-        private void printCodegenServerLog() {
-            Path logPath = Paths.get(IDRIS_JVM_HOME, "codegen", "idris-jvm-server.log");
             try {
-                Files.lines(logPath)
-                        .forEach(System.err::println);
-            } catch (IOException e) {
-                e.printStackTrace();
+                String failedTestName = format("%s%n", description.getDisplayName());
+                Files.write(failedLogPath, failedTestName.getBytes(UTF_8), CREATE, APPEND);
+            } catch (IOException ex) {
+                ex.printStackTrace();
             }
         }
 
@@ -82,12 +81,15 @@ public class IdrisJvmTest {
 
     @Parameters(name = "{0}")
     public static Collection<Object[]> data() throws IOException {
-        final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-        final Resource[] resources = resolver.getResources("idris-test-sources");
-        return Arrays.stream(resources)
-                .flatMap(IdrisJvmTest::getTestDirs)
-                .map(IdrisJvmTest::getTestFiles)
-                .collect(toList());
+        Path testSourceDir = getTestSourceDirectory();
+        List<Object[]> testcases = getTests(testSourceDir)
+            .map(Path::toFile)
+            .filter(File::exists)
+            .map(IdrisJvmTest::createTestCase)
+            .sorted(comparing(testcase -> (String) testcase[0]))
+            .collect(toList());
+        getFailedLogPath().toFile().delete();
+        return testcases;
     }
 
     @BeforeClass
@@ -98,92 +100,188 @@ public class IdrisJvmTest {
                 throw new RuntimeException(format("Unable to remove port file %s", getPortFile()));
             }
         }
-        testOutputRootDir = new File(getProperty("test.output", getProperty("user.dir")));
-        runtimeJarPath = Paths.get(getProperty("runtime.jar.path")).toString();
+        failedLogPath = getFailedLogPath();
+        if (!shouldRerunFailed()) {
+            failedLogPath.toFile().delete();
+        }
+    }
+
+    @AfterClass
+    public static void afterClass() throws IOException {
+        Path failedLogPath = getFailedLogPath();
+        if (failedLogPath.toFile().exists()) {
+            Files.write(failedLogPath, Files.lines(failedLogPath)
+                .sorted()
+                .collect(toList()));
+        }
     }
 
     @Test
     public void test() throws IOException, InterruptedException {
-        File testOutputDir = new File(testOutputRootDir, testName);
-        testOutputDir.mkdir();
-        File compilerOut = new File(testOutputDir, "compiler.log");
-        File jvmOut = new File(testOutputDir, "jvm.log");
+        assumeTrue("Test has JVM test source", hasJvmTestSource(testDir));
+        runTestRunner();
 
-        compile(testOutputDir, compilerOut);
-        run(testOutputDir, jvmOut);
+        List<String> actualOutput = readFile(getOutputFile()).stream()
+            .map(this::stripLineNo)
+            .collect(toList());
 
-        List<String> actualOutput = readFile(jvmOut);
-        List<String> expectedOutput = readFile(expectedOutputFile);
+        String[] expectedOutput = readFile(expectedOutputFile).stream()
+            .map(this::stripLineNo)
+            .toArray(String[]::new);
 
         assertThat(actualOutput)
-                .containsExactlyInAnyOrder(expectedOutput.toArray(new String[0]));
+            .containsExactlyInAnyOrder(expectedOutput);
+    }
+
+    private String stripLineNo(String line) {
+        return line.replaceAll("^\\d+\\s", "");
+    }
+
+    private static Stream<Path> getTests(Path testSourceDir) throws IOException {
+        if (shouldRerunFailed()) {
+            return Files.lines(getFailedLogPath())
+                .map(IdrisJvmTest::getFailedTestName)
+                .filter(Objects::nonNull)
+                .map(testName -> findTest(testSourceDir, testName))
+                .filter(Objects::nonNull);
+        } else {
+            return Files.find(testSourceDir, 2, (path, attr) -> attr.isDirectory());
+        }
+    }
+
+    private static Path findTest(Path testSourceDir, String testName) {
+        try {
+            return Files.find(testSourceDir, 2, (path, attr) -> path.toString().endsWith(testName))
+                .findAny()
+                .orElse(null);
+        } catch (IOException e) {
+            throw new IdrisTestException(format("Unable to find test %s under %s", testName, testSourceDir), e);
+        }
+    }
+
+    private static String getFailedTestName(String line) {
+        Matcher matcher = FAILED_TEST_PATTERN.matcher(line);
+        if (matcher.find()) {
+            return matcher.group(1);
+        } else {
+            return null;
+        }
+    }
+
+    private static Path getFailedLogPath() {
+        return Paths.get(getTestSourceDirectory().toString(), "failed");
+    }
+
+    private static Path getTestSourceDirectory() {
+        return Paths.get(getProperty("test-source-dir"));
+    }
+
+    private static boolean shouldRerunFailed() {
+        return parseBooleanProperty("rerunFailed");
+    }
+
+    private static boolean parseBooleanProperty(String propertyName) {
+        String propertyValue = getProperty(propertyName, "false");
+        return propertyValue.trim().isEmpty() || Boolean.parseBoolean(propertyValue);
     }
 
     private static boolean shouldStartIdrisJvmServer() {
-        return parseBoolean(getProperty("start-idris-jvm-server", "false"));
-    }
-
-    private void compile(final File testOutputDir, final File compilerOut) throws IOException, InterruptedException {
-        ProcessBuilder idrisCompilerProcessBuilder = new ProcessBuilder("idris", "--portable-codegen", "jvm", "-p",
-                "idrisjvmffi", "-p", "effects", sourceFile.getPath(), "-o", testOutputDir.getPath());
-        idrisCompilerProcessBuilder.directory(testOutputDir);
-
-        idrisCompilerProcessBuilder.redirectErrorStream(true);
-        idrisCompilerProcessBuilder.redirectOutput(Redirect.to(compilerOut));
-
-        Process idrisCompiler = idrisCompilerProcessBuilder.start();
-        final boolean hasCompilerExited = idrisCompiler.waitFor(3, MINUTES);
-        if (!hasCompilerExited) {
-            Files.copy(compilerOut.toPath(), System.err);
-            throw new RuntimeException("Compilation timed out. Log file is available at " + compilerOut.getPath());
-        }
-        if (idrisCompiler.exitValue() != 0) {
-            Files.copy(compilerOut.toPath(), System.err);
-            throw new RuntimeException("Compilation error. Log file is available at " + compilerOut.getPath());
-        }
-    }
-
-    private void run(final File testOutputDir, final File jvmOut) throws IOException, InterruptedException {
-        String classpath = runtimeJarPath + pathSeparator + testOutputDir.getPath();
-        ProcessBuilder jvmProcessBuilder = new ProcessBuilder("java", "-cp", classpath, "main.Main");
-        jvmProcessBuilder.redirectErrorStream(true);
-        jvmProcessBuilder.redirectOutput(Redirect.to(jvmOut));
-        Process jvm = jvmProcessBuilder.start();
-        final boolean hasJvmExited = jvm.waitFor(2, MINUTES);
-        if (!hasJvmExited) {
-            Files.copy(jvmOut.toPath(), System.err);
-            throw new RuntimeException("JVM timed out. Log file is available at " + jvmOut.getPath());
-        }
-        if (jvm.exitValue() != 0) {
-            Files.copy(jvmOut.toPath(), System.err);
-            throw new RuntimeException("Runtime error. Log file is available at " + jvmOut.getPath());
-        }
+        return parseBooleanProperty("start-idris-jvm-server");
     }
 
     private static File getPortFile() {
         return new File(IDRIS_JVM_HOME, ".idrisjvmport");
     }
 
-    private static Stream<? extends File> getTestDirs(final Resource resource) {
+    private static Object[] createTestCase(File testDir) {
+        final File expected = new File(testDir, "expected");
+        return new Object[]{testDir.getName(), testDir, expected};
+    }
+
+    private static boolean hasJvmTestSource(File testDir) {
         try {
-            File[] files = resource.getFile().listFiles();
-            requireNonNull(files);
-            return Arrays.stream(files);
+            return new File(testDir, "run").exists() &&
+                !testDir.toString().endsWith("-disabled") &&
+                !hasCOrNode(testDir) && !hasNonJvmFfi(testDir);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            return false;
         }
     }
 
-    private static Object[] getTestFiles(final File testDir) {
-        final File sourceFile = new File(testDir, testDir.getName() + ".idr");
-        final File expected = new File(testDir, "expected");
-        return new Object[]{testDir.getName(), sourceFile, expected};
+    private static boolean hasNonJvmFfi(File testDir) throws IOException {
+        return Files.find(testDir.toPath(), 10, IdrisJvmTest::isIdrisSource)
+            .anyMatch(IdrisJvmTest::isNonJvmFfi);
+    }
+
+    private static boolean isIdrisSource(Path path, BasicFileAttributes attr) {
+        return attr.isRegularFile() && path.toString().endsWith(".idr");
+    }
+
+    private static boolean hasCOrNode(File testDir) {
+        try {
+            return Files.lines(Paths.get(testDir.getPath(), "run"))
+                .anyMatch(line -> line.contains("${CC") || line.contains("node"));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static boolean isNonJvmFfi(Path src) {
+        try {
+            boolean isNonJvmFfi = Files.lines(src)
+                .anyMatch(line ->
+                    hasFfi(line, "C")
+                        || hasFfi(line, "JS") || line.contains("Ptr") || line.contains("fopen")
+                        || line.contains("%include C") || line.contains("%link C") || line.contains("%lib C"));
+            if (isNonJvmFfi) {
+                System.out.println("Ignoring C or JS FFI test in " + src);
+            }
+            return isNonJvmFfi;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static boolean hasFfi(String line, String ffi) {
+        return line.contains(format("FFI_%s", ffi));
     }
 
     private static List<String> readFile(File f) throws IOException {
         try (BufferedReader br = new BufferedReader(new FileReader(f))) {
             return br.lines().collect(toList());
         }
+    }
+
+    private File getOutputFile() {
+        return new File(testDir, "output");
+    }
+
+    private File getInputFile() {
+        return new File(testDir, "input");
+    }
+
+    private void runTestRunner() throws IOException, InterruptedException {
+        if (!new File(testDir, "run").exists()) {
+            fail(format("Executable for test %s not found", testName));
+        }
+        File runnerInput = getInputFile();
+        File runnerOut = getOutputFile();
+        Process runner = runTestRunner(runnerInput, runnerOut);
+        final boolean hasRunnerExited = runner.waitFor(2, MINUTES);
+        if (!hasRunnerExited) {
+            fail(format("Test %s timed out", testName));
+        }
+    }
+
+    private Process runTestRunner(File runnerInput, File runnerOut) throws IOException {
+        ProcessBuilder processBuilder = new ProcessBuilder("./run");
+        processBuilder.directory(testDir);
+        processBuilder.redirectErrorStream(true);
+        processBuilder.redirectOutput(Redirect.to(runnerOut));
+        if (runnerInput.exists()) {
+            processBuilder.redirectInput(runnerInput);
+        }
+        return processBuilder.start();
     }
 }
 

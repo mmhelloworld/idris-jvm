@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ Main.idr --nocolour --check && echo MAIN-PASS
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ Faulty.idr --nocolour --check && echo FAULTY-PASS
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ Multiple.idr --nocolour --check && echo MULTIPLE-PASS
+
+
+rm -f *.ibc B/*.ibc

@@ -1,0 +1,41 @@
+Interface Functor
+    Functors allow a uniform action over a parameterised type.
+
+Parameters:
+    f   -- a parameterised type
+
+Methods:
+    map : Functor f => (func : a -> b) -> f a -> f b
+        Apply a function across everything of type 'a' in a parameterised type
+        
+        The function is: Total & public export
+Implementations:
+    Functor (Pair a)
+    Functor List
+    Functor (IO' ffi)
+    Functor Stream
+    Functor Provider
+    Functor Binder
+    Functor Elab
+    Functor PrimIO
+    Functor Maybe
+    Functor (Either e)
+
+Named implementations:
+    docs003.mine : Functor List
+    docs003.another : Functor List
+        More functors!
+
+Child interfaces:
+    Traversable f
+    Applicative f
+Named implementation:
+    docs003.mine : Functor List
+        
+        
+        The function is: public export
+Named implementation:
+    docs003.another : Functor List
+        More functors!
+        
+        The function is: public export

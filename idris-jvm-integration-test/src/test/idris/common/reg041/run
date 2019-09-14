@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --quiet --port none ott.idr -e example
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ showu.idr -o reg040
+./reg040
+rm -f reg040 *.ibc

@@ -1,0 +1,6 @@
+package visibility
+
+opts = "--quiet --portable-codegen jvm -p idrisjvmffi"
+
+modules = Abstract, Visible
+

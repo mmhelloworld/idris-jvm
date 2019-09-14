@@ -1,0 +1,6 @@
+package test_tracing
+
+opts = "--quiet --portable-codegen jvm -p idrisjvmffi"
+
+modules = TestTracing
+

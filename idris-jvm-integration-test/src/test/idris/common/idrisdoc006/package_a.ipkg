@@ -1,0 +1,6 @@
+package test_merge
+
+opts = "--quiet --portable-codegen jvm -p idrisjvmffi"
+
+modules = A.fully.Qualified.NAME
+

@@ -1,0 +1,30 @@
+Interface MyShow
+    A fancy shower with a constructor
+
+Parameters:
+    a   -- the thing to be shown
+
+Methods:
+    myShow : MyShow a => (x : a) -> String
+        The shower
+        
+        The function is: Total & public export
+Implementation constructor:
+    MkMyShow : (myShow : a -> String) -> MyShow a
+        Build a MyShow
+        Arguments:
+            (implicit) a : Type  -- the thing to be shown
+            
+            myShow : a -> String  -- The shower
+            
+        The function is: public export
+Implementations:
+    MyShow Integer
+MkMyShow : (myShow : a -> String) -> MyShow a
+    Build a MyShow
+    Arguments:
+        (implicit) a : Type  -- the thing to be shown
+        
+        myShow : a -> String  -- The shower
+        
+    The function is: Total & public export

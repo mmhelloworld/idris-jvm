@@ -9,6 +9,9 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import freemarker.template.Configuration;
+import freemarker.template.Template;
+import freemarker.template.TemplateException;
 import io.github.mmhelloworld.idrisjvm.model.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,13 +26,21 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static com.fasterxml.jackson.core.JsonToken.END_ARRAY;
 import static com.fasterxml.jackson.core.JsonToken.END_OBJECT;
+import static java.lang.String.format;
+import static java.nio.file.StandardCopyOption.COPY_ATTRIBUTES;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.util.Arrays.asList;
 import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
@@ -39,11 +50,15 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
     private static final Logger LOGGER = LoggerFactory.getLogger(CodegenController.class);
 
     private final String workingDir;
+    private final Template windowsExeTemplate;
     private final ObjectMapper mapper;
+    private Template unixExeTemplate;
 
     public CodegenController(@Value("${working.dir}") String workingDir,
-                             ObjectMapper mapper) {
+                             Configuration freemarkerConfiguration, ObjectMapper mapper) throws IOException {
         this.workingDir = workingDir;
+        this.unixExeTemplate = freemarkerConfiguration.getTemplate("idrisjvm");
+        this.windowsExeTemplate = freemarkerConfiguration.getTemplate("idrisjvm.bat");
         this.mapper = mapper;
     }
 
@@ -58,11 +73,45 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
             JsonParser parser = jsonfactory.createParser(source);
             Assembler assembler = new Assembler();
             codegen(parser, assembler);
-            assembler.classCodeEnd(getOutputFile(argsList).getPath());
+            assembler.classCodeEnd(getOutputClassesDirectory(argsList).getPath());
             parser.close();
+            generateExecutables(argsList);
+            copyRuntimeJar(argsList);
         } catch (Exception e) {
             throw new IdrisCompilationException(e);
         }
+    }
+
+    private void copyRuntimeJar(List<String> args) throws IOException {
+        String outputDirectory = getOutputDirectory(args);
+        File runtimeJar = Paths.get(System.getProperty("IDRIS_JVM_HOME"), "idris-jvm-runtime.jar").toFile();
+        File targetRuntimeJar = Paths.get(outputDirectory, "idris-jvm-runtime.jar").toFile();
+        if (!targetRuntimeJar.exists() || targetRuntimeJar.lastModified() < runtimeJar.lastModified()) {
+            Files.copy(runtimeJar.toPath(), targetRuntimeJar.toPath(), REPLACE_EXISTING, COPY_ATTRIBUTES);
+        }
+    }
+
+    private void generateExecutables(List<String> args) throws IOException, TemplateException {
+        String out = getOutput(args);
+        File outputClassesDirectory = getOutputClassesDirectory(args);
+        File exeDir = Optional.ofNullable(outputClassesDirectory.getParentFile())
+            .orElse(outputClassesDirectory);
+        Map<String, Object> templateModel = new HashMap<>();
+        templateModel.put("classesDir", outputClassesDirectory.getName());
+        templateModel.put("outputName", out);
+        File exeFile = getExeFile(out, exeDir);
+        Template template = out.endsWith(".bat") ? windowsExeTemplate : unixExeTemplate;
+        try(FileWriter exeWriter = new FileWriter(exeFile)) {
+            template.process(templateModel, exeWriter);
+        }
+        boolean isExecutable = exeFile.setExecutable(true);
+        if (!isExecutable) {
+            LOGGER.warn("Unable to set execute permission for {}", exeFile);
+        }
+    }
+
+    private File getExeFile(String out, File exeDir) {
+        return Paths.get(out).isAbsolute() ? new File(out) : new File(exeDir, out);
     }
 
     private void requireJsonObject(JsonParser parser) throws IOException {
@@ -146,22 +195,40 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
         return getAbsoluteFile(sourceFileName, getCurrentWorkingDirectory(args));
     }
 
-    private File getOutputFile(final List<String> args) {
-        String outputFileName = args.get(2);
-        return getAbsoluteFile(outputFileName, getCurrentWorkingDirectory(args));
+    private File getOutputClassesDirectory(final List<String> args) {
+        String outputDirectory = getOutputDirectory(args);
+        return getAbsoluteFile(getClassesDirectoryName(args), outputDirectory);
+    }
+
+    private String getOutputDirectory(List<String> args) {
+        String output = getOutput(args);
+        return getAbsoluteFile(output, getCurrentWorkingDirectory(args)).getParent();
+    }
+
+    private String getClassesDirectoryName(List<String> args) {
+        boolean hasCustomClassesDir = args.stream().anyMatch(arg -> arg.startsWith("--classes-dir="));
+        return hasCustomClassesDir ? getCustomClassesDirectory(args) : format("%s-classes", getOutput(args));
+    }
+
+    private String getCustomClassesDirectory(List<String> args) {
+        String directory = args.stream()
+            .filter(arg -> arg.startsWith("--classes-dir="))
+            .findAny()
+            .orElseThrow(() -> new IllegalArgumentException(format("No classes directory provided: %s", args)));
+        return directory.substring("--classes-dir=".length());
+    }
+
+    private String getOutput(List<String> args) {
+        return args.get(2);
     }
 
     private String getCurrentWorkingDirectory(final List<String> args) {
         return args.get(args.size() - 1);
     }
 
-    private File getAbsoluteFile(String fileName, String cwd) {
+    private File getAbsoluteFile(String fileName, String parent) {
         File absolute = new File(fileName);
-        if (absolute.isAbsolute()) {
-            return absolute;
-        } else {
-            return new File(cwd, fileName);
-        }
+        return absolute.isAbsolute() ? absolute : new File(parent, fileName);
     }
 
     private void writePort(int port) {

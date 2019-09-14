@@ -1,0 +1,30 @@
+Data type Test.Test : Type
+    Docs for datatype Test.
+    
+    The function is: public export
+Constructors:
+    MkTest : Test
+        
+        
+        The function is: public export
+Module Test:
+    Docs for module Test.
+    
+    It is a great module. Prelude thingy:
+    
+        > "foo" ++ "bar"
+        "foobar"
+    
+    Imported thingy:
+    
+        > 0.0 :+ 0.2
+        0.0 :+ 0.2
+    
+    Type error:
+    
+        "foo" + 2
+    
+    From this module:
+    
+        > MkTest
+        MkTest

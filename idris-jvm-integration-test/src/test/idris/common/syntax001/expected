@@ -1,0 +1,26 @@
+Syntax.idr:6:7-18:
+  |
+6 | foo = fnord "argh"
+  |       ~~~~~~~~~~~~
+When checking right hand side of foo with expected type
+        Nat
+
+When checking an application of function Prelude.Interfaces.+:
+        Type mismatch between
+                String (Type of "argh")
+        and
+                Nat (Expected type)
+
+SyntaxTest.idr:5:7-18:
+  |
+5 | foo = fnord "argh"
+  |       ~~~~~~~~~~~~
+When checking right hand side of foo with expected type
+        Nat
+
+When checking an application of function Prelude.Interfaces.+:
+        Type mismatch between
+                String (Type of "argh")
+        and
+                Nat (Expected type)
+

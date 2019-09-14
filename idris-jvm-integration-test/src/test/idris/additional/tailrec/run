@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour tailrec.idr -o tailrec
+./tailrec
+rm -f tailrec tailrec.ibc

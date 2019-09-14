@@ -50,6 +50,14 @@ exitWith : (code : ExitCode) -> JVM_IO a
 exitWith ExitSuccess         = exit 0
 exitWith (ExitFailure errNo) = exit errNo
 
+||| Exit the program indicating failure.
+exitFailure : JVM_IO a
+exitFailure = exitWith (ExitFailure 1)
+
+||| Exit the program after a successful run.
+exitSuccess : JVM_IO a
+exitSuccess = exitWith ExitSuccess
+
 ||| Wall clock time
 record Clock where
   constructor MkClock

@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nobanner --nocolor --port none < input

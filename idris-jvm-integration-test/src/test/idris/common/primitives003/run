@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ -o test038 test038.idr --nocolour
+./test038
+rm -f test038 *.ibc
+

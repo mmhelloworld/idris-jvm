@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ -p effects --nocolour effects.idr -o effects
+./effects
+rm -f effects effects.ibc

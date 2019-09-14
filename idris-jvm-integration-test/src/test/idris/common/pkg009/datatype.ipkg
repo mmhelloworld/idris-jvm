@@ -1,0 +1,8 @@
+package datatypes
+
+opts = "--portable-codegen jvm -p idrisjvmffi"
+
+sourcedir = src
+
+modules = Data.Type
+

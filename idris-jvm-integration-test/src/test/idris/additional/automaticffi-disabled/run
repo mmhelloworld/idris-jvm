@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour automaticffi.idr -o automaticffi
+./automaticffi
+rm -f automaticffi automaticffi.ibc

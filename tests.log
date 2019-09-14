@@ -1,0 +1,2975 @@
+[[1;34mINFO[m] Scanning for projects...
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m---------< [0;36mio.github.mmhelloworld:idris-jvm-integration-test[0;1m >----------[m
+[[1;34mINFO[m] [1mBuilding Idris JVM Integration Test 1.0-SNAPSHOT[m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:resources[m [1m(default-resources)[m @ [36midris-jvm-integration-test[0;1m ---[m
+[[1;34mINFO[m] Using 'UTF-8' encoding to copy filtered resources.
+[[1;34mINFO[m] skip non existing resourceDirectory /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/main/resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.6.1:compile[m [1m(default-compile)[m @ [36midris-jvm-integration-test[0;1m ---[m
+[[1;34mINFO[m] No sources to compile
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:testResources[m [1m(default-testResources)[m @ [36midris-jvm-integration-test[0;1m ---[m
+[[1;34mINFO[m] Using 'UTF-8' encoding to copy filtered resources.
+[[1;34mINFO[m] Copying 0 resource
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.6.1:testCompile[m [1m(default-testCompile)[m @ [36midris-jvm-integration-test[0;1m ---[m
+[[1;34mINFO[m] Nothing to compile - all classes are up to date
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-surefire-plugin:2.20:test[m [1m(default-test)[m @ [36midris-jvm-integration-test[0;1m ---[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] -------------------------------------------------------
+[[1;34mINFO[m]  T E S T S
+[[1;34mINFO[m] -------------------------------------------------------
+[[1;34mINFO[m] Running [1m[totality015][m
+Starting test[basic011](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/basic011: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[basic021](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/basic021: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[basic022](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/basic022: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[basic024](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/basic024: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[basic025](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/basic025: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[directives003](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/directives003: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[effects001](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/effects001: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[effects002](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/effects002: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[effects004](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/effects004: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[effects003](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/effects003: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[error009](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/error009: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[ffi013](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/ffi013: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[interfaces005](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/interfaces005: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[interfaces009](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/interfaces009: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[interpret003](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/interpret003: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[io001](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/io001: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[pkg001](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/pkg001: [./run, --portable-codegen, jvm]Starting test[pkg005](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/pkg005: [./run, --portable-codegen, jvm]Starting test[pkg007](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/pkg007: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[pkg008](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/pkg008: [./run, --portable-codegen, jvm]Starting test[pkg009](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/pkg009: [./run, --portable-codegen, jvm]Starting test[pkg010](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/pkg010: [./run, --portable-codegen, jvm]Starting test[primitives002](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/primitives002: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[reg001](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/reg001: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[reg007](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/reg007: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[reg029](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/reg029: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[reg052](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/reg052: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[st001](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/st001: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[st002](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/st002: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[st003](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/st003: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[st004](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/st004: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[st005](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/st005: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[st006](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/st006: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[st007](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/st007: [./run, --portable-codegen, jvm, -p, idrisjvmffi]Starting test[totality015](idrisjvm.integrationtest.IdrisJvmTest)command strings for test /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/src/test/idris/common/totality015: [./run, --portable-codegen, jvm, -p, idrisjvmffi][[1;31mERROR[m] [1;31mTests [0;1mrun: [0;1m35[m, [1;31mFailures: [0;1;31m34[m, Errors: 0, Skipped: 0, Time elapsed: 80.852 s[1;31m <<< FAILURE![m - in [1m[totality015][m
+[[1;31mERROR[m] test[basic011](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 9.368 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: "*** ./IdrisJvm/Core/Operator.idr:227:1-233:28:unmatched case in IdrisJvm.Core.Operator.cgOpLZExt ***"",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2410-0.json","-o","basic011"]",
+    "./run: line 3: ./basic011: No such file or directory"]>
+to contain exactly in any order:
+  <["6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "FDA01C93B78A192F",
+    "AD85270E93646134",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "00",
+    "0000",
+    "00000000",
+    "0000000000000000"]>
+elements not found:
+  <["6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "FDA01C93B78A192F",
+    "AD85270E93646134",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "00",
+    "0000",
+    "00000000",
+    "0000000000000000"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: "*** ./IdrisJvm/Core/Operator.idr:227:1-233:28:unmatched case in IdrisJvm.Core.Operator.cgOpLZExt ***"",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2410-0.json","-o","basic011"]",
+    "./run: line 3: ./basic011: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[basic021](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 10.792 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["basic021.idr:8:7-9:20:",
+    "  |",
+    "|     = do modifyIORef ref (+1)",
+    "  |       ~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of count with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Prelude.Monad.>>=:",
+    "        No such variable modifyIORef",
+    "",
+    "basic021_2.idr:3:7:",
+    "  |",
+    "| count : HasReference ffi =>  Nat -> IORef Integer -> IO' ffi ()",
+    "  |       ^",
+    "When checking type of Main.count:",
+    "No such variable HasReference",
+    "",
+    "./run: line 4: ./basic021: No such file or directory",
+    "./run: line 5: ./basic021_2: No such file or directory"]>
+to contain exactly in any order:
+  <["1000000", "1000"]>
+elements not found:
+  <["1000000", "1000"]>
+and elements not expected:
+  <["basic021.idr:8:7-9:20:",
+    "  |",
+    "|     = do modifyIORef ref (+1)",
+    "  |       ~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of count with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Prelude.Monad.>>=:",
+    "        No such variable modifyIORef",
+    "",
+    "basic021_2.idr:3:7:",
+    "  |",
+    "| count : HasReference ffi =>  Nat -> IORef Integer -> IO' ffi ()",
+    "  |       ^",
+    "When checking type of Main.count:",
+    "No such variable HasReference",
+    "",
+    "./run: line 4: ./basic021: No such file or directory",
+    "./run: line 5: ./basic021_2: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[basic022](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 5.46 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["basic022.idr:3:7:",
+    "  |",
+    "| count : HasReference ffi =>  Nat -> IORef Integer -> IO' ffi ()",
+    "  |       ^",
+    "When checking type of Main.count:",
+    "No such variable HasReference",
+    "",
+    "./run: line 3: ./basic022: No such file or directory"]>
+to contain exactly in any order:
+  <["1000"]>
+elements not found:
+  <["1000"]>
+and elements not expected:
+  <["basic022.idr:3:7:",
+    "  |",
+    "| count : HasReference ffi =>  Nat -> IORef Integer -> IO' ffi ()",
+    "  |       ^",
+    "When checking type of Main.count:",
+    "No such variable HasReference",
+    "",
+    "./run: line 3: ./basic022: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[basic025](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 12.245 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["0.7853981633974483 : Double",
+    "-0.7853981633974483 : Double",
+    "2.356194490192345 : Double",
+    "-2.356194490192345 : Double",
+    "0.0 : Double",
+    "1.5707963267948966 : Double",
+    "Exception in thread "main" java.lang.RuntimeException: A PrimFn value expected but found null",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2591-0.json","-o","basic025"]",
+    "./run: line 5: ./basic025: No such file or directory"]>
+to contain exactly in any order:
+  <["0.7853981633974483 : Double",
+    "-0.7853981633974483 : Double",
+    "2.356194490192345 : Double",
+    "-2.356194490192345 : Double",
+    "0.0 : Double",
+    "1.5707963267948966 : Double",
+    "0.7853981633",
+    "-0.7853981633",
+    "2.3561944901",
+    "-2.3561944901",
+    "0",
+    "1.5707963267"]>
+elements not found:
+  <["0.7853981633",
+    "-0.7853981633",
+    "2.3561944901",
+    "-2.3561944901",
+    "0",
+    "1.5707963267"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: A PrimFn value expected but found null",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2591-0.json","-o","basic025"]",
+    "./run: line 5: ./basic025: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[directives003](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 8.569 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <[]>
+to contain exactly in any order:
+  <["nuyahcha", "mohgiide", "apeekair", "eeraimam", "rahhahwi", "goocheiv"]>
+but could not find the following elements:
+  <["nuyahcha", "mohgiide", "apeekair", "eeraimam", "rahhahwi", "goocheiv"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[effects001](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 22.539 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(idris_addToString), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0), (FCon(C_Str), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2412-0.json","-o","test021"]",
+    "Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(exit), returns: FCon(C_Unit), args: [(FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg3016-0.json","-o","test021a"]",
+    "./run: line 4: ./test021: No such file or directory",
+    "./run: line 5: ./test021a: No such file or directory"]>
+to contain exactly in any order:
+  <["["HELLO!!!\n", "WORLD!!!\n", ""]", "3", "7", "Answer: 91"]>
+elements not found:
+  <["["HELLO!!!\n", "WORLD!!!\n", ""]", "3", "7", "Answer: 91"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(idris_addToString), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0), (FCon(C_Str), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2412-0.json","-o","test021"]",
+    "Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(exit), returns: FCon(C_Unit), args: [(FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg3016-0.json","-o","test021a"]",
+    "./run: line 4: ./test021: No such file or directory",
+    "./run: line 5: ./test021a: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[effects002](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 12.265 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(free), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2506-0.json","-o","test025"]",
+    "./run: line 3: ./test025: No such file or directory"]>
+to contain exactly in any order:
+  <["[1, 2, 3, 4]"]>
+elements not found:
+  <["[1, 2, 3, 4]"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(free), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2506-0.json","-o","test025"]",
+    "./run: line 3: ./test025: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[effects004](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 9.763 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(getchar), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: []",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2521-0.json","-o","effects004"]",
+    "./run: line 3: ./effects004: No such file or directory"]>
+to contain exactly in any order:
+  <["Off we go!",
+    "Counter at 0",
+    "Counter at 1",
+    "Counter at 2",
+    "Counter at 3",
+    "Counter at 4",
+    "Counter at 5",
+    "Counter at 6",
+    "Counter at 7",
+    "Counter at 8",
+    "Finished!"]>
+elements not found:
+  <["Off we go!",
+    "Counter at 0",
+    "Counter at 1",
+    "Counter at 2",
+    "Counter at 3",
+    "Counter at 4",
+    "Counter at 5",
+    "Counter at 6",
+    "Counter at 7",
+    "Counter at 8",
+    "Finished!"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(getchar), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: []",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2521-0.json","-o","effects004"]",
+    "./run: line 3: ./effects004: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[effects003](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 16.851 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["hangman.idr:204:8-12:",
+    "    |",
+    "| wlen = proof search",
+    "    |        ~~~~~",
+    "This style of tactic proof is deprecated. See %runElab for the replacement.",
+    "",
+    "Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(getchar), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: []",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2444-0.json","-o","hangman"]",
+    "./run: line 3: ./hangman: No such file or directory"]>
+to contain exactly in any order:
+  <["hangman.idr:204:8-12:",
+    "    |",
+    "| wlen = proof search",
+    "    |        ~~~~~",
+    "This style of tactic proof is deprecated. See %runElab for the replacement.",
+    "",
+    "----",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "ja-a",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "You won! Successfully guessed java"]>
+elements not found:
+  <["----",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "ja-a",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "You won! Successfully guessed java"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(getchar), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: []",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2444-0.json","-o","hangman"]",
+    "./run: line 3: ./hangman: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[error009](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 4.898 s  <<< FAILURE!
+java.lang.AssertionError: Test error009 did not complete successfully. Exit code is 1.
+	at idrisjvm.integrationtest.IdrisJvmTest.runTestRunner(IdrisJvmTest.java:279)
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:122)
+
+[[1;31mERROR[m] test[ffi013](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 11.965 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(fileRemove), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: [(FCon(C_Str), Loc 0)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2814-0.json","-o","ffi013"]",
+    "./run: line 4: ./ffi013: No such file or directory",
+    "still exists",
+    "success",
+    "confirmed"]>
+to contain exactly in any order:
+  <["success", "confirmed", "success", "confirmed"]>
+elements not found:
+  <["success", "confirmed"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(fileRemove), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: [(FCon(C_Str), Loc 0)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2814-0.json","-o","ffi013"]",
+    "./run: line 4: ./ffi013: No such file or directory",
+    "still exists"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[interfaces005](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 15.749 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["interfaces005a.idr:18:3-29:",
+    "   |",
+    "|   [TreeSet] Ord a => SetSig a where",
+    "   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "Set.TreeSet.Set must be defined by a type or data constructor",
+    "",
+    " No such variable TreeSet",
+    "interfaces005b.idr:4:11-18:",
+    "  |",
+    "| interface SetSig a where",
+    "  |           ~~~~~~~~",
+    "Data definitions not allowed in an interface declaration",
+    "",
+    " interfaces005b.idr:18:3-29:SetSig is not an interface",
+    " No such variable TreeSet"]>
+to contain exactly in any order:
+  <["interfaces005a.idr:18:3:",
+    "Set.TreeSet.Set must be defined by a type or data constructor",
+    "No such variable TreeSet",
+    "interfaces005b.idr:4:11:",
+    "Data definitions not allowed in an interface declaration",
+    "interfaces005b.idr:18:3:SetSig is not an interface",
+    "No such variable TreeSet"]>
+elements not found:
+  <["interfaces005a.idr:18:3:",
+    "No such variable TreeSet",
+    "interfaces005b.idr:4:11:",
+    "interfaces005b.idr:18:3:SetSig is not an interface",
+    "No such variable TreeSet"]>
+and elements not expected:
+  <["interfaces005a.idr:18:3-29:",
+    "   |",
+    "|   [TreeSet] Ord a => SetSig a where",
+    "   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "",
+    " No such variable TreeSet",
+    "interfaces005b.idr:4:11-18:",
+    "  |",
+    "| interface SetSig a where",
+    "  |           ~~~~~~~~",
+    "",
+    " interfaces005b.idr:18:3-29:SetSig is not an interface",
+    " No such variable TreeSet"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[interfaces009](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 0.321 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["interfaces009.idr:23:11:",
+    "   |",
+    "|   z = x + y",
+    "   |           ^",
+    "unexpected Operator without known fixity: +",
+    ""]>
+to contain exactly in any order:
+  <[]>
+but the following elements were unexpected:
+  <["interfaces009.idr:23:11:",
+    "   |",
+    "|   z = x + y",
+    "   |           ^",
+    "unexpected Operator without known fixity: +",
+    ""]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[interpret003](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 5.62 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["interpret003.idr:4:8-18:",
+    "  |",
+    "| main = exitFailure",
+    "  |        ~~~~~~~~~~~",
+    "When checking right hand side of main with expected type",
+    "        IO ()",
+    "",
+    "No such variable exitFailure",
+    "",
+    "When checking argument value to function Prelude.Basics.the:",
+    "        No such variable Main.main"]>
+to contain exactly in any order:
+  <["Compiled program terminated with exit code 1"]>
+elements not found:
+  <["Compiled program terminated with exit code 1"]>
+and elements not expected:
+  <["interpret003.idr:4:8-18:",
+    "  |",
+    "| main = exitFailure",
+    "  |        ~~~~~~~~~~~",
+    "When checking right hand side of main with expected type",
+    "        IO ()",
+    "",
+    "No such variable exitFailure",
+    "",
+    "When checking argument value to function Prelude.Basics.the:",
+    "        No such variable Main.main"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[io001](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 7.926 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(idris_addToString), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0), (FCon(C_Str), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2860-0.json","-o","test004"]",
+    "./run: line 3: ./test004: No such file or directory"]>
+to contain exactly in any order:
+  <["Reading testfile",
+    "Hello!",
+    "World!",
+    "...",
+    "3",
+    "4",
+    "Last line",
+    "",
+    "---",
+    "Hello!",
+    "World!",
+    "...",
+    "3",
+    "4",
+    "Last line",
+    "---"]>
+elements not found:
+  <["Reading testfile",
+    "Hello!",
+    "World!",
+    "...",
+    "3",
+    "4",
+    "Last line",
+    "",
+    "---",
+    "Hello!",
+    "World!",
+    "...",
+    "3",
+    "4",
+    "Last line",
+    "---"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(idris_addToString), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0), (FCon(C_Str), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2860-0.json","-o","test004"]",
+    "./run: line 3: ./test004: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[pkg001](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 13.934 s  <<< FAILURE!
+java.lang.AssertionError: Test pkg001 did not complete successfully. Exit code is 1.
+	at idrisjvm.integrationtest.IdrisJvmTest.runTestRunner(IdrisJvmTest.java:279)
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:122)
+
+[[1;31mERROR[m] test[pkg005](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 0.072 s  <<< FAILURE!
+java.lang.AssertionError: Test pkg005 did not complete successfully. Exit code is 1.
+	at idrisjvm.integrationtest.IdrisJvmTest.runTestRunner(IdrisJvmTest.java:279)
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:122)
+
+[[1;31mERROR[m] test[pkg007](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 5.227 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["Not all command line options can be used to override package options.",
+    "",
+    "The only changeable options are:",
+    "	--log <lvl>, --total, --warnpartial, --warnreach, --warnipkg",
+    "	--ibcsubdir <path>, -i --idrispath <path>",
+    "	--logging-categories <cats>",
+    "	--highlight",
+    "",
+    "The options need removing are:",
+    "	 Pkg "idrisjvmffi" ",
+    "",
+    "",
+    "",
+    "./run: line 4: cd: ../ibcout: No such file or directory",
+    "(True, "VROOOOM", Pedal) : (Bool, String, CarPart)"]>
+to contain exactly in any order:
+  <["(True, "VROOOOM", Pedal) : (Bool, String, CarPart)"]>
+but the following elements were unexpected:
+  <["Not all command line options can be used to override package options.",
+    "",
+    "The only changeable options are:",
+    "	--log <lvl>, --total, --warnpartial, --warnreach, --warnipkg",
+    "	--ibcsubdir <path>, -i --idrispath <path>",
+    "	--logging-categories <cats>",
+    "	--highlight",
+    "",
+    "The options need removing are:",
+    "	 Pkg "idrisjvmffi" ",
+    "",
+    "",
+    "",
+    "./run: line 4: cd: ../ibcout: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[pkg008](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 14.265 s  <<< FAILURE!
+java.lang.AssertionError: Test pkg008 did not complete successfully. Exit code is 1.
+	at idrisjvm.integrationtest.IdrisJvmTest.runTestRunner(IdrisJvmTest.java:279)
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:122)
+
+[[1;31mERROR[m] test[pkg009](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 5.769 s  <<< FAILURE!
+java.lang.AssertionError: Test pkg009 did not complete successfully. Exit code is 1.
+	at idrisjvm.integrationtest.IdrisJvmTest.runTestRunner(IdrisJvmTest.java:279)
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:122)
+
+[[1;31mERROR[m] test[pkg010](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 0.1 s  <<< FAILURE!
+java.lang.AssertionError: Test pkg010 did not complete successfully. Exit code is 1.
+	at idrisjvm.integrationtest.IdrisJvmTest.runTestRunner(IdrisJvmTest.java:279)
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:122)
+
+[[1;31mERROR[m] test[primitives002](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 64.737 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["prim__floatToStr 0.0",
+    ""0.0"",
+    "prim__strToFloat 0.0",
+    "0.0",
+    "prim__addFloat 1.0 1.0",
+    "2.0",
+    "prim__subFloat 1.0 1.0",
+    "0.0",
+    "prim__mulFloat 1.0 1.0",
+    "1.0",
+    "prim__divFloat 1.0 1.0",
+    "1.0",
+    "prim__slteFloat 1.0 1.0",
+    "1",
+    "prim__sltFloat 1.0 1.0",
+    "0",
+    "prim__sgteFloat 1.0 1.0",
+    "1",
+    "prim__sgtFloat 1.0 1.0",
+    "0",
+    "prim__eqFloat 1.0 1.0",
+    "1",
+    "prim__floatACos 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFACos NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatATan 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFATan NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatCos 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFCos NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatFloor 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFFloor NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatSin 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFSin NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatTan 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFTan NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatASin 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFASin NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatCeil 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFCeil NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatExp 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFExp NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatLog 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFLog NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatSqrt 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFSqrt NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__negFloat 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFNegate NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)"]>
+to contain exactly in any order:
+  <["prim__floatToStr 0.0",
+    ""0"",
+    "prim__strToFloat 0.0",
+    "0",
+    "prim__addFloat 1.0 1.0",
+    "2",
+    "prim__subFloat 1.0 1.0",
+    "0",
+    "prim__mulFloat 1.0 1.0",
+    "1",
+    "prim__divFloat 1.0 1.0",
+    "1",
+    "prim__slteFloat 1.0 1.0",
+    "1",
+    "prim__sltFloat 1.0 1.0",
+    "0",
+    "prim__sgteFloat 1.0 1.0",
+    "1",
+    "prim__sgtFloat 1.0 1.0",
+    "0",
+    "prim__eqFloat 1.0 1.0",
+    "1",
+    "prim__floatACos 1.0",
+    "0",
+    "prim__floatATan 1.0",
+    "0.78539816",
+    "prim__floatCos 1.0",
+    "0.54030230",
+    "prim__floatFloor 1.0",
+    "1",
+    "prim__floatSin 1.0",
+    "0.84147098",
+    "prim__floatTan 1.0",
+    "1.55740772",
+    "prim__floatASin 1.0",
+    "1.57079632",
+    "prim__floatCeil 1.0",
+    "1",
+    "prim__floatExp 1.0",
+    "2.71828182",
+    "prim__floatLog 1.0",
+    "0",
+    "prim__floatSqrt 1.0",
+    "1",
+    "prim__negFloat 1.0",
+    "-1"]>
+elements not found:
+  <[""0"",
+    "2",
+    "0",
+    "1",
+    "0",
+    "1",
+    "0",
+    "0.78539816",
+    "0.54030230",
+    "1",
+    "0.84147098",
+    "1.55740772",
+    "1.57079632",
+    "1",
+    "2.71828182",
+    "0",
+    "1",
+    "-1"]>
+and elements not expected:
+  <[""0.0"",
+    "0.0",
+    "2.0",
+    "0.0",
+    "1.0",
+    "1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFACos NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFATan NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFCos NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFFloor NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFSin NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFTan NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFASin NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFCeil NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFExp NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFLog NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFSqrt NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFNegate NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[reg001](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 8.51 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["6.0", "3.0", "3.141592653589793"]>
+to contain exactly in any order:
+  <["6", "3", "3.141592653589793"]>
+elements not found:
+  <["6", "3"]>
+and elements not expected:
+  <["6.0", "3.0"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[reg007](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 4.272 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <[" Can't find import reg007.lidr"]>
+to contain exactly in any order:
+  <["reg007.lidr:8:1:A.n is already defined",
+    "reg007.lidr:12:11-17:When checking right hand side of hurrah with expected type",
+    "        0 = 1",
+    "",
+    "Type mismatch between",
+    "        n = lala (Type of isSame)",
+    "and",
+    "        0 = 1 (Expected type)",
+    "",
+    "Specifically:",
+    "        Type mismatch between",
+    "                1",
+    "        and",
+    "                0"]>
+elements not found:
+  <["reg007.lidr:8:1:A.n is already defined",
+    "reg007.lidr:12:11-17:When checking right hand side of hurrah with expected type",
+    "        0 = 1",
+    "",
+    "Type mismatch between",
+    "        n = lala (Type of isSame)",
+    "and",
+    "        0 = 1 (Expected type)",
+    "",
+    "Specifically:",
+    "        Type mismatch between",
+    "                1",
+    "        and",
+    "                0"]>
+and elements not expected:
+  <[" Can't find import reg007.lidr"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[reg029](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 12.003 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["reg029.idr:8:6:",
+    "  |",
+    "| main : JVM_IO ()",
+    "  |      ^",
+    "When checking type of Main.main:",
+    "No such variable JVM_IO",
+    "",
+    "./run: line 10: ./reg029: No such file or directory",
+    "reg029.idr:8:6:",
+    "  |",
+    "| main : JVM_IO ()",
+    "  |      ^",
+    "When checking type of Main.main:",
+    "No such variable JVM_IO",
+    "",
+    "Uncaught error: Elaborating {__infer_0} arg {ival_0}: NoSuchVariable Main.main"]>
+to contain exactly in any order:
+  <["Nothing", "Just "exists!"", "Nothing", "Just "exists!""]>
+elements not found:
+  <["Nothing", "Just "exists!"", "Nothing", "Just "exists!""]>
+and elements not expected:
+  <["reg029.idr:8:6:",
+    "  |",
+    "| main : JVM_IO ()",
+    "  |      ^",
+    "When checking type of Main.main:",
+    "No such variable JVM_IO",
+    "",
+    "./run: line 10: ./reg029: No such file or directory",
+    "reg029.idr:8:6:",
+    "  |",
+    "| main : JVM_IO ()",
+    "  |      ^",
+    "When checking type of Main.main:",
+    "No such variable JVM_IO",
+    "",
+    "Uncaught error: Elaborating {__infer_0} arg {ival_0}: NoSuchVariable Main.main"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[reg052](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 7.928 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: "*** ./IdrisJvm/Core/Operator.idr:227:1-233:28:unmatched case in IdrisJvm.Core.Operator.cgOpLZExt ***"",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg3293-0.json","-o","reg052"]",
+    "./run: line 3: ./reg052: No such file or directory"]>
+to contain exactly in any order:
+  <["000000000000002A"]>
+elements not found:
+  <["000000000000002A"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: "*** ./IdrisJvm/Core/Operator.idr:227:1-233:28:unmatched case in IdrisJvm.Core.Operator.cgOpLZExt ***"",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg3293-0.json","-o","reg052"]",
+    "./run: line 3: ./reg052: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[st001](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 10.056 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["test001.idr:36:40-44:39:",
+    "   |",
+    "|           readAcc fileHandle cnt acc = with ST do",
+    "   |                                        ~~~~~~~~~~ ...",
+    "When checking right hand side of Main.readFileCount, readAcc with expected type",
+    "        STrans m",
+    "               (Either FileError (List String))",
+    "               [cnt ::: State Int, fileHandle ::: FileHandleI mode]",
+    "               (\result => [cnt ::: State Int, fileHandle ::: FileHandleI mode])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test001.idr:47:12-61:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test001.idr:64:8-69:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test001:",
+    "./run: line 4: ./test001: No such file or directory"]>
+to contain exactly in any order:
+  <["# test001:",
+    "--test IO:",
+    "["HELLO!!\n", "WORLD!!"]",
+    "2",
+    "--test IOExcept:",
+    "["HELLO!!\n", "WORLD!!"]",
+    "2",
+    "()"]>
+elements not found:
+  <["--test IO:",
+    "["HELLO!!\n", "WORLD!!"]",
+    "2",
+    "--test IOExcept:",
+    "["HELLO!!\n", "WORLD!!"]",
+    "2",
+    "()"]>
+and elements not expected:
+  <["test001.idr:36:40-44:39:",
+    "   |",
+    "|           readAcc fileHandle cnt acc = with ST do",
+    "   |                                        ~~~~~~~~~~ ...",
+    "When checking right hand side of Main.readFileCount, readAcc with expected type",
+    "        STrans m",
+    "               (Either FileError (List String))",
+    "               [cnt ::: State Int, fileHandle ::: FileHandleI mode]",
+    "               (\result => [cnt ::: State Int, fileHandle ::: FileHandleI mode])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test001.idr:47:12-61:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test001.idr:64:8-69:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test001: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[st002](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 9.768 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["test002.idr:36:40-44:39:",
+    "   |",
+    "|           readAcc fileHandle cnt acc = with ST do",
+    "   |                                        ~~~~~~~~~~ ...",
+    "When checking right hand side of Main.readFileCount, readAcc with expected type",
+    "        STrans m",
+    "               (Either FileError (List Char))",
+    "               [cnt ::: State Int, fileHandle ::: FileHandleI mode]",
+    "               (\result => [cnt ::: State Int, fileHandle ::: FileHandleI mode])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test002.idr:47:12-61:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "# test002:",
+    "./run: line 4: ./test002: No such file or directory"]>
+to contain exactly in any order:
+  <["# test002:",
+    "--test IO:",
+    "['H', 'E', 'L', 'L', 'O', '!', '!', '\n', 'W', 'O', 'R', 'L', 'D', '!', '!', '\NUL']",
+    "16",
+    "--test IOExcept:",
+    "['H', 'E', 'L', 'L', 'O', '!', '!', '\n', 'W', 'O', 'R', 'L', 'D', '!', '!', '\NUL']",
+    "16",
+    "()"]>
+elements not found:
+  <["--test IO:",
+    "['H', 'E', 'L', 'L', 'O', '!', '!', '\n', 'W', 'O', 'R', 'L', 'D', '!', '!', '\NUL']",
+    "16",
+    "--test IOExcept:",
+    "['H', 'E', 'L', 'L', 'O', '!', '!', '\n', 'W', 'O', 'R', 'L', 'D', '!', '!', '\NUL']",
+    "16",
+    "()"]>
+and elements not expected:
+  <["test002.idr:36:40-44:39:",
+    "   |",
+    "|           readAcc fileHandle cnt acc = with ST do",
+    "   |                                        ~~~~~~~~~~ ...",
+    "When checking right hand side of Main.readFileCount, readAcc with expected type",
+    "        STrans m",
+    "               (Either FileError (List Char))",
+    "               [cnt ::: State Int, fileHandle ::: FileHandleI mode]",
+    "               (\result => [cnt ::: State Int, fileHandle ::: FileHandleI mode])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test002.idr:47:12-61:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "./run: line 4: ./test002: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[st003](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 8.811 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["test003.idr:15:12-20:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test003.idr:24:8-29:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test003:",
+    "./run: line 4: ./test003: No such file or directory"]>
+to contain exactly in any order:
+  <["# test003:",
+    "--test IO:",
+    "HELLO!!",
+    "WORLD!!",
+    "--test IOExcept:",
+    "HELLO!!",
+    "WORLD!!",
+    "()"]>
+elements not found:
+  <["--test IO:",
+    "HELLO!!",
+    "WORLD!!",
+    "--test IOExcept:",
+    "HELLO!!",
+    "WORLD!!",
+    "()"]>
+and elements not expected:
+  <["test003.idr:15:12-20:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test003.idr:24:8-29:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test003: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[st004](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 7.677 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["test004.idr:14:12-19:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test004.idr:22:8-27:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test004:",
+    "./run: line 4: ./test004: No such file or directory"]>
+to contain exactly in any order:
+  <["# test004:",
+    "--test IO:",
+    "File Not Found",
+    "--test IOExcept:",
+    "File Not Found",
+    "()"]>
+elements not found:
+  <["--test IO:", "File Not Found", "--test IOExcept:", "File Not Found", "()"]>
+and elements not expected:
+  <["test004.idr:14:12-19:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test004.idr:22:8-27:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test004: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[st005](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 7.58 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["test005.idr:14:12-27:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test005.idr:31:8-36:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test005:",
+    "./run: line 4: ./test005: No such file or directory",
+    "cat: writeTestFile: No such file or directory"]>
+to contain exactly in any order:
+  <["# test005:", "--test IO:", "--test IOExcept:", "()", "HELLO!!", "WORLD!!"]>
+elements not found:
+  <["--test IO:", "--test IOExcept:", "()", "HELLO!!", "WORLD!!"]>
+and elements not expected:
+  <["test005.idr:14:12-27:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test005.idr:31:8-36:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test005: No such file or directory",
+    "cat: writeTestFile: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[st006](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 7.375 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["test006.idr:14:12-31:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test006.idr:35:8-40:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test006:",
+    "./run: line 4: ./test006: No such file or directory",
+    "cat: writeStringTestFile: No such file or directory"]>
+to contain exactly in any order:
+  <["# test006:", "--test IO:", "--test IOExcept:", "()", "HELLO!!WORLD!!"]>
+elements not found:
+  <["--test IO:", "--test IOExcept:", "()", "HELLO!!WORLD!!"]>
+and elements not expected:
+  <["test006.idr:14:12-31:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test006.idr:35:8-40:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test006: No such file or directory",
+    "cat: writeStringTestFile: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[st007](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 6.732 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["test007.idr:14:12-18:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test007.idr:22:8-27:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test007:",
+    "./run: line 4: ./test007: No such file or directory",
+    "cat: writeFileTestFile: No such file or directory"]>
+to contain exactly in any order:
+  <["# test007:", "--test IO:", "--test IOExcept:", "()", "HELLO!!", "WORLD!!"]>
+elements not found:
+  <["--test IO:", "--test IOExcept:", "()", "HELLO!!", "WORLD!!"]>
+and elements not expected:
+  <["test007.idr:14:12-18:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test007.idr:22:8-27:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test007: No such file or directory",
+    "cat: writeFileTestFile: No such file or directory"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;31mERROR[m] test[totality015](idrisjvm.integrationtest.IdrisJvmTest)  Time elapsed: 9.072 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+  <["totality015a.idr:53:3-53:",
+    "   |",
+    "|   quiz (num1 :: num2 :: nums) score = quiz nums score",
+    "   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "Main.quiz is possibly not total due to recursive path Main.quiz --> Main.quiz",
+    "",
+    "totality015a.idr:43:3-45:36:",
+    "   |",
+    "|   correct nums score",
+    "   |   ~~~~~~~~~~~~~~~~~~ ...",
+    "Main.correct is possibly not total due to: Main.quiz",
+    "",
+    "totality015a.idr:48:3-50:28:",
+    "   |",
+    "|   wrong nums ans score",
+    "   |   ~~~~~~~~~~~~~~~~~~~~ ...",
+    "Main.wrong is possibly not total due to: Main.quiz",
+    ""]>
+to contain exactly in any order:
+  <["totality015a.idr:52:3-53:",
+    "   |",
+    "|   quiz (num1 :: num2 :: nums) score = quiz nums score",
+    "   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "Main.quiz is possibly not total due to recursive path Main.quiz --> Main.quiz",
+    "",
+    "totality015a.idr:42:3-44:36:",
+    "   |",
+    "|   correct nums score",
+    "   |   ~~~~~~~~~~~~~~~~~~ ...",
+    "Main.correct is possibly not total due to: Main.quiz",
+    "",
+    "totality015a.idr:47:3-49:28:",
+    "   |",
+    "|   wrong nums ans score",
+    "   |   ~~~~~~~~~~~~~~~~~~~~ ...",
+    "Main.wrong is possibly not total due to: Main.quiz",
+    ""]>
+elements not found:
+  <["totality015a.idr:52:3-53:",
+    "totality015a.idr:42:3-44:36:",
+    "totality015a.idr:47:3-49:28:"]>
+and elements not expected:
+  <["totality015a.idr:53:3-53:",
+    "totality015a.idr:43:3-45:36:",
+    "totality015a.idr:48:3-50:28:"]>
+
+	at idrisjvm.integrationtest.IdrisJvmTest.test(IdrisJvmTest.java:133)
+
+[[1;34mINFO[m] 
+[[1;34mINFO[m] Results:
+[[1;34mINFO[m] 
+[[1;31mERROR[m] [1;31mFailures: [m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: "*** ./IdrisJvm/Core/Operator.idr:227:1-233:28:unmatched case in IdrisJvm.Core.Operator.cgOpLZExt ***"",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2410-0.json","-o","basic011"]",
+    "./run: line 3: ./basic011: No such file or directory"]>
+to contain exactly in any order:
+  <["6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "FDA01C93B78A192F",
+    "AD85270E93646134",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "00",
+    "0000",
+    "00000000",
+    "0000000000000000"]>
+elements not found:
+  <["6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "FDA01C93B78A192F",
+    "AD85270E93646134",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "6EA049D797FA18D6",
+    "00",
+    "0000",
+    "00000000",
+    "0000000000000000"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: "*** ./IdrisJvm/Core/Operator.idr:227:1-233:28:unmatched case in IdrisJvm.Core.Operator.cgOpLZExt ***"",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2410-0.json","-o","basic011"]",
+    "./run: line 3: ./basic011: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["basic021.idr:8:7-9:20:",
+    "  |",
+    "|     = do modifyIORef ref (+1)",
+    "  |       ~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of count with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Prelude.Monad.>>=:",
+    "        No such variable modifyIORef",
+    "",
+    "basic021_2.idr:3:7:",
+    "  |",
+    "| count : HasReference ffi =>  Nat -> IORef Integer -> IO' ffi ()",
+    "  |       ^",
+    "When checking type of Main.count:",
+    "No such variable HasReference",
+    "",
+    "./run: line 4: ./basic021: No such file or directory",
+    "./run: line 5: ./basic021_2: No such file or directory"]>
+to contain exactly in any order:
+  <["1000000", "1000"]>
+elements not found:
+  <["1000000", "1000"]>
+and elements not expected:
+  <["basic021.idr:8:7-9:20:",
+    "  |",
+    "|     = do modifyIORef ref (+1)",
+    "  |       ~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of count with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Prelude.Monad.>>=:",
+    "        No such variable modifyIORef",
+    "",
+    "basic021_2.idr:3:7:",
+    "  |",
+    "| count : HasReference ffi =>  Nat -> IORef Integer -> IO' ffi ()",
+    "  |       ^",
+    "When checking type of Main.count:",
+    "No such variable HasReference",
+    "",
+    "./run: line 4: ./basic021: No such file or directory",
+    "./run: line 5: ./basic021_2: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["basic022.idr:3:7:",
+    "  |",
+    "| count : HasReference ffi =>  Nat -> IORef Integer -> IO' ffi ()",
+    "  |       ^",
+    "When checking type of Main.count:",
+    "No such variable HasReference",
+    "",
+    "./run: line 3: ./basic022: No such file or directory"]>
+to contain exactly in any order:
+  <["1000"]>
+elements not found:
+  <["1000"]>
+and elements not expected:
+  <["basic022.idr:3:7:",
+    "  |",
+    "| count : HasReference ffi =>  Nat -> IORef Integer -> IO' ffi ()",
+    "  |       ^",
+    "When checking type of Main.count:",
+    "No such variable HasReference",
+    "",
+    "./run: line 3: ./basic022: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["0.7853981633974483 : Double",
+    "-0.7853981633974483 : Double",
+    "2.356194490192345 : Double",
+    "-2.356194490192345 : Double",
+    "0.0 : Double",
+    "1.5707963267948966 : Double",
+    "Exception in thread "main" java.lang.RuntimeException: A PrimFn value expected but found null",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2591-0.json","-o","basic025"]",
+    "./run: line 5: ./basic025: No such file or directory"]>
+to contain exactly in any order:
+  <["0.7853981633974483 : Double",
+    "-0.7853981633974483 : Double",
+    "2.356194490192345 : Double",
+    "-2.356194490192345 : Double",
+    "0.0 : Double",
+    "1.5707963267948966 : Double",
+    "0.7853981633",
+    "-0.7853981633",
+    "2.3561944901",
+    "-2.3561944901",
+    "0",
+    "1.5707963267"]>
+elements not found:
+  <["0.7853981633",
+    "-0.7853981633",
+    "2.3561944901",
+    "-2.3561944901",
+    "0",
+    "1.5707963267"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: A PrimFn value expected but found null",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2591-0.json","-o","basic025"]",
+    "./run: line 5: ./basic025: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <[]>
+to contain exactly in any order:
+  <["nuyahcha", "mohgiide", "apeekair", "eeraimam", "rahhahwi", "goocheiv"]>
+but could not find the following elements:
+  <["nuyahcha", "mohgiide", "apeekair", "eeraimam", "rahhahwi", "goocheiv"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(idris_addToString), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0), (FCon(C_Str), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2412-0.json","-o","test021"]",
+    "Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(exit), returns: FCon(C_Unit), args: [(FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg3016-0.json","-o","test021a"]",
+    "./run: line 4: ./test021: No such file or directory",
+    "./run: line 5: ./test021a: No such file or directory"]>
+to contain exactly in any order:
+  <["["HELLO!!!\n", "WORLD!!!\n", ""]", "3", "7", "Answer: 91"]>
+elements not found:
+  <["["HELLO!!!\n", "WORLD!!!\n", ""]", "3", "7", "Answer: 91"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(idris_addToString), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0), (FCon(C_Str), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2412-0.json","-o","test021"]",
+    "Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(exit), returns: FCon(C_Unit), args: [(FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg3016-0.json","-o","test021a"]",
+    "./run: line 4: ./test021: No such file or directory",
+    "./run: line 5: ./test021a: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(free), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2506-0.json","-o","test025"]",
+    "./run: line 3: ./test025: No such file or directory"]>
+to contain exactly in any order:
+  <["[1, 2, 3, 4]"]>
+elements not found:
+  <["[1, 2, 3, 4]"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(free), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2506-0.json","-o","test025"]",
+    "./run: line 3: ./test025: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["hangman.idr:204:8-12:",
+    "    |",
+    "| wlen = proof search",
+    "    |        ~~~~~",
+    "This style of tactic proof is deprecated. See %runElab for the replacement.",
+    "",
+    "Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(getchar), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: []",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2444-0.json","-o","hangman"]",
+    "./run: line 3: ./hangman: No such file or directory"]>
+to contain exactly in any order:
+  <["hangman.idr:204:8-12:",
+    "    |",
+    "| wlen = proof search",
+    "    |        ~~~~~",
+    "This style of tactic proof is deprecated. See %runElab for the replacement.",
+    "",
+    "----",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "ja-a",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "You won! Successfully guessed java"]>
+elements not found:
+  <["----",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: No, sorry",
+    "-a-a",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "ja-a",
+    "",
+    "guesses left",
+    "Enter guess: Good guess!",
+    "You won! Successfully guessed java"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(getchar), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: []",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2444-0.json","-o","hangman"]",
+    "./run: line 3: ./hangman: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(getchar), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: []",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2521-0.json","-o","effects004"]",
+    "./run: line 3: ./effects004: No such file or directory"]>
+to contain exactly in any order:
+  <["Off we go!",
+    "Counter at 0",
+    "Counter at 1",
+    "Counter at 2",
+    "Counter at 3",
+    "Counter at 4",
+    "Counter at 5",
+    "Counter at 6",
+    "Counter at 7",
+    "Counter at 8",
+    "Finished!"]>
+elements not found:
+  <["Off we go!",
+    "Counter at 0",
+    "Counter at 1",
+    "Counter at 2",
+    "Counter at 3",
+    "Counter at 4",
+    "Counter at 5",
+    "Counter at 6",
+    "Counter at 7",
+    "Counter at 8",
+    "Finished!"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(getchar), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: []",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2521-0.json","-o","effects004"]",
+    "./run: line 3: ./effects004: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:122->runTestRunner:279 Test error009 did not complete successfully. Exit code is 1.[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(fileRemove), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: [(FCon(C_Str), Loc 0)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2814-0.json","-o","ffi013"]",
+    "./run: line 4: ./ffi013: No such file or directory",
+    "still exists",
+    "success",
+    "confirmed"]>
+to contain exactly in any order:
+  <["success", "confirmed", "success", "confirmed"]>
+elements not found:
+  <["success", "confirmed"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(fileRemove), returns: FApp(C_IntT, [FUnknown, FCon(C_IntNative)]), args: [(FCon(C_Str), Loc 0)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2814-0.json","-o","ffi013"]",
+    "./run: line 4: ./ffi013: No such file or directory",
+    "still exists"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["interfaces005a.idr:18:3-29:",
+    "   |",
+    "|   [TreeSet] Ord a => SetSig a where",
+    "   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "Set.TreeSet.Set must be defined by a type or data constructor",
+    "",
+    " No such variable TreeSet",
+    "interfaces005b.idr:4:11-18:",
+    "  |",
+    "| interface SetSig a where",
+    "  |           ~~~~~~~~",
+    "Data definitions not allowed in an interface declaration",
+    "",
+    " interfaces005b.idr:18:3-29:SetSig is not an interface",
+    " No such variable TreeSet"]>
+to contain exactly in any order:
+  <["interfaces005a.idr:18:3:",
+    "Set.TreeSet.Set must be defined by a type or data constructor",
+    "No such variable TreeSet",
+    "interfaces005b.idr:4:11:",
+    "Data definitions not allowed in an interface declaration",
+    "interfaces005b.idr:18:3:SetSig is not an interface",
+    "No such variable TreeSet"]>
+elements not found:
+  <["interfaces005a.idr:18:3:",
+    "No such variable TreeSet",
+    "interfaces005b.idr:4:11:",
+    "interfaces005b.idr:18:3:SetSig is not an interface",
+    "No such variable TreeSet"]>
+and elements not expected:
+  <["interfaces005a.idr:18:3-29:",
+    "   |",
+    "|   [TreeSet] Ord a => SetSig a where",
+    "   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "",
+    " No such variable TreeSet",
+    "interfaces005b.idr:4:11-18:",
+    "  |",
+    "| interface SetSig a where",
+    "  |           ~~~~~~~~",
+    "",
+    " interfaces005b.idr:18:3-29:SetSig is not an interface",
+    " No such variable TreeSet"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["interfaces009.idr:23:11:",
+    "   |",
+    "|   z = x + y",
+    "   |           ^",
+    "unexpected Operator without known fixity: +",
+    ""]>
+to contain exactly in any order:
+  <[]>
+but the following elements were unexpected:
+  <["interfaces009.idr:23:11:",
+    "   |",
+    "|   z = x + y",
+    "   |           ^",
+    "unexpected Operator without known fixity: +",
+    ""]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["interpret003.idr:4:8-18:",
+    "  |",
+    "| main = exitFailure",
+    "  |        ~~~~~~~~~~~",
+    "When checking right hand side of main with expected type",
+    "        IO ()",
+    "",
+    "No such variable exitFailure",
+    "",
+    "When checking argument value to function Prelude.Basics.the:",
+    "        No such variable Main.main"]>
+to contain exactly in any order:
+  <["Compiled program terminated with exit code 1"]>
+elements not found:
+  <["Compiled program terminated with exit code 1"]>
+and elements not expected:
+  <["interpret003.idr:4:8-18:",
+    "  |",
+    "| main = exitFailure",
+    "  |        ~~~~~~~~~~~",
+    "When checking right hand side of main with expected type",
+    "        IO ()",
+    "",
+    "No such variable exitFailure",
+    "",
+    "When checking argument value to function Prelude.Basics.the:",
+    "        No such variable Main.main"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(idris_addToString), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0), (FCon(C_Str), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2860-0.json","-o","test004"]",
+    "./run: line 3: ./test004: No such file or directory"]>
+to contain exactly in any order:
+  <["Reading testfile",
+    "Hello!",
+    "World!",
+    "...",
+    "3",
+    "4",
+    "Last line",
+    "",
+    "---",
+    "Hello!",
+    "World!",
+    "...",
+    "3",
+    "4",
+    "Last line",
+    "---"]>
+elements not found:
+  <["Reading testfile",
+    "Hello!",
+    "World!",
+    "...",
+    "3",
+    "4",
+    "Last line",
+    "",
+    "---",
+    "Hello!",
+    "World!",
+    "...",
+    "3",
+    "4",
+    "Last line",
+    "---"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: Unsupported descriptor: FStr(idris_addToString), returns: FCon(C_Unit), args: [(FCon(C_Ptr), Loc 0), (FCon(C_Str), Loc 1)]",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg2860-0.json","-o","test004"]",
+    "./run: line 3: ./test004: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:122->runTestRunner:279 Test pkg001 did not complete successfully. Exit code is 1.[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:122->runTestRunner:279 Test pkg005 did not complete successfully. Exit code is 1.[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["Not all command line options can be used to override package options.",
+    "",
+    "The only changeable options are:",
+    "	--log <lvl>, --total, --warnpartial, --warnreach, --warnipkg",
+    "	--ibcsubdir <path>, -i --idrispath <path>",
+    "	--logging-categories <cats>",
+    "	--highlight",
+    "",
+    "The options need removing are:",
+    "	 Pkg "idrisjvmffi" ",
+    "",
+    "",
+    "",
+    "./run: line 4: cd: ../ibcout: No such file or directory",
+    "(True, "VROOOOM", Pedal) : (Bool, String, CarPart)"]>
+to contain exactly in any order:
+  <["(True, "VROOOOM", Pedal) : (Bool, String, CarPart)"]>
+but the following elements were unexpected:
+  <["Not all command line options can be used to override package options.",
+    "",
+    "The only changeable options are:",
+    "	--log <lvl>, --total, --warnpartial, --warnreach, --warnipkg",
+    "	--ibcsubdir <path>, -i --idrispath <path>",
+    "	--logging-categories <cats>",
+    "	--highlight",
+    "",
+    "The options need removing are:",
+    "	 Pkg "idrisjvmffi" ",
+    "",
+    "",
+    "",
+    "./run: line 4: cd: ../ibcout: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:122->runTestRunner:279 Test pkg008 did not complete successfully. Exit code is 1.[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:122->runTestRunner:279 Test pkg009 did not complete successfully. Exit code is 1.[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:122->runTestRunner:279 Test pkg010 did not complete successfully. Exit code is 1.[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["prim__floatToStr 0.0",
+    ""0.0"",
+    "prim__strToFloat 0.0",
+    "0.0",
+    "prim__addFloat 1.0 1.0",
+    "2.0",
+    "prim__subFloat 1.0 1.0",
+    "0.0",
+    "prim__mulFloat 1.0 1.0",
+    "1.0",
+    "prim__divFloat 1.0 1.0",
+    "1.0",
+    "prim__slteFloat 1.0 1.0",
+    "1",
+    "prim__sltFloat 1.0 1.0",
+    "0",
+    "prim__sgteFloat 1.0 1.0",
+    "1",
+    "prim__sgtFloat 1.0 1.0",
+    "0",
+    "prim__eqFloat 1.0 1.0",
+    "1",
+    "prim__floatACos 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFACos NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatATan 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFATan NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatCos 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFCos NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatFloor 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFFloor NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatSin 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFSin NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatTan 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFTan NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatASin 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFASin NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatCeil 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFCeil NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatExp 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFExp NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatLog 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFLog NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__floatSqrt 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFSqrt NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "prim__negFloat 1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFNegate NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)"]>
+to contain exactly in any order:
+  <["prim__floatToStr 0.0",
+    ""0"",
+    "prim__strToFloat 0.0",
+    "0",
+    "prim__addFloat 1.0 1.0",
+    "2",
+    "prim__subFloat 1.0 1.0",
+    "0",
+    "prim__mulFloat 1.0 1.0",
+    "1",
+    "prim__divFloat 1.0 1.0",
+    "1",
+    "prim__slteFloat 1.0 1.0",
+    "1",
+    "prim__sltFloat 1.0 1.0",
+    "0",
+    "prim__sgteFloat 1.0 1.0",
+    "1",
+    "prim__sgtFloat 1.0 1.0",
+    "0",
+    "prim__eqFloat 1.0 1.0",
+    "1",
+    "prim__floatACos 1.0",
+    "0",
+    "prim__floatATan 1.0",
+    "0.78539816",
+    "prim__floatCos 1.0",
+    "0.54030230",
+    "prim__floatFloor 1.0",
+    "1",
+    "prim__floatSin 1.0",
+    "0.84147098",
+    "prim__floatTan 1.0",
+    "1.55740772",
+    "prim__floatASin 1.0",
+    "1.57079632",
+    "prim__floatCeil 1.0",
+    "1",
+    "prim__floatExp 1.0",
+    "2.71828182",
+    "prim__floatLog 1.0",
+    "0",
+    "prim__floatSqrt 1.0",
+    "1",
+    "prim__negFloat 1.0",
+    "-1"]>
+elements not found:
+  <[""0"",
+    "2",
+    "0",
+    "1",
+    "0",
+    "1",
+    "0",
+    "0.78539816",
+    "0.54030230",
+    "1",
+    "0.84147098",
+    "1.55740772",
+    "1.57079632",
+    "1",
+    "2.71828182",
+    "0",
+    "1",
+    "-1"]>
+and elements not expected:
+  <[""0.0"",
+    "0.0",
+    "2.0",
+    "0.0",
+    "1.0",
+    "1.0",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFACos NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFATan NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFCos NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFFloor NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFSin NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFTan NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFASin NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFCeil NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFExp NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFLog NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFSqrt NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)",
+    "Exception in thread "main" java.lang.RuntimeException: OPERATOR LFNegate NOT IMPLEMENTED!",
+    "	at io.github.mmhelloworld.idrisjvm.runtime.Runtime.error(Runtime.java:107)",
+    "	at main.Main.main(Main.idr)",
+    "	at main.Main.$lbracerunMain_0$rbrace(Main.idr)",
+    "	at main.Main.main(Main.idr)"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["6.0", "3.0", "3.141592653589793"]>
+to contain exactly in any order:
+  <["6", "3", "3.141592653589793"]>
+elements not found:
+  <["6", "3"]>
+and elements not expected:
+  <["6.0", "3.0"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <[" Can't find import reg007.lidr"]>
+to contain exactly in any order:
+  <["reg007.lidr:8:1:A.n is already defined",
+    "reg007.lidr:12:11-17:When checking right hand side of hurrah with expected type",
+    "        0 = 1",
+    "",
+    "Type mismatch between",
+    "        n = lala (Type of isSame)",
+    "and",
+    "        0 = 1 (Expected type)",
+    "",
+    "Specifically:",
+    "        Type mismatch between",
+    "                1",
+    "        and",
+    "                0"]>
+elements not found:
+  <["reg007.lidr:8:1:A.n is already defined",
+    "reg007.lidr:12:11-17:When checking right hand side of hurrah with expected type",
+    "        0 = 1",
+    "",
+    "Type mismatch between",
+    "        n = lala (Type of isSame)",
+    "and",
+    "        0 = 1 (Expected type)",
+    "",
+    "Specifically:",
+    "        Type mismatch between",
+    "                1",
+    "        and",
+    "                0"]>
+and elements not expected:
+  <[" Can't find import reg007.lidr"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["reg029.idr:8:6:",
+    "  |",
+    "| main : JVM_IO ()",
+    "  |      ^",
+    "When checking type of Main.main:",
+    "No such variable JVM_IO",
+    "",
+    "./run: line 10: ./reg029: No such file or directory",
+    "reg029.idr:8:6:",
+    "  |",
+    "| main : JVM_IO ()",
+    "  |      ^",
+    "When checking type of Main.main:",
+    "No such variable JVM_IO",
+    "",
+    "Uncaught error: Elaborating {__infer_0} arg {ival_0}: NoSuchVariable Main.main"]>
+to contain exactly in any order:
+  <["Nothing", "Just "exists!"", "Nothing", "Just "exists!""]>
+elements not found:
+  <["Nothing", "Just "exists!"", "Nothing", "Just "exists!""]>
+and elements not expected:
+  <["reg029.idr:8:6:",
+    "  |",
+    "| main : JVM_IO ()",
+    "  |      ^",
+    "When checking type of Main.main:",
+    "No such variable JVM_IO",
+    "",
+    "./run: line 10: ./reg029: No such file or directory",
+    "reg029.idr:8:6:",
+    "  |",
+    "| main : JVM_IO ()",
+    "  |      ^",
+    "When checking type of Main.main:",
+    "No such variable JVM_IO",
+    "",
+    "Uncaught error: Elaborating {__infer_0} arg {ival_0}: NoSuchVariable Main.main"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["Exception in thread "main" java.lang.RuntimeException: "*** ./IdrisJvm/Core/Operator.idr:227:1-233:28:unmatched case in IdrisJvm.Core.Operator.cgOpLZExt ***"",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg3293-0.json","-o","reg052"]",
+    "./run: line 3: ./reg052: No such file or directory"]>
+to contain exactly in any order:
+  <["000000000000002A"]>
+elements not found:
+  <["000000000000002A"]>
+and elements not expected:
+  <["Exception in thread "main" java.lang.RuntimeException: "*** ./IdrisJvm/Core/Operator.idr:227:1-233:28:unmatched case in IdrisJvm.Core.Operator.cgOpLZExt ***"",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.send(IdrisJvmCodegenLauncher.java:104)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.run(IdrisJvmCodegenLauncher.java:57)",
+    "	at io.github.mmhelloworld.idrisjvm.codegen.launcher.IdrisJvmCodegenLauncher.main(IdrisJvmCodegenLauncher.java:48)",
+    "FAILURE: "idris-codegen-jvm" ["/tmp/idris-cg3293-0.json","-o","reg052"]",
+    "./run: line 3: ./reg052: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["test001.idr:36:40-44:39:",
+    "   |",
+    "|           readAcc fileHandle cnt acc = with ST do",
+    "   |                                        ~~~~~~~~~~ ...",
+    "When checking right hand side of Main.readFileCount, readAcc with expected type",
+    "        STrans m",
+    "               (Either FileError (List String))",
+    "               [cnt ::: State Int, fileHandle ::: FileHandleI mode]",
+    "               (\result => [cnt ::: State Int, fileHandle ::: FileHandleI mode])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test001.idr:47:12-61:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test001.idr:64:8-69:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test001:",
+    "./run: line 4: ./test001: No such file or directory"]>
+to contain exactly in any order:
+  <["# test001:",
+    "--test IO:",
+    "["HELLO!!\n", "WORLD!!"]",
+    "2",
+    "--test IOExcept:",
+    "["HELLO!!\n", "WORLD!!"]",
+    "2",
+    "()"]>
+elements not found:
+  <["--test IO:",
+    "["HELLO!!\n", "WORLD!!"]",
+    "2",
+    "--test IOExcept:",
+    "["HELLO!!\n", "WORLD!!"]",
+    "2",
+    "()"]>
+and elements not expected:
+  <["test001.idr:36:40-44:39:",
+    "   |",
+    "|           readAcc fileHandle cnt acc = with ST do",
+    "   |                                        ~~~~~~~~~~ ...",
+    "When checking right hand side of Main.readFileCount, readAcc with expected type",
+    "        STrans m",
+    "               (Either FileError (List String))",
+    "               [cnt ::: State Int, fileHandle ::: FileHandleI mode]",
+    "               (\result => [cnt ::: State Int, fileHandle ::: FileHandleI mode])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test001.idr:47:12-61:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test001.idr:64:8-69:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test001: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["test002.idr:36:40-44:39:",
+    "   |",
+    "|           readAcc fileHandle cnt acc = with ST do",
+    "   |                                        ~~~~~~~~~~ ...",
+    "When checking right hand side of Main.readFileCount, readAcc with expected type",
+    "        STrans m",
+    "               (Either FileError (List Char))",
+    "               [cnt ::: State Int, fileHandle ::: FileHandleI mode]",
+    "               (\result => [cnt ::: State Int, fileHandle ::: FileHandleI mode])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test002.idr:47:12-61:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "# test002:",
+    "./run: line 4: ./test002: No such file or directory"]>
+to contain exactly in any order:
+  <["# test002:",
+    "--test IO:",
+    "['H', 'E', 'L', 'L', 'O', '!', '!', '\n', 'W', 'O', 'R', 'L', 'D', '!', '!', '\NUL']",
+    "16",
+    "--test IOExcept:",
+    "['H', 'E', 'L', 'L', 'O', '!', '!', '\n', 'W', 'O', 'R', 'L', 'D', '!', '!', '\NUL']",
+    "16",
+    "()"]>
+elements not found:
+  <["--test IO:",
+    "['H', 'E', 'L', 'L', 'O', '!', '!', '\n', 'W', 'O', 'R', 'L', 'D', '!', '!', '\NUL']",
+    "16",
+    "--test IOExcept:",
+    "['H', 'E', 'L', 'L', 'O', '!', '!', '\n', 'W', 'O', 'R', 'L', 'D', '!', '!', '\NUL']",
+    "16",
+    "()"]>
+and elements not expected:
+  <["test002.idr:36:40-44:39:",
+    "   |",
+    "|           readAcc fileHandle cnt acc = with ST do",
+    "   |                                        ~~~~~~~~~~ ...",
+    "When checking right hand side of Main.readFileCount, readAcc with expected type",
+    "        STrans m",
+    "               (Either FileError (List Char))",
+    "               [cnt ::: State Int, fileHandle ::: FileHandleI mode]",
+    "               (\result => [cnt ::: State Int, fileHandle ::: FileHandleI mode])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test002.idr:47:12-61:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "./run: line 4: ./test002: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["test003.idr:15:12-20:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test003.idr:24:8-29:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test003:",
+    "./run: line 4: ./test003: No such file or directory"]>
+to contain exactly in any order:
+  <["# test003:",
+    "--test IO:",
+    "HELLO!!",
+    "WORLD!!",
+    "--test IOExcept:",
+    "HELLO!!",
+    "WORLD!!",
+    "()"]>
+elements not found:
+  <["--test IO:",
+    "HELLO!!",
+    "WORLD!!",
+    "--test IOExcept:",
+    "HELLO!!",
+    "WORLD!!",
+    "()"]>
+and elements not expected:
+  <["test003.idr:15:12-20:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test003.idr:24:8-29:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test003: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["test004.idr:14:12-19:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test004.idr:22:8-27:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test004:",
+    "./run: line 4: ./test004: No such file or directory"]>
+to contain exactly in any order:
+  <["# test004:",
+    "--test IO:",
+    "File Not Found",
+    "--test IOExcept:",
+    "File Not Found",
+    "()"]>
+elements not found:
+  <["--test IO:", "File Not Found", "--test IOExcept:", "File Not Found", "()"]>
+and elements not expected:
+  <["test004.idr:14:12-19:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test004.idr:22:8-27:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test004: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["test005.idr:14:12-27:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test005.idr:31:8-36:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test005:",
+    "./run: line 4: ./test005: No such file or directory",
+    "cat: writeTestFile: No such file or directory"]>
+to contain exactly in any order:
+  <["# test005:", "--test IO:", "--test IOExcept:", "()", "HELLO!!", "WORLD!!"]>
+elements not found:
+  <["--test IO:", "--test IOExcept:", "()", "HELLO!!", "WORLD!!"]>
+and elements not expected:
+  <["test005.idr:14:12-27:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test005.idr:31:8-36:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test005: No such file or directory",
+    "cat: writeTestFile: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["test006.idr:14:12-31:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test006.idr:35:8-40:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test006:",
+    "./run: line 4: ./test006: No such file or directory",
+    "cat: writeStringTestFile: No such file or directory"]>
+to contain exactly in any order:
+  <["# test006:", "--test IO:", "--test IOExcept:", "()", "HELLO!!WORLD!!"]>
+elements not found:
+  <["--test IO:", "--test IOExcept:", "()", "HELLO!!WORLD!!"]>
+and elements not expected:
+  <["test006.idr:14:12-31:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test006.idr:35:8-40:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test006: No such file or directory",
+    "cat: writeStringTestFile: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["test007.idr:14:12-18:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test007.idr:22:8-27:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "# test007:",
+    "./run: line 4: ./test007: No such file or directory",
+    "cat: writeFileTestFile: No such file or directory"]>
+to contain exactly in any order:
+  <["# test007:", "--test IO:", "--test IOExcept:", "()", "HELLO!!", "WORLD!!"]>
+elements not found:
+  <["--test IO:", "--test IOExcept:", "()", "HELLO!!", "WORLD!!"]>
+and elements not expected:
+  <["test007.idr:14:12-18:21:",
+    "   |",
+    "| testFile = with ST do",
+    "   |            ~~~~~~~~~~ ...",
+    "When checking right hand side of testFile with expected type",
+    "        STrans m () [] (\result => [])",
+    "",
+    "When checking an application of function Control.ST.>>=:",
+    "        No such variable Prelude.File.FileError",
+    "",
+    "test007.idr:22:8-27:38:",
+    "   |",
+    "| main = do putStrLn "--test IO:"",
+    "   |        ~~~~~~~~~~~~~~~~~~~~~~~~ ...",
+    "When checking right hand side of main with expected type",
+    "        JVM_IO ()",
+    "",
+    "When checking an application of function Control.ST.run:",
+    "        Can't find implementation for File (IO' (MkFFI JVM_Types",
+    "                                                       JVM_FfiFn",
+    "                                                       String))",
+    "",
+    "./run: line 4: ./test007: No such file or directory",
+    "cat: writeFileTestFile: No such file or directory"]>
+[m
+[[1;31mERROR[m] [1;31m  IdrisJvmTest.test:133 
+Expecting:
+  <["totality015a.idr:53:3-53:",
+    "   |",
+    "|   quiz (num1 :: num2 :: nums) score = quiz nums score",
+    "   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "Main.quiz is possibly not total due to recursive path Main.quiz --> Main.quiz",
+    "",
+    "totality015a.idr:43:3-45:36:",
+    "   |",
+    "|   correct nums score",
+    "   |   ~~~~~~~~~~~~~~~~~~ ...",
+    "Main.correct is possibly not total due to: Main.quiz",
+    "",
+    "totality015a.idr:48:3-50:28:",
+    "   |",
+    "|   wrong nums ans score",
+    "   |   ~~~~~~~~~~~~~~~~~~~~ ...",
+    "Main.wrong is possibly not total due to: Main.quiz",
+    ""]>
+to contain exactly in any order:
+  <["totality015a.idr:52:3-53:",
+    "   |",
+    "|   quiz (num1 :: num2 :: nums) score = quiz nums score",
+    "   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "Main.quiz is possibly not total due to recursive path Main.quiz --> Main.quiz",
+    "",
+    "totality015a.idr:42:3-44:36:",
+    "   |",
+    "|   correct nums score",
+    "   |   ~~~~~~~~~~~~~~~~~~ ...",
+    "Main.correct is possibly not total due to: Main.quiz",
+    "",
+    "totality015a.idr:47:3-49:28:",
+    "   |",
+    "|   wrong nums ans score",
+    "   |   ~~~~~~~~~~~~~~~~~~~~ ...",
+    "Main.wrong is possibly not total due to: Main.quiz",
+    ""]>
+elements not found:
+  <["totality015a.idr:52:3-53:",
+    "totality015a.idr:42:3-44:36:",
+    "totality015a.idr:47:3-49:28:"]>
+and elements not expected:
+  <["totality015a.idr:53:3-53:",
+    "totality015a.idr:43:3-45:36:",
+    "totality015a.idr:48:3-50:28:"]>
+[m
+[[1;34mINFO[m] 
+[[1;31mERROR[m] [1;31mTests run: 35, Failures: 34, Errors: 0, Skipped: 0[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1;31mBUILD FAILURE[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] Total time:  01:22 min
+[[1;34mINFO[m] Finished at: 2019-08-19T00:22:21-04:00
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;31mERROR[m] Failed to execute goal [32morg.apache.maven.plugins:maven-surefire-plugin:2.20:test[m [1m(default-test)[m on project [36midris-jvm-integration-test[m: [1;31mThere are test failures.[m
+[[1;31mERROR[m] [1;31m[m
+[[1;31mERROR[m] [1;31mPlease refer to /home/marimuthu/workspace/idris-jvm/idris-jvm-integration-test/target/surefire-reports for the individual test results.[m
+[[1;31mERROR[m] [1;31mPlease refer to dump files (if any exist) [date]-jvmRun[N].dump, [date].dumpstream and [date]-jvmRun[N].dumpstream.[m
+[[1;31mERROR[m] -> [1m[Help 1][m
+[[1;31mERROR[m] 
+[[1;31mERROR[m] To see the full stack trace of the errors, re-run Maven with the [1m-e[m switch.
+[[1;31mERROR[m] Re-run Maven using the [1m-X[m switch to enable full debug logging.
+[[1;31mERROR[m] 
+[[1;31mERROR[m] For more information about the errors and possible solutions, please read the following articles:
+[[1;31mERROR[m] [1m[Help 1][m http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

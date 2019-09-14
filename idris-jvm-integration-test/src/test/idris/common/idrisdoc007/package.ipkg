@@ -1,0 +1,6 @@
+package do_not_delete
+
+opts = "--quiet --portable-codegen jvm -p idrisjvmffi"
+
+modules = A
+

@@ -1,0 +1,7 @@
+package totality
+
+-- totality007
+-- Test that the package builder doesn't allow totality errors in a build
+opts = "--quiet --consolewidth 80 --portable-codegen jvm -p idrisjvmffi"
+sourcedir = src
+modules = Totality

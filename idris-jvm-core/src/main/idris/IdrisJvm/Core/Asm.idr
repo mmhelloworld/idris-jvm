@@ -165,8 +165,6 @@ mutual
                                | InterfaceDesc ClassName
                                | ArrayDesc FieldTypeDescriptor
                                | IdrisExportDesc ClassName
-                               | NullableStrDesc
-                               | NullableRefDesc ClassName
 
   data FieldTypeDescriptor = FieldTyDescByte
                            | FieldTyDescChar
@@ -185,8 +183,6 @@ mutual
     (InterfaceDesc className1      ) == (InterfaceDesc className2      ) = className1 == className2
     (ArrayDesc elemDesc1           ) == (ArrayDesc elemDesc2           ) = elemDesc1 == elemDesc2
     (IdrisExportDesc className1    ) == (IdrisExportDesc className2    ) = className1 == className2
-    (NullableStrDesc               ) == (NullableStrDesc               ) = True
-    (NullableRefDesc className1    ) == (NullableRefDesc className2    ) = className1 == className2
     _                                == _                                = False
 
   Eq FieldTypeDescriptor where
@@ -272,8 +268,6 @@ mutual
     show (InterfaceDesc className) = "InterfaceDesc " ++ show className
     show (ArrayDesc tyDesc) = "ArrayDesc " ++ show tyDesc
     show (IdrisExportDesc className) = "IdrisExportDesc " ++ show className
-    show NullableStrDesc = "NullableStrDesc"
-    show (NullableRefDesc className) = "NullableRefDesc" ++ show className
 
   Show FieldTypeDescriptor where
     show FieldTyDescByte = "FieldTyDescByte"
@@ -296,16 +290,12 @@ mutual
     asmRefTyDesc (ClassDesc c)       = "L" ++ c ++ ";"
     asmRefTyDesc (IdrisExportDesc c) = "L" ++ c ++ ";"
     asmRefTyDesc (InterfaceDesc c)   = "L" ++ c ++ ";"
-    asmRefTyDesc (NullableRefDesc c) = "L" ++ c ++ ";"
-    asmRefTyDesc NullableStrDesc     = "Ljava/lang/String;"
     asmRefTyDesc (ArrayDesc ty)   = "[" ++ asmFieldTypeDesc ty
 
     refTyClassName : ReferenceTypeDescriptor -> ClassName
     refTyClassName (ClassDesc c)       = c
     refTyClassName (InterfaceDesc c)   = c
     refTyClassName (IdrisExportDesc c) = c
-    refTyClassName (NullableRefDesc c) = c
-    refTyClassName NullableStrDesc     = "java/lang/String"
     refTyClassName arr@(ArrayDesc _)   = asmRefTyDesc arr
 
     asmFieldTypeDesc : FieldTypeDescriptor -> String

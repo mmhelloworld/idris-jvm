@@ -1,0 +1,8 @@
+:casesplit 12 xs
+:casesplit 18 ys
+:proofsearch 22 maprhs
+:makewith 26 isElem2
+:casesplit 31 p
+:casesplit 36 xs'
+:casesplit 39 x
+:casesplit 43 case_val

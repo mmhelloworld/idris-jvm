@@ -1,0 +1,37 @@
+tutorial006a.idr:5:23-24:
+  |
+5 | vapp (x :: xs) ys = x :: vapp xs xs -- BROKEN
+  |                       ~~
+When checking right hand side of vapp with expected type
+        Vect (S len + m) a
+
+When checking argument xs to constructor Data.Vect.:::
+        Type mismatch between
+                Vect (len + len) a (Type of vapp xs xs)
+        and
+                Vect (plus len m) a (Expected type)
+        
+        Specifically:
+                Type mismatch between
+                        plus len len
+                and
+                        plus len m
+
+tutorial006b.idr:10:39-50:
+   |
+10 |   parity (S (S (j + j)))     | Even = Even {n=S j}
+   |                                       ~~~~~~~~~~~~
+When checking right hand side of with block in Main.parity with expected type
+        Parity (S (S (j + j)))
+
+Type mismatch between
+        Parity (S j + S j) (Type of Even)
+and
+        Parity (S (S (plus j j))) (Expected type)
+
+Specifically:
+        Type mismatch between
+                plus (S j) (S j)
+        and
+                S (S (plus j j))
+

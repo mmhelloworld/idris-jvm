@@ -1,0 +1,5 @@
+package test
+
+opts = "--portable-codegen jvm -p idrisjvmffi"
+
+executable = test

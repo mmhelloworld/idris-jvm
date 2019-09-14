@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ -p pruviloj --nocolour --check --consolewidth 70 DataDef.idr
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ -p pruviloj --nocolour --check --consolewidth 70 Tacs.idr
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ -p pruviloj --nocolour --check --consolewidth 70 AgdaStyleReflection.idr
+# Disabled due to excess memory consumption
+# ${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ -p pruviloj --nocolour --check --consolewidth 70 Deriving.idr
+rm -f *.ibc

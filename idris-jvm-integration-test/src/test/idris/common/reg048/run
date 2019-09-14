@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ reg048.idr -p contrib -o reg048
+./reg048
+rm -f reg048 *.ibc

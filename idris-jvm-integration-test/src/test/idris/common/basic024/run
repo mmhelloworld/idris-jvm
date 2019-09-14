@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --quiet --port none < input
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ basic024.idr -o basic024
+
+./basic024
+
+rm -f basic024 *.ibc

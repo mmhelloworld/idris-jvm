@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --check test035.idr
+rm -f *.ibc

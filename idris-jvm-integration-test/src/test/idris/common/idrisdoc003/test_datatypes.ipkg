@@ -1,0 +1,6 @@
+package test_datatypes
+
+opts = "--quiet --portable-codegen jvm -p idrisjvmffi"
+
+modules = TestDatatypes
+

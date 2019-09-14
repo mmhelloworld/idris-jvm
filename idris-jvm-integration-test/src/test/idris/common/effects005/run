@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ defaultLogger.idr -o default -p effects
+./default
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ categoryLogger.idr -o category -p effects
+./category
+rm -f default category *.ibc

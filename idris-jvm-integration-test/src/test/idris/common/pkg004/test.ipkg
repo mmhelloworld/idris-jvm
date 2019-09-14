@@ -1,0 +1,8 @@
+package test
+
+modules = Main
+
+opts = "--warnpartial --warnreach --nocolour --quiet --consolewidth 80 --portable-codegen jvm -p idrisjvmffi"
+
+main = Main
+executable = "filenames/cannot include\\a directory separator"

@@ -1,0 +1,6 @@
+package test_interfaces
+
+opts = "--quiet --portable-codegen jvm -p idrisjvmffi"
+
+modules = TestInterfaces
+

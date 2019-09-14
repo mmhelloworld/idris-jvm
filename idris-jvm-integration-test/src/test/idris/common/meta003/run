@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour --check --consolewidth 70 BadDef.idr
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour --consolewidth 70 -o meta003 Catch.idr
+./meta003
+rm -f meta003 *.ibc

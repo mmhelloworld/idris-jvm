@@ -1,0 +1,10 @@
+package maths
+
+sourcedir = src
+
+opts = "--quiet --portable-codegen jvm -p idrisjvmffi"
+modules = NumOps
+        , Test
+
+tests = Test.testDouble
+      , Test.testTriple

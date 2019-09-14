@@ -1,0 +1,17 @@
+Interface C
+    interface
+
+Parameters:
+    t   -- a type
+
+Methods:
+    m : C t => t
+        member of interface
+        
+        The function is: Total & public export
+Implementations:
+    C A
+        implementation of interface
+    C (D a b)
+        another implementation of interface
+        a   -- parameter type

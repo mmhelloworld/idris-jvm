@@ -1,0 +1,14 @@
+24
+12
+testFac : Int
+testFac = PE_interp_9b251b28 [] (PE_fromInteger_d6648df 4)
+PE_interp_9b251b28 : Env G -> Int -> Int
+PE_interp_9b251b28 (3arg) = \x =>
+                              ifThenElse (PE_==_ba2f651f x
+                                                         (PE_fromInteger_d6648df 0))
+                                         (Delay (PE_fromInteger_d6648df 1))
+                                         (Delay (PE_*_ba2f651f (PE_interp_9b251b28 (x ::
+                                                                                    (3arg))
+                                                                                   (PE_-_ba2f651f x
+                                                                                                  (PE_fromInteger_d6648df 1)))
+                                                               x))

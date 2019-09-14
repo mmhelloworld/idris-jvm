@@ -1,0 +1,15 @@
+interfaces005a.idr:18:3-29:
+   |
+18 |   [TreeSet] Ord a => SetSig a where
+   |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Set.TreeSet.Set must be defined by a type or data constructor
+
+ No such variable TreeSet
+interfaces005b.idr:4:11-18:
+  |
+4 | interface SetSig a where
+  |           ~~~~~~~~
+Data definitions not allowed in an interface declaration
+
+ interfaces005b.idr:18:3-29:SetSig is not an interface
+ No such variable TreeSet

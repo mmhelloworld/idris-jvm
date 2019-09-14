@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ Postulate.idr -o postulate
+./postulate
+rm -f postulate *.ibc

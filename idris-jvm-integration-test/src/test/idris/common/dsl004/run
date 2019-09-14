@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ Door0.idr --check
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ Door1.idr --check
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ Door2.idr --check
+rm -f *.ibc

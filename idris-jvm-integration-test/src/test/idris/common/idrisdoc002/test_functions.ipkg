@@ -1,0 +1,6 @@
+package test_functions
+
+opts = "--quiet --portable-codegen jvm -p idrisjvmffi"
+
+modules = TestFunctions
+

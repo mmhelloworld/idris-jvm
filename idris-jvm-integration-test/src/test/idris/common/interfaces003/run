@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour --consolewidth 70 interfaces003.idr -o interfaces003
+./interfaces003
+rm -f interfaces003 *.ibc

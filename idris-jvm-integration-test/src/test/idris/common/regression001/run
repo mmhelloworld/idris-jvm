@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --check \
+    reg001.idr reg002.idr reg003.idr reg004.lidr reg005.idr \
+    reg006.idr reg007.idr reg036.idr reg037.idr reg038.idr reg046.idr \
+    reg047a.idr reg053.idr reg057.idr reg058.idr reg058a.idr \
+    reg059.idr reg060.idr  reg061.idr reg062.idr reg063.idr \
+    reg064.idr reg065.idr  reg066.idr reg071.idr reg074.idr \
+    coverage001.idr
+
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --check \
+    eff001.idr -p effects
+
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --check --nobuiltins reg047.idr
+
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --check --nocolour \
+     reg073.lidr
+
+rm -f *.ibc

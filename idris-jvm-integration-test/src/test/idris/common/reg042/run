@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ reg042 -o reg042 --warnreach
+./reg042
+rm -f reg042 *.ibc

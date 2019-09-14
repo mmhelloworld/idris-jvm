@@ -13,7 +13,6 @@
     <name>Idris JVM Integration Test</name>
 
     <properties>
-        <test.output>${project.build.directory}</test.output>
         <deploy.dir>${user.home}/bin/idris-jvm</deploy.dir>
         <start-idris-jvm-server>true</start-idris-jvm-server>
     </properties>
@@ -42,8 +41,6 @@
 
                 <configuration>
                     <systemPropertyVariables>
-                        <test.output>${test.output}</test.output>
-                        <runtime.jar.path>${deploy.dir}/idris-jvm-runtime.jar</runtime.jar.path>
                         <start-idris-jvm-server>${start-idris-jvm-server}</start-idris-jvm-server>
                     </systemPropertyVariables>
                 </configuration>
@@ -61,11 +58,10 @@
                         <version>${maven-surefire-plugin.version}</version>
 
                         <configuration>
+                            <parallel>all</parallel>
+                            <threadCount>4</threadCount>
                             <systemPropertyVariables>
-                                <test.output>${test.output}</test.output>
-                                <runtime.jar.path>
-                                    ${basedir}/../idris-jvm-runtime/target/idris-jvm-runtime-${project.version}.jar
-                                </runtime.jar.path>
+                                <test-source-dir>${project.basedir}/src/test/idris</test-source-dir>
                                 <start-idris-jvm-server>false</start-idris-jvm-server>
                             </systemPropertyVariables>
                         </configuration>

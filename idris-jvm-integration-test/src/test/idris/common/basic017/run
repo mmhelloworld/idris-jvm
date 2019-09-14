@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ basic017.idr --check --nocolor
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ basic017a.idr --check --nocolor
+rm -f *.ibc

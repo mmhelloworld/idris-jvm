@@ -116,7 +116,6 @@ public class Util {
 
     public static boolean toBoolean(Object that) {
         if (that == null) {
-            System.out.println("null in toBoolean");
             return false;
         } else if (that instanceof Integer) {
             return ((Integer) that) != 0;

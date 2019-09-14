@@ -1,0 +1,18 @@
+Main.MkFoo : (bar : Nat) -> (baz : Bool) -> Foo a
+    Constructor for Foo
+    Arguments:
+        (implicit) a : Type  -- a type
+        
+        bar : Nat  -- A field bar
+        
+        baz : Bool  -- A field baz
+        
+    The function is: Total & public export
+Main.Foo.bar : (rec : Foo a) -> Nat
+    A field bar
+    
+    The function is: Total & public export
+Main.Foo.baz : (rec : Foo a) -> Bool
+    A field baz
+    
+    The function is: Total & public export

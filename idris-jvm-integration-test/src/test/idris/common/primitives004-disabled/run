@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ -o primitives004 primitives004.idr --nocolour
+./primitives004
+rm -f primitives004 *.ibc

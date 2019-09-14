@@ -1,0 +1,23 @@
+Not all command line options can be used to override package options.
+
+The only changeable options are:
+	--log <lvl>, --total, --warnpartial, --warnreach, --warnipkg
+	--ibcsubdir <path>, -i --idrispath <path>
+	--logging-categories <cats>
+	--highlight
+
+The options need removing are:
+	 Quiet 
+
+
+
+Elaborating {__Infer_0}
+builtin
+Elaborating =
+builtin
+Elaborating type decl Main.main[]
+Elaborating clause Main.main
+Rechecking for positivity []
+The presented iPKG file does not have a '.ipkg' extension: "malformed-package-name"
+The presented iPKG file does not exist: "non-existent-package.ipkg"
+The presented iPKG file does not have a '.ipkg' extension: "non-existent-package-with-malformed-name"

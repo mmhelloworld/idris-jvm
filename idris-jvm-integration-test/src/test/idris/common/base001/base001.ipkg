@@ -1,0 +1,8 @@
+package base001
+
+opts = "--portable-codegen jvm -p idrisjvmffi"
+
+pkgs = idrisjvmffi
+executable = base001
+main = base001
+makefile = Makefile

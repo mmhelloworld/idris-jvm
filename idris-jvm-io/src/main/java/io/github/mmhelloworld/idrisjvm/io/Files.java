@@ -1,6 +1,5 @@
 package io.github.mmhelloworld.idrisjvm.io;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -8,10 +7,12 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
-import static java.lang.System.lineSeparator;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.Files.readAllBytes;
+import static java.nio.file.Files.write;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_READ;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_WRITE;
@@ -21,7 +22,6 @@ import static java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_READ;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_WRITE;
-import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toSet;
 
 public final class Files {
@@ -44,19 +44,17 @@ public final class Files {
     }
 
     private Files() {
-
     }
 
     public static String readFile(String pathString) throws IOException {
         Path path = createPath(pathString);
-        return java.nio.file.Files.lines(path)
-            .collect(joining(lineSeparator()));
+        return new String(readAllBytes(path), UTF_8);
     }
 
     public static void writeFile(String pathString, String content) throws IOException {
         Path path = createPath(pathString);
         byte[] bytes = content.getBytes(UTF_8);
-        java.nio.file.Files.write(path, bytes);
+        write(path, bytes);
     }
 
     public static Path createPath(String pathStr) {
@@ -75,10 +73,10 @@ public final class Files {
         } else {
             if (pathStr.startsWith("../")) {
                 resolvedPath = createPath(pathStr.substring("../".length()),
-                        Paths.get(workingDir).getParent().toString());
+                    Paths.get(workingDir).getParent().toString());
             } else if (pathStr.startsWith("..")) {
                 resolvedPath = createPath(pathStr.substring("..".length()),
-                        Paths.get(workingDir).getParent().toString());
+                    Paths.get(workingDir).getParent().toString());
             } else if (pathStr.startsWith("./")) {
                 resolvedPath = createPath(pathStr.substring("./".length()), workingDir);
             } else if (pathStr.startsWith(".")) {
@@ -120,11 +118,14 @@ public final class Files {
         }
     }
 
+    public static boolean deleteIfExists(Path path) {
+        return path.toFile().delete();
+    }
 
     private static Set<PosixFilePermission> createPosixFilePermissions(int mode) {
         return modeToPermissions.entrySet().stream()
             .filter(modeAndPermission -> (mode & modeAndPermission.getKey()) == modeAndPermission.getKey())
-            .map(Map.Entry::getValue)
+            .map(Entry::getValue)
             .collect(toSet());
     }
 

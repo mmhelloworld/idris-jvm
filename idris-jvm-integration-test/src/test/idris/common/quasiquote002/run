@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ GoalQQuote.idr -o quasiquote002
+./quasiquote002
+rm -f quasiquote002 *.ibc

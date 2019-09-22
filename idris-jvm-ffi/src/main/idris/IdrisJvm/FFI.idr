@@ -92,8 +92,6 @@ mutual
       JVM_Float       : JVM_Types JFloat
       JVM_BigInteger  : JVM_Types Integer
       JVM_Unit        : JVM_Types ()
-      JVM_NullableStr : JVM_Types (Maybe String)
-      JVM_Nullable    : JVM_Types (Maybe (JVM_Native t))
       JVM_NativeT     : JVM_Types (JVM_Native a)
       JVM_IntT        : JVM_IntTypes i -> JVM_Types i
       JVM_ArrayT      : JVM_Types t -> JVM_Types (JVM_Array t)
@@ -185,6 +183,26 @@ implicit stringIsAnObject : String -> Object
 stringIsAnObject = believe_me
 
 decl syntax [sub] inherits [super] = Inherits (JVM_Native (super)) (JVM_Native (sub)) where {}
+
+isNull : JVM_Native t -> Bool
+isNull obj = unsafePerformIO $ invokeStatic (Class "java/util/Objects") "isNull" (Object -> JVM_IO Bool) (believe_me obj)
+
+isNullString : String -> Bool
+isNullString obj = unsafePerformIO $ invokeStatic (Class "java/util/Objects") "isNull" (Object -> JVM_IO Bool) (believe_me obj)
+
+implicit nullableToMaybe : JVM_Native a -> Maybe (JVM_Native a)
+nullableToMaybe t = if isNull t then Nothing else Just t
+
+nullableStringToMaybe : String -> Maybe String
+nullableStringToMaybe str = if isNullString str then Nothing else Just str
+
+implicit maybeToNullable : Maybe (JVM_Native t) -> JVM_Native t
+maybeToNullable (Just t) = t
+maybeToNullable Nothing = believe_me prim__null
+
+maybeToNullableString : Maybe String -> String
+maybeToNullableString (Just t) = t
+maybeToNullableString Nothing = believe_me prim__null
 
 %inline
 javalambda : String
@@ -334,24 +352,6 @@ try action handlers = do
         handler t
       else
         go handlers t
-
-Ref : Type
-Ref = JVM_Native (Class ("io/github/mmhelloworld/idrisjvm/runtime/Ref"))
-
-export
-data IORef a = MkIORef a
-
-export
-newIORef : a -> JVM_IO (IORef a)
-newIORef val = (MkIORef . believe_me) <$> FFI.new (Object -> JVM_IO Ref) (believe_me val)
-
-export
-readIORef : IORef a -> JVM_IO a
-readIORef (MkIORef ref) = believe_me <$> invokeInstance "getValue" (Ref -> JVM_IO Object) (believe_me ref)
-
-export
-writeIORef : IORef a -> a -> JVM_IO ()
-writeIORef (MkIORef ref) val = invokeInstance "setValue" (Ref -> Object -> JVM_IO ()) (believe_me ref) (believe_me val)
 
 export
 Show Throwable where

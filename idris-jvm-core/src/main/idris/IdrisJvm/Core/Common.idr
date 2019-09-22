@@ -313,6 +313,34 @@ cgCast (Ref ty1) (Ref ty2) = when (ty1 /= ty2) $ checkcast ty2
 
 cgCast _ _ = pure ()
 
+loadAndBox : (Int -> Asm ()) -> Asm () -> InferredTypeStore -> LVar -> Asm ()
+loadAndBox loadOp boxOp sourceLocTys var = let op = \index => do loadOp index; boxOp
+                                           in opWithWordSize sourceLocTys op var
+
+loadAndBoxBool : InferredTypeStore -> LVar -> Asm ()
+loadAndBoxBool = loadAndBox Iload boxBool
+
+loadAndBoxByte : InferredTypeStore -> LVar -> Asm ()
+loadAndBoxByte = loadAndBox Iload boxByte
+
+loadAndBoxChar : InferredTypeStore -> LVar -> Asm ()
+loadAndBoxChar = loadAndBox Iload boxChar
+
+loadAndBoxShort : InferredTypeStore -> LVar -> Asm ()
+loadAndBoxShort = loadAndBox Iload boxShort
+
+loadAndBoxInt : InferredTypeStore -> LVar -> Asm ()
+loadAndBoxInt = loadAndBox Iload boxInt
+
+loadAndBoxLong : InferredTypeStore -> LVar -> Asm ()
+loadAndBoxLong = loadAndBox Lload boxLong
+
+loadAndBoxFloat : InferredTypeStore -> LVar -> Asm ()
+loadAndBoxFloat = loadAndBox Fload boxFloat
+
+loadAndBoxDouble : InferredTypeStore -> LVar -> Asm ()
+loadAndBoxDouble = loadAndBox Dload boxDouble
+
 loadVar : InferredTypeStore -> (srcTy: InferredType) -> (targetTy: InferredType) -> LVar -> Asm ()
 loadVar sourceLocTys IBool IBool var = opWithWordSize sourceLocTys Iload var
 loadVar sourceLocTys IByte IByte var = opWithWordSize sourceLocTys Iload var
@@ -330,63 +358,29 @@ loadVar sourceLocTys IFloat IDouble var = opWithWordSize sourceLocTys (\var => d
 loadVar sourceLocTys IDouble IDouble var = opWithWordSize sourceLocTys Dload var
 loadVar sourceLocTys IDouble IFloat var = opWithWordSize sourceLocTys (\var => do Dload var; D2f)  var
 
-loadVar sourceLocTys IBool IUnknown  var =
-    let loadInstr = \index => do Iload index; boxBool
-    in opWithWordSize sourceLocTys loadInstr var 
-loadVar sourceLocTys IBool (Ref _) var =
-    let loadInstr = \index => do Iload index; boxBool
-    in opWithWordSize sourceLocTys loadInstr var
+loadVar sourceLocTys IBool IUnknown  var = loadAndBoxBool sourceLocTys var
+loadVar sourceLocTys IBool (Ref _) var = loadAndBoxBool sourceLocTys var
 
-loadVar sourceLocTys IByte IUnknown  var =
-    let loadInstr = \index => do Iload index; boxByte
-    in opWithWordSize sourceLocTys loadInstr var
-loadVar sourceLocTys IByte (Ref _) var =
-    let loadInstr = \index => do Iload index; boxByte
-    in opWithWordSize sourceLocTys loadInstr var
+loadVar sourceLocTys IByte IUnknown  var = loadAndBoxByte sourceLocTys var
+loadVar sourceLocTys IByte (Ref _) var = loadAndBoxByte sourceLocTys var
 
-loadVar sourceLocTys IChar IUnknown var =
-    let loadInstr = \index => do Iload index; boxChar
-    in opWithWordSize sourceLocTys loadInstr var
-    
-loadVar sourceLocTys IChar (Ref _) var =
-    let loadInstr = \index => do Iload index; boxChar
-    in opWithWordSize sourceLocTys loadInstr var
+loadVar sourceLocTys IChar IUnknown var = loadAndBoxChar sourceLocTys var
+loadVar sourceLocTys IChar (Ref _) var = loadAndBoxChar sourceLocTys var
 
-loadVar sourceLocTys IShort IUnknown var  =
-    let loadInstr = \index => do Iload index; boxShort
-    in opWithWordSize sourceLocTys loadInstr var
-loadVar sourceLocTys IShort (Ref _) var =
-    let loadInstr = \index => do Iload index; boxShort
-    in opWithWordSize sourceLocTys loadInstr var
+loadVar sourceLocTys IShort IUnknown var  = loadAndBoxShort sourceLocTys var
+loadVar sourceLocTys IShort (Ref _) var = loadAndBoxShort sourceLocTys var
 
-loadVar sourceLocTys IInt IUnknown var  =
-    let loadInstr = \index => do Iload index; boxInt
-    in opWithWordSize sourceLocTys loadInstr var
-loadVar sourceLocTys IInt (Ref _) var =
-    let loadInstr = \index => do Iload index; boxInt
-    in opWithWordSize sourceLocTys loadInstr var
-    
-loadVar sourceLocTys ILong IUnknown var =
-    let loadInstr = \index => do Lload index; boxLong
-    in opWithWordSize sourceLocTys loadInstr var
-    
-loadVar sourceLocTys ILong (Ref _) var =
-    let loadInstr = \index => do Lload index; boxLong
-    in opWithWordSize sourceLocTys loadInstr var
+loadVar sourceLocTys IInt IUnknown var  = loadAndBoxInt sourceLocTys var
+loadVar sourceLocTys IInt (Ref _) var = loadAndBoxInt sourceLocTys var
 
-loadVar sourceLocTys IFloat IUnknown var =
-    let loadInstr = \index => do Fload index; boxFloat
-    in opWithWordSize sourceLocTys loadInstr var
-loadVar sourceLocTys IFloat (Ref _) var =
-    let loadInstr = \index => do Fload index; boxFloat
-    in opWithWordSize sourceLocTys loadInstr var
+loadVar sourceLocTys ILong IUnknown var = loadAndBoxLong sourceLocTys var
+loadVar sourceLocTys ILong (Ref _) var = loadAndBoxLong sourceLocTys var
 
-loadVar sourceLocTys IDouble IUnknown var =
-    let loadInstr = \index => do Dload index; boxDouble
-    in opWithWordSize sourceLocTys loadInstr var
-loadVar sourceLocTys IDouble (Ref _) var =
-    let loadInstr = \index => do Dload index; boxDouble
-    in opWithWordSize sourceLocTys loadInstr var
+loadVar sourceLocTys IFloat IUnknown var = loadAndBoxFloat sourceLocTys var
+loadVar sourceLocTys IFloat (Ref _) var = loadAndBoxFloat sourceLocTys var
+
+loadVar sourceLocTys IDouble IUnknown var = loadAndBoxDouble sourceLocTys var
+loadVar sourceLocTys IDouble (Ref _) var = loadAndBoxDouble sourceLocTys var
 
 loadVar sourceLocTys IUnknown IBool var =
     let loadInstr = \index => do Aload index; boolObjToBool
@@ -428,10 +422,10 @@ loadVar sourceLocTys (Ref _) IInt var =
     let loadInstr = \index => do Aload index; objToInt
     in opWithWordSize sourceLocTys loadInstr var
 
-loadVar sourceLocTys IUnknown ILong var = 
+loadVar sourceLocTys IUnknown ILong var =
     let loadInstr = \index => do Aload index; longObjToLong
     in opWithWordSize sourceLocTys loadInstr var
-loadVar sourceLocTys (Ref _) ILong var = 
+loadVar sourceLocTys (Ref _) ILong var =
     let loadInstr = \index => do Aload index; longObjToLong
     in opWithWordSize sourceLocTys loadInstr var
 
@@ -442,10 +436,10 @@ loadVar sourceLocTys (Ref _) IFloat var =
     let loadInstr = \index => do Aload index; objToFloat
     in opWithWordSize sourceLocTys loadInstr var
 
-loadVar sourceLocTys IUnknown IDouble var = 
+loadVar sourceLocTys IUnknown IDouble var =
     let loadInstr = \index => do Aload index; objToDouble
     in opWithWordSize sourceLocTys loadInstr var
-loadVar sourceLocTys (Ref _) IDouble var = 
+loadVar sourceLocTys (Ref _) IDouble var =
     let loadInstr = \index => do Aload index; objToDouble
     in opWithWordSize sourceLocTys loadInstr var
 
@@ -454,13 +448,13 @@ loadVar sourceLocTys IUnknown arr@(IArray _) var =
     in opWithWordSize sourceLocTys loadInstr var
 loadVar sourceLocTys (Ref _) arr@(IArray _) var =
     let loadInstr = \index => do Aload index; Checkcast $ getInferredTyDesc arr
-    in opWithWordSize sourceLocTys loadInstr var 
+    in opWithWordSize sourceLocTys loadInstr var
 
-loadVar sourceLocTys IUnknown (Ref ty2) var = 
+loadVar sourceLocTys IUnknown (Ref ty2) var =
     let loadInstr = \index => do Aload index; checkcast ty2
     in opWithWordSize sourceLocTys loadInstr var
 
-loadVar sourceLocTys (Ref ty1) (Ref ty2) var = 
+loadVar sourceLocTys (Ref ty1) (Ref ty2) var =
     let loadInstr = \index => do Aload index; when (ty1 /= ty2) $ checkcast ty2
     in opWithWordSize sourceLocTys loadInstr var
 

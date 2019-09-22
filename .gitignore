@@ -1,5 +1,6 @@
 # Java
 *.class
+*.jar
 
 # Idris
 *.ibc
@@ -28,3 +29,4 @@ buildNumber.properties
 .mvn/timing.properties
 
 .DS_Store
+*.log

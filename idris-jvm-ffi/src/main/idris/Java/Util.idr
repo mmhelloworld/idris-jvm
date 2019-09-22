@@ -134,10 +134,10 @@ namespace HashMap
   new = FFI.new (JVM_IO HashMap)
 
   get : Inherits Object key => HashMap -> key -> JVM_IO (Maybe Object)
-  get this key = invokeInstance "get" (HashMap -> Object -> JVM_IO (Maybe Object)) this (believe_me key)
+  get this key = nullableToMaybe <$> invokeInstance "get" (HashMap -> Object -> JVM_IO Object) this (believe_me key)
 
   put : (Inherits Object key, Inherits Object value) => HashMap -> Maybe key -> Maybe value -> JVM_IO (Maybe Object)
-  put this key value = invokeInstance "put" (HashMap -> Maybe Object -> Maybe Object -> JVM_IO (Maybe Object)) this (believe_me key) (believe_me value)
+  put this key value = nullableToMaybe <$> invokeInstance "put" (HashMap -> Object -> Object -> JVM_IO Object) this (maybeToNullable $ believe_me key) (maybeToNullable $ believe_me value)
 
 namespace Objects
 

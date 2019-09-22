@@ -247,13 +247,6 @@ mutual
     Iconst 1
     ret IBool
 
-  cgBody ret (SCon _ 0 "Prelude.Maybe.Nothing" []) = do Aconstnull; ret inferredObjectType
-  cgBody ret (SCon _ 1 "Prelude.Maybe.Just" [var]) = do
-    locTypes <- GetFunctionLocTypes
-    let varTy = getLocTy locTypes var
-    loadVar locTypes varTy inferredObjectType var
-    ret inferredObjectType
-
   cgBody ret (SCon _ t _ args) = do createIdrisObject t args; ret inferredIdrisObjectType
 
   cgBody ret (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
@@ -270,23 +263,6 @@ mutual
                         (SDefaultCase trueAlt) ::
                         _))
     = cgIfTrueElse ret cgBody e trueAlt falseAlt
-
-  cgBody ret (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
-                         (SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
-                         _))
-    = cgIfNonNull ret cgBody e justValueStore justExpr nothingExpr
-
-  cgBody ret (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
-                         (SDefaultCase defaultExpr) ::
-                         _))
-    = cgIfNonNull ret cgBody e justValueStore justExpr defaultExpr
-
-  cgBody ret (SCase _ e ((SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
-                         (SDefaultCase defaultExpr) ::
-                         _))
-    = cgIfNull ret cgBody e nothingExpr defaultExpr
-
-  cgBody ret (SCase _ e [SConCase lv _ _ args expr]) = cgConCase ret cgBody (locIndex e) lv args expr
 
   cgBody ret (SCase _ e [SDefaultCase defaultCaseExpr]) = cgBody ret defaultCaseExpr
 

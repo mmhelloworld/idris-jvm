@@ -219,12 +219,12 @@ runAsm state assembler (ClassCodeStart version access className sig parent intf 
   annotations <- ArrayList.fromList janns
   invokeInstance
     "classCodeStart"
-    (Assembler -> Int -> Int -> ClassName -> (Maybe Signature) -> ClassName -> JList -> JList -> JVM_IO ())
+    (Assembler -> Int -> Int -> ClassName -> Signature -> ClassName -> JList -> JList -> JVM_IO ())
     assembler
     version
     (accessNum access)
     className
-    sig
+    (maybeToNullableString sig)
     parent
     (believe_me interfaces)
     (believe_me annotations)
@@ -235,14 +235,14 @@ runAsm state assembler (CreateField accs className fieldName desc sig fieldIniti
   let jaccs = sum $ accessNum <$> accs
   invokeInstance
     "createField"
-    (Assembler -> Int -> ClassName -> FieldName -> Descriptor -> Maybe Signature -> Maybe Object -> JVM_IO ())
+    (Assembler -> Int -> ClassName -> FieldName -> Descriptor -> Signature -> Object -> JVM_IO ())
     assembler
     jaccs
     className
     fieldName
     desc
-    sig
-    (toJFieldInitialValue <$> fieldInitialValue)
+    (maybeToNullableString sig)
+    (maybeToNullable (toJFieldInitialValue <$> fieldInitialValue))
 
 runAsm state assembler (CreateLabel label) = singleInst state $ do
   invokeInstance "createLabel" (Assembler -> String -> JVM_IO ()) assembler label
@@ -255,14 +255,14 @@ runAsm state assembler (CreateMethod accs className methodName desc sig exceptio
   jparamAnns <- ArrayList.fromList !(sequence $ (\paramAnn => ArrayList.fromList !(sequence $ toJAnnotation <$> paramAnn)) <$> paramAnns)
   invokeInstance
     "createMethod"
-    (Assembler -> Int -> ClassName -> MethodName -> Descriptor -> Maybe Signature -> Maybe JList -> JList -> JList -> JVM_IO ())
+    (Assembler -> Int -> ClassName -> MethodName -> Descriptor -> Signature -> JList -> JList -> JList -> JVM_IO ())
     assembler
     jaccs
     className
     methodName
     desc
-    sig
-    (believe_me jexceptions)
+    (maybeToNullableString sig)
+    (maybeToNullable $ believe_me jexceptions)
     (believe_me janns)
     (believe_me jparamAnns)
 

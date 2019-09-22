@@ -106,8 +106,10 @@
                                 <argument>${idris.srcdir}/IdrisJvm/Core/Function.idr</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/JAsm.idr</argument>
                                 <argument>${idris.srcdir}/IdrisJvm/Core/Operator.idr</argument>
+                                <argument>--cg-opt</argument>
+                                <argument>--classes-dir=classes</argument>
                                 <argument>-o</argument>
-                                <argument>${project.build.outputDirectory}</argument>
+                                <argument>${project.build.directory}/idrisjvmcore</argument>
                             </arguments>
                         </configuration>
                     </execution>

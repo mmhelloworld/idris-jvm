@@ -19,6 +19,10 @@ addType types var ty = maybe addNew checkExisting $ lookup var types where
   checkExisting : InferredType -> InferredTypeStore
   checkExisting existingTy = insert var (existingTy <+> ty) types
 
+addTypeForVars : InferredType -> List LVar -> InferredTypeStore -> InferredTypeStore
+addTypeForVars ty [] acc = acc
+addTypeForVars ty ((Loc v) :: args) acc = addTypeForVars ty args (addType acc v ty)
+
 inferBinaryOp : InferredTypeStore -> InferredType -> LVar -> LVar -> InferredTypeStore
 inferBinaryOp types ty (Loc op1) (Loc op2) = let typesWithFirstOp = addType types op1 ty
                                              in addType typesWithFirstOp op2 ty
@@ -279,12 +283,21 @@ inferOp types LStrIndex [string, index] =
 
 inferOp types LStrTail [var] = (inferredStringType, inferUnaryOp types (inferredStringType) var)
 
-inferOp types (LZExt ITNative ITBig) [var] =
-    (inferredBigIntegerType, inferUnaryOp types IInt var)
+inferOp types (LZExt ITNative ITBig) [var] = (inferredBigIntegerType, inferUnaryOp types IInt var)
+inferOp types (LZExt (ITFixed IT64) ITBig) [var] = (inferredBigIntegerType, inferUnaryOp types ILong var)
+inferOp types (LZExt (ITFixed from) ITBig) [var] = (inferredBigIntegerType, inferUnaryOp types IInt var)
 
-inferOp types (LZExt (ITFixed IT8) ITNative) [x] = (IInt, inferUnaryOp types IInt x)
-inferOp types (LZExt (ITFixed IT16) ITNative) [x] = (IInt, inferUnaryOp types IInt x)
-inferOp types (LZExt (ITFixed IT32) ITNative) [x] = (IInt, inferUnaryOp types IInt x)
+inferOp types (LZExt ITNative (ITFixed IT64)) [x] = (ILong, inferUnaryOp types IInt x)
+inferOp types (LZExt (ITFixed from) (ITFixed IT64)) [x] = (ILong, inferUnaryOp types IInt x)
+
+inferOp types (LZExt ITNative (ITFixed to)) [x] = (IInt, inferUnaryOp types IInt x)
+inferOp types (LZExt (ITFixed IT64) ITNative) [x] = (IInt, inferUnaryOp types ILong x)
+inferOp types (LZExt (ITFixed from) ITNative) [x] = (IInt, inferUnaryOp types IInt x)
+inferOp types (LZExt ITChar ITNative) [x] = (IInt, inferUnaryOp types IChar x)
+inferOp types (LZExt ITChar (ITFixed to)) [x] = (IInt, inferUnaryOp types IChar x)
+
+inferOp types (LZExt (ITFixed IT64) ITChar) [x] = (IChar, inferUnaryOp types ILong x)
+inferOp types (LZExt (ITFixed to) ITChar) [x] = (IChar, inferUnaryOp types IInt x)
 
 inferOp types op args = inferOp2 types op args
 
@@ -405,10 +418,7 @@ mutual
     inferExp config acc (SCon _ 0 "Prelude.Bool.False" []) = (IBool, acc)
     inferExp config acc (SCon _ 1 "Prelude.Bool.True" []) = (IBool, acc)
 
-    inferExp config acc (SCon _ 0 "Prelude.Maybe.Nothing" []) = (inferredObjectType, acc)
-    inferExp config acc (SCon _ 1 "Prelude.Maybe.Just" [(Loc v)]) = (inferredObjectType, acc)
-
-    inferExp config acc (SCon _ t _ args) = (inferredIdrisObjectType, acc)
+    inferExp config acc (SCon _ t _ args) = (inferredIdrisObjectType, addTypeForVars inferredObjectType args acc)
     inferExp config acc (SCase _ e ((SConCase _ 0 "Prelude.Bool.False" [] falseAlt) ::
                              (SConCase _ 1 "Prelude.Bool.True" [] trueAlt) ::
                              _)) = inferIfElseTy config acc e trueAlt falseAlt
@@ -422,23 +432,6 @@ mutual
                         (SDefaultCase trueAlt) ::
                         _))
         = inferIfElseTy config acc e trueAlt falseAlt
-
-    inferExp config acc (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
-                         (SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
-                         _))
-        = inferNullableIfElseTy config (addType acc justValueStore inferredObjectType) e justExpr nothingExpr
-
-    inferExp config acc (SCase _ e ((SConCase justValueStore 1 "Prelude.Maybe.Just" [_] justExpr) ::
-                             (SDefaultCase defaultExpr) ::
-                             _))
-        = inferNullableIfElseTy config (addType acc justValueStore inferredObjectType) e justExpr defaultExpr
-
-    inferExp config acc (SCase _ e ((SConCase _ 0 "Prelude.Maybe.Nothing" [] nothingExpr) ::
-                             (SDefaultCase defaultExpr) ::
-                             _))
-        = inferNullableIfElseTy config acc e nothingExpr defaultExpr
-
-    inferExp config acc (SCase _ e [SConCase lv _ _ args expr]) = inferAltConCase config acc lv args expr
 
     inferExp config acc (SCase _ e [SDefaultCase defaultExpr]) = inferExp config acc defaultExpr
 

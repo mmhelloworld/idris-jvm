@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour forkpar.idr -o forkpar
+java -Xss10m  \
+  -cp \
+  idris-jvm-runtime.jar:forkpar-classes \
+  main.Main
+rm -f forkpar forkpar.ibc

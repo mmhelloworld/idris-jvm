@@ -24,18 +24,6 @@ data JForeign = JStatic String String
               | JLambda String String
               | JInstanceOf String
 
-javaToIdris : TypeDescriptor -> Asm ()
-javaToIdris (FieldDescriptor FieldTyDescBoolean) = pure ()
-javaToIdris (FieldDescriptor FieldTyDescByte) = pure ()
-javaToIdris (FieldDescriptor FieldTyDescShort) = pure ()
-javaToIdris (FieldDescriptor FieldTyDescInt)     = pure ()
-javaToIdris (FieldDescriptor FieldTyDescChar)    = pure ()
-javaToIdris (FieldDescriptor FieldTyDescLong)    = pure ()
-javaToIdris (FieldDescriptor FieldTyDescFloat)   = pure ()
-javaToIdris (FieldDescriptor FieldTyDescDouble)  = pure ()
-javaToIdris VoidDescriptor                       = Aconstnull
-javaToIdris _                                    = pure ()
-
 javaReturn : TypeDescriptor -> Asm ()
 javaReturn VoidDescriptor                       = Return
 javaReturn (FieldDescriptor FieldTyDescBoolean) = Ireturn
@@ -70,13 +58,9 @@ mutual
 
   fdescRefDescriptor desc@(FApp "JVM_ArrayT" [_, elemDesc]) = ArrayDesc $ fdescFieldDescriptor elemDesc
 
-  fdescRefDescriptor desc@(FApp "JVM_Nullable" [FApp "Class" [FStr typeName]]) = NullableRefDesc typeName
-  fdescRefDescriptor desc@(FApp "JVM_Nullable" [FApp "Interface" [FStr typeName]]) = NullableRefDesc typeName
-
   fdescRefDescriptor (FCon "JVM_Str") = ClassDesc "java/lang/String"
   fdescRefDescriptor (FCon "JVM_BigInteger") = ClassDesc "java/math/BigInteger"
   fdescRefDescriptor (FStr exportedType) = IdrisExportDesc exportedType
-  fdescRefDescriptor (FCon "JVM_NullableStr") = NullableStrDesc
   fdescRefDescriptor desc = jerror $ "Invalid reference type descriptor: " ++ show desc
 
 
@@ -192,10 +176,6 @@ parseDescriptor returns ffi argsDesc = tryParseStaticMethodDescriptor returns ff
             (FieldDescriptor (FieldTyDescReference (ArrayDesc _)))        => jerror "No constructors for array types"
             (FieldDescriptor (FieldTyDescReference (IdrisExportDesc _)))  =>
                 jerror "Cannot invoke constructor of Idris exported type"
-            (FieldDescriptor (FieldTyDescReference (NullableStrDesc)))    =>
-                jerror "A constructor cannot return a nullable string"
-            (FieldDescriptor (FieldTyDescReference (NullableRefDesc _)))  =>
-                jerror "A constructor cannot return a nullable reference"
         else
             tryParseNewArrayDescriptor returns ffiDesc argsDesc
   tryParseConstructorDescriptor returns ffi argsDesc = tryParseNewArrayDescriptor returns ffi argsDesc
@@ -224,8 +204,6 @@ parseDescriptor returns ffi argsDesc = tryParseStaticMethodDescriptor returns ff
         then case fdescRefDescriptor declClass of
                 ClassDesc cname     => JVirtual cname fn
                 InterfaceDesc cname => JInterface cname fn
-                NullableStrDesc     => jerror "Instance method cannot have the first argument as nullable string"
-                NullableRefDesc _   => jerror "Instance method cannot have the first argument as nullable reference"
                 ArrayDesc _         => jerror "No instance methods on an array"
                 IdrisExportDesc _   => jerror "No instance methods on an Idris exported type"
         else tryParseGetInstanceFieldDescriptor returns ffiDesc argsDesc

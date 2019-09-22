@@ -52,14 +52,14 @@ public class Runtime {
         System.err.flush();
     }
 
+    public static List<String> getProgramArgs() {
+        return programArgs;
+    }
+
     public static void setProgramArgs(String[] args) {
         // "java" as the executable name for the first argument to conform to Idris' getArgs function
         programArgs = Stream.concat(Stream.of("java"), Arrays.stream(args))
                 .collect(toList());
-    }
-
-    public static List<String> getProgramArgs() {
-        return programArgs;
     }
 
     public static String showThrowable(Throwable throwable) {
@@ -97,8 +97,10 @@ public class Runtime {
     }
 
     public static String substring(String s, int offset, int len) {
-        int toIndex = offset + len;
-        return toIndex >= s.length() ? s.substring(offset) : s.substring(offset, toIndex);
+        int fromIndex = Math.max(offset, 0);
+        int safeLength = bounded(len, 0, s.length());
+        int toIndex = bounded(fromIndex + safeLength, 0, s.length());
+        return s.substring(fromIndex, toIndex);
     }
 
     public static Object error(Object s) {
@@ -135,12 +137,17 @@ public class Runtime {
     public static int runCommand(String command) throws IOException, InterruptedException {
         String[] cmdarray = parseCommand(command).toArray(new String[0]);
         ProcessBuilder processBuilder = new ProcessBuilder(cmdarray)
+                .inheritIO()
                 .directory(new File(Files.getWorkingDir()));
         return processBuilder.start().waitFor();
     }
 
     public static void usleep(int microseconds) throws InterruptedException {
         TimeUnit.MICROSECONDS.sleep(microseconds);
+    }
+
+    private static int bounded(int n, int lowerBound, int upperBound) {
+        return n < lowerBound ? lowerBound : Math.min(n, upperBound);
     }
 
     // This may not be adequate but simple enough for basic cases
@@ -179,4 +186,5 @@ public class Runtime {
             return str;
         }
     }
+
 }

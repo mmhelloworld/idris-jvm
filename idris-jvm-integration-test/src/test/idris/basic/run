@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour basic.idr -o basic
+java -Xss10m  \
+  -cp \
+  idris-jvm-runtime.jar:basic-classes \
+  main.Main
+rm -f basic basic.ibc

@@ -143,11 +143,11 @@ numbersField = believe_me prim__null
 
 -- To test passing nulls to Java using Maybe
 nullableToString : Inherits Object that => Maybe that -> String
-nullableToString obj = unsafePerformIO $ invokeStatic ObjectsClass "toString" (Maybe Object -> JVM_IO String) (believe_me obj)
+nullableToString obj = unsafePerformIO $ invokeStatic ObjectsClass "toString" (Object -> JVM_IO String) (maybeToNullable $ believe_me obj)
 
 -- To test passing null to Java for String using Maybe
 equalsIgnoreCase : String -> Maybe String -> Bool
-equalsIgnoreCase str1 str2 = unsafePerformIO $ invokeInstance "equalsIgnoreCase" (String -> Maybe String -> JVM_IO Bool) str1 str2
+equalsIgnoreCase str1 str2 = unsafePerformIO $ invokeInstance "equalsIgnoreCase" (String -> String -> JVM_IO Bool) str1 (maybeToNullableString str2)
 
 getName : JClass -> String
 getName clazz = unsafePerformIO $ invokeInstance "getName" (JClass -> JVM_IO String) clazz
@@ -222,9 +222,9 @@ main = do
   System.setProperty "foo" "fooval"
   printLn !(getProperty "foo")  -- Test returning a non-null string from FFI call
   hashMap <- HashMap.new
-  printLn !(Objects.toString !(HashMap.get hashMap "bar")) -- Test returning null object
+  putStrLn $ !(maybe (pure "null") (Objects.toString) !(HashMap.get hashMap "bar"))-- Test returning null object
   HashMap.put hashMap (Just "bar") (Just "barval")
-  printLn !(Objects.toString !(HashMap.get hashMap "bar")) -- Test returning a non-null object
+  putStrLn $ !(maybe (pure "null") (Objects.toString) !(HashMap.get hashMap "bar")) -- Test returning a non-null object
 
   printLn $ nullableToString (the (Maybe BigInteger) Nothing) -- Test passing Nothing as a null to FFI call
   bigOne <- BigInteger.new "1"

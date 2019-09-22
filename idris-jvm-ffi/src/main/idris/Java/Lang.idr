@@ -143,13 +143,14 @@ namespace System
   SystemClass = Class systemClass
 
   getProperty : String -> JVM_IO (Maybe String)
-  getProperty = invokeStatic SystemClass "getProperty" (String -> JVM_IO (Maybe String))
+  getProperty p = nullableStringToMaybe <$> invokeStatic SystemClass "getProperty" (String -> JVM_IO String) p
 
   getenv : String -> JVM_IO (Maybe String)
-  getenv = invokeStatic SystemClass "getenv" (String -> JVM_IO (Maybe String))
+  getenv p = nullableStringToMaybe <$> invokeStatic SystemClass "getenv" (String -> JVM_IO String) p
 
   setProperty : String -> String -> JVM_IO (Maybe String)
-  setProperty = invokeStatic SystemClass "setProperty" (String -> String -> JVM_IO (Maybe String))
+  setProperty name value = nullableStringToMaybe <$>
+    invokeStatic SystemClass "setProperty" (String -> String -> JVM_IO String) name value
 
   -- Takes a property name and a default value and returns the property value
   -- if it exists otherwise returns the default value

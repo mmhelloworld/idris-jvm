@@ -82,13 +82,14 @@ openFile f m = assert_total $ do
      ensureParentDir : Path -> JVM_IO ()
      ensureParentDir path =
        if hasWriteMode then do
-         optParent <- invokeInstance "getParent" (Path -> JVM_IO (Maybe Path)) path
+         optParent <- nullableToMaybe <$> invokeInstance "getParent" (Path -> JVM_IO Path) path
          case optParent of
             Nothing => pure ()
             Just pathDir => do
               Files.createDirectories pathDir
               pure ()
        else pure ()
+
 export
 getChar : File -> JVM_IO Char
 getChar (MkFile fileChannelIo) = getChar fileChannelIo
@@ -218,3 +219,29 @@ fRemove : (s : String) -> JVM_IO Bool
 fRemove f = do
     path <- Files.createPath f
     deleteIfExists path
+
+||| Read a line from a file
+||| @h a file handle which must be open for reading
+export
+fGetLine : (h : File) -> JVM_IO (Either FileError String)
+fGetLine file = do
+  str <- getLine file
+  pure $ Right str
+
+||| Read up to a number of characters from a file
+||| @h a file handle which must be open for reading
+export
+fGetChars : (h : File) -> (len : Int) -> JVM_IO (Either FileError String)
+fGetChars file len = (Right . pack . reverse) <$> go [] len where
+    go : List Char -> Int -> JVM_IO (List Char)
+    go acc 0 = pure acc
+    go acc n = do
+        c <- getChar file
+        go (c :: acc) (n - 1)
+
+||| Write a line to a file
+||| @h a file handle which must be open for writing
+||| @str the line to write to the file
+export
+fPutStr : (h : File) -> (str : String) -> JVM_IO (Either FileError ())
+fPutStr file s = Right <$> writeString file s

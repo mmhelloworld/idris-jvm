@@ -86,6 +86,7 @@ import static IdrisJvm.Core.export.Codegen.lURem;
 import static IdrisJvm.Core.export.Codegen.lWriteStr;
 import static IdrisJvm.Core.export.Codegen.lXOr;
 import static IdrisJvm.Core.export.Codegen.lZExt;
+import static java.lang.String.format;
 
 public class PrimFnDeserializer extends StdDeserializer<PrimFn> {
 
@@ -279,8 +280,8 @@ public class PrimFnDeserializer extends StdDeserializer<PrimFn> {
                 case "LExternal":
                     return lExternal(value.asText());
                 default:
-                    throw new RuntimeException("A PrimFn value expected but found " +
-                        jsonParser.getCurrentName());
+                    throw new RuntimeException(format("A PrimFn value expected but found %s, %s",
+                        constructor, jsonParser.getCurrentName()));
             }
         } else {
             throw new RuntimeException("An object representing PrimFn expected but found " +

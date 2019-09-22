@@ -15,15 +15,15 @@ public class ByteBufferIo {
     private final ByteBuffer buffer;
     private CharBuffer charBuffer;
 
-    public ByteBufferIo(FunctionE<ByteBuffer, Integer, IOException> reader,
-                        FunctionE<ByteBuffer, Integer, IOException> writer) {
+    ByteBufferIo(FunctionE<ByteBuffer, Integer, IOException> reader,
+                 FunctionE<ByteBuffer, Integer, IOException> writer) {
         this(reader, writer, UTF_8, 1024);
     }
 
-    public ByteBufferIo(FunctionE<ByteBuffer, Integer, IOException> reader,
-                        FunctionE<ByteBuffer, Integer, IOException> writer,
-                        Charset charset,
-                        int bufferSize) {
+    private ByteBufferIo(FunctionE<ByteBuffer, Integer, IOException> reader,
+                         FunctionE<ByteBuffer, Integer, IOException> writer,
+                         Charset charset,
+                         int bufferSize) {
         this.reader = reader;
         this.writer = writer;
         this.charset = charset;
@@ -39,24 +39,24 @@ public class ByteBufferIo {
         return charBuffer.get();
     }
 
-    public String getLine() throws IOException {
+    String getLine() throws IOException {
         if (!hasChar()) {
             return null;
         } else {
             String lineSeparator = lineSeparator();
-            int lineSeperatorLength = lineSeparator.length();
+            int lineSeparatorLength = lineSeparator.length();
             StringBuilder sb = new StringBuilder();
             do {
                 sb.append(getChar());
                 if (endsWith(sb, lineSeparator)) {
-                    return sb.substring(0, sb.length() - lineSeperatorLength);
+                    return sb.substring(0, sb.length() - lineSeparatorLength);
                 }
             } while (hasChar());
             return sb.toString();
         }
     }
 
-    public int writeString(String str) throws IOException {
+    int writeString(String str) throws IOException {
         return writer.apply(charset.encode(str));
     }
 

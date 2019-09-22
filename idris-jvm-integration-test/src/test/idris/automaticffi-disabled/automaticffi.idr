@@ -77,7 +77,7 @@ main = do
     ),
     ([catchNonFatal], \t =>
       do
-        printLn "unable to get property value"
+        printLn $ "unable to get property value: " ++ show t
         pure Nothing
     )
   ]

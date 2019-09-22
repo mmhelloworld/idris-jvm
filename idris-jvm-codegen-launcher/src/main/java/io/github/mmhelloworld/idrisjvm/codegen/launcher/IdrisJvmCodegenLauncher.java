@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 import static java.lang.Integer.parseInt;
 import static java.lang.String.format;
+import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toList;
 
 public class IdrisJvmCodegenLauncher {
@@ -95,7 +96,7 @@ public class IdrisJvmCodegenLauncher {
     }
 
     private void send(final String[] args) {
-        List<String> endpointArgs = new ArrayList<>(Arrays.asList(args));
+        List<String> endpointArgs = new ArrayList<>(asList(args));
         endpointArgs.add(System.getProperty("user.dir"));
         int port = getPort().orElseThrow(() -> new RuntimeException("Idris JVM codegen server is not running"));
         ResponseEntity<String> response = restTemplate.postForEntity("http://localhost:" + port,

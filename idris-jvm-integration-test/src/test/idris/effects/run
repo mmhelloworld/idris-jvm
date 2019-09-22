@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ -p effects --nocolour effects.idr -o effects
+java -Xss10m  \
+  -cp \
+  idris-jvm-runtime.jar:effects-classes \
+  main.Main
+rm -f effects effects.ibc

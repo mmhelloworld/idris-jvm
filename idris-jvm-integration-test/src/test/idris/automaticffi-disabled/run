@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+${IDRIS:-idris} --portable-codegen jvm -p idrisjvmffi $@ --nocolour automaticffi.idr -o automaticffi
+java -Xss10m  \
+  -cp \
+  idris-jvm-runtime.jar:automaticffi-classes \
+  main.Main
+rm -f automaticffi automaticffi.ibc

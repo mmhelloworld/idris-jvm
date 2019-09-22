@@ -10,6 +10,7 @@ import java.nio.channels.WritableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -38,6 +39,9 @@ public class FileChannelIo implements ReadableByteChannel, WritableByteChannel, 
     }
 
     public static FileChannelIo open(Path path, OpenOption... openOptions) throws IOException {
+        if (path.getParent() != null) {
+            Files.createDirectories(path.getParent());
+        }
         return new FileChannelIo(path, FileChannel.open(path, openOptions));
     }
 
@@ -46,7 +50,7 @@ public class FileChannelIo implements ReadableByteChannel, WritableByteChannel, 
     }
 
     public boolean isEof() throws IOException {
-        return channel.position() == channel.size();
+        return !byteBufferIo.hasChar();
     }
 
     public long size() throws IOException {

@@ -207,9 +207,9 @@ fEOF MkFileStdin = invokeStatic RuntimeClass "isStdinEof" (JVM_IO Bool)
 fEOF _ = pure False
 
 export
-socketListenAndAccept : Int -> JVM_IO (Either String File)
-socketListenAndAccept port = do
-    byteBufferIoOrError <- ClientServerSocket.listenAndAccept port
+socketListenAndAccept : String -> Int -> JVM_IO (Either String File)
+socketListenAndAccept host port = do
+    byteBufferIoOrError <- ClientServerSocket.listenAndAccept host port
     case byteBufferIoOrError of
         Left throwable => Left <$> Objects.toString throwable
         Right byteBufferIo => pure . Right $ MkFileClientServerSocket byteBufferIo

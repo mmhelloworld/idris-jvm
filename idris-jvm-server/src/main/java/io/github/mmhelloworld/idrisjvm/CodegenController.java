@@ -112,7 +112,7 @@ public class CodegenController implements ApplicationListener<EmbeddedServletCon
         try (FileWriter exeWriter = new FileWriter(exeFile)) {
             template.process(templateModel, exeWriter);
         }
-        io.github.mmhelloworld.idrisjvm.io.Files.chmod(exeFile.getPath(), 777);
+        io.github.mmhelloworld.idrisjvm.io.Files.chmod(exeFile.getPath(), 0777);
     }
 
     private void deleteFile(File file) throws IOException {

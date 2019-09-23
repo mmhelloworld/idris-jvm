@@ -29,9 +29,9 @@ public final class ClientServerSocket implements ReadableByteChannel, WritableBy
         return accept(serverSocket);
     }
 
-    public static ClientServerSocket listenAndAccept(int port) throws IOException, ExecutionException,
+    public static ClientServerSocket listenAndAccept(String host, int port) throws IOException, ExecutionException,
         InterruptedException {
-        return listenAndAccept(InetAddress.getLocalHost(), port);
+        return listenAndAccept(InetAddress.getByName(host), port);
     }
 
     public static ClientServerSocket accept(ServerSocket serverSocket) throws InterruptedException, ExecutionException,

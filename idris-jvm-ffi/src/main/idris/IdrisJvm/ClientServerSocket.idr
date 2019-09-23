@@ -12,9 +12,9 @@ namespace ClientServerSocket
   ClientServerSocket : Type
   ClientServerSocket = JVM_Native ClientServerSocketClass
 
-  listenAndAccept : Int -> JVM_IO (Either Throwable ClientServerSocket)
+  listenAndAccept : String -> Int -> JVM_IO (Either Throwable ClientServerSocket)
   listenAndAccept =
-    invokeStatic ClientServerSocketClass "listenAndAccept" (Int -> JVM_IO (Either Throwable ClientServerSocket))
+    invokeStatic ClientServerSocketClass "listenAndAccept" (String -> Int -> JVM_IO (Either Throwable ClientServerSocket))
 
   getChar : ClientServerSocket -> JVM_IO Char
   getChar = invokeInstance "getChar" (ClientServerSocket -> JVM_IO Char)

@@ -4,6 +4,7 @@ pkgs = effects
 
 modules = IdrisJvm.Data.Buffer
         , IdrisJvm.Data.IORef
+        , IdrisJvm.Data.Strings
         , IdrisJvm.FFI
         , IdrisJvm.IO
         , IdrisJvm.File

@@ -16,6 +16,7 @@ import IdrisJvm.System
 
 %hide Prelude.File.File
 %hide Prelude.File.FileError
+%hide Prelude.File.Directory
 %hide Java.IO.File.File
 
 public export
@@ -24,6 +25,10 @@ data File = MkFileStdin
           | MkFileStderr
           | MkFile FileChannelIo
           | MkFileClientServerSocket ClientServerSocket
+
+public export
+Directory : Type
+Directory = JDirectory
 
 public export
 FileError : Type
@@ -122,25 +127,12 @@ closeFile (MkFileClientServerSocket clientServerSocket) = ClientServerSocket.clo
 closeFile _ = pure ()
 
 export
-changeDir : String -> JVM_IO Bool
-changeDir = Files.changeDir
-
-export
 getTemporaryFileName : JVM_IO String
 getTemporaryFileName = Files.getTemporaryFileName
 
 export
 chmod : String -> Int -> JVM_IO ()
 chmod = Files.chmod
-
-export
-total
-createDir : String -> JVM_IO (Either FileError ())
-createDir d = assert_total $ Files.createDirectory d
-
-export
-currentDir : JVM_IO String
-currentDir = Files.getWorkingDir
 
 -- This is returning Int to conform to Idris fileSize function type
 -- even though Java's FileChannel returns long
@@ -245,3 +237,35 @@ fGetChars file len = (Right . pack . reverse) <$> go [] len where
 export
 fPutStr : (h : File) -> (str : String) -> JVM_IO (Either FileError ())
 fPutStr file s = Right <$> writeString file s
+
+export
+dirOpen : (d : String) -> JVM_IO (Either FileError Directory)
+dirOpen d = Files.openDirectory d
+
+export
+dirClose : Directory -> JVM_IO ()
+dirClose dir = Files.closeDirectory dir
+
+-- This function is retained for compatibility with other backends as it is part of Idris prelude. It doesn't have
+-- much usage in JVM backend as the errors involving directory operations can be directly retrieved from exceptions
+-- so the directory object itself doesn't contain the errors.
+export
+dirError : Directory -> JVM_IO Bool
+dirError dir = pure False
+
+export
+dirEntry : Directory -> JVM_IO (Either FileError String)
+dirEntry dir = Files.nextDirectoryEntry dir
+
+export
+total
+createDir : String -> JVM_IO (Either FileError ())
+createDir d = assert_total $ Files.createDirectory d
+
+export
+changeDir : String -> JVM_IO Bool
+changeDir = Files.changeDir
+
+export
+currentDir : JVM_IO String
+currentDir = Files.getWorkingDir

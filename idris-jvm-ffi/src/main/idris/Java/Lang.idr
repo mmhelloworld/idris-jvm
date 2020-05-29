@@ -247,6 +247,22 @@ namespace JavaString
   format : String -> JVM_Array Object -> String
   format fmt args = unsafePerformIO $ invokeStatic StringClass "format" (String -> JVM_Array Object -> JVM_IO String) fmt args
 
+namespace StringBuilder
+    StringBuilderClass : JVM_NativeTy
+    StringBuilderClass = Class "java/lang/StringBuilder"
+
+    StringBuilder : Type
+    StringBuilder = JVM_Native StringBuilderClass
+
+    new : Int -> JVM_IO StringBuilder
+    new = FFI.new (Int -> JVM_IO StringBuilder)
+
+    appendString : StringBuilder -> String -> JVM_IO StringBuilder
+    appendString = invokeInstance "append" (StringBuilder -> String -> JVM_IO StringBuilder)
+
+    toString : StringBuilder -> JVM_IO String
+    toString = invokeInstance "toString" (StringBuilder -> JVM_IO String)
+
 %inline
 vectToArray : Vect n elemTy -> {auto jvmType: JVM_Types elemTy} -> JVM_IO (JVM_Array elemTy)
 vectToArray {elemTy} xs

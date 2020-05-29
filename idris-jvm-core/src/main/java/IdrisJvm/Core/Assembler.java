@@ -351,7 +351,7 @@ public class Assembler {
             createDefaultConstructor(classWriter);
             return classWriter;
         });
-        final String[] exceptionsArr = exceptions == null ? null : exceptions.toArray(new String[exceptions.size()]);
+        final String[] exceptionsArr = exceptions == null ? null : exceptions.toArray(new String[0]);
         mv = cw.visitMethod(
             acc,
             methodName,

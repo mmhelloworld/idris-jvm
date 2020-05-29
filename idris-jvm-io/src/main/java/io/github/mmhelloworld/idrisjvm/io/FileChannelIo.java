@@ -23,7 +23,7 @@ public class FileChannelIo implements ReadableByteChannel, WritableByteChannel, 
     private FileChannelIo(Path path, FileChannel channel) {
         this.path = path;
         this.channel = channel;
-        byteBufferIo = new ByteBufferIo(this.channel::read, this.channel::write);
+        byteBufferIo = new ByteBufferIo(channel::read, channel::write);
     }
 
     public char getChar() throws IOException {

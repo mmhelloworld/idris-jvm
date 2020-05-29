@@ -1,6 +1,7 @@
 package io.github.mmhelloworld.idrisjvm.io;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -11,6 +12,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.Files.newDirectoryStream;
 import static java.nio.file.Files.readAllBytes;
 import static java.nio.file.Files.write;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE;
@@ -54,6 +56,7 @@ public final class Files {
     public static void writeFile(String pathString, String content) throws IOException {
         Path path = createPath(pathString);
         byte[] bytes = content.getBytes(UTF_8);
+        createDirectories(path.getParent());
         write(path, bytes);
     }
 
@@ -93,7 +96,9 @@ public final class Files {
     }
 
     public static void createDirectories(Path dirPath) throws IOException {
-        java.nio.file.Files.createDirectories(dirPath);
+        if (dirPath != null) {
+            java.nio.file.Files.createDirectories(dirPath);
+        }
     }
 
     public static String getWorkingDir() {
@@ -120,6 +125,20 @@ public final class Files {
 
     public static boolean deleteIfExists(Path path) {
         return path.toFile().delete();
+    }
+
+    public static Directory openDirectory(String name) throws IOException {
+        Path path = Paths.get(name);
+        DirectoryStream<Path> stream = newDirectoryStream(path);
+        return new Directory(path, stream, stream.iterator());
+    }
+
+    public static void closeDirectory(Directory directory) throws IOException {
+        directory.getStream().close();
+    }
+
+    public static String getNextDirectoryEntry(Directory directory) {
+        return directory.getIterator().next().toString();
     }
 
     private static Set<PosixFilePermission> createPosixFilePermissions(int mode) {

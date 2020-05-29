@@ -5,6 +5,9 @@ import IdrisJvm.IO
 
 %access public export
 
+JDirectory : Type
+JDirectory = JVM_Native (Class "io/github/mmhelloworld/idrisjvm/io/Directory")
+
 namespace Files
   FilesClass : JVM_NativeTy
   FilesClass = Class "io/github/mmhelloworld/idrisjvm/io/Files"
@@ -41,4 +44,13 @@ namespace Files
 
   deleteIfExists : Path -> JVM_IO Bool
   deleteIfExists = invokeStatic FilesClass "deleteIfExists" (Path -> JVM_IO Bool)
+
+  openDirectory : String -> JVM_IO (Either Throwable JDirectory)
+  openDirectory = invokeStatic FilesClass "openDirectory" (String -> JVM_IO (Either Throwable JDirectory))
+
+  closeDirectory : JDirectory -> JVM_IO ()
+  closeDirectory = invokeStatic FilesClass "closeDirectory" (JDirectory -> JVM_IO ())
+
+  nextDirectoryEntry : JDirectory -> JVM_IO (Either Throwable String)
+  nextDirectoryEntry = invokeStatic FilesClass "getNextDirectoryEntry" (JDirectory -> JVM_IO (Either Throwable String))
 

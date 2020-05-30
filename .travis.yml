@@ -6,7 +6,7 @@ cache:
 services:
 - docker
 jdk:
-- oraclejdk8
+- openjdk8
 env:
 - IDRIS_JVM_HOME=${HOME}/bin/idris-jvm
 before_install:

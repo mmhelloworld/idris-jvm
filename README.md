@@ -49,8 +49,8 @@ JVM bytecode back end for Idris
     * On Windows:  `idris --portable-codegen jvm.bat -p idrisjvmffi helloworld.idr -o target`
 
 * Running
-    * On Linux/Mac OS:  `$ java -cp $IDRIS_JVM_HOME/idris-jvm-runtime.jar:target main.Main`
-    * On Windows:  `$ java -cp $IDRIS_JVM_HOME/idris-jvm-runtime.jar;target main.Main`
+    * On Linux/Mac OS:  `$ java -cp $IDRIS_JVM_HOME/idris-jvm-runtime.jar:target-classes main.Main`
+    * On Windows:  `$ java -cp $IDRIS_JVM_HOME/idris-jvm-runtime.jar;target-classes main.Main`
 
 ## Features
 

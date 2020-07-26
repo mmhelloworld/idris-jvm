@@ -6,7 +6,7 @@ JVM bytecode back end for Idris
 
 ## Prerequisites
 
-1. [Idris](https://github.com/idris-lang/Idris-dev)
+1. [Idris](https://github.com/idris-lang/Idris-dev) with libffi. To install Idris with libffi using cabal: `cabal install idris -f ffi`
 2. Java 8
 
 ## Install

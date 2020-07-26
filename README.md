@@ -11,8 +11,9 @@ JVM bytecode back end for Idris
 
 ## Install
 1. Download and extract JVM bytecode back end from [here](https://github.com/mmhelloworld/idris-jvm/releases). Make sure to download the release corresponding to your Idris version.
-1. From the extracted directory, run `idris-jvm/bin/install` to install Idris packages for idris-jvm.
-1. Add `<IDRIS_JVM_EXTRACTED_DIRECTORY>/idris-jvm/codegen/bin` to `PATH`.
+2. Define `IDRIS_JVM_HOME` variable with extracted directory path
+3. From the extracted directory, run `$IDRIS_JVM_HOME/bin/install` to install Idris packages for idris-jvm.
+4. Add `$IDRIS_JVM_HOME/codegen/bin` to `PATH`.
 
 ## Example
 
@@ -20,16 +21,16 @@ JVM bytecode back end for Idris
 
     ```idris
     module Main
-    
+
     import IdrisJvm.IO
-    
+
     data Tree a = Leaf
                 | Node (Tree a) a (Tree a)
-    
+
     inorder : Tree a -> List a
     inorder Leaf = []
     inorder (Node left a right) = inorder left ++ [a] ++ inorder right
-    
+
     tree : Tree String
     tree = Node
             (Node
@@ -38,7 +39,7 @@ JVM bytecode back end for Idris
               (Node Leaf "7" Leaf))
             "/"
             (Node Leaf "2" Leaf)
-    
+
     main : JVM_IO ()
     main = printLn $ inorder tree
     ```
@@ -48,8 +49,8 @@ JVM bytecode back end for Idris
     * On Windows:  `idris --portable-codegen jvm.bat -p idrisjvmffi helloworld.idr -o target`
 
 * Running
-    * On Linux/Mac OS:  `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm/idris-jvm-runtime.jar:target main.Main`
-    * On Windows:  `$ java -cp <IDRIS_JVM_EXTRACTED_DIR>/idris-jvm/idris-jvm-runtime.jar;target main.Main`
+    * On Linux/Mac OS:  `$ java -cp $IDRIS_JVM_HOME/idris-jvm-runtime.jar:target main.Main`
+    * On Windows:  `$ java -cp $IDRIS_JVM_HOME/idris-jvm-runtime.jar;target main.Main`
 
 ## Features
 
@@ -75,7 +76,7 @@ Idris `Bits64` is mapped to Java `long`.
       evenT (S k) = do
         setProperty "bar" (show k)
         oddT k
-    
+
       oddT : Nat -> JVM_IO ()
       oddT Z = printLn False
       oddT (S k) = do
@@ -87,7 +88,7 @@ See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integ
 
 * **FFI: Calling Idris from Java:** Idris functions can be exported as Java instance methods, static methods and constructors. The exported class with Idris implementations can extend a Java class and implement interfaces. It can have static and instance fields and the field values can be set from Idris. Idris types (monomorphic, for example, `List Int`) can also be exported as a Java class. See [here](https://github.com/mmhelloworld/idris-jvm/blob/master/idris-jvm-integration-test/src/test/resources/idris-test-sources/ffi/ffi.idr) for an example.
 
-* **Idris functions as Java lambdas:** Idris functions can be passed as Java lambdas in FFI. JVM's `invokedynamic` instruction is used to create target functional interface objects just like how javac does. 
+* **Idris functions as Java lambdas:** Idris functions can be passed as Java lambdas in FFI. JVM's `invokedynamic` instruction is used to create target functional interface objects just like how javac does.
 
 ```idris
 main : JVM_IO ()

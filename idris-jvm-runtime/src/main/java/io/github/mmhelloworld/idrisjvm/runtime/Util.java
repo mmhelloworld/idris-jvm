@@ -317,7 +317,7 @@ public class Util {
     }
 
     public static boolean stringEquals(String m, String n) {
-        return m.equals(n);
+        return Objects.equals(m, n);
     }
 
     public static Object doubleLessThan(Object m, Object n) {

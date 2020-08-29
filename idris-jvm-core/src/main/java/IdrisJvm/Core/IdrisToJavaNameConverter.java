@@ -48,32 +48,44 @@ public class IdrisToJavaNameConverter {
     }
 
     public static String idrisClassMethodName(String idrisName) {
-        final Matcher matcher = pattern.matcher(idrisName);
+        Matcher matcher = pattern.matcher(idrisName);
+        String className;
+        String methodName;
         if (matcher.find()) {
-            final String className = matcher.group(1);
-            final String methodName = matcher.group(2);
-            final Matcher endsWithNonDotMatcher = endsWithNonDotsPattern.matcher(className);
+            className = matcher.group(1);
+            methodName = matcher.group(2);
+            Matcher endsWithNonDotMatcher = endsWithNonDotsPattern.matcher(className);
             if (endsWithNonDotMatcher.find()) {
                 String lastPart = endsWithNonDotMatcher.group(2);
-                return createClassName(endsWithNonDotMatcher.group(1)) + "," + createMethodName(lastPart + methodName);
+                className = createClassName(endsWithNonDotMatcher.group(1));
+                methodName = createMethodName(lastPart + methodName);
             } else {
-                final Matcher endsWithDotMatcher = endsWithDotsPattern.matcher(className);
+                Matcher endsWithDotMatcher = endsWithDotsPattern.matcher(className);
                 if (endsWithDotMatcher.find()) {
-                    return createClassName(endsWithDotMatcher.group(1)) + "," + createMethodName(endsWithDotMatcher.group(2) + methodName);
+                    className = createClassName(endsWithDotMatcher.group(1));
+                    methodName = createMethodName(endsWithDotMatcher.group(2) + methodName);
                 } else {
                     if (methodName.trim().isEmpty()) {
-                        return DEFAULT_CLASS_NAME + "," + createMethodName(className);
+                        methodName = createMethodName(className);
+                        className = DEFAULT_CLASS_NAME;
                     } else {
-                        return createClassName(className) + "," + createMethodName(methodName);
+                        className = createClassName(className);
+                        methodName = createMethodName(methodName);
                     }
                 }
             }
         } else {
-            return DEFAULT_CLASS_NAME + "," + DEFAULT_METHOD_NAME;
+            className = DEFAULT_CLASS_NAME;
+            methodName = DEFAULT_METHOD_NAME;
         }
+        if (className.equals(DEFAULT_CLASS_NAME) && !methodName.equals("main") && !methodName.equals("call__IO")
+            && !methodName.contains("runMain")) {
+            className = className + methodName;
+        }
+        return className + "," + methodName;
     }
 
-    private static String createMethodName(final String methodName) {
+    private static String createMethodName(String methodName) {
         StringBuilder builder = new StringBuilder(methodName.length());
 
         for (char c : methodName.toCharArray()) {
@@ -88,7 +100,7 @@ public class IdrisToJavaNameConverter {
         return builder.toString();
     }
 
-    private static String createClassName(final String className) {
+    private static String createClassName(String className) {
         if (className.isEmpty()) {
             return DEFAULT_CLASS_NAME;
         } else if (className.contains(".")) {

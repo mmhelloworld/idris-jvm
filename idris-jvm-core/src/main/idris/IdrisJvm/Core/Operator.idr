@@ -93,6 +93,24 @@ intToBigInteger ret x = do
   InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf"  "(J)Ljava/math/BigInteger;" False
   ret inferredBigIntegerType
 
+bits8ToBigInteger : (InferredType -> Asm ()) -> LVar -> Asm ()
+bits8ToBigInteger ret x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy IInt x
+  InvokeMethod InvokeStatic "java/lang/Byte" "toUnsignedLong"  "(B)J" False
+  InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf"  "(J)Ljava/math/BigInteger;" False
+  ret inferredBigIntegerType
+
+bits64ToBigInteger : (InferredType -> Asm ()) -> LVar -> Asm ()
+bits64ToBigInteger ret x = do
+  locTypes <- GetFunctionLocTypes
+  let xTy = getLocTy locTypes x
+  loadVar locTypes xTy ILong x
+  InvokeMethod InvokeStatic "java/lang/Long" "toUnsignedString"  "(J)Ljava/lang/String;" False
+  InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>"  "(Ljava/lang/String;)V" False
+  ret inferredBigIntegerType
+
 bigIntegerToInt : (InferredType -> Asm ()) -> LVar -> Asm ()
 bigIntegerToInt ret x = do
   locTypes <- GetFunctionLocTypes
@@ -302,7 +320,8 @@ cgOpLSGe ret (ATInt (ITFixed _)) [l, r] = compareOp IInt ret "intGreaterThanOrEq
 
 cgOpLZExt : (InferredType -> Asm ()) -> IntTy -> IntTy -> List LVar -> Asm ()
 cgOpLZExt ret ITNative ITBig [var] = intToBigInteger ret var
-cgOpLZExt ret (ITFixed IT64) ITBig [var] = longToBigInteger ret var
+cgOpLZExt ret (ITFixed IT64) ITBig [var] = bits64ToBigInteger ret var
+cgOpLZExt ret (ITFixed IT8) ITBig [var] = bits8ToBigInteger ret var
 cgOpLZExt ret (ITFixed from) ITBig [var] = intToBigInteger ret var
 
 cgOpLZExt ret (ITFixed from) (ITFixed IT64) [var] = intToLong ret var

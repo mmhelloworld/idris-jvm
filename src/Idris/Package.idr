@@ -848,10 +848,10 @@ foldWithKeysC {a} {b} fk fv = go []
                              (StringMap.toList sm))
                    nd
 
-Semigroup () where
+[semiunit] Semigroup () where
   _ <+> _ = ()
 
-Monoid () where
+[monoidunit] Monoid () using semiunit where
   neutral = ()
 
 clean : {auto c : Ref Ctxt Defs} ->
@@ -882,8 +882,8 @@ clean pkg opts -- `opts` is not used but might be in the future
                                     v = Builtin.snd ksv
                                   in
                                 insertWith (reverse ks) (maybe [v] (v::)) trie) empty toClean
-         foldWithKeysC (deleteFolder builddir)
-                       (\ks => map concat . traverse (deleteBin builddir ks))
+         foldWithKeysC @{monoidunit} (deleteFolder builddir)
+                       (\ks => map collapse . traverse (deleteBin builddir ks))
                        pkgTrie
          deleteFolder builddir []
          maybe (pure ()) (\e => delete (outputdir </> e))
@@ -894,6 +894,9 @@ clean pkg opts -- `opts` is not used but might be in the future
          deleteDocsFolder $ build </> "docs"
          runScript (postclean pkg)
   where
+    collapse : List () -> ()
+    collapse _ = ()
+
     delete : String -> Core ()
     delete path = do Right () <- coreLift $ removeFile path
                        | Left err => pure ()

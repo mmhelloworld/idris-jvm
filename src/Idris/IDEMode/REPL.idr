@@ -55,8 +55,10 @@ import Network.Socket.Data
 %default covering
 
 ||| TODO: use the version in `Network.FFI` in network after the next release.
-%foreign "C:idrnet_fdopen, libidris2_support, idris_net.h"
-prim__idrnet_fdopen : Int -> String -> PrimIO AnyPtr
+%foreign
+  "C:idrnet_fdopen, libidris2_support, idris_net.h"
+  jvm idrisSocketClass "toFile"
+prim__idrnet_fdopen : AnyPtr -> String -> PrimIO AnyPtr
 
 export
 socketToFile : Socket -> IO (Either String File)

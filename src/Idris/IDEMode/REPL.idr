@@ -53,8 +53,10 @@ import Network.Socket.Data
 
 %default covering
 
-%foreign "C:fdopen,libc 6"
-prim__fdopen : Int -> String -> PrimIO AnyPtr
+%foreign
+    "C:fdopen,libc 6"
+    jvm idrisSocketClass "toFile"
+prim__fdopen : AnyPtr -> String -> PrimIO AnyPtr
 
 export
 socketToFile : Socket -> IO (Either String File)

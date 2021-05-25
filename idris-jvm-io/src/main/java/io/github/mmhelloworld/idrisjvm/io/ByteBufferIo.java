@@ -44,12 +44,11 @@ public class ByteBufferIo {
             return null;
         } else {
             String lineSeparator = lineSeparator();
-            int lineSeparatorLength = lineSeparator.length();
             StringBuilder sb = new StringBuilder();
             do {
                 sb.append(getChar());
                 if (endsWith(sb, lineSeparator)) {
-                    return sb.substring(0, sb.length() - lineSeparatorLength);
+                    break;
                 }
             } while (hasChar());
             return sb.toString();

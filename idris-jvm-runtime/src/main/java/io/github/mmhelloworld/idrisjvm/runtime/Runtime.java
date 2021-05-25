@@ -10,23 +10,42 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.math.BigInteger;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static java.lang.String.format;
 import static java.lang.System.currentTimeMillis;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toList;
 
 public class Runtime {
+    public static final String OS_NAME;
 
     private static List<String> programArgs = emptyList();
     private static BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in, UTF_8));
 
     private static boolean isStdinEof = false;
+
+    static {
+        // To conform to support/chez/support.ss
+        String osNameProperty = getOsNameProperty();
+        if (osNameProperty.startsWith("windows")) {
+            OS_NAME = "windows";
+        } else if (osNameProperty.startsWith("mac")) {
+            OS_NAME = "darwin";
+        } else if (Stream.of("linux", "aix", "solaris", "sunos", "freebsd", "openbsd", "netbsd")
+            .anyMatch(osNameProperty::startsWith)) {
+            OS_NAME = "unix";
+        } else {
+            OS_NAME = "unknown";
+        }
+    }
 
     public static boolean isStdinEof() {
         return isStdinEof;
@@ -135,11 +154,11 @@ public class Runtime {
     }
 
     public static int runCommand(String command) throws IOException, InterruptedException {
-        String[] cmdarray = parseCommand(command).toArray(new String[0]);
-        ProcessBuilder processBuilder = new ProcessBuilder(cmdarray)
-                .inheritIO()
-                .directory(new File(Files.getWorkingDir()));
-        return processBuilder.start().waitFor();
+        String[] commandParts = getCommand(command);
+        return new ProcessBuilder(commandParts)
+            .directory(new File(Files.getWorkingDir()))
+            .start()
+            .waitFor();
     }
 
     public static void usleep(int microseconds) throws InterruptedException {
@@ -149,42 +168,29 @@ public class Runtime {
     private static int bounded(int n, int lowerBound, int upperBound) {
         return n < lowerBound ? lowerBound : Math.min(n, upperBound);
     }
-
-    // This may not be adequate but simple enough for basic cases
-    private static List<String> parseCommand(final String command) {
-        List<String> commandWithArgs = new ArrayList<>();
-        int start = 0;
-        boolean inQuotes = false;
-        for (int current = 0; current < command.length(); current++) {
-            if (isUnescapedDoubleQuotes(command, current)) {
-                inQuotes = !inQuotes;
-            }
-
-            boolean atLastChar = current == command.length() - 1;
-            if (atLastChar) {
-                commandWithArgs.add(unescapeDoubleQuotes(trimDoubleQuotes(command.substring(start))));
-            } else if (command.charAt(current) == ' ' && !inQuotes) {
-                commandWithArgs.add(unescapeDoubleQuotes(trimDoubleQuotes(command.substring(start, current))));
-                start = current + 1;
-            }
+    private static String getOsNameProperty() {
+        try {
+            return System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        } catch (SecurityException exception) {
+            return "";
         }
-        return commandWithArgs;
     }
 
-    private static boolean isUnescapedDoubleQuotes(final String str, final int index) {
-        return str.charAt(index) == '"' && (index == 0 || str.charAt(index - 1) != '\\');
-    }
-
-    private static String unescapeDoubleQuotes(String str) {
-        return str.replaceAll("\\\\\"", "\"");
-    }
-
-    private static String trimDoubleQuotes(String str) {
-        if (str.startsWith("\"") && str.endsWith("\"")) {
-            return str.substring(1, str.length() - 1);
-        } else {
-            return str;
+    private static String[] getCommand(String command) {
+        boolean isWindows = OS_NAME.equals("windows");
+        String shell = isWindows ? "cmd.exe" : "sh";
+        String shellSwitch = isWindows ? "/c" : "-c";
+        Pattern pattern = Pattern.compile(format("\\s*%s\\s+%s\\s+(.*)", shell, shellSwitch));
+        Matcher matcher = pattern.matcher(command);
+        if (matcher.find()) {
+            return new String[] {shell, shellSwitch, matcher.group(1)};
         }
+        pattern = Pattern.compile(format("\\s*%s\\s+(.*)", shell));
+        matcher = pattern.matcher(command);
+        if (matcher.find()) {
+            return new String[]{shell, shellSwitch, matcher.group(1)};
+        }
+        return new String[] {shell, shellSwitch, command};
     }
 
 }

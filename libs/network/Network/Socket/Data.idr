@@ -8,6 +8,7 @@ module Network.Socket.Data
 import Data.List
 import Data.List1
 import Data.Strings
+import System.FFI
 
 -- ------------------------------------------------------------ [ Type Aliases ]
 
@@ -61,10 +62,14 @@ EAGAIN =
 -- ---------------------------------------------------------------- [ Error Code ]
 
 -- repeat without export to avoid dependency cycles
-%foreign "C:idrnet_errno,libidris2_support"
+%foreign
+    "C:idrnet_errno,libidris2_support"
+    jvm runtimeClass "getErrorNumber"
 prim__idrnet_errno : PrimIO Int
 
-%foreign "C:isNull,libidris2_support"
+%foreign
+    "C:isNull,libidris2_support"
+    "jvm:isNull,io/github/mmhelloworld/idris2/runtime/Objects"
 prim__idrnet_isNull : (ptr : AnyPtr) -> PrimIO Int
 
 

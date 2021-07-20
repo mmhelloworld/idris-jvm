@@ -11,6 +11,9 @@ idris2docs_venv
 # Editor/IDE Related
 .\#* # Emacs swap file
 *~   # Vim swap file
+.idea
+*.iml
+
 # VS Code
 .vscode/*
 
@@ -38,3 +41,12 @@ idris2docs_venv
 /bootstrap/idris2-boot.rkt
 
 /custom.mk
+
+*.class
+*.jar
+*-pom.xml
+target
+output
+build
+classes/**
+*-classes/**

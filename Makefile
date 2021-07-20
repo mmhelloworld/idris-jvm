@@ -8,9 +8,9 @@ NAME = idris2
 TARGETDIR = build/exec
 TARGET = ${TARGETDIR}/${NAME}
 
-MAJOR=0
-MINOR=3
-PATCH=0
+MAJOR := $(shell mvn -q -Dexec.executable="echo" -Dexec.args='$${idris2.major.version}' --non-recursive exec:exec)
+MINOR := $(shell mvn -q -Dexec.executable="echo" -Dexec.args='$${idris2.minor.version}' --non-recursive exec:exec)
+PATCH := $(shell mvn -q -Dexec.executable="echo" -Dexec.args='$${idris2.patch.version}' --non-recursive exec:exec)
 
 
 GIT_SHA1=

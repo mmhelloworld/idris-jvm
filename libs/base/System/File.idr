@@ -3,6 +3,7 @@ module System.File
 import Data.List
 import Data.Strings
 import System.Info
+import System.FFI
 
 public export
 data Mode = Read | WriteTruncate | Append | ReadWrite | ReadWriteTruncate | ReadAppend
@@ -17,40 +18,53 @@ support fn = "C:" ++ fn ++ ", libidris2_support"
 libc : String -> String
 libc fn = "C:" ++ fn ++ ", libc 6"
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idris2/runtime/ChannelIo"
+
 %foreign support "idris2_openFile"
          "node:support:openFile,support_system_file"
+         jvm' fileClass "open" "String String" fileClass
 prim__open : String -> String -> PrimIO FilePtr
 
 %foreign support "idris2_closeFile"
          "node:lambda:(fp) => require('fs').closeSync(fp.fd)"
+         jvm' fileClass "close" fileClass "void"
 prim__close : FilePtr -> PrimIO ()
 
 %foreign support "idris2_fileError"
          "node:lambda:x=>(x===1n?BigInt(1):BigInt(0))"
+         jvm' fileClass "getErrorNumber" fileClass "int"
 prim__error : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileErrno"
          "node:lambda:()=>-BigInt(process.__lasterr.errno)"
+         jvm runtimeClass "getErrorNumber"
 prim__fileErrno : PrimIO Int
 
 %foreign support "idris2_readLine"
          "node:support:readLine,support_system_file"
+         jvm' fileClass "readLine" fileClass "String"
 prim__readLine : FilePtr -> PrimIO (Ptr String)
 
 %foreign support "idris2_readChars"
+         jvm' fileClass "readChars" ("int " ++ fileClass) "String"
 prim__readChars : Int -> FilePtr -> PrimIO (Ptr String)
 %foreign "C:fgetc,libc 6"
+         jvm' fileClass "readChar" fileClass "char"
 prim__readChar : FilePtr -> PrimIO Int
 
 %foreign support "idris2_writeLine"
          "node:lambda:(filePtr, line) => require('fs').writeSync(filePtr.fd, line, undefined, 'utf-8')"
+         jvm' fileClass "writeLine" (fileClass ++ " String") "int"
 prim__writeLine : FilePtr -> String -> PrimIO Int
 
 %foreign support "idris2_eof"
          "node:lambda:x=>(x.eof?1n:0n)"
+         jvm' fileClass "isEof" fileClass "int"
 prim__eof : FilePtr -> PrimIO Int
 
 %foreign "C:fflush,libc 6"
+         jvm' fileClass "flush" fileClass "int"
 prim__flush : FilePtr -> PrimIO Int
 %foreign support "idris2_popen"
 prim__popen : String -> String -> PrimIO FilePtr
@@ -58,39 +72,49 @@ prim__popen : String -> String -> PrimIO FilePtr
 prim__pclose : FilePtr -> PrimIO ()
 
 %foreign support "idris2_removeFile"
+         jvm' fileClass "delete" "String" "int"
 prim__removeFile : String -> PrimIO Int
 
 %foreign support "idris2_fileSize"
          "node:lambda:fp=>require('fs').fstatSync(fp.fd, {bigint: true}).size"
+         jvm' fileClass "size" fileClass "int"
 prim__fileSize : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileSize"
+         jvm' fileClass "size" fileClass "int"
 prim__fPoll : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileAccessTime"
+         jvm' fileClass "getAccessTime" fileClass "int"
 prim__fileAccessTime : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileModifiedTime"
          "node:lambda:fp=>require('fs').fstatSync(fp.fd, {bigint: true}).mtimeMs / 1000n"
+         jvm' fileClass "getModifiedTime" fileClass "int"
 prim__fileModifiedTime : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileStatusTime"
+         jvm' fileClass "getStatusTime" fileClass "int"
 prim__fileStatusTime : FilePtr -> PrimIO Int
 
 %foreign support "idris2_stdin"
          "node:lambda:x=>({fd:0, buffer: Buffer.alloc(0), name:'<stdin>', eof: false})"
+         jvm runtimeClass "getStdin"
 prim__stdin : FilePtr
 
 %foreign support "idris2_stdout"
          "node:lambda:x=>({fd:1, buffer: Buffer.alloc(0), name:'<stdout>', eof: false})"
+         jvm runtimeClass "getStdout"
 prim__stdout : FilePtr
 
 %foreign support "idris2_stderr"
          "node:lambda:x=>({fd:2, buffer: Buffer.alloc(0), name:'<stderr>', eof: false})"
+         jvm runtimeClass "getStderr"
 prim__stderr : FilePtr
 
 %foreign libc "chmod"
          "node:support:chmod,support_system_file"
+         jvm' fileClass "chmod" "String int" "int"
 prim__chmod : String -> Int -> PrimIO Int
 
 modeStr : Mode -> String

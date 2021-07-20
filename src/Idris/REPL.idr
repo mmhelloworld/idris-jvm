@@ -5,6 +5,7 @@ import Compiler.Scheme.Racket
 import Compiler.Scheme.Gambit
 import Compiler.ES.Node
 import Compiler.ES.Javascript
+import Compiler.Jvm.Codegen
 import Compiler.Common
 import Compiler.RefC.RefC
 
@@ -191,6 +192,7 @@ findCG
               Node => pure codegenNode
               Javascript => pure codegenJavascript
               RefC => pure codegenRefC
+              Jvm => pure codegenJvm
               Other s => case !(getCodegen s) of
                             Just cg => pure cg
                             Nothing => do coreLift $ putStrLn ("No such code generator: " ++ s)

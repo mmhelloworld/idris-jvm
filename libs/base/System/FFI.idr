@@ -33,3 +33,15 @@ setField : {s : _} -> Struct s fs -> (n : String) ->
            {auto fieldok : FieldType n ty fs} -> ty -> IO ()
 setField s n val = primIO (prim__setField s n fieldok val)
 
+public export
+jvm' : String -> String -> String -> String -> String
+jvm' className methodName arguments ret = "jvm:" ++ methodName ++ "(" ++
+    arguments ++ " " ++ ret ++ ")," ++ className
+
+public export
+jvm : String -> String -> String
+jvm className methodName = "jvm:" ++ methodName ++ "," ++ className
+
+public export
+runtimeClass : String
+runtimeClass = "io/github/mmhelloworld/idris2/runtime/Runtime"

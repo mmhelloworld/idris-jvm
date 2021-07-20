@@ -4,6 +4,10 @@
 module Network.FFI
 
 import Network.Socket.Data
+import System.FFI
+
+idrisSocketClass : String
+idrisSocketClass = "io/github/mmhelloworld/idris2/runtime/IdrisSocket"
 
 -- From sys/socket.h
 
@@ -32,11 +36,15 @@ export
 prim__idrnet_connect : (sockfd : SocketDescriptor) -> (family, socket_type : Int) ->
                        (host : String) -> (port : Port) -> PrimIO Int
 
-%foreign "C:idrnet_sockaddr_family,libidris2_support"
+%foreign
+    "C:idrnet_sockaddr_family,libidris2_support"
+    jvm' idrisSocketClass "getSocketAddressFamily" "java/lang/Object" "int"
 export
 prim__idrnet_sockaddr_family : (sockaddr : AnyPtr) -> PrimIO Int
 
-%foreign "C:idrnet_sockaddr_ipv4,libidris2_support"
+%foreign
+    "C:idrnet_sockaddr_ipv4,libidris2_support"
+    jvm' idrisSocketClass "getSocketAddressHostName" "java/lang/Object" "java/lang/String"
 export
 prim__idrnet_sockaddr_ipv4 : (sockaddr : AnyPtr) -> PrimIO String
 
@@ -134,7 +142,9 @@ prim__idrnet_errno : PrimIO Int
 export
 prim__idrnet_malloc : (size : Int) -> PrimIO AnyPtr
 
-%foreign "C:idrnet_free,libidris2_support"
+%foreign
+    "C:idrnet_free,libidris2_support"
+    jvm idrisSocketClass "free"
 export
 prim__idrnet_free : (ptr : AnyPtr) -> PrimIO ()
 

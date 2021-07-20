@@ -1,6 +1,7 @@
 module System.Directory
 
 import public System.File
+import System.FFI
 
 public export
 DirPtr : Type
@@ -8,6 +9,9 @@ DirPtr = AnyPtr
 
 support : String -> String
 support fn = "C:" ++ fn ++ ", libidris2_support"
+
+directoriesClass : String
+directoriesClass = "io/github/mmhelloworld/idris2/runtime/Directories"
 
 %foreign support "idris2_fileErrno"
          "node:support:fileErrno,support_system_directory"
@@ -29,26 +33,37 @@ ok x = pure (Right x)
 
 %foreign support "idris2_currentDirectory"
          "node:lambda:()=>process.cwd()"
+         jvm directoriesClass "getWorkingDirectory"
 prim__currentDir : PrimIO (Ptr String)
 
 %foreign support "idris2_changeDir"
          "node:support:changeDir,support_system_directory"
+         jvm directoriesClass "changeDirectory"
 prim__changeDir : String -> PrimIO Int
 
 %foreign support "idris2_createDir"
          "node:support:createDir,support_system_directory"
+         jvm directoriesClass "createDirectory"
 prim__createDir : String -> PrimIO Int
 
-%foreign support "idris2_openDir"
+%foreign
+    support "idris2_openDir"
+    jvm directoriesClass "openDirectory"
 prim__openDir : String -> PrimIO DirPtr
 
-%foreign support "idris2_closeDir"
+%foreign
+    support "idris2_closeDir"
+    jvm directoriesClass "closeDirectory"
 prim__closeDir : DirPtr -> PrimIO ()
 
-%foreign support "idris2_removeDir"
+%foreign
+    support "idris2_removeDir"
+    jvm directoriesClass "delete"
 prim__removeDir : String -> PrimIO ()
 
-%foreign support "idris2_nextDirEntry"
+%foreign
+    support "idris2_nextDirEntry"
+    jvm directoriesClass "getNextDirectoryEntry"
 prim__dirEntry : DirPtr -> PrimIO (Ptr String)
 
 export

@@ -27,6 +27,7 @@ import Libraries.Utils.Path
 import Data.List
 import Data.String
 import System
+import System.FFI
 import System.File
 
 import Network.Socket
@@ -39,11 +40,14 @@ import Libraries.Data.String.Extra -- until 0.6.0 release
 
 %default covering
 
+idrisSocketClass : String
+idrisSocketClass = "io/github/mmhelloworld/idris2/runtime/IdrisSocket"
+
 ||| TODO: use the version in `Network.FFI` in network after the next release.
 %foreign
   "C:idrnet_fdopen, libidris2_support, idris_net.h"
   jvm idrisSocketClass "toFile"
-prim__idrnet_fdopen : AnyPtr -> String -> PrimIO AnyPtr
+prim__idrnet_fdopen : SocketDescriptor -> String -> PrimIO AnyPtr
 
 export
 socketToFile : Socket -> IO (Either String File)

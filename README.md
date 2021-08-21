@@ -90,6 +90,16 @@ The [wiki lists the current plugins available for common text editors](
 https://github.com/idris-lang/Idris2/wiki/1-%5BLanguage%5D-Editor-support)
 and their features.
 
+JVM
+===
+### Build with Maven
++ To install with tests: `mvn install`
++ To install without tests `mvn install -DskipTests`
++ To recompile libraries without building compiler `mvn install -DskipIdrisCompile`
++ To recompile without building libraries `mvn install -DskipIdrisInstallLibrary`
++ To run all JVM tests `mvn -f tests/pom.xml integration-test`
++ To run a single test `mvn -f tests/pom.xml integration-test -Didris.tests="only=idris2/basic001"`
+
 Things still missing
 --------------------
 

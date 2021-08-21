@@ -1,0 +1,8 @@
+1/1: Building bangs (bangs.idr)
+Main> Just 7
+Main> Just 7
+Main> 5
+Main> "12"
+Main> True
+Main> False
+Main> Bye for now!

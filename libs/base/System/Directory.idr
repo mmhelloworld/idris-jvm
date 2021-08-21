@@ -13,6 +13,7 @@ support fn = "C:" ++ fn ++ ", libidris2_support, idris_directory.h"
 
 %foreign "C:idris2_fileErrno, libidris2_support, idris_file.h"
          "node:support:fileErrno,support_system_file"
+         jvm runtimeClass "getErrorNumber"
 prim__fileErrno : PrimIO Int
 
 returnError : HasIO io => io (Either FileError a)

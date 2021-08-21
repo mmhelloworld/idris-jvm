@@ -48,6 +48,7 @@ import Libraries.Utils.Path
 
 import Data.List
 import System
+import System.FFI
 import System.File
 
 import Network.Socket
@@ -55,10 +56,13 @@ import Network.Socket.Data
 
 %default covering
 
+idrisSocketClass : String
+idrisSocketClass = "io/github/mmhelloworld/idris2/runtime/IdrisSocket"
+
 %foreign
     "C:fdopen,libc 6"
     jvm idrisSocketClass "toFile"
-prim__fdopen : AnyPtr -> String -> PrimIO AnyPtr
+prim__fdopen : SocketDescriptor -> String -> PrimIO AnyPtr
 
 export
 socketToFile : Socket -> IO (Either String File)

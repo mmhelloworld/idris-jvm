@@ -220,7 +220,7 @@ mutual
     liftToLambdaConst (MkNConstAlt constant body) = pure $ MkNConstAlt constant !(goLiftToLambda True body)
 
 liftToLambda : NamedCExp -> NamedCExp
-liftToLambda expr = evalState (goLiftToLambda True expr) 0
+liftToLambda expr = evalState 0 (goLiftToLambda True expr)
 
 mutual
     doGetFreeVariables : SortedSet String -> SortedSet String -> NamedCExp -> SortedSet String

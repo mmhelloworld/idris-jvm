@@ -66,3 +66,16 @@ malloc size = primIO $ prim__malloc size
 export
 free : HasIO io => AnyPtr -> io ()
 free ptr = primIO $ prim__free ptr
+
+public export
+jvm' : String -> String -> String -> String -> String
+jvm' className methodName arguments ret = "jvm:" ++ methodName ++ "(" ++
+    arguments ++ " " ++ ret ++ ")," ++ className
+
+public export
+jvm : String -> String -> String
+jvm className methodName = "jvm:" ++ methodName ++ "," ++ className
+
+public export
+runtimeClass : String
+runtimeClass = "io/github/mmhelloworld/idrisjvm/runtime/Runtime"

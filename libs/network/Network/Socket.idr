@@ -23,9 +23,9 @@ socket : HasIO io
       -> io (Either SocketError Socket)
 socket sf st pn = do
   socket_res <- primIO $ prim__idrnet_socket (toCode sf) (toCode st) pn
-
-  if socket_res == -1
-    then map Left getErrno
+  errorNumber <- getErrno
+  if errorNumber /= 0
+    then pure $ Left errorNumber
     else pure $ Right (MkSocket socket_res sf st pn)
 
 ||| Close a socket
@@ -105,8 +105,9 @@ accept sock = do
   sockaddr_ptr <- primIO prim__idrnet_create_sockaddr
 
   accept_res <- primIO $ prim__idrnet_accept (descriptor sock) sockaddr_ptr
-  if accept_res == (-1)
-    then map Left getErrno
+  errorNumber <- getErrno
+  if errorNumber /= 0
+    then pure $ Left errorNumber
     else do
       let (MkSocket _ fam ty p_num) = sock
       sockaddr <- getSockAddr (SAPtr sockaddr_ptr)

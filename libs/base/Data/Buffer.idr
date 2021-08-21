@@ -1,6 +1,7 @@
 module Data.Buffer
 
 import Data.List
+import System.FFI
 
 %default total
 
@@ -14,9 +15,16 @@ import Data.List
 export
 data Buffer : Type where [external]
 
+bufferClass : String
+bufferClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer"
+
+stringsClass : String
+stringsClass = "io/github/mmhelloworld/idrisjvm/runtime/Strings"
+
 %foreign "scheme:blodwen-buffer-size"
          "RefC:getBufferSize"
          "node:lambda:b => b.length"
+         jvm bufferClass "size"
 prim__bufferSize : Buffer -> Int
 
 export %inline
@@ -26,6 +34,7 @@ rawSize buf = pure (prim__bufferSize buf)
 %foreign "scheme:blodwen-new-buffer"
          "RefC:newBuffer"
          "node:lambda:s=>Buffer.alloc(s)"
+         jvm bufferClass "create"
 prim__newBuffer : Int -> PrimIO Buffer
 
 export
@@ -49,6 +58,7 @@ newBuffer size
 %foreign "scheme:blodwen-buffer-setbyte"
          "RefC:setBufferUInt8"
          "node:lambda:(buf,offset,value)=>buf.writeUInt8(value, offset)"
+         jvm bufferClass "setByte"
 prim__setByte : Buffer -> (offset : Int) -> (val : Int) -> PrimIO ()
 
 %foreign "scheme:blodwen-buffer-setbyte"
@@ -158,6 +168,7 @@ getBits64 buf offset
 -- There is no endianness indication (LE/BE) for Int8 since it is a single byte
 
 %foreign "scheme:blodwen-buffer-setint8"
+         jvm bufferClass "setByte"
 prim__setInt8 : Buffer -> (offset : Int) -> (val : Int8) -> PrimIO ()
 
 export %inline
@@ -205,6 +216,7 @@ setInt32 buf offset val
 %foreign "scheme:blodwen-buffer-getint32"
          "RefC:getBufferInt32LE"
          "node:lambda:(buf,offset)=>buf.readInt32LE(offset)"
+         jvm bufferClass "getInt"
 prim__getInt32 : Buffer -> (offset : Int) -> PrimIO Int32
 
 export %inline
@@ -234,6 +246,7 @@ getInt64 buf offset
 %foreign "scheme:blodwen-buffer-setint"
          "RefC:setBufferInt64LE"
          "node:lambda:(buf,offset,value)=>buf.writeInt32LE(value, offset)"
+         jvm bufferClass "setInt"
 prim__setInt : Buffer -> (offset : Int) -> (val : Int) -> PrimIO ()
 
 export %inline
@@ -244,6 +257,7 @@ setInt buf offset val
 %foreign "scheme:blodwen-buffer-getint"
          "RefC:getBufferInt64LE"
          "node:lambda:(buf,offset)=>buf.readInt32LE(offset)"
+         jvm bufferClass "getInt"
 prim__getInt : Buffer -> (offset : Int) -> PrimIO Int
 
 export %inline
@@ -257,6 +271,7 @@ getInt buf offset
 %foreign "scheme:blodwen-buffer-setdouble"
          "RefC:setBufferDouble"
          "node:lambda:(buf,offset,value)=>buf.writeDoubleLE(value, offset)"
+         jvm bufferClass "setDouble"
 prim__setDouble : Buffer -> (offset : Int) -> (val : Double) -> PrimIO ()
 
 export %inline
@@ -267,6 +282,7 @@ setDouble buf offset val
 %foreign "scheme:blodwen-buffer-getdouble"
          "RefC:getBufferDouble"
          "node:lambda:(buf,offset)=>buf.readDoubleLE(offset)"
+         jvm bufferClass "getDouble"
 prim__getDouble : Buffer -> (offset : Int) -> PrimIO Double
 
 export %inline
@@ -356,11 +372,13 @@ export
 %foreign "scheme:blodwen-stringbytelen"
          "C:strlen, libc 6"
          "javascript:lambda:(string)=>new TextEncoder().encode(string).length"
+         jvm stringsClass "bytesLengthUtf8"
 stringByteLength : String -> Int
 
 %foreign "scheme:blodwen-buffer-setstring"
          "RefC:setBufferString"
          "node:lambda:(buf,offset,value)=>buf.write(value, offset,buf.length - offset, 'utf-8')"
+         jvm bufferClass "setString"
 prim__setString : Buffer -> (offset : Int) -> (val : String) -> PrimIO ()
 
 export %inline
@@ -371,6 +389,7 @@ setString buf offset val
 %foreign "scheme:blodwen-buffer-getstring"
          "RefC:getBufferString"
          "node:lambda:(buf,offset,len)=>buf.slice(offset, offset+len).toString('utf-8')"
+         jvm bufferClass "getString"
 prim__getString : Buffer -> (offset : Int) -> (len : Int) -> PrimIO String
 
 export %inline
@@ -396,6 +415,7 @@ bufferData buf
 %foreign "scheme:blodwen-buffer-copydata"
          "RefC:copyBuffer"
          "node:lambda:(b1,o1,length,b2,o2)=>b1.copy(b2,o2,o1,o1+length)"
+         jvm bufferClass "copy"
 prim__copyData : (src : Buffer) -> (srcOffset, len : Int) ->
                  (dst : Buffer) -> (dstOffset : Int) -> PrimIO ()
 

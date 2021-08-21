@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="maven-antrun-" default="main">
+  <target name="main">
+    <move file="../tests/build/exec/runtests_app/runtests.jar" tofile="../tests/build/exec/runtests_app/idris-jvm-tests-0.3.0.jar" failonerror="false" quiet="true" />
+    <copy file="../tests/build/exec/runtests_app/idris-jvm-tests-0.3.0.jar" tofile="./target/idris-jvm-tests-0.3.0.jar" />
+  </target>
+</project>

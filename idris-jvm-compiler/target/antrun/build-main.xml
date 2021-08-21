@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="maven-antrun-" default="main">
+  <target name="main">
+    <copy file="../build/exec/idris2_app/idris-jvm-compiler-0.3.0.jar" tofile="./target/assembly/lib/idris-jvm-compiler-0.3.0.jar" />
+  </target>
+</project>

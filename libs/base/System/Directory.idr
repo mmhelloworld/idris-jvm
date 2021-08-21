@@ -23,35 +23,45 @@ supportC fn = "C:\{fn}, libidris2_support, idris_directory.h"
 supportNode : (fn : String) -> String
 supportNode fn = "node:support:\{fn},support_system_directory"
 
+directoriesClass : String
+directoriesClass = "io/github/mmhelloworld/idrisjvm/runtime/Directories"
+
 ok : HasIO io => a -> io (Either FileError a)
 ok x = pure (Right x)
 
 %foreign supportC "idris2_currentDirectory"
          "node:lambda:()=>process.cwd()"
+         jvm directoriesClass "getWorkingDirectory"
 prim__currentDir : PrimIO (Ptr String)
 
 %foreign supportC "idris2_changeDir"
          supportNode "changeDir"
+         jvm directoriesClass "changeDirectory"
 prim__changeDir : String -> PrimIO Int
 
 %foreign supportC "idris2_createDir"
          supportNode "createDir"
+         jvm directoriesClass "createDirectory"
 prim__createDir : String -> PrimIO Int
 
 %foreign supportC "idris2_openDir"
          supportNode "openDir"
+         jvm directoriesClass "openDirectory"
 prim__openDir : String -> PrimIO DirPtr
 
 %foreign supportC "idris2_closeDir"
          supportNode "closeDir"
+         jvm directoriesClass "closeDirectory"
 prim__closeDir : DirPtr -> PrimIO ()
 
 %foreign supportC "idris2_removeDir"
          supportNode "removeDir"
+         jvm directoriesClass "delete"
 prim__removeDir : String -> PrimIO ()
 
 %foreign supportC "idris2_nextDirEntry"
          supportNode "dirEntry"
+         jvm directoriesClass "getNextDirectoryEntry"
 prim__dirEntry : DirPtr -> PrimIO (Ptr String)
 
 ||| Data structure for managing the pointer to a directory.

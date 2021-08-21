@@ -80,9 +80,10 @@ the [contributions wanted][2] for something more involved. This [map][3] should
 help you find your way around the source code. See [the wiki page][4]
 for more details.
 
-[1]: <https://github.com/idris-lang/Idris2/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22>
-[2]: <https://github.com/idris-lang/Idris2/wiki/What-Contributions-are-Needed>
-[3]: <https://github.com/idris-lang/Idris2/wiki/Map-of-the-Source-Code>
-[4]: <https://github.com/idris-lang/Idris2/wiki/Getting-Started-with-Compiler-Development>
-[PACK]: https://github.com/stefan-hoeck/idris2-pack
-[PACK_COL]: https://github.com/stefan-hoeck/idris2-pack-db
+### Build with Maven
++ To install with tests: `mvn install`
++ To install without tests `mvn install -DskipTests`
++ To recompile libraries without building compiler `mvn install -DskipIdrisCompile`
++ To recompile without building libraries `mvn install -DskipIdrisInstallLibrary`
++ To run all JVM tests `mvn -f tests/pom.xml integration-test`
++ To run a single test `mvn -f tests/pom.xml integration-test -Didris.tests="only=idris2/basic001"`

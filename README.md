@@ -87,6 +87,16 @@ Javascript
 ====================
 The javascript codegen uses the new BigInt, hence nodejs 10.4 or higher is required.
 
+JVM
+===
+### Build with Maven
++ To install with tests: `mvn install`
++ To install without tests `mvn install -DskipTests`
++ To recompile libraries without building compiler `mvn install -DskipIdrisCompile`
++ To recompile without building libraries `mvn install -DskipIdrisInstallLibrary`
++ To run all JVM tests `mvn -f tests/pom.xml integration-test`
++ To run a single test `mvn -f tests/pom.xml integration-test -Didris.tests="only=idris2/basic001"`
+
 Things still missing
 ====================
 

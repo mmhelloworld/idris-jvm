@@ -23,8 +23,9 @@ import Utils.Path
 
 import Data.NameMap
 
-import System.Info
+import System.File
 import System.FFI
+import System.Info
 
 import Compiler.Jvm.Asm
 import Compiler.Jvm.MockAsm
@@ -190,6 +191,12 @@ isInterfaceInvocation : InferredType -> Bool
 isInterfaceInvocation (IRef className) = "i:" `isPrefixOf` className
 isInterfaceInvocation _ = False
 
+assembleNil : (isTailCall: Bool) -> InferredType -> Asm ()
+assembleNil isTailCall returnType = do
+    Field GetStatic idrisNilClass "INSTANCE" "Lio/github/mmhelloworld/idris2/runtime/IdrisList$Nil;"
+    asmCast idrisNilType returnType
+    when isTailCall $ asmReturn returnType
+
 mutual
     assembleExpr : (isTailCall: Bool) -> InferredType -> NamedCExp -> Asm ()
     assembleExpr isTailCall returnType (NmDelay _ expr) =
@@ -274,21 +281,15 @@ mutual
         asmCast inferredObjectType returnType
         when isTailCall $ asmReturn returnType
 
-    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Prelude"] (UN "Nil")) _ _) = do
-        Field GetStatic idrisNilClass "INSTANCE"
-            "Lio/github/mmhelloworld/idris2/runtime/IdrisList$Nil;"
-        asmCast idrisNilType returnType
-        when isTailCall $ asmReturn returnType
+    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Types", "Prelude"] (UN "Nil")) _ _) =
+        assembleNil isTailCall returnType
+    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Prelude"] (UN "Nil")) _ _) =
+        assembleNil isTailCall returnType
 
-    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Prelude"] (UN "::")) _ [head, tail]) = do
-        New idrisConsClass
-        Dup
-        assembleExpr False inferredObjectType head
-        assembleExpr False idrisListType tail
-        InvokeMethod InvokeSpecial idrisConsClass "<init>"
-            "(Ljava/lang/Object;Lio/github/mmhelloworld/idris2/runtime/IdrisList;)V" False
-        asmCast idrisConsType returnType
-        when isTailCall $ asmReturn returnType
+    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Types", "Prelude"] (UN "::")) _ [head, tail]) =
+        assembleCons isTailCall returnType head tail
+    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Prelude"] (UN "::")) _ [head, tail]) =
+        assembleCons isTailCall returnType head tail
 
     assembleExpr isTailCall returnType expr@(NmCon fc name tag args) = do
         let fileName = fst $ getSourceLocation expr
@@ -416,6 +417,17 @@ mutual
         assembleExpr False IInt expr
         InvokeMethod InvokeStatic "java/math/Integer" "toUnsignedString" "(I)Ljava/lang/String;" False
         asmCast inferredStringType returnType
+
+    assembleCons : (isTailCall: Bool) -> InferredType -> NamedCExp -> NamedCExp -> Asm ()
+    assembleCons isTailCall returnType head tail = do
+        New idrisConsClass
+        Dup
+        assembleExpr False inferredObjectType head
+        assembleExpr False idrisListType tail
+        InvokeMethod InvokeSpecial idrisConsClass "<init>"
+            "(Ljava/lang/Object;Lio/github/mmhelloworld/idris2/runtime/IdrisList;)V" False
+        asmCast idrisConsType returnType
+        when isTailCall $ asmReturn returnType
 
     assembleConstructorSwitchExpr : NamedCExp -> Asm Int
     assembleConstructorSwitchExpr (NmLocal _ loc) = getVariableIndex $ jvmSimpleName loc
@@ -1376,6 +1388,10 @@ mutual
     jvmExtPrim _ returnType SysCodegen [] = do
         Ldc $ StringConst "\"jvm\""
         asmCast inferredStringType returnType
+    jvmExtPrim _ returnType VoidElim _ = do
+        Ldc $ StringConst "Error: Executed 'void'"
+        InvokeMethod InvokeStatic runtimeClass "crash" "(Ljava/lang/String;)Ljava/lang/Object;" False
+        asmCast inferredObjectType returnType
     jvmExtPrim fc _ prim args = Throw fc $ "Unsupported external function " ++ show prim ++ "(" ++
         (show $ showNamedCExp 0 <$> args) ++ ")"
 

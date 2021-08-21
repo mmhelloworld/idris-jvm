@@ -96,6 +96,10 @@ public final class IdrisSystem {
         return OS_NAME;
     }
 
+    public static Object malloc(int length) {
+        return new byte[length];
+    }
+
     private static String getOsNameProperty() {
         try {
             return System.getProperty("os.name").toLowerCase(Locale.ROOT);

@@ -5,11 +5,13 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.BindException;
+import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NoRouteToHostException;
 import java.net.ProtocolException;
+import java.net.SocketAddress;
 import java.net.StandardProtocolFamily;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -33,6 +35,8 @@ public final class IdrisSocket implements Closeable {
     private static final int DATAGRAM_SOCKET_TYPE = 2;
     private static final int INET_PROTOCOL_FAMILY = 2;
     private static final int INET6_PROTOCOL_FAMILY = 10;
+    private static final int AF_INET6 = 10;
+    private static final int AF_INET = 2;
     private AbstractSelectableChannel channel;
     private Exception exception;
     private int socketType;
@@ -67,9 +71,6 @@ public final class IdrisSocket implements Closeable {
 
     public static Object createSocketAddress() {
         return new Object[1];
-    }
-
-    public static void free(Object ptr) {
     }
 
     public static int getSocketAddressFamily(Object socketAddressPointer) {
@@ -165,10 +166,38 @@ public final class IdrisSocket implements Closeable {
             ((SocketChannel) channel).write(UTF_8.encode(data)), -1);
     }
 
-    public String receive(int length) {
+    public int send(Object buffer, int length) {
+        return withExceptionHandling(() ->
+            ((SocketChannel) channel).write(ByteBuffer.wrap((byte[]) buffer, 0, length)), -1);
+    }
+
+    public int sendTo(String data, String host, int port, int family) {
         return withExceptionHandling(() -> {
+            IdrisSocket server = create(family, socketType, 0);
+            if (server == null) {
+                return -1;
+            }
+            int connectionResult = server.connect(family, socketType, host, port);
+            return connectionResult != -1 ? server.send(data) : connectionResult;
+        }, -1);
+    }
+
+
+    public int sendToBuffer(Object bufferArray, int length, String host, int port, int family) {
+        return withExceptionHandling(() -> {
+            IdrisSocket server = create(family, socketType, 0);
+            if (server == null) {
+                return -1;
+            }
+            int connectionResult = server.connect(family, socketType, host, port);
+            return connectionResult != -1 ? server.send(bufferArray, length) : connectionResult;
+        }, -1);
+    }
+
+    public ResultPayload<String> receive(int length) {
+        SocketChannel channel = (SocketChannel) this.channel;
+        ResultPayload<String> resultPayload = withExceptionHandling(() -> {
             ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
-            SocketChannel channel = (SocketChannel) this.channel;
             do {
                 buffer.rewind();
             } while (channel.read(buffer) <= 0);
@@ -181,8 +210,91 @@ public final class IdrisSocket implements Closeable {
                 buffer.rewind();
                 read = channel.read(buffer);
             } while (read > 0 && builder.length() < length);
-            return builder.toString();
+            return new ResultPayload<>(0, builder.toString(), channel.getRemoteAddress());
         });
+        return resultPayload != null ? resultPayload : new ResultPayload<>(Runtime.getErrorNumber(), null, null);
+    }
+
+    public ResultPayload<byte[]> receive(Object arrayObject, int length) {
+        byte[] array = (byte[]) arrayObject;
+        ResultPayload<byte[]> resultPayload = withExceptionHandling(() -> {
+            SocketChannel channel = (SocketChannel) this.channel;
+            ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
+            do {
+                buffer.rewind();
+            } while (channel.read(buffer) <= 0);
+            int read;
+            int size = 0;
+            do {
+                buffer.flip();
+                System.arraycopy(buffer.array(), 0, array, size, Math.min(buffer.limit(), array.length));
+                buffer.rewind();
+                read = channel.read(buffer);
+                if (read > 0) {
+                    size += read;
+                }
+            } while (read > 0 && size < length);
+            return new ResultPayload<>(0, array, channel.getRemoteAddress());
+        });
+        return resultPayload != null ? resultPayload : new ResultPayload<>(Runtime.getErrorNumber(), null, null);
+    }
+
+    public <T> T getPayload(ResultPayload<T> resultPayload) {
+        return resultPayload.getPayload();
+    }
+
+    public <T> int getResult(ResultPayload<T> resultPayload) {
+        return resultPayload.getResult();
+    }
+
+    public <T> SocketAddress getRemoteAddress(ResultPayload<T> resultPayload) {
+        return resultPayload.getRemoteAddress();
+    }
+
+    public static int getFamily(SocketAddress socketAddress) throws UnknownHostException {
+        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
+        InetAddress inetAddress = inetSocketAddress.getAddress();
+        if (inetAddress instanceof Inet6Address) {
+            return AF_INET6;
+        } else if (inetAddress instanceof Inet4Address) {
+            return AF_INET;
+        } else {
+            throw new UnknownHostException("Cannot determine family " + socketAddress);
+        }
+    }
+
+    public static String getIpv4Address(SocketAddress socketAddress) throws UnknownHostException {
+        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
+        InetAddress inetAddress = inetSocketAddress.getAddress();
+        if (inetAddress instanceof Inet6Address) {
+            return inetAddress.getHostAddress();
+        } else {
+            throw new UnknownHostException("Not an IpV4 address: " + socketAddress);
+        }
+    }
+
+    public static int getIpv4Port(SocketAddress socketAddress) throws UnknownHostException {
+        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
+        InetAddress inetAddress = inetSocketAddress.getAddress();
+        if (inetAddress instanceof Inet6Address) {
+            return inetSocketAddress.getPort();
+        } else {
+            throw new UnknownHostException("Not an IpV4 address: " + socketAddress);
+        }
+    }
+
+    public static int getPort(SocketAddress socketAddress) {
+        return ((InetSocketAddress) socketAddress).getPort();
+    }
+
+    public static int peek(Object buf, int offset) {
+        byte[] bufArray = (byte[]) buf;
+        return Byte.toUnsignedInt(bufArray[offset]);
+    }
+
+    public static void poke(Object buf, int offset, char value) {
+        byte[] bufArray = (byte[]) buf;
+        bufArray[offset] = (byte) value;
     }
 
     @Override
@@ -283,6 +395,30 @@ public final class IdrisSocket implements Closeable {
             return ErrorCodes.NO_ROUTE_TO_HOST;
         } else {
             return ErrorCodes.IO_ERROR;
+        }
+    }
+
+    public static final class ResultPayload<T> {
+        private final int result;
+        private final T payload;
+        private final SocketAddress remoteAddress;
+
+        private ResultPayload(int result, T payload, SocketAddress remoteAddress) {
+            this.result = result;
+            this.payload = payload;
+            this.remoteAddress = remoteAddress;
+        }
+
+        public int getResult() {
+            return result;
+        }
+
+        public T getPayload() {
+            return payload;
+        }
+
+        public SocketAddress getRemoteAddress() {
+            return remoteAddress;
         }
     }
 }

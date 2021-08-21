@@ -52,7 +52,7 @@ freeBuffer buf = pure ()
 
 %foreign "scheme:blodwen-buffer-setbyte"
          "node:lambda:(buf,offset,value)=>buf.writeUInt8(Number(value), Number(offset))"
-         jvm bufferClass "getByte"
+         jvm bufferClass "setByte"
 prim__setByte : Buffer -> Int -> Int -> PrimIO ()
 
 %foreign "scheme:blodwen-buffer-setbyte"
@@ -151,6 +151,7 @@ getBits64 buf loc
 
 %foreign "scheme:blodwen-buffer-setint32"
          "node:lambda:(buf,offset,value)=>buf.writeInt32LE(Number(value), Number(offset))"
+         jvm bufferClass "setInt"
 prim__setInt32 : Buffer -> Int -> Int -> PrimIO ()
 
 export
@@ -160,6 +161,7 @@ setInt32 buf loc val
 
 %foreign "scheme:blodwen-buffer-getint32"
          "node:lambda:(buf,offset)=>BigInt(buf.readInt32LE(Number(offset)))"
+         jvm bufferClass "getInt"
 prim__getInt32 : Buffer -> Int -> PrimIO Int
 
 export
@@ -169,6 +171,7 @@ getInt32 buf loc
 
 %foreign "scheme:blodwen-buffer-setint"
          "node:lambda:(buf,offset,value)=>buf.writeInt64(Number(value), Number(offset))"
+         jvm bufferClass "setInt"
 prim__setInt : Buffer -> Int -> Int -> PrimIO ()
 
 export
@@ -178,6 +181,7 @@ setInt buf loc val
 
 %foreign "scheme:blodwen-buffer-getint"
          "node:lambda:(buf,offset)=>BigInt(buf.readInt64(Number(offset)))"
+         jvm bufferClass "getInt"
 prim__getInt : Buffer -> Int -> PrimIO Int
 
 export
@@ -187,6 +191,7 @@ getInt buf loc
 
 %foreign "scheme:blodwen-buffer-setdouble"
          "node:lambda:(buf,offset,value)=>buf.writeDoubleLE(value, Number(offset))"
+         jvm bufferClass "setDouble"
 prim__setDouble : Buffer -> Int -> Double -> PrimIO ()
 
 export
@@ -196,6 +201,7 @@ setDouble buf loc val
 
 %foreign "scheme:blodwen-buffer-getdouble"
          "node:lambda:(buf,offset)=>buf.readDoubleLE(Number(offset))"
+         jvm bufferClass "getDouble"
 prim__getDouble : Buffer -> Int -> PrimIO Double
 
 export
@@ -205,11 +211,14 @@ getDouble buf loc
 
 -- Get the length of a string in bytes, rather than characters
 export
-%foreign "C:strlen,libc 6"
+%foreign
+    "C:strlen,libc 6"
+    jvm stringsClass "bytesLengthUtf8"
 stringByteLength : String -> Int
 
 %foreign "scheme:blodwen-buffer-setstring"
          "node:lambda:(buf,offset,value)=>buf.write(value, Number(offset),buf.length - Number(offset), 'utf-8')"
+         jvm bufferClass "setString"
 prim__setString : Buffer -> Int -> String -> PrimIO ()
 
 export
@@ -219,6 +228,7 @@ setString buf loc val
 
 %foreign "scheme:blodwen-buffer-getstring"
          "node:lambda:(buf,offset,len)=>buf.slice(Number(offset), Number(offset+len)).toString('utf-8')"
+         jvm bufferClass "getString"
 prim__getString : Buffer -> Int -> Int -> PrimIO String
 
 export
@@ -243,6 +253,7 @@ bufferData buf
 
 %foreign "scheme:blodwen-buffer-copydata"
          "node:lambda:(b1,o1,length,b2,o2)=>b1.copy(b2,Number(o2), Number(o1), Number(o1+length))"
+         jvm bufferClass "copy"
 prim__copyData : Buffer -> Int -> Int -> Buffer -> Int -> PrimIO ()
 
 export
@@ -253,10 +264,12 @@ copyData src start len dest loc
 
 %foreign "C:idris2_readBufferData,libidris2_support"
          "node:lambda:(f,b,l,m) => BigInt(require('fs').readSync(f.fd,b,Number(l), Number(m)))"
+         "jvm:readFromFile(java/nio/channels/ReadableByteChannel io/github/mmhelloworld/idris2/runtime/IdrisBuffer int int int),io/github/mmhelloworld/idris2/runtime/IdrisBuffer"
 prim__readBufferData : FilePtr -> Buffer -> Int -> Int -> PrimIO Int
 
 %foreign "C:idris2_writeBufferData,libidris2_support"
          "node:lambda:(f,b,l,m) => BigInt(require('fs').writeSync(f.fd,b,Number(l), Number(m)))"
+         "jvm:writeToFile(java/nio/channels/WritableByteChannel io/github/mmhelloworld/idris2/runtime/IdrisBuffer int int int),io/github/mmhelloworld/idris2/runtime/IdrisBuffer"
 prim__writeBufferData : FilePtr -> Buffer -> Int -> Int -> PrimIO Int
 
 export

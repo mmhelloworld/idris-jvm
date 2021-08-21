@@ -119,41 +119,41 @@ namespace JList
     prim_size : JListNative -> PrimIO Int
 
     export
-    new : IO (JList a)
-    new = believe_me $ primIO prim_newArrayList
+    new : HasIO io => io (JList a)
+    new = believe_me <$> primIO prim_newArrayList
 
     export
-    add : JList a -> Int -> a -> IO ()
+    add : HasIO io => JList a -> Int -> a -> io ()
     add list index value = primIO $ prim_add (believe_me list) index (believe_me value)
 
     export
-    addAll : JList a -> Collection a -> IO Bool
+    addAll : HasIO io => JList a -> Collection a -> io Bool
     addAll list collection = primIO $ prim_addAll (believe_me list) (believe_me collection)
 
     export
-    set : JList a -> Int -> a -> IO a
-    set list index value = believe_me $ primIO $ prim_set (believe_me list) index (believe_me value)
+    set : HasIO io => JList a -> Int -> a -> io a
+    set list index value = believe_me <$> (primIO $ prim_set (believe_me list) index (believe_me value))
 
     export
-    get : JList a -> Int -> IO a
-    get list index = believe_me $ primIO $ prim_get (believe_me list) index
+    get : HasIO io => JList a -> Int -> io a
+    get list index = believe_me <$> (primIO $ prim_get (believe_me list) index)
 
     export
-    size : JList a -> IO Int
-    size list = believe_me $ primIO $ prim_size (believe_me list)
+    size : HasIO io => JList a -> io Int
+    size list = believe_me <$> (primIO $ prim_size (believe_me list))
 
     %foreign jvm' "java/util/Collections" "nCopies" "int java/lang/Object" "java/util/List"
     prim_nCopies : Int -> Object -> PrimIO JListNative
 
     export
-    nCopies : Int -> a -> IO (JList a)
-    nCopies n value = believe_me $ primIO $ prim_nCopies n (believe_me value)
+    nCopies : HasIO io => Int -> a -> io (JList a)
+    nCopies n value = believe_me <$> (primIO $ prim_nCopies n (believe_me value))
 
     %foreign jvm' "io/github/mmhelloworld/idris2/runtime/IdrisList" "fromIterable" "java/lang/Iterable" "io/github/mmhelloworld/idris2/runtime/IdrisList"
     prim_fromIterable : JIterable -> PrimIO JListNative
 
     export
-    fromIterable : Iterable a -> IO (List a)
+    fromIterable : HasIO io => Iterable a -> io (List a)
     fromIterable iterable = believe_me <$> (primIO $ prim_fromIterable (believe_me iterable))
 
 namespace Entry
@@ -167,25 +167,25 @@ namespace Entry
     prim_new : Object -> Object -> PrimIO JEntry
 
     export
-    new : k -> v -> IO (Entry k v)
+    new : HasIO io => k -> v -> io (Entry k v)
     new key value = believe_me <$> primIO (prim_new (believe_me key) (believe_me value))
 
     %foreign jvm' "java/util/Map$Entry" ".getKey" "i:java/util/Map$Entry" "java/lang/Object"
     prim_getKey : JEntry -> PrimIO Object
 
     export
-    getKey : Entry k v -> IO k
+    getKey : HasIO io => Entry k v -> io k
     getKey entry = believe_me <$> primIO (prim_getKey (believe_me entry))
 
     %foreign jvm' "java/util/Map$Entry" ".getValue" "i:java/util/Map$Entry" "java/lang/Object"
     prim_getValue : JEntry -> PrimIO Object
 
     export
-    getValue : Entry k v -> IO v
+    getValue : HasIO io => Entry k v -> io v
     getValue entry = believe_me <$> primIO (prim_getValue (believe_me entry))
 
     export
-    toTuple : Entry k v -> IO (k, v)
+    toTuple : HasIO io => Entry k v -> io (k, v)
     toTuple entry = do
         key <- getKey {k=k} {v=v} entry
         value <- getValue {k=k} {v=v} entry
@@ -203,64 +203,62 @@ namespace Map
   prim_newTreeMap : PrimIO JMap
 
   export
-  newTreeMap : IO (Map key value)
-  newTreeMap = believe_me $ primIO prim_newTreeMap
+  newTreeMap : HasIO io => io (Map key value)
+  newTreeMap = believe_me <$> primIO prim_newTreeMap
 
   %foreign jvm' "java/util/Map" ".get" "i:java/util/Map java/lang/Object" "java/lang/Object"
   prim_get : JMap -> Object -> PrimIO Object
 
   export
-  get : Map key value -> key -> IO (Maybe value)
+  get : HasIO io => Map key value -> key -> io (Maybe value)
   get map key = (believe_me . nullableToMaybe) <$> (primIO $ prim_get (believe_me map) (believe_me key))
 
   %foreign jvm' "java/util/Map" ".put" "i:java/util/Map java/lang/Object java/lang/Object" "java/lang/Object"
   prim_put : JMap -> Object -> Object -> PrimIO Object
 
   export
-  put : Map key value -> key -> value -> IO (Maybe value)
+  put : HasIO io => Map key value -> key -> value -> io (Maybe value)
   put this key value = (believe_me . nullableToMaybe) <$> (primIO $ prim_put (believe_me this) (believe_me key)
                         (believe_me value))
 
+  goFromList : HasIO io => Map key value -> List (key, value) -> io ()
+  goFromList _ [] = pure ()
+  goFromList m ((k, v) :: rest) = do
+    _ <- Map.put m k v
+    goFromList m rest
+
   export
-  fromList : List (key, value) -> IO (Map key value)
+  fromList : HasIO io => List (key, value) -> io (Map key value)
   fromList keyValues = do
       m <- Map.newTreeMap {key=key} {value=value}
-      go m keyValues
+      goFromList m keyValues
       pure m
-    where
-      go : Map key value -> List (key, value) -> IO ()
-      go m keyValues = go1 keyValues where
-        go1 : List (key, value) -> IO ()
-        go1 [] = pure ()
-        go1 ((k, v) :: rest) = do
-          _ <- Map.put m k v
-          go1 rest
 
   %foreign jvm' "java/util/Map" ".containsKey" "i:java/util/Map java/lang/Object" "boolean"
   prim_containsKey : JMap -> Object -> PrimIO Bool
 
   export
-  containsKey : Map key value -> key -> IO Bool
+  containsKey : HasIO io => Map key value -> key -> io Bool
   containsKey this key = primIO $ prim_containsKey (believe_me this) (believe_me key)
 
   %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/Maps" "transpose" "java/util/Map" "java/util/Map"
   prim_transpose : JMap -> PrimIO JMap
 
   export
-  transpose : Map k v -> IO (Map v k)
+  transpose : HasIO io => Map k v -> io (Map v k)
   transpose m = believe_me <$> primIO (prim_transpose $ believe_me m)
 
   %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/Maps" "toList" "java/util/Map" "java/util/List"
   prim_toEntries : JMap -> PrimIO JListNative
 
   export
-  toEntries : Map key value -> IO (List (Entry key value))
+  toEntries : HasIO io => Map key value -> io (List (Entry key value))
   toEntries m = do
     entries <- primIO (prim_toEntries $ believe_me m)
     JList.fromIterable (believe_me entries)
 
   export
-  toList : Map k v -> IO (List (k, v))
+  toList : HasIO io => Map k v -> io (List (k, v))
   toList m = do
     entries <- toEntries m
     traverse toTuple entries
@@ -269,7 +267,7 @@ namespace Map
   prim_keys : JMap -> PrimIO JListNative
 
   export
-  keys : Map key value -> IO (List key)
+  keys : HasIO io => Map key value -> io (List key)
   keys m = do
     jkeys <- primIO (prim_keys $ believe_me m)
     JList.fromIterable (believe_me jkeys)
@@ -278,7 +276,7 @@ namespace Map
   prim_values : JMap -> PrimIO JListNative
 
   export
-  values : Map key value -> IO (List value)
+  values : HasIO io => Map key value -> io (List value)
   values m = do
     jvalues <- primIO (prim_values $ believe_me m)
     JList.fromIterable (believe_me jvalues)
@@ -287,7 +285,7 @@ namespace Map
   prim_getValue2 : JMap -> PrimIO JMap
 
   export
-  getValue2 : Map k (Entry v1 v2) -> IO (Map k v2)
+  getValue2 : HasIO io => Map k (Entry v1 v2) -> io (Map k v2)
   getValue2 m = believe_me <$> primIO (prim_getValue2 (believe_me m))
 
 namespace EnumInt
@@ -346,7 +344,7 @@ namespace AsmGlobalState
     prim_newAsmGlobalState : String -> PrimIO AsmGlobalState
 
     public export
-    newAsmGlobalState : String -> IO AsmGlobalState
+    newAsmGlobalState : HasIO io => String -> io AsmGlobalState
     newAsmGlobalState programName = primIO $ prim_newAsmGlobalState programName
 
     public export
@@ -356,7 +354,7 @@ namespace AsmGlobalState
     prim_getAssembler : AsmGlobalState -> String -> PrimIO Assembler
 
     public export
-    getAssembler : AsmGlobalState -> String -> IO Assembler
+    getAssembler : HasIO io => AsmGlobalState -> String -> io Assembler
     getAssembler state name = primIO $ prim_getAssembler state name
 
     public export
@@ -365,7 +363,7 @@ namespace AsmGlobalState
     prim_getProgramName : AsmGlobalState -> PrimIO String
 
     public export
-    getProgramName : AsmGlobalState -> IO String
+    getProgramName : HasIO io => AsmGlobalState -> io String
     getProgramName = primIO . prim_getProgramName
 
     public export
@@ -374,7 +372,7 @@ namespace AsmGlobalState
     prim_addConstructor : AsmGlobalState -> String -> PrimIO ()
 
     public export
-    addConstructor : AsmGlobalState -> String -> IO ()
+    addConstructor : HasIO io => AsmGlobalState -> String -> io ()
     addConstructor state name = primIO $ prim_addConstructor state name
 
     public export
@@ -383,7 +381,7 @@ namespace AsmGlobalState
     prim_hasConstructor : AsmGlobalState -> String -> PrimIO Bool
 
     public export
-    hasConstructor : AsmGlobalState -> String -> IO Bool
+    hasConstructor : HasIO io => AsmGlobalState -> String -> io Bool
     hasConstructor state name = primIO $ prim_hasConstructor state name
 
     public export
@@ -392,7 +390,7 @@ namespace AsmGlobalState
     prim_getFunction : AsmGlobalState -> String -> PrimIO Object
 
     public export
-    getFunction : AsmGlobalState -> String -> IO (Maybe Function)
+    getFunction : HasIO io => AsmGlobalState -> String -> io (Maybe Function)
     getFunction state name = (believe_me . nullableToMaybe) <$> (primIO $ prim_getFunction state name)
 
     public export
@@ -401,15 +399,15 @@ namespace AsmGlobalState
     prim_jaddFunction : AsmGlobalState -> String -> Object -> PrimIO ()
 
     public export
-    jaddFunction : AsmGlobalState -> String -> Function -> IO ()
+    jaddFunction : HasIO io => AsmGlobalState -> String -> Function -> io ()
     jaddFunction state name function = primIO $ prim_jaddFunction state name (believe_me function)
 
     public export
-    findFunction : AsmGlobalState -> Jname -> IO (Maybe Function)
+    findFunction : HasIO io => AsmGlobalState -> Jname -> io (Maybe Function)
     findFunction globalState name = getFunction globalState (getSimpleName name)
 
     public export
-    addFunction : AsmGlobalState -> Jname -> Function -> IO ()
+    addFunction : HasIO io => AsmGlobalState -> Jname -> Function -> io ()
     addFunction globalState name function = jaddFunction globalState (getSimpleName name) function
 
     public export
@@ -418,11 +416,11 @@ namespace AsmGlobalState
     prim_jisUntypedFunction : AsmGlobalState -> String -> PrimIO Bool
 
     public export
-    jisUntypedFunction : AsmGlobalState -> String -> IO Bool
+    jisUntypedFunction : HasIO io => AsmGlobalState -> String -> io Bool
     jisUntypedFunction state name = primIO $ prim_jisUntypedFunction state name
 
     public export
-    isUntypedFunction : AsmGlobalState -> Jname -> IO Bool
+    isUntypedFunction : HasIO io => AsmGlobalState -> Jname -> io Bool
     isUntypedFunction globalState name = jisUntypedFunction globalState (getSimpleName name)
 
     public export
@@ -431,11 +429,11 @@ namespace AsmGlobalState
     prim_jaddUntypedFunction : AsmGlobalState -> String -> PrimIO ()
 
     public export
-    jaddUntypedFunction : AsmGlobalState -> String -> IO ()
+    jaddUntypedFunction : HasIO io => AsmGlobalState -> String -> io ()
     jaddUntypedFunction state name = primIO $ prim_jaddUntypedFunction state name
 
     public export
-    addUntypedFunction : AsmGlobalState -> Jname -> IO ()
+    addUntypedFunction : HasIO io => AsmGlobalState -> Jname -> io ()
     addUntypedFunction globalState name = jaddUntypedFunction globalState (getSimpleName name)
 
     public export
@@ -444,7 +442,7 @@ namespace AsmGlobalState
     prim_classCodeEnd : AsmGlobalState -> String -> String -> String -> PrimIO ()
 
     public export
-    classCodeEnd : AsmGlobalState -> String -> String -> String -> IO ()
+    classCodeEnd : HasIO io => AsmGlobalState -> String -> String -> String -> io ()
     classCodeEnd state outputDirectory outputFile mainClass =
         primIO $ prim_classCodeEnd state outputDirectory outputFile mainClass
 
@@ -758,7 +756,7 @@ public export
 newAssembler : PrimIO Assembler
 
 public export
-newAsmState : AsmGlobalState -> Assembler -> IO AsmState
+newAsmState : HasIO io => AsmGlobalState -> Assembler -> io AsmState
 newAsmState globalState assembler = do
     let defaultName = Jqualified "" ""
     scopes <- JList.new {a=Scope}
@@ -891,7 +889,7 @@ resetScope = updateState $
         currentScopeIndex = 0
     }
 
-fillNull : Int -> JList a -> IO ()
+fillNull : HasIO io => Int -> JList a -> io ()
 fillNull index list = do
     size <- JList.size list
     nulls <- JList.nCopies (index - size) nullValue
@@ -1017,7 +1015,7 @@ namespace JAsmState
     prim_updateVariableIndices : JMap -> JMap -> PrimIO ()
 
     export
-    updateVariableIndices : Map String Int -> Map String Int -> IO ()
+    updateVariableIndices : HasIO io => Map String Int -> Map String Int -> io ()
     updateVariableIndices resultIndicesByName indicesByName =
         primIO $ prim_updateVariableIndices (believe_me resultIndicesByName) (believe_me indicesByName)
 
@@ -1025,7 +1023,7 @@ namespace JAsmState
     prim_getVariableNames : JMap -> PrimIO JListNative
 
     export
-    getVariableNames : Map String Int -> IO (List String)
+    getVariableNames : HasIO io => Map String Int -> io (List String)
     getVariableNames indicesByName = do
         jlist <- primIO $ prim_getVariableNames (believe_me indicesByName)
         JList.fromIterable (believe_me jlist)
@@ -1296,7 +1294,7 @@ prim_newJHandle : Int -> String -> String -> String -> Bool -> PrimIO JHandle
         "io/github/mmhelloworld/idris2/jvmassembler/JBsmArg$JBsmArgHandle"
 prim_newJBsmArgHandle : JHandle -> PrimIO JBsmArgHandle
 
-newJBsmArgHandle : JHandle -> IO JBsmArgHandle
+newJBsmArgHandle : HasIO io => JHandle -> io JBsmArgHandle
 newJBsmArgHandle = primIO . prim_newJBsmArgHandle
 
 %foreign
@@ -1305,7 +1303,7 @@ newJBsmArgHandle = primIO . prim_newJBsmArgHandle
         "io/github/mmhelloworld/idris2/jvmassembler/JBsmArg$JBsmArgGetType"
 prim_newJBsmArgGetType : String -> PrimIO JBsmArgGetType
 
-newJBsmArgGetType : String -> IO JBsmArgGetType
+newJBsmArgGetType : HasIO io => String -> io JBsmArgGetType
 newJBsmArgGetType = primIO . prim_newJBsmArgGetType
 
 %foreign
@@ -1370,39 +1368,39 @@ prim_newJAnnotationProperty : String -> JAnnotationValue -> PrimIO JAnnotationPr
 prim_newJAnnotation : String -> JListNative -> PrimIO JAnnotation
 
 export
-toJHandle : Handle -> IO JHandle
+toJHandle : HasIO io => Handle -> io JHandle
 toJHandle (MkHandle tag hcname hmname hdesc hIsIntf) = do
     let tagNum = handleTagOpcode tag
     primIO $ prim_newJHandle tagNum hcname hmname hdesc hIsIntf
 
 export
-toJbsmArg : BsmArg -> IO JBsmArg
+toJbsmArg : HasIO io => BsmArg -> io JBsmArg
 toJbsmArg (BsmArgGetType desc) = believe_me <$> newJBsmArgGetType desc
 toJbsmArg (BsmArgHandle handle) = do
     jhandle <- toJHandle handle
     believe_me <$> newJBsmArgHandle jhandle
 
 mutual
-    toJAnnotationValue : Asm.AnnotationValue -> IO JAnnotationValue
-    toJAnnotationValue (AnnString s) = believe_me $ primIO $ prim_newJAnnString s
-    toJAnnotationValue (AnnEnum enum s) = believe_me $ primIO $ prim_newJAnnEnum enum s
-    toJAnnotationValue (AnnInt n) = believe_me $ primIO $ prim_newJAnnInt n
-    toJAnnotationValue (AnnBoolean n) = believe_me $ primIO $ prim_newJAnnBoolean n
-    toJAnnotationValue (AnnChar n) = believe_me $ primIO $ prim_newJAnnChar n
-    toJAnnotationValue (AnnDouble n) = believe_me $ primIO $ prim_newJAnnDouble n
-    toJAnnotationValue (AnnClass n) = believe_me $ primIO $ prim_newJAnnClass n
+    toJAnnotationValue : HasIO io => Asm.AnnotationValue -> io JAnnotationValue
+    toJAnnotationValue (AnnString s) = believe_me <$> primIO (prim_newJAnnString s)
+    toJAnnotationValue (AnnEnum enum s) = believe_me <$> primIO (prim_newJAnnEnum enum s)
+    toJAnnotationValue (AnnInt n) = believe_me <$> primIO (prim_newJAnnInt n)
+    toJAnnotationValue (AnnBoolean n) = believe_me <$> primIO (prim_newJAnnBoolean n)
+    toJAnnotationValue (AnnChar n) = believe_me <$> primIO (prim_newJAnnChar n)
+    toJAnnotationValue (AnnDouble n) = believe_me <$> primIO (prim_newJAnnDouble n)
+    toJAnnotationValue (AnnClass n) = believe_me <$> primIO (prim_newJAnnClass n)
     toJAnnotationValue (AnnAnnotation n) = do
         jAnn <- toJAnnotation n
-        believe_me $ primIO $ prim_newJAnnAnnotation jAnn
+        believe_me <$> primIO (prim_newJAnnAnnotation jAnn)
     toJAnnotationValue (AnnArray values) =
-        believe_me $ primIO $ prim_newJAnnArray (believe_me values)
+        believe_me <$> primIO (prim_newJAnnArray (believe_me values))
 
-    toJAnnotationProperty : Asm.AnnotationProperty -> IO JAnnotationProperty
+    toJAnnotationProperty : HasIO io => Asm.AnnotationProperty -> io JAnnotationProperty
     toJAnnotationProperty (name, annValue) = do
       jAnnotationValue <- toJAnnotationValue annValue
       primIO $ prim_newJAnnotationProperty name jAnnotationValue
 
-    toJAnnotation : Asm.Annotation -> IO JAnnotation
+    toJAnnotation : HasIO io => Asm.Annotation -> io JAnnotation
     toJAnnotation (MkAnnotation name props) = primIO $ prim_newJAnnotation name (believe_me props)
 
 export
@@ -1431,8 +1429,10 @@ getMethodDescriptor (MkInferredFunctionType retTy argTypes) =
     in "(" ++ (the String $ concat argDescs) ++ ")" ++ retTyDesc
 
 export
-assemble : AsmState -> IO a -> IO (a, AsmState)
-assemble state m = pure (!m, state)
+assemble : HasIO io => AsmState -> IO a -> io (a, AsmState)
+assemble state m = do
+    res <- primIO $ toPrim m
+    pure (res, state)
 
 %foreign
     jvm' "io/github/mmhelloworld/idris2/jvmassembler/IdrisName" "getIdrisFunctionName"
@@ -1522,7 +1522,7 @@ namespace LocalDateTime
     prim_toString : LocalDateTime -> PrimIO String
 
     export
-    currentTimeString : IO String
+    currentTimeString : HasIO io => io String
     currentTimeString = do
         now <- primIO prim_now
         primIO $ prim_toString now
@@ -1531,7 +1531,7 @@ namespace LocalDateTime
 prim_getCurrentThreadName : PrimIO String
 
 export
-getCurrentThreadName : IO String
+getCurrentThreadName : HasIO io => io String
 getCurrentThreadName = primIO prim_getCurrentThreadName
 
 export
@@ -1547,7 +1547,7 @@ debug msg =
         else Pure ()
 
 export
-runAsm : AsmState -> Asm a -> IO (a, AsmState)
+runAsm : HasIO io => AsmState -> Asm a -> io (a, AsmState)
 runAsm state Aaload = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.aaload" [assembler state]
 
 runAsm state Aastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.aastore" [assembler state]

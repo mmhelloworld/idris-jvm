@@ -14,6 +14,7 @@ import io.github.mmhelloworld.idris2.jvmassembler.AnnotationValue.AnnLong;
 import io.github.mmhelloworld.idris2.jvmassembler.AnnotationValue.AnnShort;
 import io.github.mmhelloworld.idris2.jvmassembler.AnnotationValue.AnnString;
 import io.github.mmhelloworld.idris2.jvmassembler.JBsmArg.JBsmArgGetType;
+import io.github.mmhelloworld.idris2.runtime.Conversion;
 import io.github.mmhelloworld.idris2.runtime.IdrisSystem;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -36,7 +37,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.AbstractMap.SimpleEntry;
@@ -203,7 +203,6 @@ public final class Assembler {
     private String className;
     private String methodName;
     private int localVarCount;
-    private boolean shouldDescribeFrame;
 
     public Assembler() {
         this.cws = new HashMap<>();
@@ -473,6 +472,12 @@ public final class Assembler {
             sig,
             exceptionsArr);
         handleCreateMethod(mv, annotations, paramAnnotations);
+    }
+
+    public void createIdrisConstructorClass(String className, Object isStringConstructor,
+                                            int constructorParameterCount) {
+        createIdrisConstructorClass(className, Conversion.intToBoolean((int) isStringConstructor),
+            constructorParameterCount);
     }
 
     public void createIdrisConstructorClass(String className, boolean isStringConstructor,
@@ -887,6 +892,10 @@ public final class Assembler {
         mv.visitTypeInsn(INSTANCEOF, className);
     }
 
+    public void invokeMethod(int invocType, String className, String methodName, String desc, Object isInterface) {
+        invokeMethod(invocType, className, methodName, desc, Conversion.intToBoolean((int) isInterface));
+    }
+
     public void invokeMethod(int invocType, String className, String methodName, String desc, boolean isInterface) {
         mv.visitMethodInsn(
             invocType,
@@ -1129,20 +1138,12 @@ public final class Assembler {
         mv.visitInsn(SASTORE);
     }
 
-    public boolean shouldDescribeFrame() {
-        return shouldDescribeFrame;
-    }
-
     public void sourceInfo(String sourceFileName) {
         cw.visitSource(sourceFileName, null);
     }
 
     public void updateLocalVarCount(int localVarCount) {
         this.localVarCount = localVarCount;
-    }
-
-    public void updateShouldDescribeFrame(boolean shouldDescribeFrame) {
-        this.shouldDescribeFrame = shouldDescribeFrame;
     }
 
     public void lineNumber(int lineNumber, String label) {
@@ -1158,16 +1159,6 @@ public final class Assembler {
         requireNonNull(end, format("Line number end label '%s' for variable %s at index %d must not be null",
             lineNumberEndLabel, name, index));
         mv.visitLocalVariable(name, typeDescriptor, signature, start, end, index);
-    }
-
-    public static void copyRuntimeClasses(String outputDirectoryName) {
-        String runtimePath = "/io/github/mmhelloworld/idris2/runtime";
-        Path outputDirectory = Paths.get(outputDirectoryName, runtimePath);
-        try {
-            copyFromJar(runtimePath, outputDirectory);
-        } catch (URISyntaxException | IOException e) {
-            e.printStackTrace();
-        }
     }
 
     public static void copyFromJar(String source, Path target) throws URISyntaxException, IOException {

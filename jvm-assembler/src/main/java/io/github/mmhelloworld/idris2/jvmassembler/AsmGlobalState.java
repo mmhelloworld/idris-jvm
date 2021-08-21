@@ -13,7 +13,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static io.github.mmhelloworld.idris2.jvmassembler.Assembler.copyRuntimeClasses;
 import static io.github.mmhelloworld.idris2.jvmassembler.Assembler.createJar;
 import static java.util.Collections.synchronizedSet;
 import static java.util.stream.Collectors.toMap;
@@ -75,7 +74,6 @@ public final class AsmGlobalState {
                 .forEach(classNameAndClassWriter ->
                     writeClass(classNameAndClassWriter.getKey(), classNameAndClassWriter.getValue(),
                         outputDirectory));
-            copyRuntimeClasses(outputDirectory);
             createJar(outputDirectory, outputFile, mainClass.replace('/', '.'));
         }
     }

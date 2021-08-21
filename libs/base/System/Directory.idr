@@ -15,6 +15,7 @@ directoriesClass = "io/github/mmhelloworld/idris2/runtime/Directories"
 
 %foreign support "idris2_fileErrno"
          "node:support:fileErrno,support_system_directory"
+         jvm runtimeClass "getErrorNumber"
 prim__fileErrno : PrimIO Int
 
 returnError : HasIO io => io (Either FileError a)

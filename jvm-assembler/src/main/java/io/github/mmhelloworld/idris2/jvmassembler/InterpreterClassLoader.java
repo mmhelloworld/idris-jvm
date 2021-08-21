@@ -12,22 +12,30 @@ import static java.lang.Thread.currentThread;
 public class InterpreterClassLoader extends URLClassLoader {
     private final Map<String, byte[]> classes;
 
-    public InterpreterClassLoader() {
-        this(new HashMap<>());
-    }
-
     public InterpreterClassLoader(Map<String, byte[]> classes) {
         this(currentThread().getContextClassLoader(), classes);
-    }
-
-    public InterpreterClassLoader(ClassLoader parent) {
-        this(parent, new HashMap<>());
     }
 
     public InterpreterClassLoader(ClassLoader parent,
                                   Map<String, byte[]> classes) {
         super(new URL[0], parent);
         this.classes = new HashMap<>(classes);
+    }
+
+    @Override
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        Class<?> loadedClass = findLoadedClass(name);
+        if (loadedClass == null) {
+            try {
+                loadedClass = findClass(name);
+            } catch (ClassNotFoundException e) {
+                loadedClass = super.loadClass(name, resolve);
+            }
+        }
+        if (resolve) {
+            resolveClass(loadedClass);
+        }
+        return loadedClass;
     }
 
     @Override
@@ -41,7 +49,7 @@ public class InterpreterClassLoader extends URLClassLoader {
         if (bytecode != null) {
             return defineClass(className, bytecode, 0, bytecode.length);
         } else {
-            return super.findClass(className);
+            throw new ClassNotFoundException(className);
         }
     }
 
@@ -66,9 +74,5 @@ public class InterpreterClassLoader extends URLClassLoader {
             }
         }
         return null;
-    }
-
-    public Map<String, byte[]> classes() {
-        return new HashMap<>(classes);
     }
 }

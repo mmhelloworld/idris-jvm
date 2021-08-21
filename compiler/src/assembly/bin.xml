@@ -7,7 +7,7 @@
     </formats>
     <fileSets>
         <fileSet>
-            <directory>${project.build.directory}/idris2</directory>
+            <directory>${project.parent.basedir}/build/exec</directory>
             <outputDirectory>/</outputDirectory>
         </fileSet>
     </fileSets>

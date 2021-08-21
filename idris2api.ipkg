@@ -36,7 +36,6 @@ modules =
     Compiler.Jvm.Optimizer,
     Compiler.Jvm.InferredType,
     Compiler.Jvm.Jname,
-    Compiler.Jvm.Jvar,
     Compiler.Jvm.MockAsm,
     Compiler.Jvm.Variable,
     Compiler.Jvm.ShowUtil,

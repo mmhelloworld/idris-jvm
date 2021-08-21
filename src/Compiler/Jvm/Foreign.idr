@@ -11,6 +11,7 @@ import Core.TT
 import Data.Bool.Extra
 import Data.SortedMap
 import Data.List
+import Data.List1
 import Data.Vect
 import Data.Strings
 
@@ -115,7 +116,8 @@ getForeignCallbackDeclarationType fc _ = throwExplicitFunctionDescriptorRequired
  -}
 export
 parseForeignType : FC -> String -> ForeignImplementationType -> Asm ForeignType
-parseForeignType fc descriptor implementationType = case toList $ Strings.split (== '#') descriptor of
+parseForeignType fc descriptor implementationType = case List1.toList $ Strings.split (== '#') descriptor of
+    [] => Throw fc $ "Invalid descriptor: " ++ descriptor
     (interfaceName :: interfaceMethodName :: signatureParts) =>
         case implementationType of
             AtomicForeignImplementationType _ => Throw fc ("Cannot pass non function argument as a JVM function")
@@ -136,12 +138,14 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: className :: _) argumen
             Pure (className, fn, returnType, argumentDeclarationTypes)
         (fn, signature) => do
             let descriptorsWithIdrisTypes =
-                List.zip (toList $ Strings.split (== ' ') (strTail . fst $ break (== ')') signature))
+                List.zip
+                    (List1.toList $ Strings.split (== ' ') (assert_total $ strTail . fst $ break (== ')') signature))
                     (argumentTypes ++ [AtomicForeignImplementationType returnType])
             (argumentTypesReversed, returnType) <- go [] descriptorsWithIdrisTypes
             Pure (className, fn, returnType, List.reverse argumentTypesReversed)
   where
     go : List ForeignType -> List (String, ForeignImplementationType) -> Asm (List ForeignType, InferredType)
+    go acc [] = Pure (acc, IUnknown)
     go acc ((returnTypeDesc, _) :: []) = Pure (acc, parse returnTypeDesc)
     go acc ((argument, ty) :: rest) = do
         foreignType <- parseForeignType fc argument ty
@@ -162,10 +166,9 @@ getArgumentIndices 0 _ = Map.newTreeMap {key=String} {value=Int}
 getArgumentIndices argIndex args = Map.fromList $ List.zip args [0 .. argIndex - 1]
 
 getPrimMethodName : String -> String
+getPrimMethodName "" = "prim__jvmStatic"
 getPrimMethodName name =
-    if prim__strHead name == '.'
-        then "prim__jvmInstance"
-        else "prim__jvmStatic"
+    assert_total $ if prim__strHead name == '.' then "prim__jvmInstance" else "prim__jvmStatic"
 
 export
 inferForeign : String -> Name -> FC -> List String -> List CFType -> CFType -> Asm ()

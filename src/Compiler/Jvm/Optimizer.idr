@@ -671,6 +671,7 @@ mutual
         pure inferredObjectType
     inferExtPrim _ returnType SysOS [] = pure inferredStringType
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
+    inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
     inferExtPrim fc _ prim args = Throw fc $ "Unsupported external function " ++ show prim ++ "(" ++
         (show $ showNamedCExp 0 <$> args) ++ ")"
 
@@ -783,6 +784,7 @@ mutual
         let argsWithTypes = List.zip args (replicate (length args) IUnknown)
         traverse_ inferParameter argsWithTypes
         pure IUnknown
+    inferExprApp _ _ = Throw emptyFC "Not a function application"
 
     inferExprCon : InferredType -> String -> Name -> List NamedCExp -> Asm InferredType
     inferExprCon exprTy fileName name args = do

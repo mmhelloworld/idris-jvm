@@ -87,6 +87,13 @@ public final class IdrisBuffer {
         ((IdrisBuffer) buffer).writeToFile(file, location, length);
     }
 
+    public static int readFromFile(ReadableByteChannel file,
+                                   IdrisBuffer buffer,
+                                   int location,
+                                   int length) throws IOException {
+        return buffer.readFromFile(file, location, length);
+    }
+
     public static int readFromFile(Object buffer,
                                    ReadableByteChannel file,
                                    int location,
@@ -108,6 +115,11 @@ public final class IdrisBuffer {
 
     public static int getErrorCode(Object buffer) {
         return buffer != null ? 0 : -1;
+    }
+
+    public static int writeToFile(WritableByteChannel file, IdrisBuffer buffer, int location, int length)
+        throws IOException {
+        return buffer.writeToFile(file, location, length);
     }
 
     public static void writeToFile(Object buffer, WritableByteChannel file, int location, int length)
@@ -260,8 +272,9 @@ public final class IdrisBuffer {
         }
     }
 
-    public void writeToFile(WritableByteChannel file, int location, int length) throws IOException {
+    public int writeToFile(WritableByteChannel file, int location, int length) throws IOException {
         int size = size();
+        int written = 0;
         if (location >= 0 && location < size) {
             if (location + length > size) {
                 length = size - location;
@@ -269,12 +282,14 @@ public final class IdrisBuffer {
             int end = location + length;
             byte[] data = new byte[1024];
             buffer.position(location);
+
             for (int index = location; index < end; index += 1024) {
                 int limit = Math.min(end - index, 1024);
                 buffer.get(data, 0, limit);
-                file.write(ByteBuffer.wrap(data, 0, limit));
+                written += file.write(ByteBuffer.wrap(data, 0, limit));
             }
         }
+        return written;
     }
 
     public static int writeToFile(String fileName, Object buffer, int length) {

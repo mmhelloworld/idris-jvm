@@ -34,8 +34,7 @@ SocketError = Int
 
 ||| SocketDescriptor: Native C Socket Descriptor
 public export
-SocketDescriptor : Type
-SocketDescriptor = Int
+data SocketDescriptor : Type where [external]
 
 public export
 Port : Type

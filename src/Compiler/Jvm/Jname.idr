@@ -51,8 +51,8 @@ jvmName (MN n i) = Jsimple $ cleanupIdentifier n ++ "$" ++ show i
 jvmName (PV n d) = Jsimple $ "$patvar" ++ getSimpleName (jvmName n)
 jvmName (DN str n) = Jsimple $ cleanupIdentifier str ++ getSimpleName (jvmName n)
 jvmName (Nested (i, x) n) = Jsimple $ "$nested" ++ show i ++ "$" ++ show x ++ "$" ++ getSimpleName (jvmName n)
-jvmName (CaseBlock x y) = Jsimple $ "$case" ++ show x ++ "$" ++ show y
-jvmName (WithBlock x y) = Jsimple $ "$with" ++ show x ++ "$" ++ show y
+jvmName (CaseBlock x y) = Jsimple $ "$case" ++ cleanupIdentifier (show x) ++ "$" ++ show y
+jvmName (WithBlock x y) = Jsimple $ "$with" ++ cleanupIdentifier (show x) ++ "$" ++ show y
 jvmName (Resolved i) = Jsimple $ "$resolved" ++ show i
 
 export

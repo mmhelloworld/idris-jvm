@@ -11,9 +11,10 @@
     <name>Idris 2 JVM</name>
 
     <modules>
-        <module>compiler</module>
         <module>jvm-assembler</module>
         <module>runtime</module>
+        <module>compiler</module>
+        <module>tests</module>
     </modules>
 
     <properties>

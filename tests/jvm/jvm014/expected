@@ -1,0 +1,4 @@
+1/1: Building Echo (Echo.idr)
+Main> Received: hello world!
+Received: echo: hello world!
+Main> Bye for now!

@@ -12,11 +12,12 @@ import static java.util.concurrent.ForkJoinPool.commonPool;
 import static java.util.stream.Collectors.toList;
 
 public final class Runtime {
+    public static final long START_TIME = System.nanoTime();
     static final ChannelIo stdin = new ChannelIo(null, Channels.newChannel(System.in));
     static final ChannelIo stdout = new ChannelIo(null, Channels.newChannel(System.out));
     static final ChannelIo stderr = new ChannelIo(null, Channels.newChannel(System.err));
     private static final ThreadLocal<Integer> ERROR_NUMBER = ThreadLocal.withInitial(() -> 0);
-    public static final long START_TIME = System.nanoTime();
+    private static final int EAGAIN = 11;
     private static IdrisList programArgs;
 
     private Runtime() {
@@ -59,6 +60,13 @@ public final class Runtime {
 
     static void setErrorNumber(int errorNumber) {
         ERROR_NUMBER.set(errorNumber);
+    }
+
+    public static int getEagain() {
+        return EAGAIN;
+    }
+
+    public static void free(Object object) {
     }
 
     public static IntThunk createThunk(int value) {

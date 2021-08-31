@@ -7,6 +7,10 @@
     </formats>
     <fileSets>
         <fileSet>
+            <directory>${user.home}/.idris2/idris2-0.3.0</directory>
+            <outputDirectory>lib/idris2-0.3.0</outputDirectory>
+        </fileSet>
+        <fileSet>
             <directory>${project.build.directory}/assembly</directory>
             <outputDirectory>/</outputDirectory>
         </fileSet>

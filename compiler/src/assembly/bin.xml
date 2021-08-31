@@ -7,7 +7,11 @@
     </formats>
     <fileSets>
         <fileSet>
-            <directory>${project.parent.basedir}/build/exec</directory>
+            <directory>${user.home}/.idris2/idris2-0.3.0</directory>
+            <outputDirectory>lib/idris2-0.3.0</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.build.directory}/assembly</directory>
             <outputDirectory>/</outputDirectory>
         </fileSet>
     </fileSets>

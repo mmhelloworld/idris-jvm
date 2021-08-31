@@ -1,89 +1,50 @@
 # Idris 2
 
-[![Documentation Status](https://readthedocs.org/projects/idris2/badge/?version=latest)](https://idris2.readthedocs.io/en/latest/?badge=latest)
-[![Build Status](https://github.com/idris-lang/Idris2/actions/workflows/ci-idris2-and-libs.yml/badge.svg?branch=main)](https://github.com/idris-lang/Idris2/actions/workflows/ci-idris2-and-libs.yml?query=branch%3Amain)
-
 [Idris 2](https://idris-lang.org/) is a purely functional programming language
-with first class types.
+with first class types. This repository provides Idris 2 compiler targeting JVM bytecode so that Idris 2 compiler and Idris 2 programs can run on the JVM.
 
-For installation instructions, see [INSTALL.md](INSTALL.md).
+## Install
 
-The [wiki](https://github.com/idris-lang/Idris2/wiki) lists a number of useful
-resources, in particular
+* Download the latest Idris 2 JVM release from here https://github.com/mmhelloworld/idris-jvm/releases/tag/v0.3.0-SNAPSHOT-20210831.
+* Extract the archive and add `idris2` launcher script directory `<EXTRACTED_DIRECTORY_ROOT>/bin` to PATH.
+* Create an environment variable `IDRIS_JVM_HOME` pointing to the extracted directory.
 
-+ [What's changed since Idris 1](https://idris2.readthedocs.io/en/latest/updates/updates.html)
-+ [Resources for learning Idris](https://github.com/idris-lang/Idris2/wiki/Resources),
-  including [official talks](https://github.com/idris-lang/Idris2/wiki/Resources#official-talks)
-  that showcase its capabilities
-+ [Editor support](https://github.com/idris-lang/Idris2/wiki/Editor-Support)
+## Example
 
-## Installation and Packages
+#### helloworld.idr
 
-The most common way to install the latest version of Idris and its packages is through [`pack`][PACK] Idris' package manager. Working with the latest version of Idris is as easy as `pack switch latest`.
-Follow instructions [on the `pack` repository][PACK] for how to install `pack`.
+    ```idris
+    module Main
 
-To use `pack` and idris, you will need an `.ipkg` file (Idris-package file) that describes your idris project.
-You can generate one with `idris2 --init`. Once setup with an `.ipkg` file, `pack` gives you access to the [_pack collection_][PACK_COL] of packages, a set of compatible libraries in the ecosystem.
-If your dependency is in the `depends` field of your `.ipkg` file, `pack` will automatically pull the dependency from you matching pack collection.
-The wiki hosts a list of [curated packages by the community](https://github.com/idris-lang/Idris2/wiki/Third-party-Libraries).
+    data Tree a = Leaf
+                | Node (Tree a) a (Tree a)
 
-Finally, `pack` also makes it easy to download, and keep updated version of, [idris2-lsp](https://github.com/idris-community/idris2-lsp), and other idris-related programs.
+    inorder : Tree a -> List a
+    inorder Leaf = []
+    inorder (Node left a right) = inorder left ++ [a] ++ inorder right
 
-## Resources to Learn Idris 2
+    tree : Tree String
+    tree = Node
+            (Node
+              (Node Leaf "3" Leaf)
+              "+"
+              (Node Leaf "7" Leaf))
+            "/"
+            (Node Leaf "2" Leaf)
 
-### Books
-- [_Type-Driven Development with Idris_](https://www.manning.com/books/type-driven-development-with-idris), Edwin brady. This was written for Idris1. If you are using Idris2, you should make [these changes](https://idris2.readthedocs.io/en/latest/typedd/typedd.html)
-### Tutorials
-- [_Functional Programming in Idris 2_](https://github.com/idris-community/idris2-tutorial)
-- [_A Tutorial on Elaborator Reflection in Idris 2_](https://github.com/stefan-hoeck/idris2-elab-util/blob/main/src/Doc/Index.md), accompanied by [library utilities](https://github.com/stefan-hoeck/idris2-elab-util)
-- [_An attempt at explaining Decidable Equality_](https://teh6.eu/en/post/intro-to-decidable-equality/)
-### Official talks
-- [_What's New in Idris 2_](https://www.youtube.com/watch?v=nbClauMCeds), Edwin Brady, Berlin Functional Programming Group
-- [Scheme Workshop Keynote](https://www.youtube.com/watch?v=h9YAOaBWuIk), Edwin Brady, ACM SIGPLAN
-- [_Idris 2 - Type-driven Development of Idris_](https://www.youtube.com/watch?v=DRq2NgeFcO0), Edwin Brady, Curry On! 2019
-- [_Idris 2: Type-driven development of Idris_](https://www.youtube.com/watch?v=mOtKD7ml0NU), Edwin Brady, Code Mesh LDN 18
-- [_The implementation of Idris 2_](https://www.youtube.com/playlist?list=PLmYPUe8PWHKqBRJfwBr4qga7WIs7r60Ql), Edwin Brady, SPLV'20 and [accompanying code](https://github.com/edwinb/SPLV20)
-### Community talks
-- [_Domain Driven Design Made Dependently Typed_](https://www.youtube.com/watch?v=QBj-4K-l-sg), Andor Penzes, Aug '21
-- [_Extending RefC - Making Idris 2 backends while avoiding most of the work_](https://www.youtube.com/watch?v=i-_U6US3bBk), Robert Wright, Sept '21
-- [_Introduction to JVM backend for Idris 2_](https://www.youtube.com/watch?v=kSIUsBQS3EE), Marimuthu Madasamy, Oct '21
-- [_Idris Data Science Infrastructure - Because sometimes we have to consider the real world_](https://www.youtube.com/watch?v=4jDlYJf9_34),  Robert Wright, Dec '21
+    main : IO ()
+    main = printLn $ inorder tree
+    ```
 
-## Documentation
+#### Compile
 
-- [Official documentation](https://idris2.readthedocs.io/en/latest/index.html)
-- Standard library online API reference
-  - [official, latest](https://idris-lang.github.io/Idris2/)
-  - [community](https://idris2docs.sinyax.net/)
-- [Community API reference for selected packages](https://idris2-quickdocs.surge.sh)
+`idris helloworld.idr -o main`
 
-## Docker images
+#### Run
 
-- Multi-arch, multi-distro Docker [images](https://github.com/joshuanianji/idris-2-docker) for Idris 2
-- Official [images](https://github.com/stefan-hoeck/idris2-pack/pkgs/container/idris2-pack) for the Pack package manager
-- [alexhumphreys/idris2-dockerfile](https://github.com/alexhumphreys/idris2-dockerfile)
-- [mattpolzin/idris-docker](https://github.com/mattpolzin/idris-docker)
-- [dgellow/idris-docker-image](https://github.com/dgellow/idris-docker-image)
+* On Linux/Mac OS:  `java -cp "build/exec/main_app/main.jar:$IDRIS_JVM_HOME/lib/*" main.Main`
+* On Windows:  `java -cp "build\exec\main_app\main.jar;%IDRIS_JVM_HOME%\lib\*" main.Main`
 
-## Things still missing
-
-+ Cumulativity (currently `Type : Type`. Bear that in mind when you think
-  you've proved something)
-+ `rewrite` doesn't yet work on dependent types
-
-## Contributions wanted
-
-If you want to learn more about Idris, contributing to the compiler could be
-one way to do so. The [contribution guidelines](CONTRIBUTING.md) outline
-the process. Having read that, choose a [good first issue][1] or have a look at
-the [contributions wanted][2] for something more involved. This [map][3] should
-help you find your way around the source code. See [the wiki page][4]
-for more details.
-
-### Build with Maven
-+ To install with tests: `mvn install`
-+ To install without tests `mvn install -DskipTests`
-+ To recompile libraries without building compiler `mvn install -DskipIdrisCompile`
-+ To recompile without building libraries `mvn install -DskipIdrisInstallLibrary`
-+ To run all JVM tests `mvn -f tests/pom.xml integration-test`
-+ To run a single test `mvn -f tests/pom.xml integration-test -Didris.tests="only=idris2/basic001"`
+## License
+This repository extends [idris-lang/Idris2](https://github.com/idris-lang/Idris2) repository with JVM backend. Files from [idris-lang/Idris2](https://github.com/idris-lang/Idris2) are covered by that repository's [license](https://github.com/idris-lang/Idris2/blob/main/LICENSE).
+All other files from this repository are covered by BSD-3-Clause License. See [LICENSE](IDRIS2-LICENSE).

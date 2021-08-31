@@ -2,6 +2,6 @@
 Main> File Exists
 False
 True
-Just "/home/marimuthu/workspace/Idris2-boot/tests/jvm/jvm017/testdir"
+Just "/home/marimuthu/workspace/Idris2/tests/jvm/jvm017/testdir"
 Main> Bye for now!
 hello

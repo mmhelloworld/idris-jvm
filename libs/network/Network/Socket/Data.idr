@@ -47,8 +47,13 @@ export
 BACKLOG : Int
 BACKLOG = 20
 
+idrisSocketClass : String
+idrisSocketClass = "io/github/mmhelloworld/idris2/runtime/IdrisSocket"
+
 -- Repeat to avoid a dependency cycle
-%foreign "C:idrnet_geteagain,libidris2_support"
+%foreign
+    "C:idrnet_geteagain,libidris2_support"
+    "jvm:getEagain(int),io/github/mmhelloworld/idris2/runtime/IdrisSocket"
 prim__idrnet_geteagain : PrimIO Int
 
 export
@@ -117,16 +122,24 @@ Show SocketFamily where
 -- This is a bit of a hack to get the OS-dependent magic constants out of C and
 -- into Idris without having to faff around on the preprocessor on the Idris
 -- side.
-%foreign "C:idrnet_af_unspec,libidris2_support"
+%foreign
+    "C:idrnet_af_unspec,libidris2_support"
+    "jvm:getAfUnspec(int),io/github/mmhelloworld/idris2/runtime/IdrisSocket"
 prim__idrnet_af_unspec : PrimIO Int
 
-%foreign "C:idrnet_af_unix,libidris2_support"
+%foreign
+    "C:idrnet_af_unix,libidris2_support"
+    "jvm:getAfUnix(int),io/github/mmhelloworld/idris2/runtime/IdrisSocket"
 prim__idrnet_af_unix : PrimIO Int
 
-%foreign "C:idrnet_af_inet,libidris2_support"
+%foreign
+    "C:idrnet_af_inet,libidris2_support"
+    "jvm:getAfInet(int),io/github/mmhelloworld/idris2/runtime/IdrisSocket"
 prim__idrnet_af_inet : PrimIO Int
 
-%foreign "C:idrnet_af_inet6,libidris2_support"
+%foreign
+    "C:idrnet_af_inet6,libidris2_support"
+    "jvm:getAfInet6(int),io/github/mmhelloworld/idris2/runtime/IdrisSocket"
 prim__idrnet_af_inet6 : PrimIO Int
 
 export

@@ -1,5 +1,7 @@
 package io.github.mmhelloworld.idris2.runtime;
 
+import java.math.BigInteger;
+
 public final class Clocks {
     private Clocks() {
     }
@@ -32,11 +34,11 @@ public final class Clocks {
         return clock == null ? 0 : 1;
     }
 
-    public static long getSeconds(Object clock) {
-        return ((IdrisClock) clock).getSeconds();
+    public static BigInteger getSeconds(Object clock) {
+        return BigInteger.valueOf(((IdrisClock) clock).getSeconds());
     }
 
-    public static long getNanoSeconds(Object clock) {
-        return ((IdrisClock) clock).getNanoSeconds();
+    public static BigInteger getNanoSeconds(Object clock) {
+        return BigInteger.valueOf(((IdrisClock) clock).getNanoSeconds());
     }
 }

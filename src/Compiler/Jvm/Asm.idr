@@ -1410,14 +1410,14 @@ toJFieldInitialValue (StringField s) = believe_me s
 toJFieldInitialValue (DoubleField d) = believe_me $ doubleValueOf d
 
 export
-loadBigInteger : String -> Asm ()
-loadBigInteger "0" = Field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-loadBigInteger "1" = Field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-loadBigInteger "10" = Field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
-loadBigInteger i = do
+loadBigInteger : Integer -> Asm ()
+loadBigInteger 0 = Field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
+loadBigInteger 1 = Field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
+loadBigInteger 10 = Field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
+loadBigInteger value = do
     New "java/math/BigInteger"
     Dup
-    Ldc $ StringConst i
+    Ldc $ StringConst $ show value
     InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export

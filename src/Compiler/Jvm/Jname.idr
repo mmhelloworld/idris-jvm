@@ -26,6 +26,10 @@ cleanupIdentifier : String -> String
 cleanupIdentifier value = unsafePerformIO $
     jvmStatic String "io/github/mmhelloworld/idris2/jvmassembler/IdrisName.transformCharacters" [value]
 
+replace : Char -> Char -> String -> String
+replace sourceChar replacementChar string = unsafePerformIO $
+    jvmInstance String "java/lang/String.replace" [string, sourceChar, replacementChar]
+
 export
 getSimpleName : Jname -> String
 getSimpleName (Jsimple n) = n
@@ -45,11 +49,12 @@ implementation Show Jname where
 
 export
 jvmName : Name -> Jname
-jvmName (NS ns n) = Jqualified (showSep "/" (cleanupIdentifier <$> List.reverse ns)) $ getSimpleName (jvmName n)
+jvmName (NS ns n) = Jqualified (replace '$' '/' (cleanupIdentifier $ showNSWithSep "$" ns)) $ getSimpleName (jvmName n)
 jvmName (UN n) = Jsimple $ cleanupIdentifier n
 jvmName (MN n i) = Jsimple $ cleanupIdentifier n ++ "$" ++ show i
 jvmName (PV n d) = Jsimple $ "$patvar" ++ getSimpleName (jvmName n)
 jvmName (DN str n) = Jsimple $ cleanupIdentifier str ++ getSimpleName (jvmName n)
+jvmName (RF str) = Jsimple $ cleanupIdentifier str
 jvmName (Nested (i, x) n) = Jsimple $ "$nested" ++ show i ++ "$" ++ show x ++ "$" ++ getSimpleName (jvmName n)
 jvmName (CaseBlock x y) = Jsimple $ "$case" ++ cleanupIdentifier (show x) ++ "$" ++ show y
 jvmName (WithBlock x y) = Jsimple $ "$with" ++ cleanupIdentifier (show x) ++ "$" ++ show y
@@ -67,4 +72,4 @@ jvmIdrisMainClass rootPackage = rootPackage ++ "/Main"
 
 export
 idrisMainFunctionName : String -> Name
-idrisMainFunctionName rootPackage = NS ["Main", rootPackage] (UN jvmIdrisMainMethodName)
+idrisMainFunctionName rootPackage = NS (mkNamespace $ rootPackage ++ ".Main") (UN jvmIdrisMainMethodName)

@@ -149,7 +149,7 @@ osClockValid clk = fromPrim (prim__osClockValid clk)
 
 %foreign
     "scheme:blodwen-clock-second"
-    "jvm:getSeconds(io/github/mmhelloworld/idris2/runtime/IdrisClock long),io/github/mmhelloworld/idris2/runtime/Clocks"
+    "jvm:.getSeconds(io/github/mmhelloworld/idris2/runtime/IdrisClock long),io/github/mmhelloworld/idris2/runtime/IdrisClock"
 prim__osClockSecond : OSClock -> PrimIO Bits64
 
 osClockSecond : OSClock -> IO Bits64
@@ -157,7 +157,7 @@ osClockSecond clk = fromPrim (prim__osClockSecond clk)
 
 %foreign
     "scheme:blodwen-clock-nanosecond"
-    "jvm:getNanoSeconds(io/github/mmhelloworld/idris2/runtime/IdrisClock long),io/github/mmhelloworld/idris2/runtime/Clocks"
+    "jvm:.getNanoSeconds(io/github/mmhelloworld/idris2/runtime/IdrisClock long),io/github/mmhelloworld/idris2/runtime/IdrisClock"
 prim__osClockNanosecond : OSClock -> PrimIO Bits64
 
 osClockNanosecond : OSClock -> IO Bits64

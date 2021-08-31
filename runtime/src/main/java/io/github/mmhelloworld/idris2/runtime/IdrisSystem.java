@@ -114,13 +114,23 @@ public final class IdrisSystem {
         String shellSwitch = isWindows ? "/c" : "-c";
         Pattern pattern = Pattern.compile(format("\\s*%s\\s+%s\\s+(.*)", shell, shellSwitch));
         Matcher matcher = pattern.matcher(command);
-        if (matcher.find()) {
+        if (matcher.matches()) {
             return new String[] {shell, shellSwitch, matcher.group(1)};
+        }
+        pattern = Pattern.compile(format("([^\\s]+)\\s+(.*)\\s+%s\\s+%s\\s+(.*)", shell, shellSwitch));
+        matcher = pattern.matcher(command);
+        if (matcher.matches()) {
+            return new String[] {matcher.group(1), matcher.group(2), shell, shellSwitch, matcher.group(3)};
         }
         pattern = Pattern.compile(format("\\s*%s\\s+(.*)", shell));
         matcher = pattern.matcher(command);
-        if (matcher.find()) {
+        if (matcher.matches()) {
             return new String[]{shell, shellSwitch, matcher.group(1)};
+        }
+        pattern = Pattern.compile(format("([^\\s]+)\\s+(.*)\\s+%s\\s+(.*)", shell));
+        matcher = pattern.matcher(command);
+        if (matcher.matches()) {
+            return new String[]{matcher.group(1), matcher.group(2), shell, shellSwitch, matcher.group(3)};
         }
         return new String[] {shell, shellSwitch, command};
     }

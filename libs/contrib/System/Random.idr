@@ -37,7 +37,7 @@ Random Int where
 
 %foreign
     "scheme:blodwen-random"
-    %foreign "jvm:nextDouble(double),io/github/mmhelloworld/idris2/runtime/Random"
+    "jvm:nextDouble(double),io/github/mmhelloworld/idris2/runtime/Random"
 prim__randomDouble : PrimIO Double
 
 randomDouble : IO Double

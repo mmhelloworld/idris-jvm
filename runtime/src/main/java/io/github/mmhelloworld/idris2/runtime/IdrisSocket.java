@@ -5,7 +5,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.BindException;
-import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -33,12 +32,12 @@ public final class IdrisSocket implements Closeable {
 
     private static final int STREAM_SOCKET_TYPE = 1;
     private static final int DATAGRAM_SOCKET_TYPE = 2;
-    private static final int INET_PROTOCOL_FAMILY = 2;
-    private static final int INET6_PROTOCOL_FAMILY = 10;
-    private static final int AF_INET6 = 10;
+    private static final int AF_UNSPEC = 0;
+    private static final int AF_UNIX = 1;
     private static final int AF_INET = 2;
+    private static final int AF_INET6 = 10;
+    private static final int EAGAIN = 112;
     private AbstractSelectableChannel channel;
-    private Exception exception;
     private int socketType;
 
     public IdrisSocket(int socketType, AbstractSelectableChannel channel) throws IOException {
@@ -49,14 +48,14 @@ public final class IdrisSocket implements Closeable {
     }
 
     public static IdrisSocket create(int socketFamily, int socketType, int protocolNumber) {
+        Runtime.setErrorNumber(0);
         try {
             switch (socketType) { // socket type represents idris socket type values from Network.Socket.Data.idr
                 case STREAM_SOCKET_TYPE:
                     return new IdrisSocket(socketType, null);
                 case DATAGRAM_SOCKET_TYPE:
                     DatagramChannel channel = DatagramChannel.open(
-                        socketFamily == INET6_PROTOCOL_FAMILY ? StandardProtocolFamily.INET6 :
-                            StandardProtocolFamily.INET);
+                        socketFamily == AF_INET6 ? StandardProtocolFamily.INET6 : StandardProtocolFamily.INET);
                     channel.configureBlocking(false);
                     return new IdrisSocket(socketType, channel);
                 default:
@@ -74,13 +73,55 @@ public final class IdrisSocket implements Closeable {
     }
 
     public static int getSocketAddressFamily(Object socketAddressPointer) {
-        InetAddress socketAddress = (InetAddress) ((Object[]) socketAddressPointer)[0];
-        return socketAddress instanceof Inet6Address ? INET6_PROTOCOL_FAMILY : INET_PROTOCOL_FAMILY;
+        SocketAddress socketAddress = (SocketAddress) ((Object[]) socketAddressPointer)[0];
+        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
+        return inetSocketAddress.getAddress() instanceof Inet6Address ? AF_INET6 : AF_INET;
     }
 
-    public static String getSocketAddressHostName(Object socketAddressPointer) {
-        InetAddress socketAddress = (InetAddress) ((Object[]) socketAddressPointer)[0];
-        return socketAddress.getHostAddress();
+    public static String getIpv4Address(Object socketAddressPointer) {
+        SocketAddress socketAddress = (SocketAddress) ((Object[]) socketAddressPointer)[0];
+        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
+        return inetSocketAddress.getAddress().getHostAddress();
+    }
+
+    public static int getIpv4Port(SocketAddress socketAddress) throws UnknownHostException {
+        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
+        InetAddress inetAddress = inetSocketAddress.getAddress();
+        if (inetAddress instanceof Inet6Address) {
+            return inetSocketAddress.getPort();
+        } else {
+            throw new UnknownHostException("Not an IpV4 address: " + socketAddress);
+        }
+    }
+
+    public static int peek(Object buf, int offset) {
+        byte[] bufArray = (byte[]) buf;
+        return Byte.toUnsignedInt(bufArray[offset]);
+    }
+
+    public static void poke(Object buf, int offset, char value) {
+        byte[] bufArray = (byte[]) buf;
+        bufArray[offset] = (byte) value;
+    }
+
+    public static int getAfUnspec() {
+        return AF_UNSPEC;
+    }
+
+    public static int getAfUnix() {
+        return AF_UNIX;
+    }
+
+    public static int getAfInet() {
+        return AF_INET;
+    }
+
+    public static int getAfInet6() {
+        return AF_INET6;
+    }
+
+    public static int getEagain() {
+        return EAGAIN;
     }
 
     public int bind(int socketFamily, int socketType, String hostName, int port) {
@@ -127,7 +168,7 @@ public final class IdrisSocket implements Closeable {
     public IdrisSocket accept(Object address) {
         return withExceptionHandling(() -> {
             SocketChannel client = Server.acceptClient();
-            ((Object[]) address)[0] = client.socket().getInetAddress();
+            ((Object[]) address)[0] = client.socket().getRemoteSocketAddress();
             return new IdrisSocket(socketType, client);
         });
     }
@@ -145,7 +186,7 @@ public final class IdrisSocket implements Closeable {
         return 0;
     }
 
-    public int getSocketPort() {
+    public int getPort() {
         switch (socketType) {
             case STREAM_SOCKET_TYPE:
                 return ((ServerSocketChannel) channel).socket().getLocalPort();
@@ -162,8 +203,7 @@ public final class IdrisSocket implements Closeable {
     }
 
     public int send(String data) {
-        return withExceptionHandling(() ->
-            ((SocketChannel) channel).write(UTF_8.encode(data)), -1);
+        return withExceptionHandling(() -> ((SocketChannel) channel).write(UTF_8.encode(data)), -1);
     }
 
     public int send(Object buffer, int length) {
@@ -181,7 +221,6 @@ public final class IdrisSocket implements Closeable {
             return connectionResult != -1 ? server.send(data) : connectionResult;
         }, -1);
     }
-
 
     public int sendToBuffer(Object bufferArray, int length, String host, int port, int family) {
         return withExceptionHandling(() -> {
@@ -210,13 +249,12 @@ public final class IdrisSocket implements Closeable {
                 buffer.rewind();
                 read = channel.read(buffer);
             } while (read > 0 && builder.length() < length);
-            return new ResultPayload<>(0, builder.toString(), channel.getRemoteAddress());
+            return new ResultPayload<>(builder.length(), builder.toString(), channel.getRemoteAddress());
         });
         return resultPayload != null ? resultPayload : new ResultPayload<>(Runtime.getErrorNumber(), null, null);
     }
 
     public ResultPayload<byte[]> receive(Object arrayObject, int length) {
-        byte[] array = (byte[]) arrayObject;
         ResultPayload<byte[]> resultPayload = withExceptionHandling(() -> {
             SocketChannel channel = (SocketChannel) this.channel;
             ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
@@ -225,6 +263,7 @@ public final class IdrisSocket implements Closeable {
             } while (channel.read(buffer) <= 0);
             int read;
             int size = 0;
+            byte[] array = (byte[]) arrayObject;
             do {
                 buffer.flip();
                 System.arraycopy(buffer.array(), 0, array, size, Math.min(buffer.limit(), array.length));
@@ -243,74 +282,12 @@ public final class IdrisSocket implements Closeable {
         return resultPayload.getPayload();
     }
 
-    public <T> int getResult(ResultPayload<T> resultPayload) {
-        return resultPayload.getResult();
-    }
-
-    public <T> SocketAddress getRemoteAddress(ResultPayload<T> resultPayload) {
-        return resultPayload.getRemoteAddress();
-    }
-
-    public static int getFamily(SocketAddress socketAddress) throws UnknownHostException {
-        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
-        InetAddress inetAddress = inetSocketAddress.getAddress();
-        if (inetAddress instanceof Inet6Address) {
-            return AF_INET6;
-        } else if (inetAddress instanceof Inet4Address) {
-            return AF_INET;
-        } else {
-            throw new UnknownHostException("Cannot determine family " + socketAddress);
-        }
-    }
-
-    public static String getIpv4Address(SocketAddress socketAddress) throws UnknownHostException {
-        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
-        InetAddress inetAddress = inetSocketAddress.getAddress();
-        if (inetAddress instanceof Inet6Address) {
-            return inetAddress.getHostAddress();
-        } else {
-            throw new UnknownHostException("Not an IpV4 address: " + socketAddress);
-        }
-    }
-
-    public static int getIpv4Port(SocketAddress socketAddress) throws UnknownHostException {
-        InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
-        InetAddress inetAddress = inetSocketAddress.getAddress();
-        if (inetAddress instanceof Inet6Address) {
-            return inetSocketAddress.getPort();
-        } else {
-            throw new UnknownHostException("Not an IpV4 address: " + socketAddress);
-        }
-    }
-
-    public static int getPort(SocketAddress socketAddress) {
-        return ((InetSocketAddress) socketAddress).getPort();
-    }
-
-    public static int peek(Object buf, int offset) {
-        byte[] bufArray = (byte[]) buf;
-        return Byte.toUnsignedInt(bufArray[offset]);
-    }
-
-    public static void poke(Object buf, int offset, char value) {
-        byte[] bufArray = (byte[]) buf;
-        bufArray[offset] = (byte) value;
-    }
-
     @Override
     public void close() {
         withExceptionHandling(() -> {
             channel.close();
             return null;
         });
-    }
-
-    public void handleException(Exception e) {
-        this.exception = e;
-        if (exception != null) {
-            exception.printStackTrace();
-        }
-        Runtime.setErrorNumber(getErrorNumber(e));
     }
 
     private void initialize(AbstractSelectableChannel channel) throws IOException {
@@ -326,7 +303,6 @@ public final class IdrisSocket implements Closeable {
     }
 
     private <T> T withExceptionHandling(SupplierE<T, ? extends Exception> action) {
-        exception = null;
         Runtime.setErrorNumber(0);
         try {
             return action.get();
@@ -341,7 +317,6 @@ public final class IdrisSocket implements Closeable {
     }
 
     private int withExceptionHandling(IntSupplierE<? extends Exception> action, int fallback) {
-        exception = null;
         Runtime.setErrorNumber(0);
         try {
             return action.get();
@@ -352,7 +327,6 @@ public final class IdrisSocket implements Closeable {
     }
 
     private boolean withExceptionHandling(BooleanSupplierE<? extends Exception> action, boolean fallback) {
-        exception = null;
         Runtime.setErrorNumber(0);
         try {
             return action.get();
@@ -363,7 +337,6 @@ public final class IdrisSocket implements Closeable {
     }
 
     private long withExceptionHandling(LongSupplierE<? extends Exception> action, long fallback) {
-        exception = null;
         Runtime.setErrorNumber(0);
         try {
             return action.get();
@@ -371,6 +344,11 @@ public final class IdrisSocket implements Closeable {
             handleException(exception);
             return fallback;
         }
+    }
+
+    private void handleException(Exception e) {
+        Runtime.setException(e);
+        Runtime.setErrorNumber(getErrorNumber(e));
     }
 
     static int getErrorNumber(Exception exception) {

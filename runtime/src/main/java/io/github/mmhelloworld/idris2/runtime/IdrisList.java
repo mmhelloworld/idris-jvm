@@ -1,7 +1,8 @@
 package io.github.mmhelloworld.idris2.runtime;
 
 import java.util.AbstractSequentialList;
-import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 
@@ -14,77 +15,81 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
     public abstract int getConstructorId();
 
     public static IdrisList fromIterable(Iterable<?> iterable) {
-        Iterator<?> iterator = iterable.iterator();
-        IdrisList list = Nil.INSTANCE;
-        while (iterator.hasNext()) {
-            list = new Cons(iterator.next(), list);
-        }
-
-        return reverse(list);
+        List<Object> items = new ArrayList<>();
+        iterable.forEach(items::add);
+        return fromArray(items.toArray());
     }
 
     public static IdrisList fromArray(boolean[] values) {
         IdrisList list = Nil.INSTANCE;
-        for (boolean value: values) {
-            list = new Cons(value, list);
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
         }
-        return reverse(list);
+        return list;
     }
 
     public static IdrisList fromArray(byte[] values) {
         IdrisList list = Nil.INSTANCE;
-        for (byte value: values) {
-            list = new Cons(value, list);
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
         }
-        return reverse(list);
+        return list;
     }
 
     public static IdrisList fromArray(char[] values) {
         IdrisList list = Nil.INSTANCE;
-        for (char value: values) {
-            list = new Cons(value, list);
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
         }
-        return reverse(list);
+        return list;
     }
 
     public static IdrisList fromArray(short[] values) {
         IdrisList list = Nil.INSTANCE;
-        for (short value: values) {
-            list = new Cons(value, list);
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
         }
-        return reverse(list);
+        return list;
     }
 
     public static IdrisList fromArray(int[] values) {
         IdrisList list = Nil.INSTANCE;
-        for (int value: values) {
-            list = new Cons(value, list);
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
         }
-        return reverse(list);
+        return list;
     }
 
     public static IdrisList fromArray(long[] values) {
         IdrisList list = Nil.INSTANCE;
-        for (long value: values) {
-            list = new Cons(value, list);
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
         }
-        return reverse(list);
+        return list;
     }
 
     public static IdrisList fromArray(float[] values) {
         IdrisList list = Nil.INSTANCE;
-        for (float value: values) {
-            list = new Cons(value, list);
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
         }
-        return reverse(list);
+        return list;
     }
 
     public static IdrisList fromArray(double[] values) {
         IdrisList list = Nil.INSTANCE;
-        for (double value: values) {
-            list = new Cons(value, list);
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
         }
-        return reverse(list);
+        return list;
+    }
+
+    public static IdrisList fromArray(Object[] values) {
+        IdrisList list = Nil.INSTANCE;
+        for (int index = values.length - 1; index >= 0; index--) {
+            list = new Cons(values[index], list);
+        }
+        return list;
     }
 
     public static IdrisList reverse(IdrisList list) {
@@ -96,12 +101,6 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
             current = cons.tail;
         }
         return result;
-    }
-
-    public static String fastPack(IdrisList idrisCharacterList) {
-        return idrisCharacterList.stream()
-            .reduce(new StringBuilder(), StringBuilder::append, StringBuilder::append)
-            .toString();
     }
 
     public static final class Nil extends IdrisList {

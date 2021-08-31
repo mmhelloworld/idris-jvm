@@ -50,13 +50,13 @@ prim__idrnet_connect : (sockfd : SocketDescriptor) -> (family, socket_type : Int
 
 %foreign
     "C:idrnet_sockaddr_family,libidris2_support"
-    jvm' idrisSocketClass "getFamily" "java/net/SocketAddress" "int"
+    jvm' idrisSocketClass "getSocketAddressFamily" "java/lang/Object" "int"
 export
 prim__idrnet_sockaddr_family : (sockaddr : AnyPtr) -> PrimIO Int
 
 %foreign
     "C:idrnet_sockaddr_ipv4,libidris2_support"
-    jvm' idrisSocketClass "getIpv4Address" "java/net/SocketAddress" "java/lang/String"
+    jvm' idrisSocketClass "getIpv4Address" "java/lang/Object" "java/lang/String"
 export
 prim__idrnet_sockaddr_ipv4 : (sockaddr : AnyPtr) -> PrimIO String
 
@@ -68,7 +68,7 @@ prim__idrnet_sockaddr_ipv4_port : (sockaddr : AnyPtr) -> PrimIO Int
 
 %foreign
     "C:idrnet_sockaddr_port,libidris2_support"
-    jvm' idrisSocketClass "getPort" "java/net/SocketAddress" "int"
+    jvm' idrisSocketClass ".getPort" "io/github/mmhelloworld/idris2/runtime/IdrisSocket" "int"
 export
 prim__idrnet_sockaddr_port : (sockfd : SocketDescriptor) -> PrimIO Int
 
@@ -146,14 +146,15 @@ prim__idrnet_recvfrom_buf : (sockfd : SocketDescriptor) -> (buf : AnyPtr) -> (le
 
 %foreign
     "C:idrnet_get_recv_res,libidris2_support"
-    jvm' idrisSocketClass "getResult" "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" "int"
+    jvm' "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" ".getResult"
+        "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" "int"
 export
 prim__idrnet_get_recv_res : (res_struct : AnyPtr) -> PrimIO Int
 
 %foreign
     "C:idrnet_get_recv_payload,libidris2_support"
-    jvm' idrisSocketClass "getPayload" "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload"
-        "java/lang/String"
+    jvm' "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" ".getPayload"
+        "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" "java/lang/Object"
 export
 prim__idrnet_get_recv_payload : (res_struct : AnyPtr) -> PrimIO String
 
@@ -165,21 +166,22 @@ prim__idrnet_free_recv_struct : (res_struct : AnyPtr) -> PrimIO ()
 
 %foreign
     "C:idrnet_get_recvfrom_res,libidris2_support"
-    jvm' idrisSocketClass "getResult" "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" "int"
+    jvm' "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" ".getResult"
+        "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" "int"
 export
 prim__idrnet_get_recvfrom_res : (res_struct : AnyPtr) -> PrimIO Int
 
 %foreign
     "C:idrnet_get_recvfrom_payload,libidris2_support"
-    jvm' idrisSocketClass "getPayload" "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload"
-        "java/lang/String"
+    jvm' "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" ".getPayload"
+        "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" "java/lang/Object"
 export
 prim__idrnet_get_recvfrom_payload : (res_struct : AnyPtr) -> PrimIO String
 
 %foreign
     "C:idrnet_get_recvfrom_sockaddr,libidris2_support"
-    jvm' idrisSocketClass "getRemoteAddress" "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload"
-        "java/net/SocketAddress"
+    jvm' "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" ".getRemoteAddress"
+        "io/github/mmhelloworld/idris2/runtime/IdrisSocket$ResultPayload" "java/net/SocketAddress"
 export
 prim__idrnet_get_recvfrom_sockaddr : (res_struct : AnyPtr) -> PrimIO AnyPtr
 

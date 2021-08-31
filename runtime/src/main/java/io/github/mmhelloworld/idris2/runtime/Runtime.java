@@ -19,6 +19,7 @@ public final class Runtime {
     private static final ThreadLocal<Integer> ERROR_NUMBER = ThreadLocal.withInitial(() -> 0);
     private static final int EAGAIN = 11;
     private static IdrisList programArgs;
+    private static Exception exception;
 
     private Runtime() {
     }
@@ -56,6 +57,14 @@ public final class Runtime {
 
     public static int getErrorNumber() {
         return ERROR_NUMBER.get();
+    }
+
+    public static Exception getException() {
+        return exception;
+    }
+
+    static void setException(Exception exception) {
+        Runtime.exception = exception;
     }
 
     static void setErrorNumber(int errorNumber) {

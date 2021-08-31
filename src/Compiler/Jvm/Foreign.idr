@@ -195,7 +195,7 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     scopes <- LiftIo $ JList.new {a=Scope}
     let function =
         MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName
-            (NmExtPrim fc (NS [] $ UN $ getPrimMethodName foreignFunctionName) [
+            (NmExtPrim fc (NS (mkNamespace "") $ UN $ getPrimMethodName foreignFunctionName) [
                 NmCon fc (UN $ createExtPrimTypeSpec jvmReturnType) Nothing [],
                 NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
                 getJvmExtPrimArguments $ List.zip argumentTypes $ SortedMap.toList argumentTypesByName,

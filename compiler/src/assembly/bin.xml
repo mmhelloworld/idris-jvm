@@ -7,7 +7,7 @@
     </formats>
     <fileSets>
         <fileSet>
-            <directory>${project.parent.basedir}/build/exec</directory>
+            <directory>${project.build.directory}/assembly</directory>
             <outputDirectory>/</outputDirectory>
         </fileSet>
     </fileSets>

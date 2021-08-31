@@ -485,7 +485,7 @@ pack (x :: xs) = strCons x (pack xs)
 %foreign
     "scheme:string-pack"
     "javascript:lambda:(xs)=>''.concat(...__prim_idris2js_array(xs))"
-    "jvm:fastPack(io/github/mmhelloworld/idris2/runtime/IdrisList java/lang/String),io/github/mmhelloworld/idris2/runtime/IdrisList"
+    "jvm:pack(io/github/mmhelloworld/idris2/runtime/IdrisList java/lang/String),io/github/mmhelloworld/idris2/runtime/Strings"
 export
 fastPack : List Char -> String
 

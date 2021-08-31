@@ -50,8 +50,9 @@ mutual
 thunkExpr : NamedCExp -> NamedCExp
 thunkExpr expr = NmLam (getFC expr) (UN "$jvm$thunk") expr
 
-isBoolTySpec : List String -> Name -> Bool
-isBoolTySpec ["Prelude"] (UN "Bool") = True
+isBoolTySpec : String -> Name -> Bool
+isBoolTySpec "Prelude" (UN "Bool") = True
+isBoolTySpec "Prelude.Basics" (UN "Bool") = True
 isBoolTySpec _ _ = False
 
 export
@@ -66,7 +67,7 @@ tySpec (NmCon fc (UN "void") _ []) = pure IVoid
 tySpec (NmCon fc (UN ty) _ []) = pure $ IRef ty
 tySpec (NmCon fc (NS namespaces n) _ []) = cond
     [(n == UN "Unit", pure IVoid),
-      (isBoolTySpec namespaces n, pure IBool)] (pure inferredObjectType)
+      (isBoolTySpec (show namespaces) n, pure IBool)] (pure inferredObjectType)
 tySpec ty = pure inferredObjectType
 
 export
@@ -309,9 +310,8 @@ mutual
 
 mutual
     trampolineExpression : NamedCExp -> NamedCExp
-    trampolineExpression expr@(NmApp fc (NmRef nameFc (UN ":__jvmTailRec__:")) args) =
-        -- Do not trampoline as tail recursion will be eliminated
-        Pure expr
+    -- Do not trampoline as tail recursion will be eliminated
+    trampolineExpression expr@(NmApp fc (NmRef nameFc (UN ":__jvmTailRec__:")) args) = expr
     trampolineExpression expr@(NmCon _ _ _ _) = thunkExpr expr
     trampolineExpression expr@(NmApp _ _ _) = thunkExpr expr
     trampolineExpression expr@(NmLet fc var value body) =
@@ -502,6 +502,12 @@ combineSwitchTypes defaultTy altTypes@(altTy :: rest) = maybe (go altTy rest) (f
   go prevTy [] = prevTy
   go prevTy (currTy :: rest) = if prevTy == currTy then go currTy rest else inferredObjectType
 
+createNewVariable : (variablePrefix: String) -> InferredType -> Asm ()
+createNewVariable variablePrefix ty = do
+    variable <- generateVariable variablePrefix
+    addVariableType variable ty
+    Pure ()
+
 mutual
     inferExpr : InferredType -> NamedCExp -> Asm InferredType
     inferExpr exprTy (NmDelay _ expr) = inferExprLam AppliedLambdaUnknown Nothing Nothing expr
@@ -531,11 +537,8 @@ mutual
         inferConstructorSwitchExpr sc
         let hasTypeCase = any isTypeCase alts
         when hasTypeCase $ do
-            constantExprVariable <- generateVariable "constructorCaseExpr"
-            addVariableType constantExprVariable inferredStringType
-            hashCodePositionVariable <- generateVariable "hashCodePosition"
-            addVariableType hashCodePositionVariable IInt
-            Pure ()
+            createNewVariable "constructorCaseExpr" inferredStringType
+            createNewVariable "hashCodePosition" IInt
         let sortedAlts = if hasTypeCase then alts else sortConCases alts
         altTypes <- traverse (inferExprConAlt exprTy) sortedAlts
         defaultTy <- traverse (inferExprWithNewScope exprTy) def
@@ -757,7 +760,17 @@ mutual
         let variableType = fromMaybe IUnknown optTy
         ty <- inferExpr variableType arg
         optName <- LiftIo $ Map.get {value=String} argumentNameByIndices index
-        maybe (Pure ()) (\name => do addVariableType name ty; Pure ()) optName
+        maybe (Pure ()) (doAddVariableType ty) optName
+      where
+        doAddVariableType : InferredType -> String -> Asm ()
+        doAddVariableType ty name = do
+            addVariableType name ty
+            case arg of
+                NmLocal _ loc => do
+                    let valueVariableName = jvmSimpleName loc
+                    valueVariableIndex <- retrieveVariableIndex valueVariableName
+                    when (index /= valueVariableIndex) $ createNewVariable "tailRecArg" ty
+                _ => createNewVariable "tailRecArg" ty
 
     inferExprApp : InferredType -> NamedCExp -> Asm InferredType
     inferExprApp exprTy app@(NmApp _ (NmRef _ (UN ":__jvmTailRec__:")) args) =
@@ -964,19 +977,53 @@ mutual
     inferExprOp DoubleFloor [x] = inferUnaryOp IDouble x
     inferExprOp DoubleCeiling [x] = inferUnaryOp IDouble x
 
+    inferExprOp (Cast Bits8Type Bits16Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits8Type Bits32Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits8Type IntType) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits8Type Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast Bits8Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast Bits8Type StringType) [x] = inferExprCast IInt inferredStringType x
+
+    inferExprOp (Cast Bits16Type Bits8Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits16Type Bits32Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits16Type IntType) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits16Type Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast Bits16Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast Bits16Type StringType) [x] = inferExprCast IInt inferredStringType x
+
+    inferExprOp (Cast Bits32Type Bits8Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits32Type Bits16Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits32Type IntType) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits32Type Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast Bits32Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast Bits32Type StringType) [x] = inferExprCast IInt inferredStringType x
+
+    inferExprOp (Cast Bits64Type Bits8Type) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type Bits16Type) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type Bits32Type) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type IntType) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type IntegerType) [x] = inferExprCast ILong inferredBigIntegerType x
     inferExprOp (Cast Bits64Type StringType) [x] = inferExprCast ILong inferredStringType x
+
+    inferExprOp (Cast IntType Bits8Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast IntType Bits16Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast IntType Bits32Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast IntType Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast IntType IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast IntType StringType) [x] = inferExprCast IInt inferredStringType x
+
+    inferExprOp (Cast IntegerType Bits8Type)  [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType Bits16Type) [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType Bits32Type) [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType IntType) [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType Bits64Type) [x] = inferExprCast inferredBigIntegerType ILong x
     inferExprOp (Cast IntegerType StringType) [x] = inferExprCast inferredBigIntegerType inferredStringType x
+
     inferExprOp (Cast DoubleType StringType) [x] = inferExprCast IDouble inferredStringType x
     inferExprOp (Cast CharType StringType) [x] = inferExprCast IChar inferredStringType x
-    inferExprOp (Cast IntType IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast DoubleType IntegerType) [x] = inferExprCast IDouble inferredBigIntegerType x
     inferExprOp (Cast CharType IntegerType) [x] = inferExprCast IChar inferredBigIntegerType x
     inferExprOp (Cast StringType IntegerType) [x] = inferExprCast inferredStringType inferredBigIntegerType x
-    inferExprOp (Cast IntegerType IntType) [x] = inferExprCast inferredBigIntegerType IInt x
     inferExprOp (Cast DoubleType IntType) [x] = inferExprCast IDouble IInt x
     inferExprOp (Cast StringType IntType) [x] = inferExprCast inferredStringType IInt x
     inferExprOp (Cast CharType IntType) [x] = inferExprCast IChar IInt x
@@ -987,7 +1034,7 @@ mutual
 
     inferExprOp BelieveMe [_, _, x] = Pure IUnknown
     inferExprOp Crash [_, msg] = Pure IUnknown
-    inferExprOp op _ = Throw emptyFC ("Unsupported expr " ++ show op)
+    inferExprOp op _ = Throw emptyFC ("Unsupported primitive function " ++ show op)
 
 optimize : NamedCExp -> Asm NamedCExp
 optimize = markTailRecursion . liftToLambda

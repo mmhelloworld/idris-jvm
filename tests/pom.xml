@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.github.mmhelloworld.idris2</groupId>
         <artifactId>idris2</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>0.3.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -15,6 +15,8 @@
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
+        <skipIdrisCompile>false</skipIdrisCompile>
+        <skipIdrisClean>false</skipIdrisClean>
         <idris.tests/>
         <skipTests>false</skipTests>
     </properties>
@@ -87,6 +89,28 @@
                 </executions>
             </plugin>
             <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-jar</id>
+                        <phase>none</phase>
+                        <configuration>
+                            <finalName>unwanted</finalName>
+                            <classifier>unwanted</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-install-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-install</id>
+                        <phase>none</phase>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
                 <executions>
                     <execution>
@@ -97,14 +121,12 @@
                         </goals>
                         <configuration>
                             <target>
-                                <copy file="build/exec/runtests_app/runtests.jar"
-                                      tofile="${project.build.directory}/tests-${project.version}.jar"
-                                      failonerror="false"
-                                      quiet="true"/>
                                 <move file="build/exec/runtests_app/runtests.jar"
                                       tofile="./build/exec/runtests_app/tests-${project.version}.jar"
                                       failonerror="false"
                                       quiet="true"/>
+                                <copy file="build/exec/runtests_app/tests-${project.version}.jar"
+                                      tofile="./target/tests-${project.version}.jar"/>
                             </target>
                         </configuration>
                     </execution>
@@ -131,25 +153,6 @@
                                     <id>runtests</id>
                                 </program>
                             </programs>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>create-zip</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                        <configuration>
-                            <appendAssemblyId>false</appendAssemblyId>
-                            <descriptors>
-                                <descriptor>src/assembly/bin.xml</descriptor>
-                            </descriptors>
-                            <finalName>idris2</finalName>
                         </configuration>
                     </execution>
                 </executions>

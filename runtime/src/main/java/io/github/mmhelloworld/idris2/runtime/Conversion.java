@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 
 import static java.lang.String.format;
+import static java.math.RoundingMode.FLOOR;
 
 public final class Conversion {
     private Conversion() {
@@ -110,7 +111,9 @@ public final class Conversion {
 
     public static BigInteger toInteger(String value) {
         try {
-            return new BigDecimal(value).toBigInteger();
+            return new BigDecimal(value)
+                .setScale(0, FLOOR)
+                .toBigIntegerExact();
         } catch (NumberFormatException exception) {
             // Conforming to scheme backend
             return BigInteger.ZERO;
@@ -119,7 +122,9 @@ public final class Conversion {
 
     public static int toInt(String value) {
         try {
-            return new BigDecimal(value).toBigInteger().intValueExact();
+            return new BigDecimal(value)
+                .setScale(0, FLOOR)
+                .intValueExact();
         } catch (NumberFormatException exception) {
             // Conforming to scheme backend
             return 0;
@@ -135,11 +140,49 @@ public final class Conversion {
         }
     }
 
+    static BigInteger toUnsignedBigInteger(long value) {
+        if (value >= 0L)
+            return BigInteger.valueOf(value);
+        else {
+            int upper = (int) (value >>> 32);
+            int lower = (int) value;
+
+            // return (upper << 32) + lower
+            return (BigInteger.valueOf(Integer.toUnsignedLong(upper))).shiftLeft(32).
+                add(BigInteger.valueOf(Integer.toUnsignedLong(lower)));
+        }
+    }
+
     public static int boolToInt(boolean value) {
         return value ? 0 : 1;
     }
 
     public static boolean intToBoolean(int value) {
         return value == 0;
+    }
+
+    public static int toUnsignedInt(int value, int numberOfBits) {
+        return value % (1 << numberOfBits);
+    }
+
+    public static int toUnsignedInt(long value, int numberOfBits) {
+        return (int) toUnsignedLong(value, numberOfBits);
+    }
+
+    public static long toUnsignedLong(int value, int numberOfBits) {
+        long max = numberOfBits < Long.SIZE ? 1L << numberOfBits : (long) Math.pow(2, numberOfBits);
+        return value % max;
+    }
+
+    public static long toUnsignedLong(long value, int numberOfBits) {
+        return value % (1L << numberOfBits);
+    }
+
+    public static int toUnsignedInt(BigInteger value, int numberOfBits) {
+        return (int) toUnsignedLong(value, numberOfBits);
+    }
+
+    public static long toUnsignedLong(BigInteger value, int numberOfBits) {
+        return value.mod(BigInteger.ONE.shiftLeft(numberOfBits)).longValue();
     }
 }

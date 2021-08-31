@@ -10,8 +10,9 @@ on:
       - master
 
 env:
-  IDRIS2_PREVIOUS_VERSION: 0.2.2-SNAPSHOT
-  IDRIS2_PREVIOUS_VERSION_CLASSIFIER: 20210831
+  IDRIS2_PREVIOUS_VERSION: 0.2.2
+  IDRIS2_PREVIOUS_PACKAGE_VERSION: 0.2.2-SNAPSHOT
+  IDRIS2_PREVIOUS_PACKAGE_VERSION_CLASSIFIER: 20210831.1
   IDRIS2_TESTS_CG: jvm
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
 
@@ -28,8 +29,9 @@ jobs:
           distribution: 'adopt'
       - name: Download previous version
         run: |
-          wget https://github.com/mmhelloworld/Idris2/releases/download/v$IDRIS2_PREVIOUS_VERSION-$IDRIS2_PREVIOUS_VERSION_CLASSIFIER/idris2-$IDRIS2_PREVIOUS_VERSION.zip
-          unzip idris2-$IDRIS2_PREVIOUS_VERSION -d $HOME/bin
-          echo "::add-path::$HOME/bin/idris2-$IDRIS2_PREVIOUS_VERSION/bin"
+          wget https://github.com/mmhelloworld/Idris2/releases/download/v$IDRIS2_PREVIOUS_PACKAGE_VERSION-$IDRIS2_PREVIOUS_PACKAGE_VERSION_CLASSIFIER/idris2-$IDRIS2_PREVIOUS_PACKAGE_VERSION.zip
+          unzip idris2-$IDRIS2_PREVIOUS_PACKAGE_VERSION.zip -d $HOME/bin
+          cp -r $HOME/bin/idris2-$IDRIS2_PREVIOUS_PACKAGE_VERSION/lib/idris2-$IDRIS2_PREVIOUS_VERSION $HOME/.idris2/
+          echo "::add-path::$HOME/bin/idris2-$IDRIS2_PREVIOUS_PACKAGE_VERSION/bin"
       - name: Build
         run: mvn --batch-mode install -DskipTests

@@ -140,7 +140,7 @@
                 <executions>
                     <execution>
                         <id>create-zip</id>
-                        <phase>package</phase>
+                        <phase>install</phase>
                         <goals>
                             <goal>single</goal>
                         </goals>

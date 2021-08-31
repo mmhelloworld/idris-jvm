@@ -1,42 +1,50 @@
 # Idris 2
 
-[![Documentation Status](https://readthedocs.org/projects/idris2/badge/?version=latest)](https://idris2.readthedocs.io/en/latest/?badge=latest)
-[![Build Status](https://github.com/idris-lang/Idris2/actions/workflows/ci-idris2-and-libs.yml/badge.svg?branch=main)](https://github.com/idris-lang/Idris2/actions/workflows/ci-idris2-and-libs.yml?query=branch%3Amain)
-
 [Idris 2](https://idris-lang.org/) is a purely functional programming language
-with first class types.
+with first class types. This repository provides Idris 2 compiler targeting JVM bytecode so that Idris 2 compiler and Idris 2 programs can run on the JVM.
 
-For installation instructions, see [INSTALL.md](INSTALL.md).
+## Install
 
-The [wiki](https://github.com/idris-lang/Idris2/wiki) lists a number of useful
-resources, in particular
+* Download the latest Idris 2 JVM release from here https://github.com/mmhelloworld/idris-jvm/releases/tag/v0.3.0-SNAPSHOT-20210831.
+* Extract the archive and add `idris2` launcher script directory `<EXTRACTED_DIRECTORY_ROOT>/bin` to PATH.
+* Create an environment variable `IDRIS_JVM_HOME` pointing to the extracted directory.
 
-+ [What's changed since Idris 1](https://idris2.readthedocs.io/en/latest/updates/updates.html)
-+ [Resources for learning Idris](https://github.com/idris-lang/Idris2/wiki/Resources),
-  including [official talks](https://github.com/idris-lang/Idris2/wiki/Resources#official-talks)
-  that showcase its capabilities
-+ [Editor support](https://github.com/idris-lang/Idris2/wiki/Editor-Support)
+## Example
 
-## Things still missing
+#### helloworld.idr
 
-+ Cumulativity (currently `Type : Type`. Bear that in mind when you think
-  you've proved something)
-+ `rewrite` doesn't yet work on dependent types
+    ```idris
+    module Main
 
-## Contributions wanted
+    data Tree a = Leaf
+                | Node (Tree a) a (Tree a)
 
-If you want to learn more about Idris, contributing to the compiler could be
-one way to do so. The [contribution guidelines](CONTRIBUTING.md) outline
-the process. Having read that, choose a [good first issue][1] or have a look at
-the [contributions wanted][2] for something more involved. This [map][3] should
-help you find your way around the source code. See [the wiki page][4]
-for more details.
+    inorder : Tree a -> List a
+    inorder Leaf = []
+    inorder (Node left a right) = inorder left ++ [a] ++ inorder right
 
-### Build with Maven
-+ To install with tests: `mvn install`
-+ To install without tests `mvn install -DskipTests`
-+ To recompile libraries without building compiler `mvn install -DskipIdrisCompile`
-+ To recompile without building libraries `mvn install -DskipIdrisInstallLibrary`
-+ To run all JVM tests `mvn -f tests/pom.xml integration-test`
-+ To run a single test `mvn -f tests/pom.xml integration-test -Didris.tests="only=idris2/basic001"`
+    tree : Tree String
+    tree = Node
+            (Node
+              (Node Leaf "3" Leaf)
+              "+"
+              (Node Leaf "7" Leaf))
+            "/"
+            (Node Leaf "2" Leaf)
 
+    main : IO ()
+    main = printLn $ inorder tree
+    ```
+
+#### Compile
+
+`idris helloworld.idr -o main`
+
+#### Run
+
+* On Linux/Mac OS:  `java -cp "build/exec/main_app/main.jar:$IDRIS_JVM_HOME/lib/*" main.Main`
+* On Windows:  `java -cp "build\exec\main_app\main.jar;%IDRIS_JVM_HOME%\lib\*" main.Main`
+
+## License
+This repository extends [idris-lang/Idris2](https://github.com/idris-lang/Idris2) repository with JVM backend. Files from [idris-lang/Idris2](https://github.com/idris-lang/Idris2) are covered by that repository's [license](https://github.com/idris-lang/Idris2/blob/main/LICENSE).
+All other files from this repository are covered by BSD-3-Clause License. See [LICENSE](IDRIS2-LICENSE).

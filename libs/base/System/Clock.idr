@@ -98,6 +98,7 @@ isClockMandatory _      = Mandatory
 
 %foreign "scheme:blodwen-clock-time-monotonic"
          "RefC:clockTimeMonotonic"
+         "jvm:getMonotonicClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeMonotonic : PrimIO OSClock
 
 clockTimeMonotonic : IO OSClock
@@ -105,6 +106,7 @@ clockTimeMonotonic = fromPrim prim__clockTimeMonotonic
 
 %foreign "scheme:blodwen-clock-time-utc"
          "RefC:clockTimeUtc"
+         "jvm:getUtcClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeUtc : PrimIO OSClock
 
 clockTimeUtc : IO OSClock
@@ -112,6 +114,7 @@ clockTimeUtc = fromPrim prim__clockTimeUtc
 
 %foreign "scheme:blodwen-clock-time-process"
          "RefC:clockTimeProcess"
+         "jvm:getProcessClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeProcess : PrimIO OSClock
 
 clockTimeProcess : IO OSClock
@@ -119,6 +122,7 @@ clockTimeProcess = fromPrim prim__clockTimeProcess
 
 %foreign "scheme:blodwen-clock-time-thread"
          "RefC:clockTimeThread"
+         "jvm:getThreadClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeThread : PrimIO OSClock
 
 clockTimeThread : IO OSClock
@@ -126,6 +130,7 @@ clockTimeThread = fromPrim prim__clockTimeThread
 
 %foreign "scheme:blodwen-clock-time-gccpu"
          "RefC:clockTimeGcCpu"
+         "jvm:getGcCpuClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeGcCpu : PrimIO OSClock
 
 clockTimeGcCpu : IO OSClock
@@ -133,6 +138,7 @@ clockTimeGcCpu = fromPrim prim__clockTimeGcCpu
 
 %foreign "scheme:blodwen-clock-time-gcreal"
          "RefC:clockTimeGcReal"
+         "jvm:getGcRealClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeGcReal : PrimIO OSClock
 
 clockTimeGcReal : IO OSClock
@@ -149,6 +155,7 @@ fetchOSClock Duration  = clockTimeMonotonic
 
 %foreign "scheme:blodwen-is-time?"
          "RefC:clockValid"
+         "jvm:isValid(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock int),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__osClockValid : OSClock -> PrimIO Int
 
 ||| A test to determine the status of optional clocks.
@@ -157,6 +164,7 @@ osClockValid clk = fromPrim (prim__osClockValid clk)
 
 %foreign "scheme:blodwen-clock-second"
          "RefC:clockSecond"
+         "jvm:.getSeconds(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock long),io/github/mmhelloworld/idrisjvm/runtime/IdrisClock"
 prim__osClockSecond : OSClock -> PrimIO Bits64
 
 osClockSecond : OSClock -> IO Bits64
@@ -164,6 +172,7 @@ osClockSecond clk = fromPrim (prim__osClockSecond clk)
 
 %foreign "scheme:blodwen-clock-nanosecond"
          "RefC:clockNanosecond"
+         "jvm:.getNanoSeconds(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock long),io/github/mmhelloworld/idrisjvm/runtime/IdrisClock"
 prim__osClockNanosecond : OSClock -> PrimIO Bits64
 
 osClockNanosecond : OSClock -> IO Bits64

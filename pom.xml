@@ -4,17 +4,17 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.github.mmhelloworld.idris2</groupId>
-    <artifactId>idris2</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <groupId>io.github.mmhelloworld</groupId>
+    <artifactId>idris-jvm</artifactId>
+    <version>0.3.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Idris 2 JVM</name>
 
     <modules>
-        <module>jvm-assembler</module>
-        <module>runtime</module>
-        <module>compiler</module>
-        <module>tests</module>
+        <module>idris-jvm-assembler</module>
+        <module>idris-jvm-runtime</module>
+        <module>idris-jvm-compiler</module>
+        <module>idris-jvm-tests</module>
     </modules>
 
     <properties>

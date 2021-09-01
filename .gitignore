@@ -34,6 +34,15 @@ idris2docs_venv
 
 /custom.mk
 
+*.class
+*.jar
+*-pom.xml
+target
+output
+build
+classes/**
+*-classes/**
+
 # NixOS
 /result
 
@@ -49,6 +58,9 @@ idris2docs_venv
 .\#*
 # VS Code
 .vscode/*
+#Intellij
+.idea
+*.iml
 
 # macOS
 .DS_Store

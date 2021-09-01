@@ -193,7 +193,7 @@ isInterfaceInvocation _ = False
 
 assembleNil : (isTailCall: Bool) -> InferredType -> Asm ()
 assembleNil isTailCall returnType = do
-    Field GetStatic idrisNilClass "INSTANCE" "Lio/github/mmhelloworld/idris2/runtime/IdrisList$Nil;"
+    Field GetStatic idrisNilClass "INSTANCE" "Lio/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil;"
     asmCast idrisNilType returnType
     when isTailCall $ asmReturn returnType
 
@@ -425,7 +425,7 @@ mutual
         assembleExpr False inferredObjectType head
         assembleExpr False idrisListType tail
         InvokeMethod InvokeSpecial idrisConsClass "<init>"
-            "(Ljava/lang/Object;Lio/github/mmhelloworld/idris2/runtime/IdrisList;)V" False
+            "(Ljava/lang/Object;Lio/github/mmhelloworld/idrisjvm/runtime/IdrisList;)V" False
         asmCast idrisConsType returnType
         when isTailCall $ asmReturn returnType
 
@@ -1468,7 +1468,7 @@ getJvmClassMethodName programName name =
     let jname = jvmName name
     in getIdrisFunctionName programName (className jname) (methodName jname)
 
-%foreign jvm' "io/github/mmhelloworld/idris2/runtime/Runtime" "waitForFuturesToComplete" "java/util/List" "void"
+%foreign jvm' "io/github/mmhelloworld/idrisjvm/runtime/Runtime" "waitForFuturesToComplete" "java/util/List" "void"
 prim_waitForFuturesToComplete : List ThreadID -> PrimIO ()
 
 waitForFuturesToComplete : List ThreadID -> IO ()

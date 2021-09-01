@@ -75,6 +75,7 @@ toPrim (MkIO fn) = fn
 
 %foreign "C:idris2_isNull, libidris2_support, idris_support.h"
          "javascript:lambda:x=>x===undefined||x===null?1:0"
+         "jvm:isNull,io/github/mmhelloworld/idrisjvm/runtime/Objects"
 export
 prim__nullAnyPtr : AnyPtr -> Int
 

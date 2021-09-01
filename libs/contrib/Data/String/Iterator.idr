@@ -23,7 +23,7 @@ data StringIterator : String -> Type where [external]
 %foreign
   "scheme:blodwen-string-iterator-new"
   "javascript:stringIterator:new"
-  "jvm:newStringIterator(java/lang/String int),io/github/mmhelloworld/idris2/runtime/Strings"
+  "jvm:newStringIterator(java/lang/String int),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 private
 fromString : (str : String) -> StringIterator str
 
@@ -51,7 +51,7 @@ data UnconsResult : String -> Type where
 %foreign
   "scheme:blodwen-string-iterator-next"
   "javascript:stringIterator:next"
-  "jvm:nextStringIterator(java/lang/String int io/github/mmhelloworld/idris2/runtime/IdrisObject),io/github/mmhelloworld/idris2/runtime/Strings"
+  "jvm:nextStringIterator(java/lang/String int io/github/mmhelloworld/idrisjvm/runtime/IdrisObject),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 uncons : (str : String) -> (it : StringIterator str) -> UnconsResult str
 

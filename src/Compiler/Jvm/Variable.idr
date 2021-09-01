@@ -113,7 +113,7 @@ unboxFloat = InvokeMethod InvokeVirtual "java/lang/Float" "floatValue" "()F" Fal
 
 export
 conversionClass : String
-conversionClass = "io/github/mmhelloworld/idris2/runtime/Conversion"
+conversionClass = "io/github/mmhelloworld/idrisjvm/runtime/Conversion"
 
 boolObjToBool : Asm ()
 boolObjToBool = InvokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False

@@ -21,7 +21,7 @@ foldl1 f (x::xs) = foldl f x xs
 %foreign
   "scheme:string-unpack"
   "javascript:lambda:(str)=>__prim_js2idris_array(Array.from(str))"
-  "jvm:unpack(java/lang/String io/github/mmhelloworld/idris2/runtime/IdrisList),io/github/mmhelloworld/idris2/runtime/Strings"
+  "jvm:unpack(java/lang/String io/github/mmhelloworld/idrisjvm/runtime/IdrisList),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 fastUnpack : String -> List Char
 
@@ -33,7 +33,7 @@ fastUnpack : String -> List Char
 %foreign
   "scheme:string-concat"
   "javascript:lambda:(xs)=>''.concat(...__prim_idris2js_array(xs))"
-  "jvm:concat(io/github/mmhelloworld/idris2/runtime/IdrisList java/lang/String),io/github/mmhelloworld/idris2/runtime/Strings"
+  "jvm:concat(io/github/mmhelloworld/idrisjvm/runtime/IdrisList java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 fastConcat : List String -> String
 

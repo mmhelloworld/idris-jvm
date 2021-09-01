@@ -11,7 +11,7 @@ support : String -> String
 support fn = "C:" ++ fn ++ ", libidris2_support"
 
 directoriesClass : String
-directoriesClass = "io/github/mmhelloworld/idris2/runtime/Directories"
+directoriesClass = "io/github/mmhelloworld/idrisjvm/runtime/Directories"
 
 %foreign support "idris2_fileErrno"
          "node:support:fileErrno,support_system_directory"

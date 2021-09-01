@@ -71,11 +71,11 @@ arrayListType = IRef arrayListClass
 
 public export
 idrisSystemClass : String
-idrisSystemClass = "io/github/mmhelloworld/idris2/runtime/IdrisSystem"
+idrisSystemClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 
 public export
 idrisListClass : String
-idrisListClass = "io/github/mmhelloworld/idris2/runtime/IdrisList"
+idrisListClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList"
 
 public export
 idrisListType : InferredType
@@ -83,7 +83,7 @@ idrisListType = IRef idrisListClass
 
 public export
 idrisNilClass : String
-idrisNilClass = "io/github/mmhelloworld/idris2/runtime/IdrisList$Nil"
+idrisNilClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil"
 
 public export
 idrisNilType : InferredType
@@ -91,7 +91,7 @@ idrisNilType = IRef idrisNilClass
 
 public export
 idrisConsClass : String
-idrisConsClass = "io/github/mmhelloworld/idris2/runtime/IdrisList$Cons"
+idrisConsClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList$Cons"
 
 public export
 idrisConsType : InferredType
@@ -111,7 +111,7 @@ isPrimitive _ = False
 
 public export
 getRuntimeClass : String -> String
-getRuntimeClass name = "io/github/mmhelloworld/idris2/runtime/" ++ name
+getRuntimeClass name = "io/github/mmhelloworld/idrisjvm/runtime/" ++ name
 
 public export
 intThunkClass : String

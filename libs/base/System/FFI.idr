@@ -44,4 +44,4 @@ jvm className methodName = "jvm:" ++ methodName ++ "," ++ className
 
 public export
 runtimeClass : String
-runtimeClass = "io/github/mmhelloworld/idris2/runtime/Runtime"
+runtimeClass = "io/github/mmhelloworld/idrisjvm/runtime/Runtime"

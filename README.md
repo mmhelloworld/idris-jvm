@@ -40,7 +40,7 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 
 #### Compile
 
-`idris helloworld.idr -o main`
+`idris2 helloworld.idr -o main`
 
 #### Run
 

@@ -57,7 +57,7 @@ import Network.Socket.Data
 %default covering
 
 idrisSocketClass : String
-idrisSocketClass = "io/github/mmhelloworld/idris2/runtime/IdrisSocket"
+idrisSocketClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket"
 
 %foreign
     "C:fdopen,libc 6"

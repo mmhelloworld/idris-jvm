@@ -18,6 +18,9 @@ FilePtr = AnyPtr
 support : String -> String
 support fn = "C:" ++ fn ++ ", libidris2_support, idris_file.h"
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
+
 %foreign support "idris2_openFile"
          "node:support:openFile,support_system_file"
 prim__open : String -> String -> PrimIO FilePtr

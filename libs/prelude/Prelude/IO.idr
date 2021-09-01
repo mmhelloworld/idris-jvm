@@ -71,20 +71,25 @@ onCollect ptr c = fromPrim (prim__onCollect ptr (\x => toPrim (c x)))
 
 %foreign "C:idris2_getString, libidris2_support, idris_support.h"
          "javascript:lambda:x=>x"
+         "jvm:getString,io/github/mmhelloworld/idrisjvm/runtime/Objects"
 export
 prim__getString : Ptr String -> String
 
 %foreign "C:putchar,libc 6"
+         "jvm:putChar(char void),io/github/mmhelloworld/idrisjvm/runtime/Console"
 prim__putChar : Char -> (1 x : %World) -> IORes ()
 %foreign "C:getchar,libc 6"
+         "jvm:getChar(char),io/github/mmhelloworld/idrisjvm/runtime/Console"
 %extern prim__getChar : (1 x : %World) -> IORes Char
 
 %foreign "C:idris2_getStr, libidris2_support, idris_support.h"
          "node:support:getStr,support_system_file"
+         "jvm:getString,io/github/mmhelloworld/idrisjvm/runtime/Console"
 prim__getStr : PrimIO String
 
 %foreign "C:idris2_putStr, libidris2_support, idris_support.h"
          "node:lambda:x=>process.stdout.write(x)"
+         "jvm:printString,io/github/mmhelloworld/idrisjvm/runtime/Console"
 prim__putStr : String -> PrimIO ()
 
 ||| Output a string to stdout without a trailing newline.
@@ -118,6 +123,7 @@ getChar : HasIO io => io Char
 getChar = primIO prim__getChar
 
 %foreign "scheme:blodwen-thread"
+         "jvm:fork(java/util/function/Function#apply#java/lang/Object#java/lang/Object java/util/concurrent/ForkJoinTask),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 export
 prim__fork : (1 prog : PrimIO ()) -> PrimIO ThreadID
 

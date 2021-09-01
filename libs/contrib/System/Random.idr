@@ -14,6 +14,7 @@ interface Random a where
   randomRIO : HasIO io => (a, a) -> io a
 
 %foreign "scheme:blodwen-random"
+         "jvm:nextInt(int int),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__randomInt : Int -> PrimIO Int
 
 randomInt : Int -> IO Int
@@ -34,6 +35,7 @@ Random Int where
      in map (+ lo) $ liftIO $ randomInt range
 
 %foreign "scheme:blodwen-random"
+         "jvm:nextDouble(double),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__randomDouble : PrimIO Double
 
 randomDouble : IO Double
@@ -48,6 +50,7 @@ Random Double where
   randomRIO (lo, hi) = map ((+ lo) . (* (hi - lo))) (liftIO randomDouble)
 
 %foreign "scheme:blodwen-random-seed"
+         "jvm:setSeed(long void),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__srand : Bits64 -> PrimIO ()
 
 ||| Sets the random seed

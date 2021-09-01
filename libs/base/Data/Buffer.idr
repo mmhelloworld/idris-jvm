@@ -17,6 +17,12 @@ import Data.List
 export
 data Buffer : Type where [external]
 
+bufferClass : String
+bufferClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer"
+
+stringsClass : String
+stringsClass = "io/github/mmhelloworld/idrisjvm/runtime/Strings"
+
 %foreign "scheme:blodwen-buffer-size"
          "RefC:getBufferSize"
          "node:lambda:b => BigInt(b.length)"
@@ -259,13 +265,13 @@ copyData src start len dest loc
 %foreign "C:idris2_readBufferData, libidris2_support, idris_file.h"
          "RefC:readBufferData"
          "node:lambda:(f,b,l,m) => BigInt(require('fs').readSync(f.fd,b,Number(l), Number(m)))"
-         "jvm:readFromFile(java/nio/channels/ReadableByteChannel io/github/mmhelloworld/idris2/runtime/IdrisBuffer int int int),io/github/mmhelloworld/idris2/runtime/IdrisBuffer"
+         "jvm:readFromFile(java/nio/channels/ReadableByteChannel io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer int int int),io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer"
 prim__readBufferData : FilePtr -> Buffer -> Int -> Int -> PrimIO Int
 
 %foreign "C:idris2_writeBufferData, libidris2_support, idris_file.h"
          "RefC:writeBufferData"
          "node:lambda:(f,b,l,m) => BigInt(require('fs').writeSync(f.fd,b,Number(l), Number(m)))"
-         "jvm:writeToFile(java/nio/channels/WritableByteChannel io/github/mmhelloworld/idris2/runtime/IdrisBuffer int int int),io/github/mmhelloworld/idris2/runtime/IdrisBuffer"
+         "jvm:writeToFile(java/nio/channels/WritableByteChannel io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer int int int),io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer"
 prim__writeBufferData : FilePtr -> Buffer -> Int -> Int -> PrimIO Int
 
 export

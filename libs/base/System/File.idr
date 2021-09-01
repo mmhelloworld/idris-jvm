@@ -19,7 +19,7 @@ libc : String -> String
 libc fn = "C:" ++ fn ++ ", libc 6"
 
 fileClass : String
-fileClass = "io/github/mmhelloworld/idris2/runtime/ChannelIo"
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
 
 %foreign support "idris2_openFile"
          "node:support:openFile,support_system_file"

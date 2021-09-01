@@ -1,5 +1,6 @@
 Idris 2 for JVM
 ============
+[![Build Status](https://github.com/mmhelloworld/idris-jvm/actions/workflows/install.yml/badge.svg)](https://github.com/mmhelloworld/idris-jvm/actions/workflows/install.yml)
 
 [Idris 2](https://idris-lang.org/) is a purely functional programming language
 with first class types. This repository provides Idris 2 compiler targeting JVM bytecode so that Idris 2 compiler and Idris 2 programs can run on the JVM.

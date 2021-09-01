@@ -15,7 +15,7 @@ interface Random a where
 
 %foreign
     "scheme:blodwen-random"
-    %foreign "jvm:nextInt(int int),io/github/mmhelloworld/idris2/runtime/Random"
+    %foreign "jvm:nextInt(int int),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__randomInt : Int -> PrimIO Int
 
 randomInt : Int -> IO Int
@@ -37,7 +37,7 @@ Random Int where
 
 %foreign
     "scheme:blodwen-random"
-    "jvm:nextDouble(double),io/github/mmhelloworld/idris2/runtime/Random"
+    "jvm:nextDouble(double),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__randomDouble : PrimIO Double
 
 randomDouble : IO Double
@@ -53,7 +53,7 @@ Random Double where
 
 %foreign
     "scheme:blodwen-random-seed"
-    "jvm:setSeed(long void),io/github/mmhelloworld/idris2/runtime/Random"
+    "jvm:setSeed(long void),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__srand : Bits64 -> PrimIO ()
 
 ||| Sets the random seed

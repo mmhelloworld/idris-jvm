@@ -49,10 +49,12 @@ setField : {sn : _} -> (s : Struct sn fs) -> (n : String) ->
 setField s n val = primIO (prim__setField s n fieldok val)
 
 %foreign "C:idris2_malloc, libidris2_support, idris_memory.h"
+         "jvm:malloc(int java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__malloc : (size : Int) -> PrimIO AnyPtr
 
 %foreign "C:idris2_free, libidris2_support, idris_memory.h"
          "javascript:lambda:()=>undefined"
+         jvm' runtimeClass "free" "java/lang/Object" "void"
 prim__free : AnyPtr -> PrimIO ()
 
 ||| Allocate memory with libc `malloc`.

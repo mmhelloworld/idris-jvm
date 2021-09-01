@@ -7,12 +7,12 @@ on:
       - '*'
   pull_request:
     branches:
-      - master
+      - main
 
 env:
   IDRIS2_PREVIOUS_VERSION: 0.2.2
-  IDRIS2_PREVIOUS_PACKAGE_VERSION: 0.2.2-SNAPSHOT
-  IDRIS2_PREVIOUS_PACKAGE_VERSION_CLASSIFIER: 20210831.1
+  IDRIS2_PREVIOUS_VERSION_SUFFIX: '-SNAPSHOT'
+  IDRIS2_PREVIOUS_VERSION_TAG_SUFFIX: '-20210831.2'
   IDRIS2_TESTS_CG: jvm
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
 
@@ -27,11 +27,15 @@ jobs:
         with:
           java-version: '8'
           distribution: 'adopt'
+          cache: 'maven'
+      - name: Set IDRIS2_PREFIX
+        run: echo "IDRIS2_PREFIX=$HOME/bin/idris2-$IDRIS2_PREVIOUS_VERSION$IDRIS2_PREVIOUS_VERSION_SUFFIX/lib" >> $GITHUB_ENV
+      - name: Set PREFIX
+        run: echo "PREFIX=$IDRIS2_PREFIX" >> $GITHUB_ENV
       - name: Download previous version
         run: |
-          wget https://github.com/mmhelloworld/Idris2/releases/download/v$IDRIS2_PREVIOUS_PACKAGE_VERSION-$IDRIS2_PREVIOUS_PACKAGE_VERSION_CLASSIFIER/idris2-$IDRIS2_PREVIOUS_PACKAGE_VERSION.zip
-          unzip idris2-$IDRIS2_PREVIOUS_PACKAGE_VERSION.zip -d $HOME/bin
-          cp -r $HOME/bin/idris2-$IDRIS2_PREVIOUS_PACKAGE_VERSION/lib/idris2-$IDRIS2_PREVIOUS_VERSION $HOME/.idris2/
-          echo "::add-path::$HOME/bin/idris2-$IDRIS2_PREVIOUS_PACKAGE_VERSION/bin"
+          wget https://github.com/mmhelloworld/Idris2/releases/download/v$IDRIS2_PREVIOUS_VERSION$IDRIS2_PREVIOUS_VERSION_SUFFIX$IDRIS2_PREVIOUS_VERSION_TAG_SUFFIX/idris2-$IDRIS2_PREVIOUS_VERSION$IDRIS2_PREVIOUS_VERSION_SUFFIX.zip
+          unzip idris2-$IDRIS2_PREVIOUS_VERSION$IDRIS2_PREVIOUS_VERSION_SUFFIX.zip -d $HOME/bin
+          echo "::add-path::$HOME/bin/idris2-$IDRIS2_PREVIOUS_VERSION$IDRIS2_PREVIOUS_VERSION_SUFFIX/bin"
       - name: Build
         run: mvn --batch-mode install -DskipTests

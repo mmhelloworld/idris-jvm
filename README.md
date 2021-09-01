@@ -15,7 +15,7 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 
 #### helloworld.idr
 
-    ```idris
+```idris
     module Main
 
     data Tree a = Leaf
@@ -36,7 +36,7 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 
     main : IO ()
     main = printLn $ inorder tree
-    ```
+```
 
 #### Compile
 

@@ -31,10 +31,12 @@ libc fn = "C:" ++ fn ++ ", libc 6"
 
 %foreign "scheme,racket:blodwen-sleep"
          supportC "idris2_sleep"
+         "jvm:sleep(int void),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__sleep : Int -> PrimIO ()
 
 %foreign "scheme,racket:blodwen-usleep"
          supportC "idris2_usleep"
+         "jvm:usleep(int void),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__usleep : Int -> PrimIO ()
 
 ||| Sleep for the specified number of seconds or, if signals are supported,
@@ -61,12 +63,14 @@ usleep usec = primIO (prim__usleep usec)
 %foreign "scheme:blodwen-arg-count"
          supportC "idris2_getArgCount"
          "node:lambda:() => process.argv.length"
+         "jvm:getProgramArgCount(int),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 prim__getArgCount : PrimIO Int
 
 -- Get argument number `n`
 %foreign "scheme:blodwen-arg"
          supportC "idris2_getArg"
          "node:lambda:n => process.argv[n]"
+         "jvm:getProgramArg(int java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 prim__getArg : Int -> PrimIO String
 
 ||| Retrieve the arguments to the program call, if there were any.
@@ -80,15 +84,19 @@ getArgs = do
 
 %foreign libc "getenv"
          "node:lambda: n => process.env[n]"
+         "jvm:getEnv(java/lang/String java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__getEnv : String -> PrimIO (Ptr String)
 
 %foreign supportC "idris2_getEnvPair"
+         "jvm:getEnvPair(int java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__getEnvPair : Int -> PrimIO (Ptr String)
 %foreign supportC "idris2_setenv"
          supportNode "setEnv"
+         "jvm:setEnv(java/lang/String java/lang/String int int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__setEnv : String -> String -> Int -> PrimIO Int
 %foreign supportC "idris2_unsetenv"
          supportNode "unsetEnv"
+         "jvm:clearEnv(java/lang/String int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__unsetEnv : String -> PrimIO Int
 
 ||| Retrieve the specified environment variable's value string, or `Nothing` if
@@ -151,6 +159,7 @@ unsetEnv var
 
 %foreign "C:idris2_system, libidris2_support, idris_system.h"
          supportNode "spawnSync"
+         "jvm:runCommand(java/lang/String int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__system : String -> PrimIO Int
 
 ||| Execute a shell command, returning its termination status or -1 if an error
@@ -184,6 +193,7 @@ namespace Escaped
 
 %foreign supportC "idris2_time"
          "javascript:lambda:() => Math.floor(new Date().getTime() / 1000)"
+         "jvm:time(int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__time : PrimIO Int
 
 ||| Return the number of seconds since epoch.
@@ -193,6 +203,7 @@ time = pure $ cast !(primIO prim__time)
 
 %foreign supportC "idris2_getPID"
          "node:lambda:() => process.pid"
+         "jvm:getPid(int),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 prim__getPID : PrimIO Int
 
 ||| Get the ID of the currently running process.
@@ -202,6 +213,7 @@ getPID = primIO prim__getPID
 
 %foreign libc "exit"
          "node:lambda:c => process.exit(c)"
+         "jvm:exit(int void),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__exit : Int -> PrimIO ()
 
 ||| Programs can either terminate successfully, or end in a caught

@@ -718,6 +718,7 @@ pack (x :: xs) = strCons x (pack xs)
     "scheme:string-pack"
     "RefC:fastPack"
     "javascript:lambda:(xs)=>__prim_idris2js_array(xs).join('')"
+    "jvm:pack(io/github/mmhelloworld/idrisjvm/runtime/IdrisList java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 fastPack : List Char -> String
 

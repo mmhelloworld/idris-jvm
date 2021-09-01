@@ -3,7 +3,7 @@ name: "pre-release"
 on:
   push:
     branches:
-      - "master"
+      - main
 
 env:
   IDRIS2_PREVIOUS_VERSION: 0.2.2

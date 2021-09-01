@@ -323,7 +323,7 @@ public final class Assembler {
         jarFile.delete();
         try (JarOutputStream target = new JarOutputStream(new FileOutputStream(jarFile), createManifest(mainClass))) {
             File sourceDirectory = new File(directory);
-            add(sourceDirectory, target, sourceDirectory);
+            add(sourceDirectory, target, jarFile, sourceDirectory);
         }
     }
 
@@ -335,18 +335,20 @@ public final class Assembler {
         return manifest;
     }
 
-    private static void add(File source, JarOutputStream target, File rootDirectory) throws IOException {
+    private static void add(File source, JarOutputStream target, File jarFile, File rootDirectory) throws IOException {
         if (source.isDirectory()) {
-            addDirectory(source, target, rootDirectory);
+            addDirectory(source, target, jarFile, rootDirectory);
         } else {
-            addFile(source, target, rootDirectory);
+            addFile(source, target, jarFile, rootDirectory);
         }
-        source.delete();
+        if (source.isDirectory() || (source.isFile() && !source.getName().equals(jarFile.getName()))) {
+            source.delete();
+        }
     }
 
-    private static void addFile(File source, JarOutputStream jarOutputStream, File rootDirectory)
+    private static void addFile(File source, JarOutputStream jarOutputStream, File jarFile, File rootDirectory)
         throws IOException {
-        if (!source.getPath().endsWith(".class")) {
+        if (source.equals(jarFile)) {
             return;
         }
         JarEntry entry = new JarEntry(getJarEntryName(source, rootDirectory));
@@ -365,7 +367,7 @@ public final class Assembler {
         }
     }
 
-    private static void addDirectory(File source, JarOutputStream jarOutputStream, File rootDirectory)
+    private static void addDirectory(File source, JarOutputStream jarOutputStream, File jarFile, File rootDirectory)
         throws IOException {
         String name = getJarEntryName(source, rootDirectory);
         if (!name.isEmpty()) {
@@ -373,7 +375,7 @@ public final class Assembler {
         }
         File[] files = requireNonNull(source.listFiles(), "Unable to get files from directory " + source);
         for (File file : files)
-            add(file, jarOutputStream, rootDirectory);
+            add(file, jarOutputStream, jarFile, rootDirectory);
     }
 
     private static String getJarEntryName(File source, File rootDirectory) {

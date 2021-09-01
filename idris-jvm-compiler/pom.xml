@@ -20,6 +20,20 @@
         <skipIdrisClean>false</skipIdrisClean>
     </properties>
 
+    <profiles>
+        <profile>
+            <id>IDRIS2_PREFIX</id>
+            <activation>
+                <property>
+                    <name>!env.IDRIS2_PREFIX</name>
+                </property>
+            </activation>
+            <properties>
+                <env.IDRIS2_PREFIX>${user.home}/.idris2</env.IDRIS2_PREFIX>
+            </properties>
+        </profile>
+    </profiles>
+
     <build>
         <plugins>
             <plugin>
@@ -120,6 +134,7 @@
                             <goal>run</goal>
                         </goals>
                         <configuration>
+                            <skip>${skipIdrisCompile}</skip>
                             <target>
                                 <delete failonerror="false">
                                     <fileset dir="../build/exec/idris2_app" includes="*.jar"/>

@@ -46,8 +46,12 @@ export
 BACKLOG : Int
 BACKLOG = 20
 
+idrisSocketClass : String
+idrisSocketClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket"
+
 -- Repeat to avoid a dependency cycle
 %foreign "C:idrnet_geteagain, libidris2_support, idris_net.h"
+         "jvm:getEagain(int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket"
 prim__idrnet_geteagain : PrimIO Int
 
 export
@@ -64,6 +68,7 @@ EAGAIN =
 prim__idrnet_errno : PrimIO Int
 
 %foreign "C:isNull, libidris2_support, idris_support.h"
+         "jvm:isNull,io/github/mmhelloworld/idrisjvm/runtime/Objects"
 prim__idrnet_isNull : (ptr : AnyPtr) -> PrimIO Int
 
 
@@ -113,15 +118,19 @@ Show SocketFamily where
 -- into Idris without having to faff around on the preprocessor on the Idris
 -- side.
 %foreign "C:idrnet_af_unspec, libidris2_support, idris_net.h"
+         "jvm:getAfUnspec(int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket"
 prim__idrnet_af_unspec : PrimIO Int
 
 %foreign "C:idrnet_af_unix, libidris2_support, idris_net.h"
+         "jvm:getAfUnix(int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket"
 prim__idrnet_af_unix : PrimIO Int
 
 %foreign "C:idrnet_af_inet, libidris2_support, idris_net.h"
+         "jvm:getAfInet(int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket"
 prim__idrnet_af_inet : PrimIO Int
 
 %foreign "C:idrnet_af_inet6, libidris2_support, idris_net.h"
+         "jvm:getAfInet6(int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket"
 prim__idrnet_af_inet6 : PrimIO Int
 
 export

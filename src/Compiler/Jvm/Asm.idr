@@ -68,7 +68,7 @@ namespace Object
     toString obj = unsafePerformIO $ primIO $ prim_toString (believe_me obj)
 
 public export
-%foreign "jvm:nullValue(java/lang/Object),io/github/mmhelloworld/idris2/runtime/Runtime"
+%foreign "jvm:nullValue(java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 nullValue : Object
 
 public export
@@ -149,7 +149,7 @@ namespace JList
     nCopies : HasIO io => Int -> a -> io (JList a)
     nCopies n value = believe_me <$> (primIO $ prim_nCopies n (believe_me value))
 
-    %foreign jvm' "io/github/mmhelloworld/idris2/runtime/IdrisList" "fromIterable" "java/lang/Iterable" "io/github/mmhelloworld/idris2/runtime/IdrisList"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/runtime/IdrisList" "fromIterable" "java/lang/Iterable" "io/github/mmhelloworld/idrisjvm/runtime/IdrisList"
     prim_fromIterable : JIterable -> PrimIO JListNative
 
     export
@@ -241,14 +241,14 @@ namespace Map
   containsKey : HasIO io => Map key value -> key -> io Bool
   containsKey this key = primIO $ prim_containsKey (believe_me this) (believe_me key)
 
-  %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/Maps" "transpose" "java/util/Map" "java/util/Map"
+  %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "transpose" "java/util/Map" "java/util/Map"
   prim_transpose : JMap -> PrimIO JMap
 
   export
   transpose : HasIO io => Map k v -> io (Map v k)
   transpose m = believe_me <$> primIO (prim_transpose $ believe_me m)
 
-  %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/Maps" "toList" "java/util/Map" "java/util/List"
+  %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "toList" "java/util/Map" "java/util/List"
   prim_toEntries : JMap -> PrimIO JListNative
 
   export
@@ -263,7 +263,7 @@ namespace Map
     entries <- toEntries m
     traverse toTuple entries
 
-  %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/Maps" "keys" "java/util/Map" "java/util/List"
+  %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "keys" "java/util/Map" "java/util/List"
   prim_keys : JMap -> PrimIO JListNative
 
   export
@@ -272,7 +272,7 @@ namespace Map
     jkeys <- primIO (prim_keys $ believe_me m)
     JList.fromIterable (believe_me jkeys)
 
-  %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/Maps" "values" "java/util/Map" "java/util/List"
+  %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "values" "java/util/Map" "java/util/List"
   prim_values : JMap -> PrimIO JListNative
 
   export
@@ -281,7 +281,7 @@ namespace Map
     jvalues <- primIO (prim_values $ believe_me m)
     JList.fromIterable (believe_me jvalues)
 
-  %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/Maps" "getValue2" "java/util/Map" "java/util/Map"
+  %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "getValue2" "java/util/Map" "java/util/Map"
   prim_getValue2 : JMap -> PrimIO JMap
 
   export
@@ -340,7 +340,7 @@ namespace AsmGlobalState
 
     public export
     %foreign
-        "jvm:<init>(String io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState),io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState"
+        "jvm:<init>(String io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
     prim_newAsmGlobalState : String -> PrimIO AsmGlobalState
 
     public export
@@ -348,9 +348,9 @@ namespace AsmGlobalState
     newAsmGlobalState programName = primIO $ prim_newAsmGlobalState programName
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".getAssembler"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState String"
-                "io/github/mmhelloworld/idris2/jvmassembler/Assembler"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getAssembler"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String"
+                "io/github/mmhelloworld/idrisjvm/assembler/Assembler"
     prim_getAssembler : AsmGlobalState -> String -> PrimIO Assembler
 
     public export
@@ -358,8 +358,8 @@ namespace AsmGlobalState
     getAssembler state name = primIO $ prim_getAssembler state name
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".getProgramName"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" "String"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getProgramName"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "String"
     prim_getProgramName : AsmGlobalState -> PrimIO String
 
     public export
@@ -367,8 +367,8 @@ namespace AsmGlobalState
     getProgramName = primIO . prim_getProgramName
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".addConstructor"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState String" "void"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".addConstructor"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "void"
     prim_addConstructor : AsmGlobalState -> String -> PrimIO ()
 
     public export
@@ -376,8 +376,8 @@ namespace AsmGlobalState
     addConstructor state name = primIO $ prim_addConstructor state name
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".hasConstructor"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState String" "boolean"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".hasConstructor"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "boolean"
     prim_hasConstructor : AsmGlobalState -> String -> PrimIO Bool
 
     public export
@@ -385,8 +385,8 @@ namespace AsmGlobalState
     hasConstructor state name = primIO $ prim_hasConstructor state name
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".getFunction"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState String" "java/lang/Object"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getFunction"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "java/lang/Object"
     prim_getFunction : AsmGlobalState -> String -> PrimIO Object
 
     public export
@@ -394,8 +394,8 @@ namespace AsmGlobalState
     getFunction state name = (believe_me . nullableToMaybe) <$> (primIO $ prim_getFunction state name)
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".addFunction"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState String java/lang/Object" "void"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".addFunction"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String java/lang/Object" "void"
     prim_jaddFunction : AsmGlobalState -> String -> Object -> PrimIO ()
 
     public export
@@ -411,8 +411,8 @@ namespace AsmGlobalState
     addFunction globalState name function = jaddFunction globalState (getSimpleName name) function
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".isUntypedFunction"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState String" "boolean"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".isUntypedFunction"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "boolean"
     prim_jisUntypedFunction : AsmGlobalState -> String -> PrimIO Bool
 
     public export
@@ -424,8 +424,8 @@ namespace AsmGlobalState
     isUntypedFunction globalState name = jisUntypedFunction globalState (getSimpleName name)
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".addUntypedFunction"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState String" "void"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".addUntypedFunction"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "void"
     prim_jaddUntypedFunction : AsmGlobalState -> String -> PrimIO ()
 
     public export
@@ -437,8 +437,8 @@ namespace AsmGlobalState
     addUntypedFunction globalState name = jaddUntypedFunction globalState (getSimpleName name)
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState" ".classCodeEnd"
-                "io/github/mmhelloworld/idris2/jvmassembler/AsmGlobalState String String String" "void"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".classCodeEnd"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String String String" "void"
     prim_classCodeEnd : AsmGlobalState -> String -> String -> String -> PrimIO ()
 
     public export
@@ -752,7 +752,7 @@ Applicative Asm where
 
 public export
 %foreign
-    "jvm:<init>(io/github/mmhelloworld/idris2/jvmassembler/Assembler),io/github/mmhelloworld/idris2/jvmassembler/Assembler"
+    "jvm:<init>(io/github/mmhelloworld/idrisjvm/assembler/Assembler),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 newAssembler : PrimIO Assembler
 
 public export
@@ -776,7 +776,7 @@ getAndUpdateState f = do
     Pure state
 
 public export
-%foreign "jvm:crash(String java/lang/Object),io/github/mmhelloworld/idris2/runtime/Runtime"
+%foreign "jvm:crash(String java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 crash : String -> Object
 
 export
@@ -1011,7 +1011,7 @@ generateVariable namePrefix = do
     Pure variableName
 
 namespace JAsmState
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmState" "updateVariableIndices" "java/util/Map java/util/Map" "void"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "updateVariableIndices" "java/util/Map java/util/Map" "void"
     prim_updateVariableIndices : JMap -> JMap -> PrimIO ()
 
     export
@@ -1019,7 +1019,7 @@ namespace JAsmState
     updateVariableIndices resultIndicesByName indicesByName =
         primIO $ prim_updateVariableIndices (believe_me resultIndicesByName) (believe_me indicesByName)
 
-    %foreign jvm' "io/github/mmhelloworld/idris2/jvmassembler/AsmState" "getVariableNames" "java/util/Map" "java/util/List"
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "getVariableNames" "java/util/Map" "java/util/List"
     prim_getVariableNames : JMap -> PrimIO JListNative
 
     export
@@ -1283,88 +1283,88 @@ toJClassOpts ComputeMaxs = 1
 toJClassOpts ComputeFrames = 2
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/JHandle" "<init>"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/JHandle" "<init>"
         "int String String String boolean"
-        "io/github/mmhelloworld/idris2/jvmassembler/JHandle"
+        "io/github/mmhelloworld/idrisjvm/assembler/JHandle"
 prim_newJHandle : Int -> String -> String -> String -> Bool -> PrimIO JHandle
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/JBsmArg$JBsmArgHandle" "<init>"
-        "io/github/mmhelloworld/idris2/jvmassembler/JHandle"
-        "io/github/mmhelloworld/idris2/jvmassembler/JBsmArg$JBsmArgHandle"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/JBsmArg$JBsmArgHandle" "<init>"
+        "io/github/mmhelloworld/idrisjvm/assembler/JHandle"
+        "io/github/mmhelloworld/idrisjvm/assembler/JBsmArg$JBsmArgHandle"
 prim_newJBsmArgHandle : JHandle -> PrimIO JBsmArgHandle
 
 newJBsmArgHandle : HasIO io => JHandle -> io JBsmArgHandle
 newJBsmArgHandle = primIO . prim_newJBsmArgHandle
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/JBsmArg$JBsmArgGetType" "<init>"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/JBsmArg$JBsmArgGetType" "<init>"
         "String"
-        "io/github/mmhelloworld/idris2/jvmassembler/JBsmArg$JBsmArgGetType"
+        "io/github/mmhelloworld/idrisjvm/assembler/JBsmArg$JBsmArgGetType"
 prim_newJBsmArgGetType : String -> PrimIO JBsmArgGetType
 
 newJBsmArgGetType : HasIO io => String -> io JBsmArgGetType
 newJBsmArgGetType = primIO . prim_newJBsmArgGetType
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnString" "<init>"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnString" "<init>"
         "String"
-        "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnString"
+        "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnString"
 prim_newJAnnString : String -> PrimIO JAnnString
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnEnum" "<init>"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnEnum" "<init>"
         "String String"
-        "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnEnum"
+        "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnEnum"
 prim_newJAnnEnum : String -> String -> PrimIO JAnnEnum
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnInt" "<init>"
-        "int" "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnInt"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnInt" "<init>"
+        "int" "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnInt"
 prim_newJAnnInt : Int -> PrimIO JAnnInt
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnBoolean" "<init>"
-        "boolean" "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnBoolean"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnBoolean" "<init>"
+        "boolean" "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnBoolean"
 prim_newJAnnBoolean : Bool -> PrimIO JAnnBoolean
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnChar" "<init>"
-        "char" "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnChar"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnChar" "<init>"
+        "char" "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnChar"
 prim_newJAnnChar : Char -> PrimIO JAnnChar
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnDouble" "<init>"
-        "double" "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnDouble"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnDouble" "<init>"
+        "double" "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnDouble"
 prim_newJAnnDouble : Double -> PrimIO JAnnDouble
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnClass" "<init>"
-        "String" "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnClass"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnClass" "<init>"
+        "String" "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnClass"
 prim_newJAnnClass : String -> PrimIO JAnnClass
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnAnnotation" "<init>"
-        "io/github/mmhelloworld/idris2/jvmassembler/Annotation"
-        "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnAnnotation"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnAnnotation" "<init>"
+        "io/github/mmhelloworld/idrisjvm/assembler/Annotation"
+        "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnAnnotation"
 prim_newJAnnAnnotation : JAnnotation -> PrimIO JAnnAnnotation
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnArray" "<init>"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnArray" "<init>"
         "java/util/List"
-        "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnArray"
+        "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnArray"
 prim_newJAnnArray : JListNative -> PrimIO JAnnArray
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnotationProperty" "<init>"
-        "String io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue"
-        "io/github/mmhelloworld/idris2/jvmassembler/AnnotationValue$AnnotationProperty"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnotationProperty" "<init>"
+        "String io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue"
+        "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnotationProperty"
 prim_newJAnnotationProperty : String -> JAnnotationValue -> PrimIO JAnnotationProperty
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/Annotation" "<init>"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/Annotation" "<init>"
         "String java/util/List"
-        "io/github/mmhelloworld/idris2/jvmassembler/Annotation"
+        "io/github/mmhelloworld/idrisjvm/assembler/Annotation"
 prim_newJAnnotation : String -> JListNative -> PrimIO JAnnotation
 
 export
@@ -1435,8 +1435,8 @@ assemble state m = do
     pure (res, state)
 
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/IdrisName" "getIdrisFunctionName"
-        "String String String" "io/github/mmhelloworld/idris2/runtime/IdrisList"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/IdrisName" "getIdrisFunctionName"
+        "String String String" "io/github/mmhelloworld/idrisjvm/runtime/IdrisList"
 jgetIdrisFunctionName : String -> String -> String -> List String
 
 export
@@ -1448,7 +1448,7 @@ getIdrisFunctionName programName moduleName idrisFunctionName =
 
 export
 %foreign
-    jvm' "io/github/mmhelloworld/idris2/jvmassembler/IdrisName" "getIdrisConstructorClassName"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/IdrisName" "getIdrisConstructorClassName"
         "String" "String"
 getIdrisConstructorClassName : String -> String
 
@@ -1527,7 +1527,7 @@ namespace LocalDateTime
         now <- primIO prim_now
         primIO $ prim_toString now
 
-%foreign "jvm:getCurrentThreadName(java/lang/String),io/github/mmhelloworld/idris2/runtime/Runtime"
+%foreign "jvm:getCurrentThreadName(java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 prim_getCurrentThreadName : PrimIO String
 
 export
@@ -1548,59 +1548,59 @@ debug msg =
 
 export
 runAsm : HasIO io => AsmState -> Asm a -> io (a, AsmState)
-runAsm state Aaload = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.aaload" [assembler state]
+runAsm state Aaload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aaload" [assembler state]
 
-runAsm state Aastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.aastore" [assembler state]
+runAsm state Aastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aastore" [assembler state]
 
-runAsm state Aconstnull = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.aconstnull" [assembler state]
+runAsm state Aconstnull = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aconstnull" [assembler state]
 
 runAsm state (Aload n) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.aload" [assembler state, n]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aload" [assembler state, n]
 
 runAsm state (Anewarray desc) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewarray" [assembler state, desc]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewarray" [assembler state, desc]
 runAsm state Anewintarray     = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewintarray" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewintarray" [assembler state]
 runAsm state Anewbooleanarray = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewbooleanarray" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewbooleanarray" [assembler state]
 runAsm state Anewbytearray    = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewbytearray" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewbytearray" [assembler state]
 runAsm state Anewchararray    = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewchararray" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewchararray" [assembler state]
 runAsm state Anewshortarray   = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewshortarray" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewshortarray" [assembler state]
 runAsm state Anewlongarray    = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewlongarray" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewlongarray" [assembler state]
 runAsm state Anewfloatarray   = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewfloatarray" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewfloatarray" [assembler state]
 runAsm state Anewdoublearray  = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.anewdoublearray" [assembler state]
-runAsm state Arraylength      = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.arraylength" [assembler state]
-runAsm state Areturn          = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.areturn" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewdoublearray" [assembler state]
+runAsm state Arraylength      = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.arraylength" [assembler state]
+runAsm state Areturn          = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.areturn" [assembler state]
 runAsm state (Astore n)       = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.astore" [assembler state, n]
-runAsm state Baload           = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.baload" [assembler state]
-runAsm state Bastore          = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.bastore" [assembler state]
-runAsm state Caload           = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.caload" [assembler state]
-runAsm state Castore          = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.castore" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.astore" [assembler state, n]
+runAsm state Baload           = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.baload" [assembler state]
+runAsm state Bastore          = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.bastore" [assembler state]
+runAsm state Caload           = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.caload" [assembler state]
+runAsm state Castore          = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.castore" [assembler state]
 runAsm state (Checkcast desc) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.checkcast" [assembler state, desc]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.checkcast" [assembler state, desc]
 runAsm state (ClassCodeStart version access className sig parent intf anns) = assemble state $ do
   janns <- sequence $ toJAnnotation <$> anns
-  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.classCodeStart"
+  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.classCodeStart"
     [assembler state, version, accessNum access, className, maybeToNullable sig, parent,
         the (JList String) $ believe_me intf, the (JList JAnnotation) $ believe_me janns]
 
 runAsm state (CreateClass opts) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.createClass" [toJClassOpts opts]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createClass" [toJClassOpts opts]
 runAsm state (CreateField accs className fieldName desc sig fieldInitialValue) = assemble state $ do
   let jaccs = sum $ accessNum <$> accs
-  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.createField"
+  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createField"
     [assembler state, jaccs, className, fieldName, desc, maybeToNullable sig,
         maybeToNullable (toJFieldInitialValue <$> fieldInitialValue)]
 
 runAsm state (CreateLabel label) = assemble state $ do
-  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.createLabel" [assembler state, label]
+  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createLabel" [assembler state, label]
   pure label
 
 runAsm state (CreateMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns) =
@@ -1609,227 +1609,227 @@ runAsm state (CreateMethod accs sourceFileName className methodName desc sig exc
         let jaccs = sum $ accessNum <$> accs
         janns <- sequence $ toJAnnotation <$> anns
         jparamAnns <- sequence $ (\paramAnn => sequence $ toJAnnotation <$> paramAnn) <$> paramAnns
-        jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.createMethod"
+        jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createMethod"
             [assembler state, jaccs, sourceFileName, className, methodName, desc, maybeToNullable sig,
                 the (JList String) $ believe_me $ maybeToNullable exceptions,
                 the (JList JAnnotation) $ believe_me janns, the (JList (JList JAnnotation)) $ believe_me jparamAnns]
 
 runAsm state (CreateIdrisConstructorClass className isStringConstructor constructorParameterCount) =
-    assemble state $  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.createIdrisConstructorClass"
+    assemble state $  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createIdrisConstructorClass"
         [assembler state, className, isStringConstructor, constructorParameterCount]
 
 runAsm state D2i =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.d2i" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2i" [assembler state]
 runAsm state D2f =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.d2f" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2f" [assembler state]
 runAsm state Dadd =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dadd" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dadd" [assembler state]
 runAsm state Dcmpg =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dcmpg" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dcmpg" [assembler state]
 runAsm state Dcmpl =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dcmpl" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dcmpl" [assembler state]
 runAsm state (Dconst n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dconst" [assembler state, n]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dconst" [assembler state, n]
 runAsm state Daload =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.daload" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.daload" [assembler state]
 runAsm state Dastore =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dastore" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dastore" [assembler state]
 runAsm state Ddiv =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ddiv" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ddiv" [assembler state]
 runAsm state (Debug message) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.debug"
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.debug"
         [assembler state, message]
 runAsm state (Dload n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dload" [assembler state, n]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dload" [assembler state, n]
 runAsm state Dmul =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dmul" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dmul" [assembler state]
 runAsm state Dneg =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dneg" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dneg" [assembler state]
 runAsm state Drem =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.drem" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.drem" [assembler state]
 runAsm state Dreturn =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dreturn" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dreturn" [assembler state]
 runAsm state (Dstore n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dstore" [assembler state, n]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dstore" [assembler state, n]
 runAsm state Dsub =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dsub" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dsub" [assembler state]
 runAsm state Dup =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.dup" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dup" [assembler state]
 runAsm state (Error err) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.error" [assembler state, err]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.error" [assembler state, err]
 runAsm state F2d =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.f2d" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.f2d" [assembler state]
 runAsm state Faload =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.faload" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.faload" [assembler state]
 runAsm state Fastore =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.fastore" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fastore" [assembler state]
 runAsm state (Fconst n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.fconst" [assembler state, n]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fconst" [assembler state, n]
 runAsm state (Field finsType cname fname desc) = assemble state $ do
   let finsTypeNum = fieldInsTypeNum finsType
-  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.field"
+  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.field"
     [assembler state, finsTypeNum, cname, fname, desc]
 
 runAsm state FieldEnd =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.fieldEnd" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fieldEnd" [assembler state]
 
 runAsm state (Fload n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.fload" [assembler state, n]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fload" [assembler state, n]
 
 runAsm state (Frame frameType nLocal localSigs nStack stackSigs) = assemble state $ do
   let ftypeNum = frameTypeNum frameType
-  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.frame"
+  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.frame"
     [assembler state, ftypeNum, nLocal, the (JList String) $ believe_me localSigs, nStack,
         the (JList String) $ believe_me stackSigs]
 
 runAsm state Freturn =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.freturn" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.freturn" [assembler state]
 runAsm state (Fstore n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.fstore" [assembler state, n]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fstore" [assembler state, n]
 
 runAsm state (Goto label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.gotoLabel"
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.gotoLabel"
         [assembler state, label]
 
 runAsm state I2b =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.i2b" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2b" [assembler state]
 runAsm state I2c =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.i2c" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2c" [assembler state]
 runAsm state I2d =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.i2d" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2d" [assembler state]
 runAsm state I2l =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.i2l" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2l" [assembler state]
 runAsm state I2s =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.i2s" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2s" [assembler state]
 runAsm state Iadd =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.iadd" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iadd" [assembler state]
 runAsm state Iaload =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.iaload" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iaload" [assembler state]
 runAsm state Iand =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.iand" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iand" [assembler state]
 runAsm state Iastore =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.iastore" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iastore" [assembler state]
 runAsm state Ior =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ior" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ior" [assembler state]
 runAsm state Ixor =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ixor" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ixor" [assembler state]
 runAsm state Icompl =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.icompl" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.icompl" [assembler state]
 runAsm state (Iconst n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.iconst" [assembler state, n]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iconst" [assembler state, n]
 runAsm state Idiv =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.idiv" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.idiv" [assembler state]
 runAsm state (Ifeq label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ifeq" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifeq" [assembler state, label]
 runAsm state (Ifge label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ifge" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifge" [assembler state, label]
 runAsm state (Ifgt label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ifgt" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifgt" [assembler state, label]
 runAsm state (Ificmpge label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ificmpge" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpge" [assembler state, label]
 runAsm state (Ificmpgt label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ificmpgt" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpgt" [assembler state, label]
 runAsm state (Ificmple label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ificmple" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmple" [assembler state, label]
 runAsm state (Ificmplt label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ificmplt" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmplt" [assembler state, label]
 runAsm state (Ificmpeq label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ificmpeq" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpeq" [assembler state, label]
 runAsm state (Ificmpne label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ificmpne" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpne" [assembler state, label]
 runAsm state (Ifle label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ifle" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifle" [assembler state, label]
 runAsm state (Iflt label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.iflt" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iflt" [assembler state, label]
 runAsm state (Ifne label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ifne" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifne" [assembler state, label]
 runAsm state (Ifnonnull label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ifnonnull" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifnonnull" [assembler state, label]
 runAsm state (Ifnull label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ifnull" [assembler state, label]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifnull" [assembler state, label]
 runAsm state (Iload n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.iload" [assembler state, n]
-runAsm state Imul = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.imul" [assembler state]
-runAsm state Ineg = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ineg" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iload" [assembler state, n]
+runAsm state Imul = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.imul" [assembler state]
+runAsm state Ineg = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ineg" [assembler state]
 runAsm state (InstanceOf className) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.instanceOf" [assembler state, className]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.instanceOf" [assembler state, className]
 runAsm state (InvokeMethod invocType cname mname desc isIntf) = assemble state $ do
   let invocTypeAsm = invocTypeNum invocType
-  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.invokeMethod"
+  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.invokeMethod"
     [assembler state, invocTypeAsm, cname, mname, desc, isIntf]
 
 runAsm state (InvokeDynamic mname desc handle bsmArgs) = assemble state $ do
   jbsmArgsList <- sequence $ toJbsmArg <$> bsmArgs
   jhandle <- toJHandle handle
-  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.invokeDynamic"
+  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.invokeDynamic"
     [assembler state, mname, desc, jhandle, the (JList JBsmArg) $ believe_me jbsmArgsList]
 
-runAsm state Irem = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.irem" [assembler state]
-runAsm state Ireturn = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ireturn" [assembler state]
-runAsm state Ishl = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ishl" [assembler state]
-runAsm state Ishr = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ishr" [assembler state]
+runAsm state Irem = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.irem" [assembler state]
+runAsm state Ireturn = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ireturn" [assembler state]
+runAsm state Ishl = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ishl" [assembler state]
+runAsm state Ishr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ishr" [assembler state]
 runAsm state (Istore n) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.istore" [assembler state, n]
-runAsm state Isub = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.isub" [assembler state]
-runAsm state Iushr = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.iushr" [assembler state]
-runAsm state L2i = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.l2i" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.istore" [assembler state, n]
+runAsm state Isub = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.isub" [assembler state]
+runAsm state Iushr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iushr" [assembler state]
+runAsm state L2i = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2i" [assembler state]
 runAsm state (LabelStart label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.labelStart" [assembler state, label]
-runAsm state Ladd = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ladd" [assembler state]
-runAsm state Land = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.land" [assembler state]
-runAsm state Laload = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.laload" [assembler state]
-runAsm state Lastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lastore" [assembler state]
-runAsm state Lor = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lor" [assembler state]
-runAsm state Lxor = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lxor" [assembler state]
-runAsm state Lcompl = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lcompl" [assembler state]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.labelStart" [assembler state, label]
+runAsm state Ladd = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ladd" [assembler state]
+runAsm state Land = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.land" [assembler state]
+runAsm state Laload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.laload" [assembler state]
+runAsm state Lastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lastore" [assembler state]
+runAsm state Lor = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lor" [assembler state]
+runAsm state Lxor = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lxor" [assembler state]
+runAsm state Lcompl = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcompl" [assembler state]
 
 runAsm state (Ldc (TypeConst ty)) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ldcType" [assembler state, ty]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldcType" [assembler state, ty]
 runAsm state (Ldc constant) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ldc" [assembler state, constantToObject constant]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldc" [assembler state, constantToObject constant]
 
-runAsm state Ldiv = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.ldiv" [assembler state]
+runAsm state Ldiv = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldiv" [assembler state]
 
 runAsm state (LineNumber lineNumber label) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lineNumber" [assembler state, lineNumber, label]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lineNumber" [assembler state, lineNumber, label]
 
 runAsm state (Lload n) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lload" [assembler state, n]
-runAsm state Lmul = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lmul" [assembler state]
-runAsm state Lneg = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lneg" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lload" [assembler state, n]
+runAsm state Lmul = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lmul" [assembler state]
+runAsm state Lneg = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lneg" [assembler state]
 runAsm state (LookupSwitch defaultLabel labels cases) = assemble state $ do
   let jcases = integerValueOf <$> cases
-  jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lookupSwitch"
+  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lookupSwitch"
     [assembler state, defaultLabel, the (JList String) $ believe_me labels, the (JList Int) $ believe_me jcases]
 
 runAsm state (LocalVariable name descriptor signature startLabel endLabel index) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.localVariable"
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.localVariable"
         [assembler state, name, descriptor, maybeToNullable signature, startLabel, endLabel, index]
 
-runAsm state Lrem = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lrem" [assembler state]
-runAsm state Lreturn = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lreturn" [assembler state]
-runAsm state Lshl = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lshl" [assembler state]
-runAsm state Lshr = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lshr" [assembler state]
+runAsm state Lrem = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lrem" [assembler state]
+runAsm state Lreturn = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lreturn" [assembler state]
+runAsm state Lshl = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lshl" [assembler state]
+runAsm state Lshr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lshr" [assembler state]
 runAsm state (Lstore n) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lstore" [assembler state, n]
-runAsm state Lsub = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lsub" [assembler state]
-runAsm state Lushr = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.lushr" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lstore" [assembler state, n]
+runAsm state Lsub = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lsub" [assembler state]
+runAsm state Lushr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lushr" [assembler state]
 runAsm state (MaxStackAndLocal stack local) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.maxStackAndLocal" [assembler state, stack, local]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.maxStackAndLocal" [assembler state, stack, local]
 runAsm state MethodCodeStart = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.methodCodeStart" [assembler state]
-runAsm state MethodCodeEnd = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.methodCodeEnd" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.methodCodeStart" [assembler state]
+runAsm state MethodCodeEnd = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.methodCodeEnd" [assembler state]
 runAsm state (Multianewarray desc dims) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.multiANewArray" [assembler state, desc, dims]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.multiANewArray" [assembler state, desc, dims]
 runAsm state (New cname) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.asmNew" [assembler state, cname]
-runAsm state Pop = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.pop" [assembler state]
-runAsm state Pop2 = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.pop2" [assembler state]
-runAsm state Return = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.voidReturn" [assembler state]
-runAsm state Saload = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.saload" [assembler state]
-runAsm state Sastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.sastore" [assembler state]
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.asmNew" [assembler state, cname]
+runAsm state Pop = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.pop" [assembler state]
+runAsm state Pop2 = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.pop2" [assembler state]
+runAsm state Return = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.voidReturn" [assembler state]
+runAsm state Saload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.saload" [assembler state]
+runAsm state Sastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.sastore" [assembler state]
 runAsm state (SourceInfo sourceFileName)
-  = assemble state $ jvmInstance () "io/github/mmhelloworld/idris2/jvmassembler/Assembler.sourceInfo" [assembler state, sourceFileName]
+  = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.sourceInfo" [assembler state, sourceFileName]
 runAsm state (LiftIo action) = assemble state action
 
 runAsm state (Throw fc message) = pure (believe_me $ crash $ show fc ++ ": " ++ message, state)

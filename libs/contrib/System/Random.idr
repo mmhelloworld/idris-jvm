@@ -15,6 +15,7 @@ interface Random a where
 
 %foreign "scheme:blodwen-random"
          "javascript:lambda:(max)=>Math.floor(Math.random() * max)"
+         "jvm:nextInt(int int),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__randomBits32 : Bits32 -> PrimIO Bits32
 
 randomBits32 : Bits32 -> IO Bits32
@@ -38,6 +39,7 @@ Random Int32 where
 
 %foreign "scheme:blodwen-random"
          "javascript:lambda:()=>Math.random()"
+         "jvm:nextDouble(double),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__randomDouble : PrimIO Double
 
 randomDouble : IO Double
@@ -52,6 +54,7 @@ Random Double where
   randomRIO (lo, hi) = map ((+ lo) . (* (hi - lo))) (liftIO randomDouble)
 
 %foreign "scheme:blodwen-random-seed"
+         "jvm:setSeed(long void),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__srand : Bits64 -> PrimIO ()
 
 ||| Sets the random seed

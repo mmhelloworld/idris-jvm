@@ -19,12 +19,12 @@ methodName (Jsimple mname) = mname
 
 export
 assemblerClass : String -> String
-assemblerClass name = "io/github/mmhelloworld/idris2/jvmassembler/" ++ name
+assemblerClass name = "io/github/mmhelloworld/idrisjvm/assembler/" ++ name
 
 export
 cleanupIdentifier : String -> String
 cleanupIdentifier value = unsafePerformIO $
-    jvmStatic String "io/github/mmhelloworld/idris2/jvmassembler/IdrisName.transformCharacters" [value]
+    jvmStatic String "io/github/mmhelloworld/idrisjvm/assembler/IdrisName.transformCharacters" [value]
 
 export
 getSimpleName : Jname -> String

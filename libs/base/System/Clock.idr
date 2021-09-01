@@ -119,6 +119,7 @@ isClockMandatory _      = Mandatory
 %foreign "scheme:blodwen-clock-time-monotonic"
          "RefC:clockTimeMonotonic"
          "javascript:lambda:()=>performance.now()" -- javascript clocks are represented as milliseconds
+         "jvm:getMonotonicClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeMonotonic : PrimIO OSClock
 
 ||| Get the current backend's monotonic time.
@@ -128,6 +129,7 @@ clockTimeMonotonic = fromPrim prim__clockTimeMonotonic
 %foreign "scheme:blodwen-clock-time-utc"
          "RefC:clockTimeUtc"
          "javascript:lambda:()=>Date.now()"
+         "jvm:getUtcClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeUtc : PrimIO OSClock
 
 ||| Get the current UTC time.
@@ -137,6 +139,7 @@ clockTimeUtc = fromPrim prim__clockTimeUtc
 %foreign "scheme:blodwen-clock-time-process"
          "RefC:clockTimeProcess"
          "javascript:support:clockTimeProcess,support_system_clock"
+         "jvm:getProcessClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeProcess : PrimIO OSClock
 
 ||| Get the amount of time used by the current process.
@@ -146,6 +149,7 @@ clockTimeProcess = fromPrim prim__clockTimeProcess
 %foreign "scheme:blodwen-clock-time-thread"
          "RefC:clockTimeThread"
          "javascript:support:clockTimeThread,support_system_clock"
+         "jvm:getThreadClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeThread : PrimIO OSClock
 
 ||| Get the amount of time used by the current thread.
@@ -155,6 +159,7 @@ clockTimeThread = fromPrim prim__clockTimeThread
 %foreign "scheme:blodwen-clock-time-gccpu"
          "RefC:clockTimeGcCpu"
          "javascript:lambda:()=>null"
+         "jvm:getGcCpuClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeGcCpu : PrimIO OSClock
 
 ||| Get the amount of the current process's CPU time consumed by the garbage
@@ -165,6 +170,7 @@ clockTimeGcCpu = fromPrim prim__clockTimeGcCpu
 %foreign "scheme:blodwen-clock-time-gcreal"
          "RefC:clockTimeGcReal"
          "javascript:lambda:()=>null"
+         "jvm:getGcRealClock(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__clockTimeGcReal : PrimIO OSClock
 
 ||| Get the amount of the current process's real-time consumed by the garbage
@@ -184,6 +190,7 @@ fetchOSClock Duration  = clockTimeMonotonic
 %foreign "scheme:blodwen-is-time?"
          "RefC:clockValid"
          "javascript:lambda:(x)=>x===null?0:1"
+         "jvm:isValid(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock int),io/github/mmhelloworld/idrisjvm/runtime/Clocks"
 prim__osClockValid : OSClock -> PrimIO Int
 
 ||| A test to determine the status of optional clocks.
@@ -193,6 +200,7 @@ osClockValid clk = fromPrim (prim__osClockValid clk)
 %foreign "scheme:blodwen-clock-second"
          "RefC:clockSecond"
          "javascript:lambda:(x)=>BigInt(Math.floor(x/1000))"
+         "jvm:.getSeconds(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock long),io/github/mmhelloworld/idrisjvm/runtime/IdrisClock"
 prim__osClockSecond : OSClock -> PrimIO Bits64
 
 ||| Get the second of time from the given `OSClock`.
@@ -202,6 +210,7 @@ osClockSecond clk = fromPrim (prim__osClockSecond clk)
 %foreign "scheme:blodwen-clock-nanosecond"
          "RefC:clockNanosecond"
          "javascript:lambda:(x)=>BigInt(Math.floor((x%1000)*1000*1000))"
+         "jvm:.getNanoSeconds(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock long),io/github/mmhelloworld/idrisjvm/runtime/IdrisClock"
 prim__osClockNanosecond : OSClock -> PrimIO Bits64
 
 ||| Get the nanosecond of time from the given `OSClock`.

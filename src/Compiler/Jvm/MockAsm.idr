@@ -18,8 +18,8 @@ import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
 import Compiler.Jvm.ShowUtil
 
+%foreign "jvm:.toString,java/lang/Object"
 objectToString : Object -> IO String
-objectToString obj = jvmStatic String "java/util/Objects.toString" [obj]
 
 export
 mockRunAsm : AsmState -> Asm a -> IO (a, AsmState)
@@ -66,11 +66,12 @@ mockRunAsm state (ClassCodeStart version access className sig parent intf anns) 
     parent]
 
 mockRunAsm state (CreateClass opts) = assemble state $ putStrLn $ "createClass " ++ show opts
-mockRunAsm state (CreateField accs className fieldName desc sig fieldInitialValue) = assemble state $ do
+mockRunAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue) = assemble state $ do
   let jaccs = sum $ accessNum <$> accs
   putStrLn $ unwords [
     "createField",
     show jaccs,
+    sourceFileName,
     className,
     fieldName,
     desc,

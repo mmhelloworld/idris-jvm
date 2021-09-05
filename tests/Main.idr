@@ -173,7 +173,7 @@ jvmTests = MkTestPool []
     [ "jvm001", "jvm002", "jvm003", "jvm004", "jvm005", "jvm006",
       "jvm007", "jvm008", "jvm009", "jvm011", "jvm012", "jvm014",
       "jvm015", "jvm016", "jvm017", "jvm018", "jvm019", "jvm020",
-      "reg001", "tailrec001" ]
+      "reg001", "tailrec001", "concurrency001" ]
 
 main : IO ()
 main = runner

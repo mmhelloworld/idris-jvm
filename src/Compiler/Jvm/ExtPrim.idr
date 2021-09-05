@@ -11,6 +11,7 @@ data ExtPrim = JvmStaticMethodCall | JvmInstanceMethodCall
              | GetField | SetField
              | VoidElim
              | SysOS | SysCodegen
+             | MakeFuture
              | Unknown Name
 
 export
@@ -28,6 +29,7 @@ Show ExtPrim where
   show VoidElim = "VoidElim"
   show SysOS = "SysOS"
   show SysCodegen = "SysCodegen"
+  show MakeFuture = "MakeFuture"
   show (Unknown n) = "Unknown " ++ show n
 
 ||| Match on a user given name to get the scheme primitive
@@ -46,7 +48,8 @@ toPrim pn@(NS _ n)
             (n == UN "prim__setField", SetField),
             (n == UN "void", VoidElim),
             (n == UN "prim__os", SysOS),
-            (n == UN "prim__codegen", SysCodegen)
+            (n == UN "prim__codegen", SysCodegen),
+            (n == UN "prim__makeFuture", MakeFuture)
             ]
            (Unknown pn)
 toPrim pn = Unknown pn

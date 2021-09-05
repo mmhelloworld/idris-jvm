@@ -130,6 +130,10 @@ public final class Runtime {
         return commonPool().submit((Runnable) () -> action.apply(0));
     }
 
+    public static ForkJoinTask<?> fork(Delayed action) {
+        return commonPool().submit(action::evaluate);
+    }
+
     public static void waitForFuturesToComplete(List<? extends Future<?>> tasks) {
         tasks.forEach(future -> {
             try {

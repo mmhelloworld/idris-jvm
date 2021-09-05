@@ -63,6 +63,7 @@ tySpec (NmCon fc (UN "String") _ []) = pure inferredStringType
 tySpec (NmCon fc (UN "Double") _ []) = pure IDouble
 tySpec (NmCon fc (UN "Char") _ []) = pure IChar
 tySpec (NmCon fc (UN "Bool") _ []) = pure IBool
+tySpec (NmCon fc (UN "long") _ []) = pure ILong
 tySpec (NmCon fc (UN "void") _ []) = pure IVoid
 tySpec (NmCon fc (UN ty) _ []) = pure $ IRef ty
 tySpec (NmCon fc (NS namespaces n) _ []) = cond
@@ -478,6 +479,10 @@ getIntConstantValue fc x =
         then Pure 0
         else Throw fc ("Constant " ++ show x ++ " cannot be converted to integer.")
 
+export
+comparing : Ord a => (b -> a) -> b -> b -> Ordering
+comparing p x y = compare (p x) (p y)
+
 sortConCases : List NamedConAlt -> List NamedConAlt
 sortConCases alts = sortBy (comparing getTag) alts where
     getTag : NamedConAlt -> Int
@@ -675,6 +680,9 @@ mutual
     inferExtPrim _ returnType SysOS [] = pure inferredStringType
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
     inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
+    inferExtPrim _ returnType MakeFuture [_, action] = do
+        inferExpr delayedType action
+        pure inferredForkJoinTaskType
     inferExtPrim fc _ prim args = Throw fc $ "Unsupported external function " ++ show prim ++ "(" ++
         (show $ showNamedCExp 0 <$> args) ++ ")"
 
@@ -1040,76 +1048,78 @@ optimize : NamedCExp -> Asm NamedCExp
 optimize = markTailRecursion . liftToLambda
 
 export
+%inline
 emptyFunction : NamedCExp
 emptyFunction = NmCrash emptyFC "uninitialized function"
 
 export
 inferDef : String -> Name -> FC -> NamedDef -> Asm ()
-inferDef programName idrisName fc (MkNmFun args expr) = do
-        let jname = jvmName idrisName
-        let jvmClassAndMethodName = getIdrisFunctionName programName (className jname) (methodName jname)
-        let arity = length args
-        let arityInt = the Int $ cast arity
-        let argumentNames = jvmSimpleName <$> args
-        argIndices <- LiftIo $ getArgumentIndices arityInt argumentNames
-        isUntyped <- isUntypedFunction jname
-        let initialArgumentTypes = replicate arity $ if isUntyped then inferredObjectType else IUnknown
-        argumentTypesByName <- LiftIo $ Map.fromList $ List.zip argumentNames initialArgumentTypes
-        scopes <- LiftIo $ JList.new {a=Scope}
-        let function =
-            MkFunction jname (MkInferredFunctionType IUnknown initialArgumentTypes)
-                scopes 0 jvmClassAndMethodName emptyFunction
-        setCurrentFunction function
-        LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
-        let shouldDebugExpr = shouldDebug &&
-            (fromMaybe True $ ((\name => name `isInfixOf` (getSimpleName jname)) <$> debugFunction))
-        when shouldDebugExpr $ do
-                debug $ "**********************"
-                debug $ "Inferring " ++ (className jvmClassAndMethodName) ++ "." ++ (methodName jvmClassAndMethodName)
-                debug "Unoptimized"
-                debug "---------"
-                debug $ showNamedCExp 0 expr
-        optimizedExpr <- optimize expr
-        updateCurrentFunction $ record { optimizedBody = optimizedExpr }
+inferDef programName idrisName fc (MkNmFun args body) = do
+    let jname = jvmName idrisName
+    let jvmClassAndMethodName = getIdrisFunctionName programName (className jname) (methodName jname)
+    let arity = length args
+    let arityInt = the Int $ cast arity
+    let expr = if arityInt == 0 then NmDelay fc body else body
+    let argumentNames = jvmSimpleName <$> args
+    argIndices <- LiftIo $ getArgumentIndices arityInt argumentNames
+    isUntyped <- isUntypedFunction jname
+    let initialArgumentTypes = replicate arity $ if isUntyped then inferredObjectType else IUnknown
+    argumentTypesByName <- LiftIo $ Map.fromList $ List.zip argumentNames initialArgumentTypes
+    scopes <- LiftIo $ JList.new {a=Scope}
+    let function =
+        MkFunction jname (MkInferredFunctionType IUnknown initialArgumentTypes)
+            scopes 0 jvmClassAndMethodName emptyFunction
+    setCurrentFunction function
+    LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
+    let shouldDebugExpr = shouldDebug &&
+        (fromMaybe True $ ((\name => name `isInfixOf` (getSimpleName jname)) <$> debugFunction))
+    when shouldDebugExpr $ do
+            debug $ "**********************"
+            debug $ "Inferring " ++ (className jvmClassAndMethodName) ++ "." ++ (methodName jvmClassAndMethodName)
+            debug "Unoptimized"
+            debug "---------"
+            debug $ showNamedCExp 0 expr
+    optimizedExpr <- optimize expr
+    updateCurrentFunction $ record { optimizedBody = optimizedExpr }
 
-        resetScope
-        scopeIndex <- newScopeIndex
-        let (_, lineStart, lineEnd) = getSourceLocation expr
-        allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
-        allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
-        let functionScope =
-            MkScope scopeIndex Nothing argumentTypesByName allVariableTypes argIndices
-                allVariableIndices IUnknown arityInt (lineStart, lineEnd) ("", "") []
+    resetScope
+    scopeIndex <- newScopeIndex
+    let (_, lineStart, lineEnd) = getSourceLocation expr
+    allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+    allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+    let functionScope =
+        MkScope scopeIndex Nothing argumentTypesByName allVariableTypes argIndices
+            allVariableIndices IUnknown arityInt (lineStart, lineEnd) ("", "") []
 
-        saveScope functionScope
-        retTy <- inferExpr IUnknown optimizedExpr
-        updateScopeVariableTypes
-        let inferredFunctionType =
-            MkInferredFunctionType (if isUntyped then inferredObjectType else IUnknown)
-                !(getArgumentTypes argumentNames)
-        updateCurrentFunction $ record { inferredFunctionType = inferredFunctionType }
-    where
-        getArgumentTypes : List String -> Asm (List InferredType)
-        getArgumentTypes argumentNames = do
-            argumentIndicesByName <- getVariableIndicesByName 0
-            argumentTypesByIndex <- getVariableTypesAtScope 0
-            LiftIo $ go argumentIndicesByName argumentTypesByIndex argumentNames
+    saveScope functionScope
+    retTy <- inferExpr IUnknown optimizedExpr
+    updateScopeVariableTypes
+    inferredArgumentTypes <- if isUntyped then pure initialArgumentTypes else getArgumentTypes argumentNames
+    let inferredFunctionType =
+        MkInferredFunctionType (if isUntyped then inferredObjectType else IUnknown) inferredArgumentTypes
+    updateCurrentFunction $ record { inferredFunctionType = inferredFunctionType }
+  where
+    getArgumentTypes : List String -> Asm (List InferredType)
+    getArgumentTypes argumentNames = do
+        argumentIndicesByName <- getVariableIndicesByName 0
+        argumentTypesByIndex <- getVariableTypesAtScope 0
+        LiftIo $ go argumentIndicesByName argumentTypesByIndex argumentNames
+      where
+        go : Map String Int -> Map Int InferredType -> List String -> IO (List InferredType)
+        go argumentIndicesByName argumentTypesByIndex argumentNames = do
+            types <- go1 [] argumentNames
+            pure $ reverse types
           where
-            go : Map String Int -> Map Int InferredType -> List String -> IO (List InferredType)
-            go argumentIndicesByName argumentTypesByIndex argumentNames = do
-                types <- go1 [] argumentNames
-                pure $ reverse types
-              where
-                go1 : List InferredType -> List String -> IO (List InferredType)
-                go1 acc [] = pure acc
-                go1 acc (arg :: args) = do
-                    optIndex <- Map.get {value=Int} argumentIndicesByName arg
-                    ty <- case optIndex of
-                        Just index => do
-                            optTy <- Map.get argumentTypesByIndex index
-                            pure $ fromMaybe IUnknown optTy
-                        Nothing => pure IUnknown
-                    go1 (ty :: acc) args
+            go1 : List InferredType -> List String -> IO (List InferredType)
+            go1 acc [] = pure acc
+            go1 acc (arg :: args) = do
+                optIndex <- Map.get {value=Int} argumentIndicesByName arg
+                ty <- case optIndex of
+                    Just index => do
+                        optTy <- Map.get argumentTypesByIndex index
+                        pure $ fromMaybe IUnknown optTy
+                    Nothing => pure IUnknown
+                go1 (ty :: acc) args
 
 inferDef programName n fc (MkNmError expr) = inferDef programName n fc (MkNmFun [] expr)
 

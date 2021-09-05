@@ -113,10 +113,10 @@ constantAltIntExpr fc alt@(MkNConstAlt constant _) = do
         label <- newLabel
         Pure (label, constExpr, alt)
 
-hashCode : TT.Constant -> Asm (Maybe Int)
-hashCode (BI value) = LiftIo $ (Just <$> jvmInstance Int "java/math/BigInteger.hashCode" [value])
-hashCode (Str value) = LiftIo $ (Just <$> jvmInstance Int "java/lang/String.hashCode" [value])
-hashCode x = Pure Nothing
+hashCode : TT.Constant -> Maybe Int
+hashCode (BI value) = Just $ Object.hashCode value
+hashCode (Str value) = Just $ Object.hashCode value
+hashCode x = Nothing
 
 getHashCodeSwitchClass : FC -> InferredType -> Asm String
 getHashCodeSwitchClass fc constantType =
@@ -253,16 +253,34 @@ mutual
                 parameterTypes <- getFunctionParameterTypes jname
                 let argsWithTypes = List.zip args parameterTypes
                 variableTypes <- getVariableTypes
-                traverse_ (storeParameter variableTypes) $ List.zip [0 .. the Int $ cast lastArgIndex] argsWithTypes
+                let argIndices = [0 .. the Int $ cast lastArgIndex]
+                targetVariableIndices <- traverse (storeParameter variableTypes) $ List.zip argIndices argsWithTypes
+                traverse (assign variableTypes) $ List.zip targetVariableIndices $ List.zip argIndices parameterTypes
                 Goto methodStartLabel
+              where
+                assign : Map Int InferredType -> (Int, Int, InferredType) -> Asm ()
+                assign types (targetVariableIndex, argIndex, ty) =
+                    when (targetVariableIndex /= argIndex) $ do
+                        loadVar types ty ty targetVariableIndex
+                        storeVar ty ty argIndex
 
+    assembleExpr isTailCall returnType (NmApp _ (NmRef _ idrisName) []) = do
+        let jname = jvmName idrisName
+        let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
+        Field GetStatic (className functionName) (methodName functionName)
+            "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
+        InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
+            "()Ljava/lang/Object;" False
+        asmCast inferredObjectType returnType
+        when isTailCall $ asmReturn returnType
     assembleExpr isTailCall returnType (NmApp _ (NmRef _ idrisName) args) = do
         -- Not a tail call, unwrap possible trampoline thunks
         let jname = jvmName idrisName
-        let functionType =
-            fromMaybe
-                (MkInferredFunctionType inferredObjectType $ replicate (length args) inferredObjectType)
-                !(findFunctionType jname)
+        functionType <- case !(findFunctionType jname) of
+            Just ty => Pure ty
+            Nothing => do
+                addUntypedFunction jname
+                Pure $ MkInferredFunctionType inferredObjectType $ replicate (length args) inferredObjectType
         let paramTypes = parameterTypes functionType
         let argsWithTypes = List.zip args paramTypes
         traverse assembleParameter argsWithTypes
@@ -915,6 +933,9 @@ mutual
             maybe (Pure ()) (setScopeCounter . succ) (parentIndex scope)
             let lambdaBodyReturnType = returnType scope
             let lambdaType = getLambdaType parameterName
+            when (lambdaType == DelayedLambda) $ do
+                New "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed"
+                Dup
             let lambdaInterfaceType = getLambdaInterfaceType lambdaType lambdaBodyReturnType
             parameterType <-
                 the (Asm (Maybe InferredType)) $ traverse getVariableType
@@ -938,6 +959,9 @@ mutual
                     MkInferredFunctionType implementationMethodReturnType $ toList parameterType
                 invokeDynamic lambdaClassName lambdaMethodName interfaceMethodName invokeDynamicDescriptor
                     (getSamDesc lambdaType) implementationMethodDescriptor instantiatedMethodDescriptor
+                when (lambdaType == DelayedLambda) $
+                    InvokeMethod InvokeSpecial "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "<init>"
+                        "(Lio/github/mmhelloworld/idrisjvm/runtime/Delayed;)V" False
                 asmCast lambdaInterfaceType lambdaReturnType
             let staticCall = do
                  InvokeMethod InvokeStatic lambdaClassName lambdaMethodName implementationMethodDescriptor False
@@ -948,8 +972,7 @@ mutual
             newLineNumberLabels <- LiftIo $ Map.newTreeMap {key=Int} {value=String}
             updateState $ record { lineNumberLabels = newLineNumberLabels }
             className <- getClassName
-            let accessModifiers =
-                if className /= lambdaClassName || isExtracted then [Public, Static] else [Public, Static, Synthetic]
+            let accessModifiers = if isExtracted then [Public, Static] else [Public, Static, Synthetic]
             CreateMethod accessModifiers "" lambdaClassName lambdaMethodName implementationMethodDescriptor
                 Nothing Nothing [] []
             MethodCodeStart
@@ -1114,10 +1137,9 @@ mutual
                 (hashPositionSwitchAlts hashPositionAndAlts) def
         where
             constantAltHashCodeExpr : FC -> (Int, NamedConstAlt) -> Asm (Int, Int, NamedConstAlt)
-            constantAltHashCodeExpr fc positionAndAlt@(position, MkNConstAlt constant _) = do
-                Just hashCodeValue <- hashCode constant
-                    | Nothing => Throw fc ("Constant " ++ show constant ++ " cannot be compiled to 'Switch'.")
-                Pure (hashCodeValue, position, snd positionAndAlt)
+            constantAltHashCodeExpr fc positionAndAlt@(position, MkNConstAlt constant _) = case hashCode constant of
+                Just hashCodeValue => Pure (hashCodeValue, position, snd positionAndAlt)
+                Nothing => Throw fc ("Constant " ++ show constant ++ " cannot be compiled to 'Switch'.")
 
             hashPositionSwitchAlts : List (Int, Int, NamedConstAlt) -> List NamedConstAlt
             hashPositionSwitchAlts exprPositionAlts = reverse $ go [] exprPositionAlts where
@@ -1269,10 +1291,10 @@ mutual
             (hashPositionSwitchAlts hashPositionAndAlts) def
     where
         conAltHashCodeExpr : FC -> (Int, NamedConAlt) -> Asm (Int, Int, NamedConAlt)
-        conAltHashCodeExpr fc positionAndAlt@(position, MkNConAlt name _ _ _) = do
-            Just hashCodeValue <- hashCode (Str $ getIdrisConstructorClassName (jvmSimpleName name))
-                | Nothing => Throw fc ("Constructor " ++ show name ++ " cannot be compiled to 'Switch'.")
-            Pure (hashCodeValue, position, snd positionAndAlt)
+        conAltHashCodeExpr fc positionAndAlt@(position, MkNConAlt name _ _ _) =
+            case hashCode (Str $ getIdrisConstructorClassName (jvmSimpleName name)) of
+                Just hashCodeValue => Pure (hashCodeValue, position, snd positionAndAlt)
+                Nothing => Throw fc ("Constructor " ++ show name ++ " cannot be compiled to 'Switch'.")
 
         hashPositionSwitchAlts : List (Int, Int, NamedConAlt) -> List NamedConAlt
         hashPositionSwitchAlts exprPositionAlts = reverse $ go [] exprPositionAlts where
@@ -1392,8 +1414,16 @@ mutual
         Ldc $ StringConst "Error: Executed 'void'"
         InvokeMethod InvokeStatic runtimeClass "crash" "(Ljava/lang/String;)Ljava/lang/Object;" False
         asmCast inferredObjectType returnType
+    jvmExtPrim _ returnType MakeFuture [_, action] = do
+        assembleExpr False delayedType action
+        InvokeMethod InvokeStatic runtimeClass "fork" "(Lio/github/mmhelloworld/idrisjvm/runtime/Delayed;)Ljava/util/concurrent/ForkJoinTask;" False
+        asmCast inferredForkJoinTaskType returnType
     jvmExtPrim fc _ prim args = Throw fc $ "Unsupported external function " ++ show prim ++ "(" ++
         (show $ showNamedCExp 0 <$> args) ++ ")"
+
+isDelayedExpr : NamedCExp -> Bool
+isDelayedExpr (NmDelay _ _) = True
+isDelayedExpr _ = False
 
 assembleDefinition : Name -> FC -> Asm ()
 assembleDefinition idrisName fc = do
@@ -1402,12 +1432,11 @@ assembleDefinition idrisName fc = do
     loadFunction jname
     function <- getCurrentFunction
     let functionType = inferredFunctionType function
+    let arity = length $ parameterTypes functionType
     let jvmClassAndMethodName = jvmClassMethodName function
     let declaringClassName = className jvmClassAndMethodName
     let methodName = methodName jvmClassAndMethodName
     let methodReturnType = returnType functionType
-    let descriptor = getMethodDescriptor functionType
-    let fileName = fst $ getSourceLocationFromFc fc
     lineNumberLabels <- LiftIo $ Map.newTreeMap {key=Int} {value=String}
     updateState $ record {
         scopeCounter = 0,
@@ -1422,23 +1451,36 @@ assembleDefinition idrisName fc = do
     debug "Optimized"
     debug "---------"
     debug $ showNamedCExp 0 optimizedExpr
-    CreateMethod [Public, Static] fileName declaringClassName methodName descriptor Nothing Nothing [] []
-    MethodCodeStart
-    CreateLabel methodStartLabel
-    CreateLabel methodEndLabel
-    LabelStart methodStartLabel
-    withScope $ do
-        scopeIndex <- getCurrentScopeIndex
-        scope <- getScope scopeIndex
-        let (lineNumberStart, lineNumberEnd) = lineNumbers scope
-        addLineNumber lineNumberStart methodStartLabel
-        updateScopeStartLabel scopeIndex methodStartLabel
-        updateScopeEndLabel scopeIndex methodEndLabel
-        assembleExpr True methodReturnType optimizedExpr
-        LabelStart methodEndLabel
-    addLocalVariables 0
-    MaxStackAndLocal (-1) (-1)
-    MethodCodeEnd
+    let fileName = fst $ getSourceLocationFromFc fc
+    let descriptor = getMethodDescriptor functionType
+    let isField = arity == 0 && isDelayedExpr optimizedExpr
+    let classInitOrMethodName = if isField then "<clinit>" else methodName
+    when isField $ do
+        CreateField [Public, Static, Final] fileName declaringClassName methodName
+            "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;" Nothing Nothing
+        FieldEnd
+    CreateMethod [Public, Static] fileName declaringClassName classInitOrMethodName descriptor Nothing Nothing [] []
+    if (not isField)
+        then do
+            MethodCodeStart
+            CreateLabel methodStartLabel
+            CreateLabel methodEndLabel
+            LabelStart methodStartLabel
+            withScope $ do
+                scopeIndex <- getCurrentScopeIndex
+                scope <- getScope scopeIndex
+                let (lineNumberStart, lineNumberEnd) = lineNumbers scope
+                addLineNumber lineNumberStart methodStartLabel
+                updateScopeStartLabel scopeIndex methodStartLabel
+                updateScopeEndLabel scopeIndex methodEndLabel
+                assembleExpr True methodReturnType optimizedExpr
+                LabelStart methodEndLabel
+            addLocalVariables 0
+            MaxStackAndLocal (-1) (-1)
+            MethodCodeEnd
+        else do
+            withScope $ assembleExpr False methodReturnType optimizedExpr
+            Field PutStatic declaringClassName methodName "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
 
 createMainMethod : String -> Jname -> Asm ()
 createMainMethod programName mainFunctionName = do
@@ -1451,10 +1493,9 @@ createMainMethod programName mainFunctionName = do
     Ldc $ StringConst programName
     Aload 0
     InvokeMethod InvokeStatic runtimeClass "setProgramArgs" "(Ljava/lang/String;[Ljava/lang/String;)V" False
-    let methodType = inferredFunctionType function
-    let methodDescriptor = getMethodDescriptor methodType
-    InvokeMethod InvokeStatic mainClassName (methodName idrisMainClassMethodName)
-        methodDescriptor False
+    Field GetStatic mainClassName (methodName idrisMainClassMethodName) "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
+    InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
+        "()Ljava/lang/Object;" False
     {-when (isThunkType $ returnType methodType) unwrapObjectThunk-}
     Return
     MaxStackAndLocal (-1) (-1)
@@ -1521,9 +1562,12 @@ assemble globalState fcAndDefinitionsByName name = do
 goAssembleAsync : AsmGlobalState -> Map String (FC, NamedDef) -> List (List Name) -> IO ()
 goAssembleAsync _ _ [] = pure ()
 goAssembleAsync globalState fcAndDefinitionsByName (xs :: xss) = do
-    threadIds <- traverse (fork . assemble globalState fcAndDefinitionsByName) xs
+    threadIds <- traverse forkAssemble xs
     waitForFuturesToComplete threadIds
     goAssembleAsync globalState fcAndDefinitionsByName xss
+  where
+    forkAssemble : Name -> IO ThreadID
+    forkAssemble name = fork $ assemble globalState fcAndDefinitionsByName name
 
 assembleAsync : AsmGlobalState -> Map String (FC, NamedDef) -> List (List Name) -> IO ()
 assembleAsync globalState fcAndDefinitionsByName names =

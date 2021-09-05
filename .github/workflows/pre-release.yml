@@ -8,7 +8,7 @@ on:
 env:
   IDRIS2_PREVIOUS_VERSION: 0.2.2
   IDRIS2_PREVIOUS_VERSION_SUFFIX: '-SNAPSHOT'
-  IDRIS2_PREVIOUS_VERSION_TAG_SUFFIX: '-20210831.2'
+  IDRIS2_PREVIOUS_VERSION_TAG_SUFFIX: '-20210905'
   IDRIS2_TESTS_CG: jvm
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
 
@@ -42,7 +42,7 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
-          prerelease: false
+          prerelease: true
           title: "Development Build"
           files: |
             idris-jvm-compiler/target/idris2-0.3.0-SNAPSHOT.zip

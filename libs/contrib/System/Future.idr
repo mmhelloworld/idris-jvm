@@ -10,6 +10,7 @@ data Future : Type -> Type where [external]
 %extern prim__makeFuture : {0 a : Type} -> Lazy a -> Future a
 
 %foreign "scheme:blodwen-await-future"
+         "jvm:await(java/lang/Object java/util/concurrent/Future java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Futures"
 prim__awaitFuture : {0 a : Type} -> Future a -> a
 
 export

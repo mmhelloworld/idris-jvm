@@ -381,6 +381,13 @@ contribLibraryTests = testsInDir "contrib" (const True) "Contrib library" [Chez,
 codegenTests : IO TestPool
 codegenTests = testsInDir "codegen" (const True) "Code generation" [] Nothing
 
+jvmTests : TestPool
+jvmTests = MkTestPool "JVM backend" [] (Just Jvm)
+    [ "jvm001", "jvm002", "jvm003", "jvm004", "jvm005", "jvm006",
+      "jvm007", "jvm008", "jvm009", "jvm011", "jvm012", "jvm014",
+      "jvm015", "jvm016", "jvm017", "jvm018", "jvm019", "jvm020",
+      "reg001", "tailrec001", "concurrency001" ]
+
 main : IO ()
 main = runner $
   [ testPaths "ttimp" ttimpTests
@@ -420,6 +427,7 @@ main = runner $
   , !vmcodeInterpTests
   , !templateTests
   , !codegenTests
+  , testPaths "jvm" jvmTests
   ]
   ++ map (testPaths "allschemes" . idrisTestsAllSchemes) [Chez, Racket]
   ++ map (testPaths "allbackends" . idrisTestsAllBackends) [Chez, Node, Racket, C]

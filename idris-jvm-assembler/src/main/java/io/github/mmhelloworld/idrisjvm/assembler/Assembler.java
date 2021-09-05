@@ -1,7 +1,5 @@
 package io.github.mmhelloworld.idrisjvm.assembler;
 
-import io.github.mmhelloworld.idrisjvm.runtime.Conversion;
-import io.github.mmhelloworld.idrisjvm.runtime.IdrisSystem;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.FieldVisitor;
@@ -16,15 +14,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Deque;
 import java.util.HashMap;
@@ -38,10 +27,9 @@ import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.stream.IntStream;
 
+import static io.github.mmhelloworld.idrisjvm.runtime.Conversion.intToBoolean;
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static java.util.Collections.emptyMap;
 import static java.util.Objects.requireNonNull;
 import static java.util.jar.Attributes.Name.MAIN_CLASS;
 import static java.util.jar.Attributes.Name.MANIFEST_VERSION;
@@ -54,6 +42,7 @@ import static org.objectweb.asm.Opcodes.AASTORE;
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
+import static org.objectweb.asm.Opcodes.ACC_STATIC;
 import static org.objectweb.asm.Opcodes.ACC_SUPER;
 import static org.objectweb.asm.Opcodes.ACONST_NULL;
 import static org.objectweb.asm.Opcodes.ALOAD;
@@ -95,6 +84,7 @@ import static org.objectweb.asm.Opcodes.FLOAD;
 import static org.objectweb.asm.Opcodes.FRETURN;
 import static org.objectweb.asm.Opcodes.FSTORE;
 import static org.objectweb.asm.Opcodes.GETFIELD;
+import static org.objectweb.asm.Opcodes.GOTO;
 import static org.objectweb.asm.Opcodes.I2B;
 import static org.objectweb.asm.Opcodes.I2C;
 import static org.objectweb.asm.Opcodes.I2D;
@@ -186,9 +176,9 @@ public final class Assembler {
     private ClassWriter cw;
     private MethodVisitor mv;
     private FieldVisitor fv;
+    private MethodVisitor classInitMethodVisitor;
     private String className;
     private String methodName;
-    private int localVarCount;
 
     public Assembler() {
         this.cws = new HashMap<>();
@@ -394,13 +384,26 @@ public final class Assembler {
         jarOutputStream.closeEntry();
     }
 
-    public void createField(int acc, String className, String fieldName, String desc, String sig, Object value) {
-        cw = cws.computeIfAbsent(className, cname -> {
-            final ClassWriter classWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-            classWriter.visit(52, ACC_PUBLIC, cname, null, "java/lang/Object", null);
-            return classWriter;
-        });
+    public Assembler classInitEnd() {
+        if (classInitMethodVisitor != null) {
+            classInitMethodVisitor.visitInsn(RETURN);
+            classInitMethodVisitor.visitMaxs(-1, -1);
+            classInitMethodVisitor.visitEnd();
+        }
+        return this;
+    }
+
+    public void createField(int acc, String sourceFile, String className, String fieldName, String desc, String sig,
+                            Object value) {
+        cw = cws.computeIfAbsent(className, cname -> createClassWriter(sourceFile, cname));
         fv = cw.visitField(acc, fieldName, desc, sig, value);
+    }
+
+    private ClassWriter createClassWriter(String sourceFile, String cname) {
+        ClassWriter classWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+        classWriter.visit(52, ACC_PUBLIC + ACC_FINAL, cname, null, "java/lang/Object", null);
+        classWriter.visitSource(sourceFile, null);
+        return classWriter;
     }
 
     public void createLabel(String labelName) {
@@ -430,32 +433,36 @@ public final class Assembler {
                              List<Annotation> annotations,
                              List<List<Annotation>> paramAnnotations) {
         if (mv != null) {
-            classMethodVisitorStack.addFirst(new ClassMethodVisitor(this.className, this.methodName, cw, mv,
-                env));
+            classMethodVisitorStack.addFirst(new ClassMethodVisitor(this.className, this.methodName, cw, mv, env));
             env = new HashMap<>();
         }
         this.className = className;
         this.methodName = methodName;
-        cw = cws.computeIfAbsent(className, cname -> {
-            final ClassWriter classWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-            classWriter.visit(52, ACC_PUBLIC + ACC_FINAL, className, null, "java/lang/Object", null);
-            classWriter.visitSource(sourceFile, null);
-            return classWriter;
-        });
+        cw = cws.computeIfAbsent(className, cname -> createClassWriter(sourceFile, className));
         String[] exceptionsArr = exceptions == null ? null : exceptions.toArray(new String[0]);
-        mv = cw.visitMethod(
-            acc,
-            methodName,
-            desc,
-            sig,
-            exceptionsArr);
+        mv = "<clinit>".equals(methodName) ?
+            getOrCreateClassInitMethodVisitor() :
+            cw.visitMethod(acc, methodName, desc, sig, exceptionsArr);
         handleCreateMethod(mv, annotations, paramAnnotations);
+    }
+
+    public MethodVisitor getClassInitMethodVisitor() {
+        return classInitMethodVisitor;
+    }
+
+    private MethodVisitor getOrCreateClassInitMethodVisitor() {
+        if (classInitMethodVisitor != null) {
+            return classInitMethodVisitor;
+        } else {
+            classInitMethodVisitor = cw.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
+            classInitMethodVisitor.visitCode();
+            return classInitMethodVisitor;
+        }
     }
 
     public void createIdrisConstructorClass(String className, Object isStringConstructor,
                                             int constructorParameterCount) {
-        createIdrisConstructorClass(className, Conversion.intToBoolean((int) isStringConstructor),
-            constructorParameterCount);
+        createIdrisConstructorClass(className, intToBoolean((int) isStringConstructor), constructorParameterCount);
     }
 
     public void createIdrisConstructorClass(String className, boolean isStringConstructor,
@@ -717,17 +724,13 @@ public final class Assembler {
         return methodName;
     }
 
-    public int getLocalVarCount() {
-        return localVarCount;
-    }
-
     public void gotoLabel(String labelName) {
         Label label = (Label) env.get(labelName);
         if (label == null) {
             throw new NullPointerException(format("Label %s cannot be null. Current method: %s, Environment: %s",
                 labelName, methodName, env));
         }
-        mv.visitJumpInsn(Opcodes.GOTO, label);
+        mv.visitJumpInsn(GOTO, label);
     }
 
     public void i2b() {
@@ -871,7 +874,7 @@ public final class Assembler {
     }
 
     public void invokeMethod(int invocType, String className, String methodName, String desc, Object isInterface) {
-        invokeMethod(invocType, className, methodName, desc, Conversion.intToBoolean((int) isInterface));
+        invokeMethod(invocType, className, methodName, desc, intToBoolean((int) isInterface));
     }
 
     public void invokeMethod(int invocType, String className, String methodName, String desc, boolean isInterface) {
@@ -1078,7 +1081,9 @@ public final class Assembler {
     }
 
     public void methodCodeEnd() {
-        mv.visitEnd();
+        if (mv != classInitMethodVisitor) {
+            mv.visitEnd();
+        }
         if (!classMethodVisitorStack.isEmpty()) {
             ClassMethodVisitor classMethodVisitor = classMethodVisitorStack.removeFirst();
             cw = classMethodVisitor.getClassVisitor();
@@ -1120,10 +1125,6 @@ public final class Assembler {
         cw.visitSource(sourceFileName, null);
     }
 
-    public void updateLocalVarCount(int localVarCount) {
-        this.localVarCount = localVarCount;
-    }
-
     public void lineNumber(int lineNumber, String label) {
         mv.visitLineNumber(lineNumber, (Label) env.get(label));
     }
@@ -1137,26 +1138,6 @@ public final class Assembler {
         requireNonNull(end, format("Line number end label '%s' for variable %s at index %d must not be null",
             lineNumberEndLabel, name, index));
         mv.visitLocalVariable(name, typeDescriptor, signature, start, end, index);
-    }
-
-    public static void copyFromJar(String source, Path target) throws URISyntaxException, IOException {
-        URI resource = IdrisSystem.class.getResource("").toURI();
-        FileSystem fileSystem = FileSystems.newFileSystem(resource, emptyMap());
-        Path jarPath = fileSystem.getPath(source);
-        Files.walkFileTree(jarPath, new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                Path currentTarget = target.resolve(jarPath.relativize(dir).toString());
-                Files.createDirectories(currentTarget);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                Files.copy(file, target.resolve(jarPath.relativize(file).toString()), REPLACE_EXISTING);
-                return FileVisitResult.CONTINUE;
-            }
-        });
     }
 
     private void handleCreateMethod(MethodVisitor mv, List<Annotation> annotations,
@@ -1179,10 +1160,6 @@ public final class Assembler {
             });
         }
 
-    }
-
-    private String getClassNameLastPart(String className) {
-        return className.substring(className.lastIndexOf('/') + 1);
     }
 
     private Object toOpcode(String s) {

@@ -200,7 +200,7 @@ osClockValid clk = fromPrim (prim__osClockValid clk)
 %foreign "scheme:blodwen-clock-second"
          "RefC:clockSecond"
          "javascript:lambda:(x)=>BigInt(Math.floor(x/1000))"
-         "jvm:.getSeconds(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock long),io/github/mmhelloworld/idrisjvm/runtime/IdrisClock"
+         "jvm:.getSeconds(i:io/github/mmhelloworld/idrisjvm/runtime/IdrisClock long),io/github/mmhelloworld/idrisjvm/runtime/IdrisClock"
 prim__osClockSecond : OSClock -> PrimIO Bits64
 
 ||| Get the second of time from the given `OSClock`.
@@ -210,7 +210,7 @@ osClockSecond clk = fromPrim (prim__osClockSecond clk)
 %foreign "scheme:blodwen-clock-nanosecond"
          "RefC:clockNanosecond"
          "javascript:lambda:(x)=>BigInt(Math.floor((x%1000)*1000*1000))"
-         "jvm:.getNanoSeconds(io/github/mmhelloworld/idrisjvm/runtime/IdrisClock long),io/github/mmhelloworld/idrisjvm/runtime/IdrisClock"
+         "jvm:.getNanoSeconds(i:io/github/mmhelloworld/idrisjvm/runtime/IdrisClock long),io/github/mmhelloworld/idrisjvm/runtime/IdrisClock"
 prim__osClockNanosecond : OSClock -> PrimIO Bits64
 
 ||| Get the nanosecond of time from the given `OSClock`.

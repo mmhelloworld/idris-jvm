@@ -63,9 +63,16 @@ namespace Object
     %foreign jvm' "java/lang/Object" ".toString" "java/lang/Object" "String"
     prim_toString : Object -> PrimIO String
 
+    %foreign jvm' "java/lang/Object" ".hashCode" "java/lang/Object" "int"
+    prim_hashCode : Object -> PrimIO Int
+
     export
     toString : a -> String
     toString obj = unsafePerformIO $ primIO $ prim_toString (believe_me obj)
+
+    export
+    hashCode : a -> Int
+    hashCode obj = unsafePerformIO $ primIO $ prim_hashCode (believe_me obj)
 
 public export
 %foreign "jvm:nullValue(java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
@@ -299,10 +306,6 @@ public export
 runtimeClass : String
 runtimeClass = getRuntimeClass "Runtime"
 
-export
-comparing : Ord a => (b -> a) -> b -> b -> Ordering
-comparing p x y = compare (p x) (p y)
-
 public export
 record Scope where
     constructor MkScope
@@ -410,12 +413,11 @@ namespace AsmGlobalState
     addFunction : HasIO io => AsmGlobalState -> Jname -> Function -> io ()
     addFunction globalState name function = jaddFunction globalState (getSimpleName name) function
 
-    public export
+    export
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".isUntypedFunction"
                 "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "boolean"
     prim_jisUntypedFunction : AsmGlobalState -> String -> PrimIO Bool
 
-    public export
     jisUntypedFunction : HasIO io => AsmGlobalState -> String -> io Bool
     jisUntypedFunction state name = primIO $ prim_jisUntypedFunction state name
 
@@ -566,7 +568,7 @@ data Asm : Type -> Type where
     ClassCodeStart : Int -> Access -> (className: String) -> (signature: Maybe String) -> (parentClassName: String) ->
                         (interfaces: List String) -> List Asm.Annotation -> Asm ()
     CreateClass : ClassOpts -> Asm ()
-    CreateField : List Access -> (className: String) -> (fieldName: String) -> (descriptor: String) ->
+    CreateField : List Access -> (sourceFileName: String) -> (className: String) -> (fieldName: String) -> (descriptor: String) ->
                     (signature: Maybe String) -> Maybe FieldInitialValue -> Asm ()
     CreateLabel : String -> Asm String
     CreateMethod : List Access -> (sourceFileName: String) -> (className: String) ->
@@ -734,14 +736,17 @@ Show AsmState where
     ]
 
 namespace AsmDo
+  %inline
   public export
   (>>=) : Asm a -> (a -> Asm b) -> Asm b
   (>>=) = Bind
 
+%inline
 public export
 Functor Asm where
   map f a = Bind a (\a' => Pure $ f a')
 
+%inline
 public export
 Applicative Asm where
   pure = Pure
@@ -1172,6 +1177,7 @@ addVariableType var ty = do
     _ <- LiftIo $ Map.put (variableTypes scope) var newTy
     Pure newTy
 
+%inline
 export
 lambdaMaxCountPerMethod: Int
 lambdaMaxCountPerMethod = 5
@@ -1294,6 +1300,7 @@ prim_newJHandle : Int -> String -> String -> String -> Bool -> PrimIO JHandle
         "io/github/mmhelloworld/idrisjvm/assembler/JBsmArg$JBsmArgHandle"
 prim_newJBsmArgHandle : JHandle -> PrimIO JBsmArgHandle
 
+%inline
 newJBsmArgHandle : HasIO io => JHandle -> io JBsmArgHandle
 newJBsmArgHandle = primIO . prim_newJBsmArgHandle
 
@@ -1303,6 +1310,7 @@ newJBsmArgHandle = primIO . prim_newJBsmArgHandle
         "io/github/mmhelloworld/idrisjvm/assembler/JBsmArg$JBsmArgGetType"
 prim_newJBsmArgGetType : String -> PrimIO JBsmArgGetType
 
+%inline
 newJBsmArgGetType : HasIO io => String -> io JBsmArgGetType
 newJBsmArgGetType = primIO . prim_newJBsmArgGetType
 
@@ -1421,7 +1429,7 @@ loadBigInteger i = do
     InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export
-getMethodDescriptor :InferredFunctionType -> String
+getMethodDescriptor : InferredFunctionType -> String
 getMethodDescriptor (MkInferredFunctionType retTy []) = "()" ++ getJvmTypeDescriptor retTy
 getMethodDescriptor (MkInferredFunctionType retTy argTypes) =
     let argDescs = getJvmTypeDescriptor <$> argTypes
@@ -1452,17 +1460,10 @@ export
         "String" "String"
 getIdrisConstructorClassName : String -> String
 
+%inline
 metafactoryDesc : String
 metafactoryDesc =
-  concat $ the (List String) [ "("
-         , "Ljava/lang/invoke/MethodHandles$Lookup;"
-         , "Ljava/lang/String;Ljava/lang/invoke/MethodType;"
-         , "Ljava/lang/invoke/MethodType;"
-         , "Ljava/lang/invoke/MethodHandle;"
-         , "Ljava/lang/invoke/MethodType;"
-         , ")"
-         , "Ljava/lang/invoke/CallSite;"
-         ]
+    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
 
 export
 invokeDynamic : (implClassName: String) -> (implMethodName: String) -> (interfaceMethodName: String) ->
@@ -1593,10 +1594,10 @@ runAsm state (ClassCodeStart version access className sig parent intf anns) = as
 
 runAsm state (CreateClass opts) =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createClass" [toJClassOpts opts]
-runAsm state (CreateField accs className fieldName desc sig fieldInitialValue) = assemble state $ do
+runAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue) = assemble state $ do
   let jaccs = sum $ accessNum <$> accs
   jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createField"
-    [assembler state, jaccs, className, fieldName, desc, maybeToNullable sig,
+    [assembler state, jaccs, sourceFileName, className, fieldName, desc, maybeToNullable sig,
         maybeToNullable (toJFieldInitialValue <$> fieldInitialValue)]
 
 runAsm state (CreateLabel label) = assemble state $ do

@@ -21,10 +21,12 @@ export
 assemblerClass : String -> String
 assemblerClass name = "io/github/mmhelloworld/idrisjvm/assembler/" ++ name
 
+%foreign "jvm:transformCharacters,io/github/mmhelloworld/idrisjvm/assembler/IdrisName"
 export
 cleanupIdentifier : String -> String
-cleanupIdentifier value = unsafePerformIO $
-    jvmStatic String "io/github/mmhelloworld/idrisjvm/assembler/IdrisName.transformCharacters" [value]
+
+%foreign "jvm:.replace,java/lang/String"
+replace : String -> Char -> Char -> String
 
 export
 getSimpleName : Jname -> String
@@ -45,7 +47,7 @@ implementation Show Jname where
 
 export
 jvmName : Name -> Jname
-jvmName (NS ns n) = Jqualified (showSep "/" (cleanupIdentifier <$> List.reverse ns)) $ getSimpleName (jvmName n)
+jvmName (NS ns n) = Jqualified (replace (cleanupIdentifier $ showNSWithSep "$" ns) '$' '/') $ getSimpleName (jvmName n)
 jvmName (UN n) = Jsimple $ cleanupIdentifier n
 jvmName (MN n i) = Jsimple $ cleanupIdentifier n ++ "$" ++ show i
 jvmName (PV n d) = Jsimple $ "$patvar" ++ getSimpleName (jvmName n)

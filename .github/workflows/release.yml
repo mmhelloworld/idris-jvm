@@ -1,13 +1,9 @@
-name: Install
+name: "release"
+
 on:
   push:
-    branches:
-      - '*'
     tags:
-      - '*'
-  pull_request:
-    branches:
-      - main
+      - "v*"
 
 env:
   IDRIS2_PREVIOUS_VERSION: 0.2.2
@@ -17,8 +13,10 @@ env:
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  tagged-release:
+    name: "Tagged Release"
+    runs-on: "ubuntu-latest"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -38,4 +36,12 @@ jobs:
           unzip idris2-$IDRIS2_PREVIOUS_VERSION$IDRIS2_PREVIOUS_VERSION_SUFFIX.zip -d $HOME/bin
           echo "::add-path::$HOME/bin/idris2-$IDRIS2_PREVIOUS_VERSION$IDRIS2_PREVIOUS_VERSION_SUFFIX/bin"
       - name: Build
-        run: mvn --batch-mode install -Dinteractive= -Didris.tests="only=jvm"
+        run: mvn --batch-mode install -DskipTests
+
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
+          title: "Release 0.3.0"
+          files: |
+            idris-jvm-compiler/target/idris2-0.3.0-SNAPSHOT.zip

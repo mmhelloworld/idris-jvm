@@ -65,6 +65,7 @@
                         <configuration>
                             <skip>${skipIdrisClean}</skip>
                             <executable>make</executable>
+                            <workingDirectory>${project.parent.basedir}/tests</workingDirectory>
                             <arguments>
                                 <argument>clean</argument>
                             </arguments>
@@ -77,6 +78,9 @@
                             <goal>exec</goal>
                         </goals>
                         <configuration>
+                            <environmentVariables>
+                                <INTERACTIVE/>
+                            </environmentVariables>
                             <skip>${skipTests}</skip>
                             <executable>make</executable>
                             <workingDirectory>${project.parent.basedir}</workingDirectory>
@@ -159,8 +163,8 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.github.mmhelloworld.idris2</groupId>
-            <artifactId>runtime</artifactId>
+            <groupId>io.github.mmhelloworld</groupId>
+            <artifactId>idris-jvm-runtime</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

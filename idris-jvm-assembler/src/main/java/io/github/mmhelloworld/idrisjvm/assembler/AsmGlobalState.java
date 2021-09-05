@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 import static java.util.Collections.synchronizedSet;
 import static java.util.stream.Collectors.toMap;
@@ -68,18 +69,15 @@ public final class AsmGlobalState {
         if (outputDirectory.isEmpty()) {
             interpret(mainClass.replace('/', '.'));
         } else {
-            assemblers.values().parallelStream()
-                .flatMap(assembler -> assembler.getClassWriters().entrySet().stream())
+            getClassNameAndClassWriters()
                 .forEach(classNameAndClassWriter ->
-                    writeClass(classNameAndClassWriter.getKey(), classNameAndClassWriter.getValue(),
-                        outputDirectory));
+                    writeClass(classNameAndClassWriter.getKey(), classNameAndClassWriter.getValue(), outputDirectory));
             Assembler.createJar(outputDirectory, outputFile, mainClass.replace('/', '.'));
         }
     }
 
     public void interpret(String mainClass) {
-        Map<String, byte[]> classes = assemblers.values().parallelStream()
-            .flatMap(assembler -> assembler.getClassWriters().entrySet().stream())
+        Map<String, byte[]> classes = getClassNameAndClassWriters()
             .collect(toMap(Entry::getKey, entry -> entry.getValue().toByteArray()));
         try {
             new InterpreterClassLoader(classes)
@@ -89,6 +87,12 @@ public final class AsmGlobalState {
         } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private Stream<Entry<String, ClassWriter>> getClassNameAndClassWriters() {
+        return assemblers.values().parallelStream()
+            .map(Assembler::classInitEnd)
+            .flatMap(assembler -> assembler.getClassWriters().entrySet().stream());
     }
 
     public void writeClass(String className, ClassWriter classWriter, String outputClassFileDir) {

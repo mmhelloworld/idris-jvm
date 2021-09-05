@@ -145,6 +145,9 @@ racketTests = testsInDir "racket" "Racket backend" {codegen = Just Racket}
 nodeTests : IO TestPool
 nodeTests = testsInDir "node" "Node backend" {codegen = Just Node}
 
+jvmTests : IO TestPool
+jvmTests = testsInDir "jvm" "JVM backend" {codegen = Just Jvm}
+
 vmcodeInterpTests : IO TestPool
 vmcodeInterpTests = testsInDir "vmcode" "VMCode interpreter"
 
@@ -218,6 +221,7 @@ main = (runner =<<) $ sequence $
   , refcTests
   , racketTests
   , nodeTests
+  , jvmTests
   , vmcodeInterpTests
   , templateTests
   , codegenTests

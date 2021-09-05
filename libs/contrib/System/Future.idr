@@ -11,6 +11,7 @@ data Future : Type -> Type where [external]
 prim__makeFuture : {0 a : Type} -> (() -> a) -> Future a
 
 %foreign "scheme:blodwen-await-future"
+         "jvm:await(java/lang/Object java/util/concurrent/Future java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Futures"
 prim__awaitFuture : {0 a : Type} -> Future a -> a
 
 export %inline -- inlining is important for correct context in codegens

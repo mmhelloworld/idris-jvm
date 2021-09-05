@@ -140,10 +140,10 @@ public final class Conversion {
         }
     }
 
-    static BigInteger toUnsignedBigInteger(long value) {
-        if (value >= 0L)
+    public static BigInteger toUnsignedBigInteger(long value) {
+        if (value >= 0L) {
             return BigInteger.valueOf(value);
-        else {
+        } else {
             int upper = (int) (value >>> 32);
             int lower = (int) value;
 

@@ -121,7 +121,7 @@ system cmd = primIO (prim__system cmd)
 
 %foreign support "idris2_time"
          "javascript:lambda:() => Math.floor(new Date().getTime() / 1000)"
-         "jvm:time(int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
+         "jvm:time(java/lang/Object int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__time : PrimIO Int
 
 ||| Return the number of seconds since epoch.

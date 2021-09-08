@@ -29,12 +29,12 @@ public final class IdrisSystem {
 
         // To conform to support/chez/support.ss
         String osNameProperty = getOsNameProperty();
-        if (osNameProperty.startsWith("windows")) {
-            OS_NAME = "windows";
-        } else if (osNameProperty.startsWith("mac")) {
+        if (osNameProperty.contains("mac") || osNameProperty.contains("darwin")) {
             OS_NAME = "darwin";
-        } else if (Stream.of("linux", "aix", "solaris", "sunos", "freebsd", "openbsd", "netbsd")
-            .anyMatch(osNameProperty::startsWith)) {
+        } else if (osNameProperty.contains("win")) {
+            OS_NAME = "windows";
+        } else if (Stream.of("nix", "nux", "aix", "solaris", "sunos", "freebsd", "openbsd", "netbsd")
+            .anyMatch(osNameProperty::contains)) {
             OS_NAME = "unix";
         } else {
             OS_NAME = "unknown";

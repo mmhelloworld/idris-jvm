@@ -189,33 +189,53 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     scopeIndex <- newScopeIndex
     let arityNat = length jvmArgumentTypes
     let arity = the Int $ cast arityNat
+    let isNilArity = arity == 0
     let argumentNames =
-       if arity > 0 then (\argumentIndex => "arg" ++ show argumentIndex) <$> [0 .. arity - 1] else []
+       if isNilArity then [] else (\argumentIndex => "arg" ++ show argumentIndex) <$> [0 .. arity - 1]
     let argumentTypesByName = SortedMap.fromList $ List.zip argumentNames jvmArgumentTypes
     isUntyped <- isUntypedFunction jname
+    let methodReturnType =
+        if isNilArity
+            then delayedType
+            else if jvmReturnType == IVoid || isUntyped then inferredObjectType else jvmReturnType
     let inferredFunctionType = MkInferredFunctionType
-            (if jvmReturnType == IVoid || isUntyped then inferredObjectType else jvmReturnType)
+            methodReturnType
             (if isUntyped then replicate arityNat inferredObjectType else stripInterfacePrefix <$> jvmArgumentTypes)
     scopes <- LiftIo $ JList.new {a=Scope}
-    let function =
-        MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName
-            (NmExtPrim fc (NS [] $ UN $ getPrimMethodName foreignFunctionName) [
-                NmCon fc (UN $ createExtPrimTypeSpec jvmReturnType) Nothing [],
-                NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
-                getJvmExtPrimArguments $ List.zip argumentTypes $ SortedMap.toList argumentTypesByName,
-                NmPrimVal fc WorldVal])
+    let externalFunctionBody =
+        NmExtPrim fc (NS (mkNamespace "") $ UN $ getPrimMethodName foreignFunctionName) [
+           NmCon fc (UN $ createExtPrimTypeSpec jvmReturnType) Nothing [],
+           NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
+           getJvmExtPrimArguments $ List.zip argumentTypes $ SortedMap.toList argumentTypesByName,
+           NmPrimVal fc WorldVal]
+    let functionBody =
+        if isNilArity
+            then NmDelay fc externalFunctionBody
+            else externalFunctionBody
+    let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName functionBody
     setCurrentFunction function
     LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
     let parameterTypes = parameterTypes inferredFunctionType
     argumentTypesByIndex <- LiftIo $
-        if arity > 0
-            then Map.fromList $ List.zip [0 .. arity - 1] parameterTypes
-            else Map.newTreeMap {key=Int} {value=InferredType}
+        if isNilArity
+            then Map.newTreeMap {key=Int} {value=InferredType}
+            else Map.fromList $ List.zip [0 .. arity - 1] parameterTypes
     argumentTypesByName <- LiftIo $ Map.fromList $ List.zip argumentNames parameterTypes
     argIndices <- LiftIo $ getArgumentIndices arity argumentNames
     let functionScope = MkScope scopeIndex Nothing argumentTypesByName argumentTypesByIndex argIndices argIndices
-                            jvmReturnType arity (0, 0) ("", "") []
+                            methodReturnType arity (0, 0) ("", "") []
     saveScope functionScope
+    when isNilArity $ do
+        let parentScopeIndex = scopeIndex
+        scopeIndex <- newScopeIndex
+        variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
+        allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+        variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+        allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+        let delayLambdaScope =
+            MkScope scopeIndex (Just parentScopeIndex) variableTypes allVariableTypes
+                variableIndices allVariableIndices IUnknown 0 (0, 0) ("", "") []
+        saveScope delayLambdaScope
     updateScopeVariableTypes
   where
     getJvmExtPrimArguments : List (CFType, String, InferredType) -> NamedCExp

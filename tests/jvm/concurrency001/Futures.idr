@@ -13,10 +13,7 @@ constant = do
 
 -- Issue related to usleep in MacOS brew chez
 macsleep : (us : Int) -> So (us >= 0) => IO ()
-macsleep us =
-  if (os == "darwin")
-    then sleep (us `div` 10000)
-    else usleep us
+macsleep us = sleep (us `div` 10000)
 
 partial
 futureHelloWorld : (Int, String) -> IO (Future Unit)

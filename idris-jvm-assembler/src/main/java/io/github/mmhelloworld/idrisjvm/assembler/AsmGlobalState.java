@@ -33,23 +33,23 @@ public final class AsmGlobalState {
         assemblers = new ConcurrentHashMap<>();
     }
 
-    public void addFunction(String name, Object value) {
+    public synchronized void addFunction(String name, Object value) {
         functions.put(name, value);
     }
 
-    public Object getFunction(String name) {
+    public synchronized Object getFunction(String name) {
         return functions.get(name);
     }
 
-    public void addUntypedFunction(String name) {
+    public synchronized void addUntypedFunction(String name) {
         untypedFunctions.add(name);
     }
 
-    public boolean isUntypedFunction(String name) {
+    public synchronized boolean isUntypedFunction(String name) {
         return untypedFunctions.contains(name);
     }
 
-    public Assembler getAssembler(String name) {
+    public synchronized Assembler getAssembler(String name) {
         return assemblers.computeIfAbsent(name, key -> new Assembler());
     }
 
@@ -57,11 +57,11 @@ public final class AsmGlobalState {
         return programName;
     }
 
-    public boolean hasConstructor(String name) {
+    public synchronized boolean hasConstructor(String name) {
         return constructors.contains(name);
     }
 
-    public void addConstructor(String name) {
+    public synchronized void addConstructor(String name) {
         constructors.add(name);
     }
 

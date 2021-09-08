@@ -65,6 +65,7 @@ EAGAIN =
 
 -- repeat without export to avoid dependency cycles
 %foreign "C:idrnet_errno, libidris2_support, idris_net.h"
+         jvm' runtimeClass "getErrorNumber" "java/lang/Object" "int"
 prim__idrnet_errno : PrimIO Int
 
 %foreign "C:isNull, libidris2_support, idris_support.h"

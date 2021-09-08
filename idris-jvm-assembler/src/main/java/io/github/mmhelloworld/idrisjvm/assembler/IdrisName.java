@@ -99,10 +99,10 @@ public final class IdrisName {
         if (size > 1) {
             List<String> packageNameParts = nameParts.subList(1, size - 1);
             LinkedList<String> prefixedPackagedNames = packageNameParts.stream()
-                .map(packageName -> "M$" + packageName)
+                .map(packageName -> "M_" + packageName)
                 .collect(toCollection(LinkedList::new));
             String rootPackage = nameParts.get(0);
-            prefixedPackagedNames.add(0, rootPackage.equals(programName) ? rootPackage : "M$" + rootPackage);
+            prefixedPackagedNames.add(0, rootPackage.equals(programName) ? rootPackage : "M_" + rootPackage);
             String className = nameParts.get(size - 1);
             prefixedPackagedNames.add(className);
             return prefixedPackagedNames;

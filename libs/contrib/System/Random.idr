@@ -35,7 +35,7 @@ Random Int where
      in map (+ lo) $ liftIO $ randomInt range
 
 %foreign "scheme:blodwen-random"
-         "jvm:nextDouble(double),io/github/mmhelloworld/idrisjvm/runtime/Random"
+         "jvm:nextDouble(java/lang/Object double),io/github/mmhelloworld/idrisjvm/runtime/Random"
 prim__randomDouble : PrimIO Double
 
 randomDouble : IO Double

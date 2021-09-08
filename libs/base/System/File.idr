@@ -35,6 +35,7 @@ prim__error : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileErrno"
          "node:support:fileErrno,support_system_file"
+         jvm' runtimeClass "getErrorNumber" "java/lang/Object" "int"
 prim__fileErrno : PrimIO Int
 
 %foreign support "idris2_seekLine"

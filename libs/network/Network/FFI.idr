@@ -65,6 +65,7 @@ prim__idrnet_sockaddr_port : (sockfd : SocketDescriptor) -> PrimIO Int
 
 
 %foreign "C:idrnet_create_sockaddr, libidris2_support, idris_net.h"
+         jvm' idrisSocketClass "createSocketAddress" "java/lang/Object" "java/lang/Object"
 export
 prim__idrnet_create_sockaddr : PrimIO AnyPtr
 
@@ -183,6 +184,7 @@ export
 prim__idrnet_geteagain : PrimIO Int
 
 %foreign "C:idrnet_errno, libidris2_support, idris_net.h"
+         jvm' runtimeClass "getErrorNumber" "java/lang/Object" "int"
 export
 prim__idrnet_errno : PrimIO Int
 

@@ -107,7 +107,7 @@ namespace JList
     JList : Type -> Type
     JList a = JListNative
 
-    %foreign "jvm:<init>(java/util/ArrayList),java/util/ArrayList"
+    %foreign "jvm:<init>(java/lang/Object java/util/ArrayList),java/util/ArrayList"
     prim_newArrayList : PrimIO JListNative
 
     %foreign jvm' "java/util/List" ".add" "i:java/util/List int java/lang/Object" "void"
@@ -206,7 +206,7 @@ namespace Map
   Map : Type -> Type -> Type
   Map k v = JMap
 
-  %foreign "jvm:<init>(java/util/TreeMap),java/util/TreeMap"
+  %foreign "jvm:<init>(java/lang/Object java/util/TreeMap),java/util/TreeMap"
   prim_newTreeMap : PrimIO JMap
 
   export
@@ -754,11 +754,6 @@ Applicative Asm where
   (<*>) f a = Bind f (\f' =>
               Bind a (\a' =>
               Pure (f' a')))
-
-public export
-%foreign
-    "jvm:<init>(io/github/mmhelloworld/idrisjvm/assembler/Assembler),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
-newAssembler : PrimIO Assembler
 
 public export
 newAsmState : HasIO io => AsmGlobalState -> Assembler -> io AsmState
@@ -1516,7 +1511,7 @@ debugFunction = unsafePerformIO $ getEnv "IDRIS_JVM_DEBUG_FUNCTION"
 namespace LocalDateTime
     data LocalDateTime : Type where [external]
 
-    %foreign "jvm:now(java/time/LocalDateTime),java/time/LocalDateTime"
+    %foreign "jvm:now(java/lang/Object java/time/LocalDateTime),java/time/LocalDateTime"
     prim_now : PrimIO LocalDateTime
 
     %foreign jvm' "java/time/LocalDateTime" ".toString" "java/time/LocalDateTime" "String"
@@ -1528,7 +1523,7 @@ namespace LocalDateTime
         now <- primIO prim_now
         primIO $ prim_toString now
 
-%foreign "jvm:getCurrentThreadName(java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
+%foreign "jvm:getCurrentThreadName(java/lang/Object java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 prim_getCurrentThreadName : PrimIO String
 
 export

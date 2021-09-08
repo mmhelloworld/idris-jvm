@@ -104,7 +104,7 @@ system cmd = primIO (prim__system cmd)
 
 %foreign support "idris2_time"
          "scheme:blodwen-time"
-         "jvm:time(int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
+         "jvm:time(java/lang/Object int),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__time : PrimIO Int
 
 export

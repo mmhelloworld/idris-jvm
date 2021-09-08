@@ -189,7 +189,7 @@
                             <repositoryName>exec/idris2_app</repositoryName>
                             <repositoryLayout>flat</repositoryLayout>
                             <assembleDirectory>${project.parent.basedir}/build</assembleDirectory>
-                            <extraJvmArguments>-Xss36m -Xms2g -Xmx3g</extraJvmArguments>
+                            <extraJvmArguments>-Xss36m -Xms3g -Xmx3g</extraJvmArguments>
                             <programs>
                                 <program>
                                     <mainClass>idris2.Main</mainClass>

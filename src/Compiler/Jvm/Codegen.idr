@@ -270,15 +270,8 @@ mutual
                         loadVar types ty ty targetVariableIndex
                         storeVar ty ty argIndex
 
-    assembleExpr isTailCall returnType (NmApp _ (NmRef _ idrisName) []) = do
-        let jname = jvmName idrisName
-        let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
-        Field GetStatic (className functionName) (methodName functionName)
-            "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
-        InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
-            "()Ljava/lang/Object;" False
-        asmCast inferredObjectType returnType
-        when isTailCall $ asmReturn returnType
+    assembleExpr isTailCall returnType (NmApp _ (NmRef _ idrisName) []) =
+        assembleNmAppNilArity isTailCall returnType idrisName
     assembleExpr isTailCall returnType (NmApp _ (NmRef _ idrisName) args) = do
         -- Not a tail call, unwrap possible trampoline thunks
         let jname = jvmName idrisName
@@ -288,14 +281,17 @@ mutual
                 addUntypedFunction jname
                 Pure $ MkInferredFunctionType inferredObjectType $ replicate (length args) inferredObjectType
         let paramTypes = parameterTypes functionType
-        let argsWithTypes = List.zip args paramTypes
-        traverse assembleParameter argsWithTypes
-        let methodReturnType = InferredFunctionType.returnType functionType
-        let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType paramTypes
-        let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
-        InvokeMethod InvokeStatic (className functionName) (methodName functionName) methodDescriptor False
-        asmCast methodReturnType returnType
-        when isTailCall $ asmReturn returnType
+        if paramTypes == []
+            then assembleNmAppNilArity isTailCall returnType idrisName
+            else do
+                let argsWithTypes = List.zip args paramTypes
+                traverse assembleParameter argsWithTypes
+                let methodReturnType = InferredFunctionType.returnType functionType
+                let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType paramTypes
+                let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
+                InvokeMethod InvokeStatic (className functionName) (methodName functionName) methodDescriptor False
+                asmCast methodReturnType returnType
+                when isTailCall $ asmReturn returnType
 
     assembleExpr isTailCall returnType (NmApp _ lambdaVariable [arg]) = do
         assembleExpr False inferredLambdaType lambdaVariable
@@ -405,6 +401,17 @@ mutual
         asmCast inferredObjectType returnType
         when isTailCall $ asmReturn returnType
     assembleExpr _ _ expr = Throw (getFC expr) $ "Cannot compile " ++ show expr ++ " yet"
+
+    assembleNmAppNilArity : (isTailCall : Bool) -> InferredType -> Name -> Asm ()
+    assembleNmAppNilArity isTailCall returnType idrisName = do
+        let jname = jvmName idrisName
+        let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
+        Field GetStatic (className functionName) (methodName functionName)
+            "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
+        InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
+            "()Ljava/lang/Object;" False
+        asmCast inferredObjectType returnType
+        when isTailCall $ asmReturn returnType
 
     unsignedIntToBigInteger : InferredType -> NamedCExp -> Asm ()
     unsignedIntToBigInteger returnType expr = do
@@ -1521,10 +1528,6 @@ mutual
     jvmExtPrim fc _ prim args = Throw fc $ "Unsupported external function " ++ show prim ++ "(" ++
         (show $ showNamedCExp 0 <$> args) ++ ")"
 
-isDelayedExpr : NamedCExp -> Bool
-isDelayedExpr (NmDelay _ _) = True
-isDelayedExpr _ = False
-
 assembleDefinition : Name -> FC -> Asm ()
 assembleDefinition idrisName fc = do
     let jname = jvmName idrisName
@@ -1553,7 +1556,7 @@ assembleDefinition idrisName fc = do
     debug $ showNamedCExp 0 optimizedExpr
     let fileName = fst $ getSourceLocationFromFc fc
     let descriptor = getMethodDescriptor functionType
-    let isField = arity == 0 && isDelayedExpr optimizedExpr
+    let isField = arity == 0
     let classInitOrMethodName = if isField then "<clinit>" else methodName
     when isField $ do
         CreateField [Public, Static, Final] fileName declaringClassName methodName
@@ -1579,7 +1582,7 @@ assembleDefinition idrisName fc = do
             MaxStackAndLocal (-1) (-1)
             MethodCodeEnd
         else do
-            withScope $ assembleExpr False methodReturnType optimizedExpr
+            withScope $ assembleExpr False delayedType optimizedExpr
             Field PutStatic declaringClassName methodName "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
 
 createMainMethod : String -> Jname -> Asm ()

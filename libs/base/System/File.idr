@@ -38,7 +38,7 @@ prim__error : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileErrno"
          "node:lambda:()=>-BigInt(process.__lasterr.errno)"
-         jvm runtimeClass "getErrorNumber"
+         jvm' runtimeClass "getErrorNumber" "java/lang/Object" "int"
 prim__fileErrno : PrimIO Int
 
 %foreign support "idris2_readLine"

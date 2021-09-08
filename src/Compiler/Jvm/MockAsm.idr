@@ -18,7 +18,7 @@ import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
 import Compiler.Jvm.ShowUtil
 
-%foreign "jvm:.toString,java/lang/Object"
+%foreign "jvm:.toString(java/lang/Object java/lang/String),java/lang/Object"
 objectToString : Object -> IO String
 
 export

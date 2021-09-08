@@ -79,12 +79,12 @@ prim__getString : Ptr String -> String
 prim__putChar : Char -> (1 x : %World) -> IORes ()
 %foreign
     "C:getchar,libc 6"
-    "jvm:getChar(char),io/github/mmhelloworld/idrisjvm/runtime/Console"
+    "jvm:getChar(java/lang/Object char),io/github/mmhelloworld/idrisjvm/runtime/Console"
 %extern prim__getChar : (1 x : %World) -> IORes Char
 
 %foreign "C:idris2_getStr,libidris2_support"
          "node:support:getStr,support_system_file"
-         "jvm:getString,io/github/mmhelloworld/idrisjvm/runtime/Console"
+         "jvm:getString(java/lang/Object java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Console"
 prim__getStr : PrimIO String
 
 %foreign "C:idris2_putStr,libidris2_support"

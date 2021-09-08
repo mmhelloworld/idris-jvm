@@ -30,17 +30,17 @@ public class IdrisNameTest {
 
     static Stream<Arguments> getFunctionName() {
         return Stream.of(
-            arguments("Data/List", "take", IdrisList.fromIterable(asList("M$Data/List","take"))),
+            arguments("Data/List", "take", IdrisList.fromIterable(asList("M_Data/List","take"))),
             arguments("Main", "bar", IdrisList.fromIterable(asList("main/Main","bar"))),
             arguments("Foo", "bar", IdrisList.fromIterable(asList("main/Foo","bar"))),
-            arguments("Main/Foo", "bar", IdrisList.fromIterable(asList("M$Main/Foo","bar"))),
-            arguments("Main/Foo/Bar/Baz", "bar", IdrisList.fromIterable(asList("M$Main/M$Foo/M$Bar/Baz","bar"))));
+            arguments("Main/Foo", "bar", IdrisList.fromIterable(asList("M_Main/Foo","bar"))),
+            arguments("Main/Foo/Bar/Baz", "bar", IdrisList.fromIterable(asList("M_Main/M_Foo/M_Bar/Baz","bar"))));
     }
 
     static Stream<Arguments> getConstructorClassName() {
         return Stream.of(
-            arguments("Data/List/Take", "M$Data/M$List/Take"),
-            arguments("Prelude/Foo", "M$Prelude/Foo"),
+            arguments("Data/List/Take", "M_Data/M_List/Take"),
+            arguments("Prelude/Foo", "M_Prelude/Foo"),
             arguments("Prelude", "main/Prelude")
         );
     }

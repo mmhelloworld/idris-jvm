@@ -120,7 +120,7 @@ getForeignCallbackDeclarationType fc _ = throwExplicitFunctionDescriptorRequired
  -}
 export
 parseForeignType : FC -> String -> ForeignImplementationType -> Asm ForeignType
-parseForeignType fc descriptor implementationType = case List1.toList $ Strings.split (== '#') descriptor of
+parseForeignType fc descriptor implementationType = case toList $ Strings.split (== '#') descriptor of
     [] => Throw fc $ "Invalid descriptor: " ++ descriptor
     (interfaceName :: interfaceMethodName :: signatureParts) =>
         case implementationType of
@@ -143,7 +143,7 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: className :: _) argumen
         (fn, signature) => do
             let descriptorsWithIdrisTypes =
                 List.zip
-                    (List1.toList $ Strings.split (== ' ') (assert_total $ strTail . fst $ break (== ')') signature))
+                    (toList $ Strings.split (== ' ') (assert_total $ strTail . fst $ break (== ')') signature))
                     (argumentTypes ++ [AtomicForeignImplementationType returnType])
             (argumentTypesReversed, returnType) <- go [] descriptorsWithIdrisTypes
             Pure (className, fn, returnType, List.reverse argumentTypesReversed)

@@ -479,10 +479,6 @@ getIntConstantValue fc x =
         then Pure 0
         else Throw fc ("Constant " ++ show x ++ " cannot be converted to integer.")
 
-export
-comparing : Ord a => (b -> a) -> b -> b -> Ordering
-comparing p x y = compare (p x) (p y)
-
 sortConCases : List NamedConAlt -> List NamedConAlt
 sortConCases alts = sortBy (comparing getTag) alts where
     getTag : NamedConAlt -> Int

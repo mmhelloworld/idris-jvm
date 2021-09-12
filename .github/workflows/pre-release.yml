@@ -42,4 +42,4 @@ jobs:
           prerelease: true
           title: "Development Build"
           files: |
-            idris-jvm-compiler/target/idris2-0.3.0-SNAPSHOT.zip
+            idris-jvm-compiler/target/idris2-0.3.0.zip

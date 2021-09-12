@@ -111,20 +111,6 @@
                 </executions>
             </plugin>
             <plugin>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>process-resources</phase>
-                        <goals>
-                            <goal>copy-dependencies</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.parent.basedir}/build/exec/idris2_app</outputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
                 <executions>
                     <execution>
@@ -208,7 +194,7 @@
                             <repositoryName>lib</repositoryName>
                             <repositoryLayout>flat</repositoryLayout>
                             <assembleDirectory>${project.build.directory}/assembly</assembleDirectory>
-                            <extraJvmArguments>-Xss36m -Xms2g -Xmx3g</extraJvmArguments>
+                            <extraJvmArguments>-Xss36m -Xms3g -Xmx3g</extraJvmArguments>
                             <programs>
                                 <program>
                                     <mainClass>idris2.Main</mainClass>

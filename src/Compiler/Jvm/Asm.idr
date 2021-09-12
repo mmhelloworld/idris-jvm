@@ -1542,6 +1542,25 @@ debug msg =
             Debug $ context ++ ": " ++ msg
         else Pure ()
 
+public export
+data FArgList : Type where
+     Nil : FArgList
+     (::) : {a : Type} -> (1 arg : a) -> (1 args : FArgList) -> FArgList
+
+export
+%extern prim__jvmInstance : (ret : Type) -> String -> (1 args : FArgList) -> (1 x : %World) -> IORes ret
+
+export
+%extern prim__jvmStatic : (ret : Type) -> String -> (1 args : FArgList) -> (1 x : %World) -> IORes ret
+
+export %inline
+jvmStatic : (ret : Type) -> String -> (1 args : FArgList) -> IO ret
+jvmStatic ret fn args = fromPrim (prim__jvmStatic ret fn args)
+
+export %inline
+jvmInstance : (ret : Type) -> String -> (1 args : FArgList) -> IO ret
+jvmInstance ret fn args = fromPrim (prim__jvmInstance ret fn args)
+
 export
 runAsm : HasIO io => AsmState -> Asm a -> io (a, AsmState)
 runAsm state Aaload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aaload" [assembler state]

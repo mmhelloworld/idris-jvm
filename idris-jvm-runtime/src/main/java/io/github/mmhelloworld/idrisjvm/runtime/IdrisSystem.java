@@ -100,15 +100,7 @@ public final class IdrisSystem {
         return new byte[length];
     }
 
-    private static String getOsNameProperty() {
-        try {
-            return System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        } catch (SecurityException exception) {
-            return "";
-        }
-    }
-
-    private static String[] getCommand(String command) {
+    public static String[] getCommand(String command) {
         boolean isWindows = OS_NAME.equals("windows");
         String shell = isWindows ? "cmd.exe" : "sh";
         String shellSwitch = isWindows ? "/c" : "-c";
@@ -133,5 +125,13 @@ public final class IdrisSystem {
             return new String[]{matcher.group(1), matcher.group(2), shell, shellSwitch, matcher.group(3)};
         }
         return new String[] {shell, shellSwitch, command};
+    }
+
+    private static String getOsNameProperty() {
+        try {
+            return System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        } catch (SecurityException exception) {
+            return "";
+        }
     }
 }

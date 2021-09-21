@@ -67,8 +67,10 @@ prim__eof : FilePtr -> PrimIO Int
          jvm' fileClass "flush" fileClass "int"
 prim__flush : FilePtr -> PrimIO Int
 %foreign support "idris2_popen"
+         jvm' fileClass "popen" "String String" fileClass
 prim__popen : String -> String -> PrimIO FilePtr
 %foreign support "idris2_pclose"
+         jvm' fileClass "close" fileClass "void"
 prim__pclose : FilePtr -> PrimIO ()
 
 %foreign support "idris2_removeFile"

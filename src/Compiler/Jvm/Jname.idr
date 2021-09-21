@@ -50,13 +50,13 @@ jvmName : Name -> Jname
 jvmName (NS ns n) = Jqualified (replace (cleanupIdentifier $ showNSWithSep "$" ns) '$' '/') $ getSimpleName (jvmName n)
 jvmName (UN n) = Jsimple $ cleanupIdentifier n
 jvmName (MN n i) = Jsimple $ cleanupIdentifier n ++ "$" ++ show i
-jvmName (PV n d) = Jsimple $ "$patvar" ++ getSimpleName (jvmName n)
+jvmName (PV n d) = Jsimple $ "$p" ++ getSimpleName (jvmName n)
 jvmName (DN str n) = Jsimple $ cleanupIdentifier str ++ getSimpleName (jvmName n)
 jvmName (RF str) = Jsimple $ cleanupIdentifier str
-jvmName (Nested (i, x) n) = Jsimple $ "$nested" ++ show i ++ "$" ++ show x ++ "$" ++ getSimpleName (jvmName n)
-jvmName (CaseBlock x y) = Jsimple $ "$case" ++ cleanupIdentifier (show x) ++ "$" ++ show y
-jvmName (WithBlock x y) = Jsimple $ "$with" ++ cleanupIdentifier (show x) ++ "$" ++ show y
-jvmName (Resolved i) = Jsimple $ "$resolved" ++ show i
+jvmName (Nested (i, x) n) = Jsimple $ "$n" ++ show i ++ "$" ++ show x ++ "$" ++ getSimpleName (jvmName n)
+jvmName (CaseBlock x y) = Jsimple $ "$c" ++ cleanupIdentifier (show x) ++ "$" ++ show y
+jvmName (WithBlock x y) = Jsimple $ "$w" ++ cleanupIdentifier (show x) ++ "$" ++ show y
+jvmName (Resolved i) = Jsimple $ "$r" ++ show i
 
 export
 jvmSimpleName : Name -> String

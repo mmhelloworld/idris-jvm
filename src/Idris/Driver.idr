@@ -139,7 +139,7 @@ stMain cgs opts
          let updated = foldl (\o, (s, _) => addCG (s, Other s) o) (options defs) cgs
          c <- newRef Ctxt ({ options := updated } defs)
          s <- newRef Syn initSyntax
-         setCG {c} $ maybe Chez (Other . fst) (head' cgs)
+         setCG {c} $ maybe Jvm (Other . fst) (head' cgs)
          addPrimitives
 
          setWorkingDir "."

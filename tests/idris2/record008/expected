@@ -10,5 +10,6 @@ Postfix>  0 a : Type
 ------------------------------
 b : (d : Diag a) -> d .fstt = d .sndd
 Postfix> Postfix.prf : (d : Diag a) -> val d = d .sndd
+Postfix> Postfix.Diag.equal : ({rec:0} : Diag a) -> fstt rec = sndd rec
 Postfix> 
 Bye for now!

@@ -1,5 +1,7 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
+import java.util.function.Function;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public final class Strings {
@@ -49,6 +51,11 @@ public final class Strings {
     public static IdrisObject nextStringIterator(String string, int offset) {
         // matches scheme implementation function blodwen-string-iterator-next
         return offset >= string.length() ? NilUnconsResult.INSTANCE : new CharacterUnconsResult(string, offset);
+    }
+
+    public static Object stringIteratorToString(Object ignore, String str, int offset,
+                                                Function<Object, Object> function) {
+        return function.apply(str.substring(offset));
     }
 
     private static final class NilUnconsResult implements IdrisObject {

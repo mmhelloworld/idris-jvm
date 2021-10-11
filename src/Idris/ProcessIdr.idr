@@ -269,6 +269,7 @@ getCG Node = pure $ Just codegenNode
 getCG Javascript = pure $ Just codegenJavascript
 getCG RefC = pure $ Just codegenRefC
 getCG VMCodeInterp = pure $ Just codegenVMCodeInterp
+getCG Jvm = pure $ Just codegenJvm
 getCG (Other s) = getCodegen s
 
 export

@@ -1,5 +1,6 @@
 import Data.Buffer
 import System.File
+import Debug.Buffer
 
 main : IO ()
 main

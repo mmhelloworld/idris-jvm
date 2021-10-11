@@ -8,8 +8,7 @@ import Core.Context
 import Core.Name
 import Core.TT
 
-import Data.Bool.Extra
-import Data.SortedMap
+import Libraries.Data.SortedMap
 import Data.List
 import Data.List1
 import Data.Vect
@@ -158,11 +157,9 @@ parseForeignFunctionDescriptor fc descriptors _ _ = Throw fc $ "Invalid foreign 
 
 export
 findJvmDescriptor : FC -> Name -> List String -> Asm (List String)
-findJvmDescriptor fc name [] =
-    Throw fc $ "Cannot compile foreign function " ++ show name ++ " to JVM as JVM foreign descriptor is missing"
-findJvmDescriptor fc name (descriptor :: descriptors) = case parseCC descriptor of
+findJvmDescriptor fc name descriptors = case parseCC ["jvm"] descriptors of
     Just ("jvm", descriptorParts) => Pure descriptorParts
-    _ => findJvmDescriptor fc name descriptors
+    _ => Throw fc $ "Cannot compile foreign function " ++ show name ++ " to JVM as JVM foreign descriptor is missing"
 
 export
 getArgumentIndices : (arity: Int) -> List String -> IO (Map String Int)
@@ -204,13 +201,13 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     scopes <- LiftIo $ JList.new {a=Scope}
     let externalFunctionBody =
         NmExtPrim fc (NS (mkNamespace "") $ UN $ getPrimMethodName foreignFunctionName) [
-           NmCon fc (UN $ createExtPrimTypeSpec jvmReturnType) Nothing [],
+           NmCon fc (UN $ createExtPrimTypeSpec jvmReturnType) DATACON Nothing [],
            NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
            getJvmExtPrimArguments $ List.zip argumentTypes $ SortedMap.toList argumentTypesByName,
            NmPrimVal fc WorldVal]
     let functionBody =
         if isNilArity
-            then NmDelay fc externalFunctionBody
+            then NmDelay fc LLazy externalFunctionBody
             else externalFunctionBody
     let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName functionBody
     setCurrentFunction function
@@ -239,9 +236,9 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     updateScopeVariableTypes
   where
     getJvmExtPrimArguments : List (CFType, String, InferredType) -> NamedCExp
-    getJvmExtPrimArguments [] = NmCon fc (UN "emptyForeignArg") (Just 0) []
+    getJvmExtPrimArguments [] = NmCon fc (UN "emptyForeignArg") DATACON (Just 0) []
     getJvmExtPrimArguments ((CFWorld, _, _) :: rest) = getJvmExtPrimArguments rest
-    getJvmExtPrimArguments ((_, name, ty) :: rest) = NmCon fc (UN "foreignArg") (Just 1) [
-        NmCon fc (UN $ createExtPrimTypeSpec ty) (Just 0) [],
+    getJvmExtPrimArguments ((_, name, ty) :: rest) = NmCon fc (UN "foreignArg") DATACON (Just 1) [
+        NmCon fc (UN $ createExtPrimTypeSpec ty) DATACON (Just 0) [],
         NmLocal fc (UN name),
         getJvmExtPrimArguments rest ]

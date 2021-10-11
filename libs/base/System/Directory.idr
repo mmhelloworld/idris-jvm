@@ -3,6 +3,7 @@ module System.Directory
 
 import System.Errno
 import public System.File
+import System.FFI
 
 %default total
 

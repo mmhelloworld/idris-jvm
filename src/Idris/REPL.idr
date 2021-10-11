@@ -1,6 +1,7 @@
 module Idris.REPL
 
 import Compiler.Common
+import Compiler.Jvm.Codegen
 import Compiler.Inline
 
 import Core.Case.CaseTree

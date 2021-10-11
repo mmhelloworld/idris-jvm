@@ -1,0 +1,36 @@
+1/1: Building TypeCase (TypeCase.idr)
+Main> "Nat"
+"List of Nat"
+"List of Something else"
+"List of Something else"
+"List of Bool"
+"Int"
+"Something else"
+"List of Type"
+"List of Int"
+43
+42
+Main> Main.strangeId is total
+Main> Main.strangeId': strangeId' _
+Main> Bye for now!
+1/1: Building TypeCase2 (TypeCase2.idr)
+Error: While processing left hand side of strangeId. Can't match on Nat (Erased argument).
+
+TypeCase2:5:14--5:17
+ 1 | data Bar = MkBar
+ 2 | data Baz = MkBaz
+ 3 | 
+ 4 | strangeId : a -> a
+ 5 | strangeId {a=Nat} x = x+1
+                  ^^^
+
+Error: While processing left hand side of foo. Can't match on Nat (Erased argument).
+
+TypeCase2:9:5--9:8
+ 5 | strangeId {a=Nat} x = x+1
+ 6 | strangeId x = x
+ 7 | 
+ 8 | foo : (0 x : Type) -> String
+ 9 | foo Nat = "Nat"
+         ^^^
+

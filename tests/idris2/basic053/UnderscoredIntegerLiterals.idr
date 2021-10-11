@@ -9,10 +9,10 @@ equalAmounts = amount == 10000000000
 
 -- grouping hexadecimal addresses by words
 addr : Int
-addr = 0xCAFE_F00D
+addr = 0xCAFE_F00
 
 equalAddrs : Bool
-equalAddrs = addr == 0xCAFEF00D
+equalAddrs = addr == 0xCAFEF00
 
 -- grouping bits into nibbles in a binary literal
 equalFlags : Bool

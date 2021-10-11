@@ -90,5 +90,4 @@ LOG eval.stuck:5: Stuck function: Lib.accMapAux
 LOG eval.stuck:5: Stuck function: Lib.accMapAux
 LOG eval.stuck:5: Stuck function: Lib.accMapAux
 [2, 3, 4]
-Main> 
-Bye for now!
+Main> Bye for now!

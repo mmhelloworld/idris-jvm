@@ -338,7 +338,7 @@ pathLookup names = do
 ||| Some test may involve Idris' backends and have requirements.
 ||| We define here the ones supported by Idris
 public export
-data Requirement = C | Chez | Node | Racket | Gambit
+data Requirement = C | Chez | Node | Racket | Gambit | Jvm
 
 export
 Eq Requirement where
@@ -356,6 +356,7 @@ Show Requirement where
   show Node = "node"
   show Racket = "racket"
   show Gambit = "gambit"
+  show Jvm = "jvm"
 
 export
 [CG] Show Requirement where
@@ -364,6 +365,7 @@ export
   show Node = "node"
   show Racket = "racket"
   show Gambit = "gambit"
+  show Jvm = "jvm"
 
 export
 checkRequirement : Requirement -> IO (Maybe String)
@@ -380,6 +382,7 @@ checkRequirement req
     requirement Node = ("NODE", ["node"])
     requirement Racket = ("RACKET", ["racket"])
     requirement Gambit = ("GAMBIT", ["gsc"])
+    requirement Jvm = ("JVM", ["java"])
     platformSupport : Requirement -> Bool
     platformSupport C = not isWindows
     platformSupport Racket = not isWindows
@@ -394,6 +397,7 @@ findCG
        Nothing <- checkRequirement Racket  | p => pure (Just "racket")
        Nothing <- checkRequirement Gambit  | p => pure (Just "gsc")
        Nothing <- checkRequirement C       | p => pure (Just "refc")
+       Nothing <- checkRequirement Jvm     | p => pure (Just "jvm")
        pure Nothing
 
 ||| A choice of a codegen

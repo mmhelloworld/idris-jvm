@@ -10,7 +10,7 @@ import Core.TT
 
 import Data.List
 import Data.Maybe
-import Data.SortedSet
+import Libraries.Data.SortedSet
 import Data.Vect
 
 import Compiler.Jvm.Tuples
@@ -302,9 +302,27 @@ namespace EnumInt
 
 data Collection : Type where [external]
 
+%inline
 public export
 runtimeClass : String
 runtimeClass = getRuntimeClass "Runtime"
+
+public export
+record TailCallCategory where
+    constructor MkTailCallCategory
+
+    -- Self tail calls are eliminated using JVM's GOTO
+    hasSelfTailCall : Bool
+
+    -- Non self tails calls are trampolined using INVOKEDYNAMIC
+    hasNonSelfTailCall : Bool
+
+export
+Show TailCallCategory where
+    show tailCallCategory = showType "TailCallCategory" [
+        ("hasSelfTailCall", show $ hasSelfTailCall tailCallCategory),
+        ("hasNonSelfTailCall", show $ hasNonSelfTailCall tailCallCategory)
+    ]
 
 public export
 record Scope where
@@ -692,7 +710,7 @@ data Asm : Type -> Type where
     SetState : AsmState -> Asm ()
 
     Pure : ty -> Asm ty
-    Bind : Asm a -> (a -> Asm b) -> Asm b    
+    Bind : Asm a -> (a -> Asm b) -> Asm b
 
 export
 Show Scope where
@@ -716,7 +734,7 @@ Show InferredFunctionType where
 
 export
 Show Function where
-    show function = 
+    show function =
         showType "Function" [
             ("idrisName", show $ idrisName function),
             ("inferredFunctionType", show $ inferredFunctionType function),
@@ -1175,7 +1193,7 @@ addVariableType var ty = do
 %inline
 export
 lambdaMaxCountPerMethod: Int
-lambdaMaxCountPerMethod = 5
+lambdaMaxCountPerMethod = 25
 
 export
 getLambdaImplementationMethodName : String -> Asm Jname
@@ -1413,14 +1431,14 @@ toJFieldInitialValue (StringField s) = believe_me s
 toJFieldInitialValue (DoubleField d) = believe_me $ doubleValueOf d
 
 export
-loadBigInteger : String -> Asm ()
-loadBigInteger "0" = Field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-loadBigInteger "1" = Field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-loadBigInteger "10" = Field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
-loadBigInteger i = do
+loadBigInteger : Integer -> Asm ()
+loadBigInteger 0 = Field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
+loadBigInteger 1 = Field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
+loadBigInteger 10 = Field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
+loadBigInteger value = do
     New "java/math/BigInteger"
     Dup
-    Ldc $ StringConst i
+    Ldc $ StringConst $ show value
     InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export
@@ -1478,19 +1496,22 @@ invokeDynamic implClassName implMethodName interfaceMethodName invokeDynamicDesc
 export
 getThunkType : InferredType -> InferredType
 getThunkType IInt = intThunkType
+getThunkType ILong = longThunkType
 getThunkType IDouble = doubleThunkType
 getThunkType _ = thunkType
 
 export
 getThunkValueType : InferredType -> InferredType
-getThunkValueType ty = if ty == intThunkType then IInt
+getThunkValueType ty =
+    if ty == intThunkType then IInt
+    else if ty == longThunkType then ILong
     else if ty == doubleThunkType then IDouble
     else if ty == thunkType then inferredObjectType
     else ty
 
 export
 isThunkType : InferredType -> Bool
-isThunkType ty = ty == intThunkType || ty == doubleThunkType || ty == thunkType
+isThunkType ty = ty == intThunkType || ty == longThunkType || ty == doubleThunkType || ty == thunkType
 
 export
 shouldDebugAsm : Bool

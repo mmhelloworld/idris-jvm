@@ -1,4 +1,4 @@
-:ml 16 succNotZero
-:ml 19 recNotEqLift
-:gd 11 recNotEq
+:ml 18 succNotZero
+:ml 21 recNotEqLift
+:gd 13 recNotEq
 :q

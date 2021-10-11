@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.3.0</version>
+        <version>0.4.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -18,25 +18,11 @@
         <skipIdrisCompile>false</skipIdrisCompile>
         <skipIdrisClean>false</skipIdrisClean>
         <idris.tests/>
-        <skipTests>false</skipTests
+        <skipTests>false</skipTests>
     </properties>
 
     <build>
         <plugins>
-            <plugin>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>process-resources</phase>
-                        <goals>
-                            <goal>copy-dependencies</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.parent.basedir}/tests/build/exec/runtests_app</outputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
@@ -52,7 +38,7 @@
                             <executable>make</executable>
                             <workingDirectory>${project.parent.basedir}</workingDirectory>
                             <arguments>
-                                <argument>testbin</argument>
+                                <argument>testenv</argument>
                             </arguments>
                         </configuration>
                     </execution>
@@ -88,6 +74,42 @@
                                 <argument>test</argument>
                                 <argument>${idris.tests}</argument>
                             </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-jar</id>
+                        <phase>none</phase>
+                        <configuration>
+                            <finalName>unwanted</finalName>
+                            <classifier>unwanted</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-install-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-install</id>
+                        <phase>none</phase>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.parent.basedir}/tests/build/exec/runtests_app</outputDirectory>
                         </configuration>
                     </execution>
                 </executions>
@@ -135,25 +157,6 @@
                                     <id>runtests</id>
                                 </program>
                             </programs>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>create-zip</id>
-                        <phase>install</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                        <configuration>
-                            <appendAssemblyId>false</appendAssemblyId>
-                            <descriptors>
-                                <descriptor>src/assembly/bin.xml</descriptor>
-                            </descriptors>
-                            <finalName>idris2</finalName>
                         </configuration>
                     </execution>
                 </executions>

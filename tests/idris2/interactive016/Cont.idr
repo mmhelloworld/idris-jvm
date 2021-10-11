@@ -1,3 +1,5 @@
+%search_timeout 5000
+
 data Cont : (r : Type) -> (a : Type) -> Type where
      MkCont : ((k : a -> r) -> r) -> Cont r a
 

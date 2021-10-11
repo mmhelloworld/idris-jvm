@@ -8,6 +8,7 @@ import Compiler.ES.Node
 import Compiler.ES.Javascript
 import Compiler.Common
 import Compiler.RefC.RefC
+import Compiler.Jvm.Codegen
 import Compiler.Inline
 
 import Core.AutoSearch
@@ -220,6 +221,7 @@ findCG
               Node => pure codegenNode
               Javascript => pure codegenJavascript
               RefC => pure codegenRefC
+              Jvm => pure codegenJvm
               Other s => case !(getCodegen s) of
                             Just cg => pure cg
                             Nothing => do coreLift_ $ putStrLn ("No such code generator: " ++ s)

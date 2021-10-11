@@ -1,3 +1,5 @@
+%search_timeout 5000
+
 %hint
 mycong : (f : a -> b) -> x = y -> f x = f y
 mycong f Refl = Refl

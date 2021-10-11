@@ -1,6 +1,7 @@
 module System.Directory
 
 import public System.File
+import System.FFI
 
 %default total
 
@@ -36,26 +37,33 @@ ok x = pure (Right x)
 
 %foreign support "idris2_currentDirectory"
          "node:lambda:()=>process.cwd()"
+         jvm directoriesClass "getWorkingDirectory"
 prim__currentDir : PrimIO (Ptr String)
 
 %foreign support "idris2_changeDir"
          "node:support:changeDir,support_system_directory"
+         jvm directoriesClass "changeDirectory"
 prim__changeDir : String -> PrimIO Int
 
 %foreign support "idris2_createDir"
          "node:support:createDir,support_system_directory"
+         jvm directoriesClass "createDirectory"
 prim__createDir : String -> PrimIO Int
 
 %foreign support "idris2_openDir"
+         jvm directoriesClass "openDirectory"
 prim__openDir : String -> PrimIO DirPtr
 
 %foreign support "idris2_closeDir"
+         jvm directoriesClass "closeDirectory"
 prim__closeDir : DirPtr -> PrimIO ()
 
 %foreign support "idris2_removeDir"
+         jvm directoriesClass "delete"
 prim__removeDir : String -> PrimIO ()
 
 %foreign support "idris2_nextDirEntry"
+         jvm directoriesClass "getNextDirectoryEntry"
 prim__dirEntry : DirPtr -> PrimIO (Ptr String)
 
 export

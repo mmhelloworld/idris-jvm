@@ -50,17 +50,18 @@ prim__idrnet_connect : (sockfd : SocketDescriptor) -> (family, socket_type : Int
 
 %foreign
   "C:idrnet_sockaddr_family, libidris2_support, idris_net.h"
-  jvm' idrisSocketClass "getFamily" "java/net/SocketAddress" "int"
+  jvm' idrisSocketClass "getSocketAddressFamily" "java/lang/Object" "int"
 export
 prim__idrnet_sockaddr_family : (sockaddr : AnyPtr) -> PrimIO Int
 
 %foreign
   "C:idrnet_sockaddr_ipv4, libidris2_support, idris_net.h"
-  jvm' idrisSocketClass "getIpv4Address" "java/net/SocketAddress" "java/lang/String"
+  jvm' idrisSocketClass "getIpv4Address" "java/lang/Object" "java/lang/String"
 export
 prim__idrnet_sockaddr_ipv4 : (sockaddr : AnyPtr) -> PrimIO String
 
 %foreign "C:idrnet_sockaddr_unix, libidris2_support, idris_net.h"
+         jvm' idrisSocketClass "getIpv4Address" "java/net/SocketAddress" "java/lang/String"
 export
 prim__idrnet_sockaddr_unix : (sockaddr : AnyPtr) -> PrimIO String
 

@@ -427,12 +427,12 @@ toLimbs x
     = if x == 0
          then []
          else if x == -1 then [-1]
-              else fromInteger (prim__and_Integer x 0xffffffff) ::
-                   toLimbs (prim__shr_Integer x 32)
+              else fromInteger (prim__and_Integer x 0xffff) ::
+                   toLimbs (prim__shr_Integer x 16)
 
 fromLimbs : List Int -> Integer
 fromLimbs [] = 0
-fromLimbs (x :: xs) = cast x + prim__shl_Integer (fromLimbs xs) 32
+fromLimbs (x :: xs) = cast x + prim__shl_Integer (fromLimbs xs) 16
 
 export
 TTC Integer where

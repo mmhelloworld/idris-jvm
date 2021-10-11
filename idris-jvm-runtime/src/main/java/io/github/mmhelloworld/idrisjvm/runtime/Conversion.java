@@ -4,7 +4,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 
 import static java.lang.String.format;
-import static java.math.RoundingMode.FLOOR;
+import static java.math.BigInteger.ONE;
+import static java.math.BigInteger.ZERO;
+import static java.math.RoundingMode.DOWN;
 
 public final class Conversion {
     private Conversion() {
@@ -23,6 +25,29 @@ public final class Conversion {
             return (char) that;
         } else if (that instanceof Boolean) {
             return boolToInt((boolean) that);
+        } else if (that instanceof Byte) {
+            return (byte) that;
+        } else if (that instanceof Short) {
+            return (short) that;
+        } else {
+            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to int",
+                that, that.getClass()));
+        }
+    }
+
+    public static int toInt1(Object that) {
+        if (that == null) {
+            return 0;
+        } else if (that instanceof Integer) {
+            return (int) that;
+        } else if (that instanceof Thunk) {
+            return ((Thunk) that).getInt();
+        } else if (that instanceof BigInteger) {
+            return ((BigInteger) that).intValueExact();
+        } else if (that instanceof Character) {
+            return (char) that;
+        } else if (that instanceof Boolean) {
+            return boolToInt1((boolean) that);
         } else if (that instanceof Byte) {
             return (byte) that;
         } else if (that instanceof Short) {
@@ -57,6 +82,21 @@ public final class Conversion {
             return intToBoolean(((Thunk) that).getInt());
         } else if (that instanceof Integer) {
             return intToBoolean((Integer) that);
+        } else {
+            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to boolean",
+                that, that.getClass()));
+        }
+    }
+
+    public static boolean toBoolean1(Object that) {
+        if (that == null) {
+            return false;
+        } else if (that instanceof Boolean) {
+            return (Boolean) that;
+        } else if (that instanceof Thunk) {
+            return intToBoolean1(((Thunk) that).getInt());
+        } else if (that instanceof Integer) {
+            return intToBoolean1((Integer) that);
         } else {
             throw new IllegalArgumentException(format("Unable to convert value %s of type %s to boolean",
                 that, that.getClass()));
@@ -112,18 +152,18 @@ public final class Conversion {
     public static BigInteger toInteger(String value) {
         try {
             return new BigDecimal(value)
-                .setScale(0, FLOOR)
+                .setScale(0, DOWN)
                 .toBigIntegerExact();
         } catch (NumberFormatException exception) {
             // Conforming to scheme backend
-            return BigInteger.ZERO;
+            return ZERO;
         }
     }
 
     public static int toInt(String value) {
         try {
             return new BigDecimal(value)
-                .setScale(0, FLOOR)
+                .setScale(0, DOWN)
                 .intValueExact();
         } catch (NumberFormatException exception) {
             // Conforming to scheme backend
@@ -157,8 +197,16 @@ public final class Conversion {
         return value ? 0 : 1;
     }
 
+    public static int boolToInt1(boolean value) {
+        return value ? 1 : 0;
+    }
+
     public static boolean intToBoolean(int value) {
         return value == 0;
+    }
+
+    public static boolean intToBoolean1(int value) {
+        return value == 1;
     }
 
     public static int toUnsignedInt(int value, int numberOfBits) {
@@ -183,6 +231,6 @@ public final class Conversion {
     }
 
     public static long toUnsignedLong(BigInteger value, int numberOfBits) {
-        return value.mod(BigInteger.ONE.shiftLeft(numberOfBits)).longValue();
+        return value.mod(ONE.shiftLeft(numberOfBits)).longValue();
     }
 }

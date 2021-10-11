@@ -7,8 +7,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.Future;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static java.util.concurrent.ForkJoinPool.commonPool;
+import static java.util.stream.Collectors.toList;
 
 public final class Runtime {
     public static final long START_TIME = System.nanoTime();
@@ -18,9 +20,14 @@ public final class Runtime {
     private static final ThreadLocal<Integer> ERROR_NUMBER = ThreadLocal.withInitial(() -> 0);
     private static final int EAGAIN = 11;
     private static String[] programArgs;
+    private static IdrisList programArgsList;
     private static Exception exception;
 
     private Runtime() {
+    }
+
+    public static IdrisList getProgramArgs() {
+        return programArgsList;
     }
 
     public static String getProgramArg(int index) {
@@ -33,7 +40,12 @@ public final class Runtime {
 
     public static void setProgramArgs(String programName, String[] args) {
         if (programArgs == null) {
-            programArgs = args;
+            String[] argsWithProgramName = new String[args.length + 1];
+            argsWithProgramName[0] = programName;
+            System.arraycopy(args, 0, argsWithProgramName, 1, args.length);
+            programArgs = argsWithProgramName;
+            programArgsList = IdrisList.fromIterable(Stream.concat(Stream.of(programName), Stream.of(args))
+                .collect(toList()));
         }
     }
 
@@ -84,16 +96,20 @@ public final class Runtime {
     public static void free(Object object) {
     }
 
-    public static IntThunk createThunk(int value) {
-        return new IntThunkResult(value);
-    }
-
     public static IntThunk unboxToIntThunk(Thunk value) {
         return () -> value;
     }
 
     public static DoubleThunk unboxToDoubleThunk(Thunk value) {
         return () -> value;
+    }
+
+    public static IntThunk createThunk(int value) {
+        return new IntThunkResult(value);
+    }
+
+    public static LongThunk createThunk(long value) {
+        return new LongThunkResult(value);
     }
 
     public static DoubleThunk createThunk(double value) {
@@ -124,6 +140,14 @@ public final class Runtime {
         }
     }
 
+    public static long unwrapLongThunk(Object possibleThunk) {
+        if (possibleThunk instanceof Thunk) {
+            return ((Thunk) possibleThunk).getLong();
+        } else {
+            return (long) possibleThunk;
+        }
+    }
+
     public static double unwrapDoubleThunk(Object possibleThunk) {
         if (possibleThunk instanceof Thunk) {
             return ((Thunk) possibleThunk).getDouble();
@@ -133,11 +157,21 @@ public final class Runtime {
     }
 
     public static ForkJoinTask<?> fork(Function<Object, Object> action) {
-        return commonPool().submit((Runnable) () -> action.apply(0));
+        return commonPool().submit((Runnable) () -> {
+            try {
+                action.apply(0);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     public static ForkJoinTask<?> fork(Delayed action) {
         return commonPool().submit(action::evaluate);
+    }
+
+    public static void await(ForkJoinTask<?> task) {
+        task.join();
     }
 
     public static void waitForFuturesToComplete(List<? extends Future<?>> tasks) {

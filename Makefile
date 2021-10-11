@@ -62,15 +62,8 @@ ${TARGET}: src/IdrisPaths.idr
 src/IdrisPaths.idr: FORCE
 	echo '-- @generated' > src/IdrisPaths.idr
 	echo 'module IdrisPaths' >> src/IdrisPaths.idr
-	echo 'import System' >> src/IdrisPaths.idr
 	echo 'export idrisVersion : ((Nat,Nat,Nat), String); idrisVersion = ((${MAJOR},${MINOR},${PATCH}), "${GIT_SHA1}")' >> src/IdrisPaths.idr
-	echo 'export' >> src/IdrisPaths.idr
-	echo 'yprefix : String' >> src/IdrisPaths.idr
-	echo 'yprefix = unsafePerformIO $$ do' >> src/IdrisPaths.idr
-	echo '    idris2PrefixMaybe <- getEnv "IDRIS2_PREFIX"' >> src/IdrisPaths.idr
-	echo '    case idris2PrefixMaybe of' >> src/IdrisPaths.idr
-	echo '        Just idris2Prefix => pure idris2Prefix' >> src/IdrisPaths.idr
-	echo '        _ => maybe "" (\home => home ++ "/.idris2") <$$> getEnv "user.home"' >> src/IdrisPaths.idr
+	echo 'export yprefix : String; yprefix="${IDRIS2_PREFIX}"' >> src/IdrisPaths.idr
 
 FORCE:
 

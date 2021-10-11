@@ -3,6 +3,7 @@ module System
 import public Data.So
 import Data.List
 import Data.Strings
+import Debug.Trace
 
 %default total
 

@@ -1,4 +1,4 @@
-module Compiler.Jvm.MockAsm 
+module Compiler.Jvm.MockAsm
 
 import Compiler.Common
 import Compiler.CompileExpr
@@ -9,7 +9,7 @@ import Core.Name
 import Core.TT
 
 import Data.Maybe
-import Data.SortedMap
+import Libraries.Data.SortedMap
 import Data.Strings
 import Data.Vect
 

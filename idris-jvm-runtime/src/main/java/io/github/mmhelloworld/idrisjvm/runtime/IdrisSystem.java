@@ -6,14 +6,15 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static io.github.mmhelloworld.idrisjvm.runtime.Directories.workingDir;
 import static java.lang.String.format;
 import static java.lang.System.currentTimeMillis;
+import static java.util.Locale.ROOT;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -51,7 +52,7 @@ public final class IdrisSystem {
     public static int runCommand(String command) throws IOException, InterruptedException {
         String[] commandParts = getCommand(command);
         return new ProcessBuilder(commandParts)
-            .directory(new File(Directories.workingDir))
+            .directory(new File(workingDir))
             .inheritIO()
             .start()
             .waitFor();
@@ -100,38 +101,28 @@ public final class IdrisSystem {
         return new byte[length];
     }
 
-    private static String getOsNameProperty() {
-        try {
-            return System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        } catch (SecurityException exception) {
-            return "";
-        }
-    }
-
-    private static String[] getCommand(String command) {
+    public static String[] getCommand(String command) {
         boolean isWindows = OS_NAME.equals("windows");
         String shell = isWindows ? "cmd.exe" : "sh";
         String shellSwitch = isWindows ? "/c" : "-c";
         Pattern pattern = Pattern.compile(format("\\s*%s\\s+%s\\s+(.*)", shell, shellSwitch));
         Matcher matcher = pattern.matcher(command);
         if (matcher.matches()) {
-            return new String[] {shell, shellSwitch, matcher.group(1)};
-        }
-        pattern = Pattern.compile(format("([^\\s]+)\\s+(.*)\\s+%s\\s+%s\\s+(.*)", shell, shellSwitch));
-        matcher = pattern.matcher(command);
-        if (matcher.matches()) {
-            return new String[] {matcher.group(1), matcher.group(2), shell, shellSwitch, matcher.group(3)};
+            return new String[]{shell, shellSwitch, matcher.group(1)};
         }
         pattern = Pattern.compile(format("\\s*%s\\s+(.*)", shell));
         matcher = pattern.matcher(command);
         if (matcher.matches()) {
             return new String[]{shell, shellSwitch, matcher.group(1)};
         }
-        pattern = Pattern.compile(format("([^\\s]+)\\s+(.*)\\s+%s\\s+(.*)", shell));
-        matcher = pattern.matcher(command);
-        if (matcher.matches()) {
-            return new String[]{matcher.group(1), matcher.group(2), shell, shellSwitch, matcher.group(3)};
+        return new String[]{shell, shellSwitch, command};
+    }
+
+    private static String getOsNameProperty() {
+        try {
+            return System.getProperty("os.name").toLowerCase(ROOT);
+        } catch (SecurityException exception) {
+            return "";
         }
-        return new String[] {shell, shellSwitch, command};
     }
 }

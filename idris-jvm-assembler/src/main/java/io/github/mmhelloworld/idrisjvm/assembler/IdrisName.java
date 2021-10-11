@@ -22,13 +22,13 @@ public final class IdrisName {
     private static final Map<Character, String> replacements = new HashMap<>();
 
     static {
-        replacements.put(' ', "$spc");
+        replacements.put(' ', "$s");
         replacements.put('!', "$not");
-        replacements.put('"', "$dquo");
+        replacements.put('"', "$d");
         replacements.put('#', "$hash");
         replacements.put('%', "$mod");
         replacements.put('&', "$and");
-        replacements.put('\'', "$squo");
+        replacements.put('\'', "$q");
         replacements.put('(', "$lpar");
         replacements.put(')', "$rpar");
         replacements.put('*', "$mul");

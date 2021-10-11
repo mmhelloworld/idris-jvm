@@ -29,5 +29,4 @@ Main>  0 x : Nat
    y : Nat
 ------------------------------
 e : p2 y 0
-Main> 
-Bye for now!
+Main> Bye for now!

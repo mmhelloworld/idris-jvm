@@ -9,19 +9,18 @@ import Core.Directory
 import Core.Name
 import Core.TT
 
-import Data.Bool.Extra
 import Data.List
 import Data.Maybe
-import Data.SortedMap
+import Libraries.Data.SortedMap
 import Data.Strings
 import Data.Vect
 
 import Core.Directory
 import Core.Options
-import Utils.Hex
-import Utils.Path
+import Libraries.Utils.Hex
+import Libraries.Utils.Path
 
-import Data.NameMap
+import Libraries.Data.NameMap
 
 import System.File
 import System.FFI
@@ -118,6 +117,9 @@ hashCode (BI value) = Just $ Object.hashCode value
 hashCode (Str value) = Just $ Object.hashCode value
 hashCode x = Nothing
 
+unwrapExpr : NamedCExp -> NamedCExp
+unwrapExpr expr = NmApp emptyFC (NmRef emptyFC (UN ":__jvmUnwrap__:")) [expr]
+
 getHashCodeSwitchClass : FC -> InferredType -> Asm String
 getHashCodeSwitchClass fc constantType =
     if constantType == inferredStringType
@@ -133,13 +135,18 @@ assembleHashCodeSwitchConstant fc constant =
     Throw fc $ "Constant " ++ show constant ++ " cannot be compiled to 'switch'"
 
 conAltIntExpr : NamedConAlt -> Asm (String, Int, NamedConAlt)
-conAltIntExpr alt@(MkNConAlt name tag _ expr) = do
+conAltIntExpr alt@(MkNConAlt name conInfo tag _ expr) = do
     label <- newLabel
-    intValue <- maybe (Throw emptyFC $ "Missing constructor tag " ++ show name) Pure tag
+    intValue <- case conInfo of
+      NOTHING => Pure 0
+      NIL => Pure 0
+      JUST => Pure 1
+      CONS => Pure 1
+      _ => maybe (Throw emptyFC $ "Missing constructor tag " ++ show name) Pure tag
     Pure (label, intValue, alt)
 
 conAltStringExpr : NamedConAlt -> Asm (String, String, NamedConAlt)
-conAltStringExpr alt@(MkNConAlt name tag _ expr) = do
+conAltStringExpr alt@(MkNConAlt name _ _ _ expr) = do
     label <- newLabel
     Pure (label, jvmSimpleName name, alt)
 
@@ -194,12 +201,24 @@ isInterfaceInvocation _ = False
 assembleNil : (isTailCall: Bool) -> InferredType -> Asm ()
 assembleNil isTailCall returnType = do
     Field GetStatic idrisNilClass "INSTANCE" "Lio/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil;"
-    asmCast idrisNilType returnType
+    asmCast idrisObjectType returnType
     when isTailCall $ asmReturn returnType
+
+assembleNothing : (isTailCall: Bool) -> InferredType -> Asm ()
+assembleNothing isTailCall returnType = do
+    Field GetStatic idrisNothingClass "INSTANCE" "Lio/github/mmhelloworld/idrisjvm/runtime/Maybe$Nothing;"
+    asmCast idrisObjectType returnType
+    when isTailCall $ asmReturn returnType
+
+getDynamicVariableIndex : (variablePrefix: String) -> Asm Int
+getDynamicVariableIndex variablePrefix = do
+    suffixIndex <- newDynamicVariableIndex
+    let variableName = variablePrefix ++ show suffixIndex
+    getVariableIndex variableName
 
 mutual
     assembleExpr : (isTailCall: Bool) -> InferredType -> NamedCExp -> Asm ()
-    assembleExpr isTailCall returnType (NmDelay _ expr) =
+    assembleExpr isTailCall returnType (NmDelay _ _ expr) =
         assembleSubMethodWithScope isTailCall returnType Nothing Nothing expr
     assembleExpr isTailCall returnType (NmLocal _ loc) = do
         let variableName = jvmSimpleName loc
@@ -244,8 +263,13 @@ mutual
             updateScopeEndLabel targetExprScopeIndex methodEndLabel
             assembleExpr isTailCall returnType expr
 
+    assembleExpr isTailCall returnType app@(NmApp _ (NmRef _ (UN ":__jvmUnwrap__:")) [arg]) = do
+       assembleExpr False IUnknown arg
+       InvokeMethod InvokeStatic runtimeClass "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+       when isTailCall $ asmReturn returnType
+
     -- Tail recursion. Store arguments and recur to the beginning of the method
-    assembleExpr _ returnType app@(NmApp fc (NmRef nameFc (UN ":__jvmTailRec__:")) args) =
+    assembleExpr _ returnType app@(NmApp fc (NmRef _ (UN ":__jvmTailRec__:")) args) =
         case length args of
             Z => Goto methodStartLabel
             (S lastArgIndex) => do
@@ -295,37 +319,19 @@ mutual
         asmCast inferredObjectType returnType
         when isTailCall $ asmReturn returnType
 
-    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Types", "Prelude"] (UN "Nil")) _ _) =
-        assembleNil isTailCall returnType
-    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Prelude"] (UN "Nil")) _ _) =
-        assembleNil isTailCall returnType
+    assembleExpr isTailCall returnType expr@(NmCon _ _ NOTHING _ []) = assembleNothing isTailCall returnType
+    assembleExpr isTailCall returnType expr@(NmCon fc _ NOTHING _ _) = Throw fc "Invalid NOTHING constructor"
+    assembleExpr isTailCall returnType expr@(NmCon _ _ JUST _ [value]) = assembleJust isTailCall returnType value
+    assembleExpr isTailCall returnType expr@(NmCon fc _ JUST _ _) = Throw fc "Invalid JUST constructor"
 
-    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Types", "Prelude"] (UN "::")) _ [head, tail]) =
-        assembleCons isTailCall returnType head tail
-    assembleExpr isTailCall returnType expr@(NmCon fc (NS ["Prelude"] (UN "::")) _ [head, tail]) =
-        assembleCons isTailCall returnType head tail
+    assembleExpr isTailCall returnType expr@(NmCon _ _ NIL _ []) = assembleNil isTailCall returnType
+    assembleExpr isTailCall returnType expr@(NmCon fc _ NIL _ _) = Throw fc "Invalid NIL constructor"
+    assembleExpr isTailCall returnType expr@(NmCon _ _ CONS _ [head, tail]) =
+      assembleCons isTailCall returnType head tail
+    assembleExpr isTailCall returnType expr@(NmCon fc _ CONS _ _) = Throw fc "Invalid CONS constructor"
 
-    assembleExpr isTailCall returnType expr@(NmCon fc name tag args) = do
-        let fileName = fst $ getSourceLocation expr
-        let constructorClassName = getIdrisConstructorClassName (jvmSimpleName name)
-        let constructorType = maybe inferredStringType (const IInt) tag
-        New constructorClassName
-        Dup
-        maybe (Ldc . StringConst $ constructorClassName) Iconst tag
-        let constructorParameterCountNat = length args
-        let constructorParameterCount = the Int $ cast constructorParameterCountNat
-        let constructorTypes = constructorType :: replicate constructorParameterCountNat inferredObjectType
-        let argsWithTypes = List.zip args $ drop 1 constructorTypes
-        traverse assembleParameter argsWithTypes
-        let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid constructorTypes
-        globalState <- getGlobalState
-        hasConstructor <- LiftIo $ AsmGlobalState.hasConstructor globalState constructorClassName
-        when (not hasConstructor) $ do
-            LiftIo $ AsmGlobalState.addConstructor globalState constructorClassName
-            CreateIdrisConstructorClass constructorClassName (isNothing tag) constructorParameterCount
-        InvokeMethod InvokeSpecial constructorClassName "<init>" descriptor False
-        asmCast (IRef constructorClassName) returnType
-        when isTailCall $ asmReturn returnType
+    assembleExpr isTailCall returnType expr@(NmCon fc name conInfo tag args) =
+        assembleCon isTailCall returnType fc name tag args
 
     assembleExpr isTailCall returnType (NmOp fc fn args) = do
         assembleExprOp returnType fc fn args
@@ -333,7 +339,7 @@ mutual
     assembleExpr isTailCall returnType (NmExtPrim fc p args) = do
         jvmExtPrim fc returnType (toPrim p) args
         when isTailCall $ asmReturn returnType
-    assembleExpr isTailCall returnType (NmForce _ expr) = do
+    assembleExpr isTailCall returnType (NmForce _ _ expr) = do
         assembleExpr False delayedType expr
         InvokeMethod InvokeStatic runtimeClass "force" "(Ljava/lang/Object;)Ljava/lang/Object;" False
         asmCast inferredObjectType returnType
@@ -345,25 +351,10 @@ mutual
     assembleExpr isTailCall returnType (NmConCase fc sc [] (Just expr)) = do
         assembleConstructorSwitchExpr sc
         assembleExpr isTailCall returnType expr
-    assembleExpr _ returnType (NmConCase fc sc [MkNConAlt name _ args expr] Nothing) = do
+    assembleExpr _ returnType (NmConCase fc sc [MkNConAlt name _ _ args expr] Nothing) = do
         idrisObjectVariableIndex <- assembleConstructorSwitchExpr sc
         assembleConCaseExpr returnType idrisObjectVariableIndex name args expr
-    assembleExpr _ returnType (NmConCase fc sc alts def) = do
-        idrisObjectVariableIndex <- assembleConstructorSwitchExpr sc
-        let hasTypeCase = any isTypeCase alts
-        let constructorType = if hasTypeCase then "Ljava/lang/String;" else "I"
-        variableTypes <- getVariableTypes
-        optTy <- LiftIo $ Map.get variableTypes idrisObjectVariableIndex
-        let idrisObjectVariableType = fromMaybe IUnknown optTy
-        loadVar variableTypes idrisObjectVariableType idrisObjectType idrisObjectVariableIndex
-        when (idrisObjectVariableType /= idrisObjectType) $ do
-            storeVar idrisObjectType idrisObjectType idrisObjectVariableIndex
-            loadVar !getVariableTypes idrisObjectType idrisObjectType idrisObjectVariableIndex
-        let constructorGetter = if hasTypeCase then "getStringConstructorId" else "getConstructorId"
-        InvokeMethod InvokeInterface idrisObjectClass constructorGetter ("()" ++ constructorType) True
-        if hasTypeCase
-            then assembleStringConstructorSwitch returnType fc idrisObjectVariableIndex alts def
-            else assembleConstructorSwitch returnType fc idrisObjectVariableIndex alts def
+    assembleExpr _ returnType (NmConCase fc sc alts def) = assembleConCase returnType fc sc alts def
 
     assembleExpr isTailCall returnType (NmConstCase fc sc [] Nothing) = do
         defaultValue returnType
@@ -378,12 +369,12 @@ mutual
     assembleExpr isTailCall returnType (NmPrimVal fc (B32 value)) = assembleInt isTailCall returnType value
     assembleExpr isTailCall returnType (NmPrimVal fc (I value)) = assembleInt isTailCall returnType value
     assembleExpr isTailCall returnType (NmPrimVal fc (B64 value)) = do
-        loadBigInteger $ show value
+        loadBigInteger value
         InvokeMethod InvokeVirtual "java/math/BigInteger" "longValue" "()J" False
         asmCast ILong returnType
         when isTailCall $ asmReturn returnType
     assembleExpr isTailCall returnType (NmPrimVal fc (BI value)) = do
-        loadBigInteger $ show value
+        loadBigInteger value
         asmCast inferredBigIntegerType returnType
         when isTailCall $ asmReturn returnType
     assembleExpr isTailCall returnType (NmPrimVal fc (Str value)) = do
@@ -431,27 +422,52 @@ mutual
         InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
         asmCast inferredBigIntegerType returnType
 
-    bigIntegerToUnsignedInt : InferredType -> NamedCExp -> Asm ()
-    bigIntegerToUnsignedInt returnType expr = do
-        assembleExpr False inferredBigIntegerType expr
-        InvokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
-        asmCast IInt returnType
-
     unsignedIntToString : InferredType -> NamedCExp -> Asm ()
     unsignedIntToString returnType expr = do
         assembleExpr False IInt expr
-        InvokeMethod InvokeStatic "java/math/Integer" "toUnsignedString" "(I)Ljava/lang/String;" False
+        InvokeMethod InvokeStatic "java/lang/Integer" "toUnsignedString" "(I)Ljava/lang/String;" False
         asmCast inferredStringType returnType
+
+    assembleCon : (isTailCall: Bool) -> InferredType -> FC -> Name -> (tag : Maybe Int) -> List NamedCExp -> Asm ()
+    assembleCon isTailCall returnType fc name tag args = do
+        let fileName = fst $ getSourceLocationFromFc fc
+        let constructorClassName = getIdrisConstructorClassName (jvmSimpleName name)
+        let constructorType = maybe inferredStringType (const IInt) tag
+        New constructorClassName
+        Dup
+        maybe (Ldc . StringConst $ constructorClassName) Iconst tag
+        let constructorParameterCountNat = length args
+        let constructorParameterCount = the Int $ cast constructorParameterCountNat
+        let constructorTypes = constructorType :: replicate constructorParameterCountNat inferredObjectType
+        let argsWithTypes = List.zip args $ drop 1 constructorTypes
+        traverse assembleParameter argsWithTypes
+        let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid constructorTypes
+        globalState <- getGlobalState
+        hasConstructor <- LiftIo $ AsmGlobalState.hasConstructor globalState constructorClassName
+        when (not hasConstructor) $ do
+            LiftIo $ AsmGlobalState.addConstructor globalState constructorClassName
+            CreateIdrisConstructorClass constructorClassName (isNothing tag) constructorParameterCount
+        InvokeMethod InvokeSpecial constructorClassName "<init>" descriptor False
+        asmCast idrisObjectType returnType
+        when isTailCall $ asmReturn returnType
 
     assembleCons : (isTailCall: Bool) -> InferredType -> NamedCExp -> NamedCExp -> Asm ()
     assembleCons isTailCall returnType head tail = do
         New idrisConsClass
         Dup
         assembleExpr False inferredObjectType head
-        assembleExpr False idrisListType tail
-        InvokeMethod InvokeSpecial idrisConsClass "<init>"
-            "(Ljava/lang/Object;Lio/github/mmhelloworld/idrisjvm/runtime/IdrisList;)V" False
-        asmCast idrisConsType returnType
+        assembleExpr False inferredObjectType tail
+        InvokeMethod InvokeSpecial idrisConsClass "<init>" "(Ljava/lang/Object;Ljava/lang/Object;)V" False
+        asmCast idrisObjectType returnType
+        when isTailCall $ asmReturn returnType
+
+    assembleJust : (isTailCall: Bool) -> InferredType -> NamedCExp -> Asm ()
+    assembleJust isTailCall returnType value = do
+        New idrisJustClass
+        Dup
+        assembleExpr False inferredObjectType value
+        InvokeMethod InvokeSpecial idrisJustClass "<init>" "(Ljava/lang/Object;)V" False
+        asmCast idrisObjectType returnType
         when isTailCall $ asmReturn returnType
 
     assembleConstructorSwitchExpr : NamedCExp -> Asm Int
@@ -773,14 +789,34 @@ mutual
         op : Asm ()
         op = InvokeMethod InvokeStatic "java/lang/Math" "ceil" "(D)D" False
 
-    assembleExprOp returnType fc (Cast IntegerType Bits8Type) [x] = bigIntegerToUnsignedInt returnType x
-    assembleExprOp returnType fc (Cast IntegerType Bits16Type) [x] = bigIntegerToUnsignedInt returnType x
-    assembleExprOp returnType fc (Cast IntegerType Bits32Type) [x] = bigIntegerToUnsignedInt returnType x
+    assembleExprOp returnType fc (Cast IntegerType Bits8Type) [x] = do
+        assembleExpr False inferredBigIntegerType x
+        Iconst 8
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(Ljava/math/BigInteger;I)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast IntegerType Bits16Type) [x] = do
+        assembleExpr False inferredBigIntegerType x
+        Iconst 16
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(Ljava/math/BigInteger;I)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast IntegerType Bits32Type) [x] = do
+        assembleExpr False inferredBigIntegerType x
+        Iconst 32
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(Ljava/math/BigInteger;I)I" False
+        asmCast IInt returnType
     assembleExprOp returnType fc (Cast IntegerType Bits64Type) [x] = do
         assembleExpr False inferredBigIntegerType x
-        InvokeMethod InvokeVirtual "java/math/BigInteger" "longValue" "()J" False
+        Iconst 64
+        InvokeMethod InvokeStatic conversionClass "toUnsignedLong" "(Ljava/math/BigInteger;I)J" False
         asmCast ILong returnType
-
+    assembleExprOp returnType fc (Cast IntegerType IntType) [x] = do
+        assembleExpr False inferredBigIntegerType x
+        InvokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast IntegerType DoubleType) [x] = do
+        assembleExpr False inferredBigIntegerType x
+        InvokeMethod InvokeVirtual "java/math/BigInteger" "doubleValue" "()D" False
+        asmCast IDouble returnType
     assembleExprOp returnType fc (Cast IntegerType StringType) [x] = do
         assembleExpr False inferredBigIntegerType x
         InvokeMethod InvokeVirtual "java/math/BigInteger" "toString" "()Ljava/lang/String;" False
@@ -790,17 +826,6 @@ mutual
         assembleExpr False IDouble x
         InvokeMethod InvokeStatic "java/lang/Double" "toString" "(D)Ljava/lang/String;" False
         asmCast inferredStringType returnType
-
-    assembleExprOp returnType fc (Cast CharType StringType) [x] = do
-        assembleExpr False IChar x
-        InvokeMethod InvokeStatic "java/lang/Character" "toString" "(C)Ljava/lang/String;" False
-        asmCast inferredStringType returnType
-
-    assembleExprOp returnType fc (Cast IntType IntegerType) [x] = do
-        assembleExpr False IInt x
-        I2l
-        InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
-        asmCast inferredBigIntegerType returnType
 
     assembleExprOp returnType fc (Cast DoubleType IntegerType) [x] = do
         assembleExpr False IDouble x
@@ -814,40 +839,135 @@ mutual
         I2l
         InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
         asmCast inferredBigIntegerType returnType
+    assembleExprOp returnType fc (Cast CharType IntType) [x] = do
+        assembleExpr False IChar x
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast CharType StringType) [x] = do
+        assembleExpr False IChar x
+        InvokeMethod InvokeStatic "java/lang/Character" "toString" "(C)Ljava/lang/String;" False
+        asmCast inferredStringType returnType
 
-    assembleExprOp returnType fc (Cast StringType IntegerType) [x] = do
-        assembleExpr False inferredStringType x
-        InvokeMethod InvokeStatic conversionClass "toInteger" "(Ljava/lang/String;)Ljava/math/BigInteger;" False
-        asmCast inferredBigIntegerType returnType
-
+    assembleExprOp returnType fc (Cast Bits8Type Bits16Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 16
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(II)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits8Type Bits32Type) [x] = do
+        assembleExpr False IInt x
+        I2l
+        Iconst 32
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(JI)I" False
+        asmCast IInt returnType
     assembleExprOp returnType fc (Cast Bits8Type IntType) [x] = do assembleExpr False IInt x; asmCast IInt returnType
-    assembleExprOp returnType fc (Cast Bits16Type IntType) [x] = do assembleExpr False IInt x; asmCast IInt returnType
-    assembleExprOp returnType fc (Cast Bits32Type IntType) [x] = do assembleExpr False IInt x; asmCast IInt returnType
-
+    assembleExprOp returnType fc (Cast Bits8Type Bits64Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 64
+        InvokeMethod InvokeStatic conversionClass "toUnsignedLong" "(II)J" False
+        asmCast ILong returnType
     assembleExprOp returnType fc (Cast Bits8Type IntegerType) [x] = unsignedIntToBigInteger returnType x
+    assembleExprOp returnType fc (Cast Bits8Type StringType) [x] = unsignedIntToString returnType x
+
+    assembleExprOp returnType fc (Cast Bits16Type Bits8Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 8
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(II)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits16Type Bits32Type) [x] = do
+        assembleExpr False IInt x
+        I2l
+        Iconst 32
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(JI)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits16Type IntType) [x] = do assembleExpr False IInt x; asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits16Type Bits64Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 64
+        InvokeMethod InvokeStatic conversionClass "toUnsignedLong" "(II)J" False
+        asmCast ILong returnType
     assembleExprOp returnType fc (Cast Bits16Type IntegerType) [x] = unsignedIntToBigInteger returnType x
+    assembleExprOp returnType fc (Cast Bits16Type StringType) [x] = unsignedIntToString returnType x
+
+    assembleExprOp returnType fc (Cast Bits32Type Bits8Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 8
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(II)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits32Type Bits16Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 16
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(II)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits32Type IntType) [x] = do assembleExpr False IInt x; asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits32Type Bits64Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 64
+        InvokeMethod InvokeStatic conversionClass "toUnsignedLong" "(II)J" False
+        asmCast ILong returnType
     assembleExprOp returnType fc (Cast Bits32Type IntegerType) [x] = unsignedIntToBigInteger returnType x
+    assembleExprOp returnType fc (Cast Bits32Type StringType) [x] = unsignedIntToString returnType x
+
+    assembleExprOp returnType fc (Cast Bits64Type Bits8Type) [x] = do
+        assembleExpr False ILong x
+        Iconst 8
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(JI)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits64Type Bits16Type) [x] = do
+        assembleExpr False ILong x
+        Iconst 16
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(JI)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast Bits64Type Bits32Type) [x] = do
+        assembleExpr False ILong x
+        Iconst 32
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(JI)I" False
+        asmCast IInt returnType
     assembleExprOp returnType fc (Cast Bits64Type IntegerType) [x] = do
         assembleExpr False ILong x
-        InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
+        InvokeMethod InvokeStatic conversionClass "toUnsignedBigInteger" "(J)Ljava/math/BigInteger;" False
         asmCast inferredBigIntegerType returnType
-
-    assembleExprOp returnType fc (Cast Bits8Type StringType) [x] = unsignedIntToString returnType x
-    assembleExprOp returnType fc (Cast Bits16Type StringType) [x] = unsignedIntToString returnType x
-    assembleExprOp returnType fc (Cast Bits32Type StringType) [x] = unsignedIntToString returnType x
-    assembleExprOp returnType fc (Cast IntType StringType) [x] = do
-        assembleExpr False IInt x
-        InvokeMethod InvokeStatic "java/lang/Integer" "toString" "(I)Ljava/lang/String;" False
-        asmCast inferredStringType returnType
     assembleExprOp returnType fc (Cast Bits64Type StringType) [x] = do
         assembleExpr False ILong x
         InvokeMethod InvokeStatic "java/lang/Long" "toUnsignedString" "(J)Ljava/lang/String;" False
         asmCast inferredStringType returnType
 
-    assembleExprOp returnType fc (Cast IntegerType IntType) [x] = do
-        assembleExpr False inferredBigIntegerType x
-        InvokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
+    assembleExprOp returnType fc (Cast IntType Bits8Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 8
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(II)I" False
         asmCast IInt returnType
+    assembleExprOp returnType fc (Cast IntType Bits16Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 16
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(II)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast IntType Bits32Type) [x] = do
+        assembleExpr False IInt x
+        I2l
+        Iconst 32
+        InvokeMethod InvokeStatic conversionClass "toUnsignedInt" "(JI)I" False
+        asmCast IInt returnType
+    assembleExprOp returnType fc (Cast IntType Bits64Type) [x] = do
+        assembleExpr False IInt x
+        Iconst 64
+        InvokeMethod InvokeStatic conversionClass "toUnsignedLong" "(II)J" False
+        asmCast ILong returnType
+    assembleExprOp returnType fc (Cast IntType IntegerType) [x] = do
+        assembleExpr False IInt x
+        I2l
+        InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
+        asmCast inferredBigIntegerType returnType
+    assembleExprOp returnType fc (Cast IntType DoubleType) [x] = do
+        assembleExpr False IInt x
+        I2d
+        asmCast IDouble returnType
+    assembleExprOp returnType fc (Cast IntType CharType) [x] = do
+        assembleExpr False IInt x
+        I2c
+        asmCast IChar returnType
+    assembleExprOp returnType fc (Cast IntType StringType) [x] = do
+        assembleExpr False IInt x
+        InvokeMethod InvokeStatic "java/lang/Integer" "toString" "(I)Ljava/lang/String;" False
+        asmCast inferredStringType returnType
 
     assembleExprOp returnType fc (Cast DoubleType IntType) [x] = do
         assembleExpr False IDouble x
@@ -858,30 +978,14 @@ mutual
         assembleExpr False inferredStringType x
         InvokeMethod InvokeStatic conversionClass "toInt" "(Ljava/lang/String;)I" False
         asmCast IInt returnType
-
-    assembleExprOp returnType fc (Cast CharType IntType) [x] = do
-        assembleExpr False IChar x
-        asmCast IInt returnType
-
-    assembleExprOp returnType fc (Cast IntegerType DoubleType) [x] = do
-        assembleExpr False inferredBigIntegerType x
-        InvokeMethod InvokeVirtual "java/math/BigInteger" "doubleValue" "()D" False
-        asmCast IDouble returnType
-
-    assembleExprOp returnType fc (Cast IntType DoubleType) [x] = do
-        assembleExpr False IInt x
-        I2d
-        asmCast IDouble returnType
-
+    assembleExprOp returnType fc (Cast StringType IntegerType) [x] = do
+        assembleExpr False inferredStringType x
+        InvokeMethod InvokeStatic conversionClass "toInteger" "(Ljava/lang/String;)Ljava/math/BigInteger;" False
+        asmCast inferredBigIntegerType returnType
     assembleExprOp returnType fc (Cast StringType DoubleType) [x] = do
         assembleExpr False inferredStringType x
         InvokeMethod InvokeStatic conversionClass "toDouble" "(Ljava/lang/String;)D" False
         asmCast IDouble returnType
-
-    assembleExprOp returnType fc (Cast IntType CharType) [x] = do
-        assembleExpr False IInt x
-        I2c
-        asmCast IChar returnType
 
     assembleExprOp returnType fc BelieveMe [_,_,x] = do
         assembleExpr False IUnknown x
@@ -897,17 +1001,23 @@ mutual
     assembleParameter : (NamedCExp, InferredType) -> Asm ()
     assembleParameter (param, ty) = assembleExpr False ty param
 
-    storeParameter : Map Int InferredType -> (Int, NamedCExp, InferredType) -> Asm ()
+    storeParameter : Map Int InferredType -> (Int, NamedCExp, InferredType) -> Asm Int
     storeParameter variableTypes (var, (NmLocal _ loc), ty) = do
         let valueVariableName = jvmSimpleName loc
         valueVariableIndex <- getVariableIndex valueVariableName
-        when (var /= valueVariableIndex) $ do
-            valueVariableType <- getVariableType valueVariableName
-            loadVar variableTypes valueVariableType ty valueVariableIndex
-            storeVar ty ty var
+        if var /= valueVariableIndex
+            then do
+                valueVariableType <- getVariableType valueVariableName
+                loadVar variableTypes valueVariableType ty valueVariableIndex
+                targetVariableIndex <- getDynamicVariableIndex "tailRecArg"
+                storeVar ty ty targetVariableIndex
+                Pure targetVariableIndex
+            else Pure var
     storeParameter _ (var, param, ty) = do
         assembleExpr False ty param
-        storeVar ty ty var
+        targetVariableIndex <- getDynamicVariableIndex "tailRecArg"
+        storeVar ty ty targetVariableIndex
+        Pure targetVariableIndex
 
     assembleSubMethodWithScope : (isTailCall: Bool) -> InferredType -> (parameterValue: Maybe NamedCExp) ->
         (parameterName : Maybe Name) -> NamedCExp -> Asm ()
@@ -956,7 +1066,7 @@ mutual
             let implementationMethodDescriptor =
                 getMethodDescriptor $
                     MkInferredFunctionType implementationMethodReturnType (variableTypes ++ toList parameterType)
-            let methodPrefix = if isExtracted then "extracted" else "lambda"
+            let methodPrefix = if isExtracted then "extr" else "lambda"
             lambdaClassMethodName <- getLambdaImplementationMethodName methodPrefix
             let lambdaMethodName = methodName lambdaClassMethodName
             let lambdaClassName = className lambdaClassMethodName
@@ -969,7 +1079,6 @@ mutual
                 when (lambdaType == DelayedLambda) $
                     InvokeMethod InvokeSpecial "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "<init>"
                         "(Lio/github/mmhelloworld/idrisjvm/runtime/Delayed;)V" False
-                asmCast lambdaInterfaceType lambdaReturnType
             let staticCall = do
                  InvokeMethod InvokeStatic lambdaClassName lambdaMethodName implementationMethodDescriptor False
                  asmCast lambdaBodyReturnType lambdaReturnType
@@ -1193,26 +1302,46 @@ mutual
                         storeVar IInt IInt hashCodePositionVariableIndex
                         Goto switchEndLabel
 
+    assembleConCase : InferredType -> FC -> (sc : NamedCExp) -> List NamedConAlt -> Maybe NamedCExp -> Asm ()
+    assembleConCase returnType fc sc alts def = do
+        idrisObjectVariableIndex <- assembleConstructorSwitchExpr sc
+        let hasTypeCase = any isTypeCase alts
+        let constructorType = if hasTypeCase then "Ljava/lang/String;" else "I"
+        variableTypes <- getVariableTypes
+        optTy <- LiftIo $ Map.get variableTypes idrisObjectVariableIndex
+        let idrisObjectVariableType = fromMaybe IUnknown optTy
+        loadVar variableTypes idrisObjectVariableType idrisObjectType idrisObjectVariableIndex
+        when (idrisObjectVariableType /= idrisObjectType) $ do
+            storeVar idrisObjectType idrisObjectType idrisObjectVariableIndex
+            loadVar !getVariableTypes idrisObjectType idrisObjectType idrisObjectVariableIndex
+        let constructorGetter = if hasTypeCase then "getStringConstructorId" else "getConstructorId"
+        InvokeMethod InvokeInterface idrisObjectClass constructorGetter ("()" ++ constructorType) True
+        if hasTypeCase
+            then assembleStringConstructorSwitch returnType fc idrisObjectVariableIndex alts def
+            else assembleConstructorSwitch returnType fc idrisObjectVariableIndex alts def
+
     assembleConCaseExpr : InferredType -> Int -> Name -> List Name -> NamedCExp -> Asm ()
     assembleConCaseExpr returnType idrisObjectVariableIndex name args expr = do
             variableTypes <- getVariableTypes
-            bindArg variableTypes 0 args
+            optTy <- LiftIo $ Map.get variableTypes idrisObjectVariableIndex
+            let idrisObjectVariableType = fromMaybe IUnknown optTy
+            bindArg idrisObjectVariableType variableTypes 0 args
             assembleExpr True returnType expr
         where
             constructorType : InferredType
             constructorType = IRef $ jvmSimpleName name
 
-            bindArg : Map Int InferredType -> Int -> List Name -> Asm ()
-            bindArg _ _ [] = Pure ()
-            bindArg variableTypes index (var :: vars) = do
+            bindArg : InferredType -> Map Int InferredType -> Int -> List Name -> Asm ()
+            bindArg _ _ _ [] = Pure ()
+            bindArg idrisObjectVariableType variableTypes index (var :: vars) = do
                 let variableName = jvmSimpleName var
                 when (used variableName expr) $ do
-                    loadVar variableTypes idrisObjectType idrisObjectType idrisObjectVariableIndex
+                    loadVar variableTypes idrisObjectVariableType idrisObjectType idrisObjectVariableIndex
                     Iconst index
                     InvokeMethod InvokeInterface idrisObjectClass "getProperty" "(I)Ljava/lang/Object;" True
                     variableIndex <- getVariableIndex variableName
                     storeVar inferredObjectType !(getVariableType variableName) variableIndex
-                bindArg variableTypes (index + 1) vars
+                bindArg idrisObjectVariableType variableTypes (index + 1) vars
 
     assembleConstructorSwitch : InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Asm ()
     assembleConstructorSwitch returnType fc idrisObjectVariableIndex alts def = do
@@ -1257,7 +1386,7 @@ mutual
                 assembleConCaseExpr returnType idrisObjectVariableIndex name args expr
 
             assembleExprConAlt : (String, Int, NamedConAlt, String) -> Asm ()
-            assembleExprConAlt (labelStart, _, (MkNConAlt name tag args expr), labelEnd) =
+            assembleExprConAlt (labelStart, _, (MkNConAlt name _ _ args expr), labelEnd) =
                 assembleCaseWithScope labelStart labelEnd name args expr
 
     assembleStringConstructorSwitch : InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Asm ()
@@ -1298,7 +1427,7 @@ mutual
             (hashPositionSwitchAlts hashPositionAndAlts) def
     where
         conAltHashCodeExpr : FC -> (Int, NamedConAlt) -> Asm (Int, Int, NamedConAlt)
-        conAltHashCodeExpr fc positionAndAlt@(position, MkNConAlt name _ _ _) =
+        conAltHashCodeExpr fc positionAndAlt@(position, MkNConAlt name _ _ _ _) =
             case hashCode (Str $ getIdrisConstructorClassName (jvmSimpleName name)) of
                 Just hashCodeValue => Pure (hashCodeValue, position, snd positionAndAlt)
                 Nothing => Throw fc ("Constructor " ++ show name ++ " cannot be compiled to 'Switch'.")
@@ -1307,8 +1436,8 @@ mutual
         hashPositionSwitchAlts exprPositionAlts = reverse $ go [] exprPositionAlts where
             go : List NamedConAlt -> List (Int, Int, NamedConAlt) -> List NamedConAlt
             go acc [] = acc
-            go acc ((_, position, (MkNConAlt name _ args expr)) :: alts) =
-                go (MkNConAlt name (Just position) args expr :: acc) alts
+            go acc ((_, position, (MkNConAlt name conInfo _ args expr)) :: alts) =
+                go (MkNConAlt name conInfo (Just position) args expr :: acc) alts
 
         assembleHashCodeSwitchCases : FC -> String -> Int -> Int -> String ->
             (String, Int, List (Int, NamedConAlt)) -> Asm ()
@@ -1318,7 +1447,7 @@ mutual
                 go : String -> List (Int, NamedConAlt) -> Asm ()
                 go _ [] = Pure ()
                 go label (positionAndAlt :: nextPositionAndAlt :: positionAndAlts) = do
-                    let (position, (MkNConAlt name _ _ _)) = positionAndAlt
+                    let (position, (MkNConAlt name _ _ _ _)) = positionAndAlt
                     scope <- getScope !getCurrentScopeIndex
                     let lineNumberStart = fst $ lineNumbers scope
                     LabelStart switchEndLabel
@@ -1335,7 +1464,7 @@ mutual
                     Goto switchEndLabel
                     go nextLabel (nextPositionAndAlt :: positionAndAlts)
                 go label (positionAndAlt :: []) = do
-                    let (position, (MkNConAlt name _ _ _)) = positionAndAlt
+                    let (position, (MkNConAlt name _ _ _ _)) = positionAndAlt
                     scope <- getScope !getCurrentScopeIndex
                     let lineNumberStart = fst $ lineNumbers scope
                     LabelStart label
@@ -1499,7 +1628,6 @@ createMainMethod programName mainFunctionName = do
     Field GetStatic mainClassName (methodName idrisMainClassMethodName) "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
     InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
         "()Ljava/lang/Object;" False
-    {-when (isThunkType $ returnType methodType) unwrapObjectThunk-}
     Return
     MaxStackAndLocal (-1) (-1)
     MethodCodeEnd
@@ -1585,11 +1713,12 @@ getNameStrDef (name, fc, def) = (name, def)
 ||| Compile a TT expression to JVM bytecode
 compileToJvmBytecode : Ref Ctxt Defs -> String -> String -> ClosedTerm -> Core ()
 compileToJvmBytecode c outputDirectory outputFile term = do
-    cdata <- getCompileData Cases term
+    cdata <- getCompileData False Cases term
     let ndefs = namedDefs cdata
     let idrisMainBody = forget (mainExpr cdata)
+    let unwrappedExpr = unwrapExpr idrisMainBody
     let programName = if outputFile == "" then "repl" else outputFile
-    let nameFcDefs = (idrisMainFunctionName programName, emptyFC, MkNmFun [] idrisMainBody) :: ndefs
+    let nameFcDefs = (idrisMainFunctionName programName, emptyFC, MkNmFun [] unwrappedExpr) :: ndefs
     let nameStrFcDefs = getNameStrFcDef <$> nameFcDefs
     fcAndDefinitionsByName <- coreLift $ Map.fromList nameStrFcDefs
     let nameStrDefs = getNameStrDef <$> nameStrFcDefs

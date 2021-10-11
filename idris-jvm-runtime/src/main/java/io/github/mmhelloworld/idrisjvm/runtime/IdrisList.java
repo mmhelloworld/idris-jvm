@@ -98,7 +98,7 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
         while (current != Nil.INSTANCE) {
             Cons cons = ((Cons) current);
             result = new Cons(cons.head, result);
-            current = cons.tail;
+            current = (IdrisList) cons.tail;
         }
         return result;
     }
@@ -132,11 +132,15 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
 
     public static final class Cons extends IdrisList {
         private final Object head;
-        private final IdrisList tail;
+        private final Object tail;
 
-        public Cons(Object head, IdrisList tail) {
+        public Cons(Object head, Object tail) {
             this.head = head;
             this.tail = tail;
+        }
+
+        public Cons(Object head, IdrisList tail) {
+            this(head, (Object) tail);
         }
 
         @Override
@@ -167,7 +171,7 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
 
         @Override
         public int size() {
-            return 1 + tail.size();
+            return 1 + ((IdrisList) tail).size();
         }
 
         private static class Node {
@@ -204,7 +208,8 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
                 Node currNode = new Node(cons.head);
                 int startIndex = -1;
                 Node start = new Node(null, EMPTY_ELEMENT, currNode);
-                for (IdrisList currList = cons.tail; currList != Nil.INSTANCE; currList = ((Cons) currList).tail) {
+                for (IdrisList currList = (IdrisList) cons.tail; currList != Nil.INSTANCE; currList =
+                    (IdrisList) ((Cons) currList).tail) {
                     Cons newCons = (Cons) currList;
                     Node newNode = new Node(newCons.head);
                     currNode.next = newNode;

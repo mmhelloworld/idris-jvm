@@ -1,3 +1,5 @@
+%search_timeout 5000
+
 natElim : (p : Nat -> Type) -> p Z -> ((k : Nat) -> p k -> p (S k)) ->
           (x : Nat) -> p x
 

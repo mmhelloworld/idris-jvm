@@ -60,6 +60,7 @@ data CG = Chez
         | Javascript
         | RefC
         | VMCodeInterp
+        | Jvm
         | Other String
 
 export
@@ -72,6 +73,7 @@ Eq CG where
   Javascript == Javascript = True
   RefC == RefC = True
   VMCodeInterp == VMCodeInterp = True
+  Jvm == Jvm = True
   Other s == Other t = s == t
   _ == _ = False
 
@@ -85,6 +87,7 @@ Show CG where
   show Javascript = "javascript"
   show RefC = "refc"
   show VMCodeInterp = "vmcode-interp"
+  show Jvm = "jvm"
   show (Other s) = s
 
 public export
@@ -206,6 +209,7 @@ availableCGs o
        ("javascript", Javascript),
        ("refc", RefC),
        ("gambit", Gambit),
+       ("jvm", Jvm),
        ("vmcode-interp", VMCodeInterp)] ++ additionalCGs o
 
 export
@@ -221,7 +225,7 @@ defaultPPrint = MkPPOpts False False True False
 
 export
 defaultSession : Session
-defaultSession = MkSessionOpts False CoveringOnly False False Chez [] 1000 False False
+defaultSession = MkSessionOpts False CoveringOnly False False Jvm [] 1000 False False
                                defaultLogLevel Nothing False Nothing Nothing
                                Nothing Nothing False 1 False False True
                                False [] False False

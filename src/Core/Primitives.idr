@@ -29,6 +29,24 @@ unaryOp fn [NPrimVal fc x]
     = map (NPrimVal fc) (fn x)
 unaryOp _ _ = Nothing
 
+b8max : Int
+b8max = 0x100
+
+b16max : Int
+b16max = 0x10000
+
+b32max : Integer
+b32max = 4294967296
+
+b64max : Integer
+b64max = 18446744073709551616 -- 0x10000000000000000
+
+bitCastWrap : (i : Integer) -> (max : Integer) -> Integer
+bitCastWrap i max
+    = if i >= 0 -- oops, we don't have `rem` yet!
+        then i `mod` max
+        else max + i `mod` max
+
 castString : Vect 1 (NF vars) -> Maybe (NF vars)
 castString [NPrimVal fc (I i)] = Just (NPrimVal fc (Str (show i)))
 castString [NPrimVal fc (I8 i)] = Just (NPrimVal fc (Str (show i)))
@@ -38,7 +56,7 @@ castString [NPrimVal fc (I64 i)] = Just (NPrimVal fc (Str (show i)))
 castString [NPrimVal fc (BI i)] = Just (NPrimVal fc (Str (show i)))
 castString [NPrimVal fc (B8 i)] = Just (NPrimVal fc (Str (show i)))
 castString [NPrimVal fc (B16 i)] = Just (NPrimVal fc (Str (show i)))
-castString [NPrimVal fc (B32 i)] = Just (NPrimVal fc (Str (show i)))
+castString [NPrimVal fc (B32 i)] = Just (NPrimVal fc (Str (show $ bitCastWrap (the Integer $ cast i) b32max)))
 castString [NPrimVal fc (B64 i)] = Just (NPrimVal fc (Str (show i)))
 castString [NPrimVal fc (Ch i)] = Just (NPrimVal fc (Str (stripQuotes (show i))))
 castString [NPrimVal fc (Db i)] = Just (NPrimVal fc (Str (show i)))

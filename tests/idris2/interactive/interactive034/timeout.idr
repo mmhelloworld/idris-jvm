@@ -1,7 +1,7 @@
 import Data.List
 import Data.List.Elem
 
-%search_timeout 1000
+%search_timeout 5000
 
 ||| A Place has an ID and a number of tokens
 data Place : Type where

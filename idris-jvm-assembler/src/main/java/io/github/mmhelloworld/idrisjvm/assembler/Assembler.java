@@ -331,7 +331,7 @@ public final class Assembler {
         } else {
             addFile(source, target, jarFile, rootDirectory);
         }
-        if (source.isDirectory() || (source.isFile() && !source.getName().equals(jarFile.getName()))) {
+        if (source.isDirectory() || !source.getName().endsWith(".jar")) {
             source.delete();
         }
     }

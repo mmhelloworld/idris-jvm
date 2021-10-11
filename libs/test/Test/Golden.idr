@@ -348,7 +348,7 @@ Eq Requirement where
 ||| Some test may involve Idris' backends and have requirements.
 ||| We define here the ones supported by Idris
 public export
-data BackendRequirement = ReqC | ReqChez | ReqNodeJS | ReqRacket | ReqGambit
+data BackendRequirement = ReqC | ReqChez | ReqNodeJS | ReqRacket | ReqJvm | ReqGambit
 
 export
 checkRequirement : BackendRequirement -> IO (Maybe String)
@@ -365,6 +365,7 @@ checkRequirement req
     requirement ReqNodeJS = ("NODE", ["node"])
     requirement ReqRacket = ("RACKET", ["racket"])
     requirement ReqGambit = ("GAMBIT", ["gsc"])
+    requirement ReqJvm = ("JVM", ["java"])
 
     platformSupport : BackendRequirement -> Bool
     platformSupport ReqC = not isWindows
@@ -400,6 +401,7 @@ findCG
        Nothing <- checkRequirement ReqRacket  | p => pure (Just "racket")
        Nothing <- checkRequirement ReqGambit  | p => pure (Just "gsc")
        Nothing <- checkRequirement ReqC       | p => pure (Just "refc")
+       Nothing <- checkRequirement ReqJvm     | p => pure (Just "jvm")
        pure Nothing
 
 ||| A choice of a codegen

@@ -1,10 +1,10 @@
-:gd 7 my_cong
-:gd 9 my_curry
-:gd 11 my_uncurry
-:gd 13 append
-:gd 15 lappend
-:gd 17 zipWith
-:gd 29 lookup
-:gd 35 foo
+:gd 9 my_cong
+:gd 11 my_curry
+:gd 13 my_uncurry
+:gd 15 append
+:gd 17 lappend
+:gd 19 zipWith
+:gd 31 lookup
+:gd 37 foo
 :t my_uncurry
 :q

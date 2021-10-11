@@ -82,7 +82,7 @@ public final class Directories {
     public static Object getNextDirectoryEntry(Object directory) {
         Iterator<Path> iterator = ((Directory) directory).getIterator();
         if (iterator.hasNext()) {
-            return iterator.next().toString();
+            return iterator.next().getFileName().toString();
         } else {
             Runtime.setErrorNumber(2);
             return null;

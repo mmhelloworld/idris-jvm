@@ -2,10 +2,12 @@ package io.github.mmhelloworld.idrisjvm.runtime;
 
 import java.io.Closeable;
 import java.io.EOFException;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channel;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+import static io.github.mmhelloworld.idrisjvm.runtime.Directories.workingDir;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_READ;
@@ -120,6 +123,14 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
         }
     }
 
+    public static ChannelIo popen(String command, String mode) throws IOException {
+        Process process = new ProcessBuilder(IdrisSystem.getCommand(command))
+            .directory(new File(workingDir))
+            .start();
+        return new ChannelIo(null, new ReadableWritableChannel(Channels.newChannel(process.getInputStream()),
+            Channels.newChannel(process.getOutputStream())));
+    }
+
     public static void close(ChannelIo file) {
         file.close();
     }
@@ -129,9 +140,9 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
             .chmod(mode);
     }
 
-    public static void createDirectories(Path dirPath) throws IOException {
-        if (dirPath != null) {
-            java.nio.file.Files.createDirectories(dirPath);
+    public static void createDirectories(Path path) throws IOException {
+        if (path != null && (!Files.isSymbolicLink(path) || !Files.exists(path))) {
+            Files.createDirectories(path);
         }
     }
 
@@ -139,7 +150,7 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
         Path path = Paths.createPath(pathString);
         byte[] bytes = content.getBytes(UTF_8);
         createDirectories(path.getParent());
-        java.nio.file.Files.write(path, bytes);
+        Files.write(path, bytes);
     }
 
     public static int flush(ChannelIo file) {
@@ -191,6 +202,11 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
     public String readLine() {
         String chars = withExceptionHandling(byteBufferIo::getLine);
         return exception != null ? "" : chars;
+    }
+
+    @Override
+    public int seekLine() {
+        return withExceptionHandling(byteBufferIo::seekLine);
     }
 
     public void handleException(Exception e) {
@@ -334,9 +350,7 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
     }
 
     private static ChannelIo open(Path path, OpenOption... openOptions) throws IOException {
-        if (path.getParent() != null) {
-            java.nio.file.Files.createDirectories(path.getParent());
-        }
+        ensureParentDirectory(path);
         return new ChannelIo(path, FileChannel.open(path, openOptions));
     }
 

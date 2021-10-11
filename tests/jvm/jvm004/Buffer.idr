@@ -1,5 +1,6 @@
 import Data.Buffer
 import System.File
+import Debug.Buffer
 
 main : IO ()
 main
@@ -24,6 +25,10 @@ main
          val <- getString buf 26 6
          printLn val
 
+         setBits16 buf 32 65535
+         val <- getBits16 buf 32
+         printLn val
+
          ds <- bufferData buf
          printLn ds
 
@@ -35,8 +40,15 @@ main
          ds <- bufferData buf2
          printLn ds
 
-         freeBuffer buf
-         freeBuffer buf2
+         setByte buf2 0 1
+         Just ccBuf <- concatBuffers [buf, buf2]
+            | Nothing => putStrLn "Buffer concat failed"
+         printLn !(bufferData ccBuf)
+
+         Just (a, b) <- splitBuffer buf 20
+            | Nothing => putStrLn "Buffer split failed"
+         printBuffer a
+         printBuffer b
 
 -- Put back when the File API is moved to C and these can work again
 --          Right f <- openBinaryFile "test.buf" Read
@@ -47,4 +59,3 @@ main
 --              | Left err => do putStrLn "Buffer read fail"
 --                               closeFile f
 --          closeFile f
-

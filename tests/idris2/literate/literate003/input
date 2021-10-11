@@ -1,9 +1,9 @@
-:gd 7 my_cong
-:gd 9 my_curry
-:gd 11 my_uncurry
-:gd 13 append
-:gd 15 lappend
-:gd 17 zipWith
-:gd 29 lookup
+:gd 8 my_cong
+:gd 10 my_curry
+:gd 12 my_uncurry
+:gd 14 append
+:gd 16 lappend
+:gd 18 zipWith
+:gd 30 lookup
 :t my_uncurry
 :q

@@ -10,9 +10,8 @@ import Core.Context
 import Core.Name
 import Core.TT
 
-import Data.Bool.Extra
-import Data.SortedMap
-import Data.SortedSet
+import Libraries.Data.SortedMap
+import Libraries.Data.SortedSet
 import Data.List
 import Data.Maybe
 import Data.Strings
@@ -39,7 +38,7 @@ mutual
 
     hasTailCallConAlt : (predicate: Name -> Bool) -> List NamedConAlt -> Bool
     hasTailCallConAlt predicate [] = False
-    hasTailCallConAlt predicate ((MkNConAlt _ _ _ expr) :: alts) =
+    hasTailCallConAlt predicate ((MkNConAlt _ _ _ _ expr) :: alts) =
         hasTailCall predicate expr || hasTailCallConAlt predicate alts
 
     hasTailCallConstAlt : (predicate: Name -> Bool) -> List NamedConstAlt -> Bool
@@ -50,35 +49,46 @@ mutual
 thunkExpr : NamedCExp -> NamedCExp
 thunkExpr expr = NmLam (getFC expr) (UN "$jvm$thunk") expr
 
-isBoolTySpec : List String -> Name -> Bool
-isBoolTySpec ["Prelude"] (UN "Bool") = True
+isBoolTySpec : String -> Name -> Bool
+isBoolTySpec "Prelude" (UN "Bool") = True
+isBoolTySpec "Prelude.Basics" (UN "Bool") = True
 isBoolTySpec _ _ = False
 
 export
 tySpec : NamedCExp -> Asm InferredType
-tySpec (NmCon fc (UN "Int") _ []) = pure IInt
-tySpec (NmCon fc (UN "Integer") _ []) = pure inferredBigIntegerType
-tySpec (NmCon fc (UN "String") _ []) = pure inferredStringType
-tySpec (NmCon fc (UN "Double") _ []) = pure IDouble
-tySpec (NmCon fc (UN "Char") _ []) = pure IChar
-tySpec (NmCon fc (UN "Bool") _ []) = pure IBool
-tySpec (NmCon fc (UN "long") _ []) = pure ILong
-tySpec (NmCon fc (UN "void") _ []) = pure IVoid
-tySpec (NmCon fc (UN ty) _ []) = pure $ IRef ty
-tySpec (NmCon fc (NS namespaces n) _ []) = cond
+tySpec (NmCon fc (UN "Int") _ _ []) = pure IInt
+tySpec (NmCon fc (UN "Integer") _ _ []) = pure inferredBigIntegerType
+tySpec (NmCon fc (UN "String") _ _ []) = pure inferredStringType
+tySpec (NmCon fc (UN "Double") _ _ []) = pure IDouble
+tySpec (NmCon fc (UN "Char") _ _ []) = pure IChar
+tySpec (NmCon fc (UN "Bool") _ _ []) = pure IBool
+tySpec (NmCon fc (UN "long") _ _ []) = pure ILong
+tySpec (NmCon fc (UN "void") _ _ []) = pure IVoid
+tySpec (NmCon fc (UN ty) _ _ []) = pure $ IRef ty
+tySpec (NmCon fc (NS namespaces n) _ _ []) = cond
     [(n == UN "Unit", pure IVoid),
-      (isBoolTySpec namespaces n, pure IBool)] (pure inferredObjectType)
+      (isBoolTySpec (show namespaces) n, pure IBool)] (pure inferredObjectType)
 tySpec ty = pure inferredObjectType
 
 export
 getFArgs : NamedCExp -> Asm (List (NamedCExp, NamedCExp))
-getFArgs (NmCon fc _ (Just 0) _) = pure []
-getFArgs (NmCon fc _ (Just 1) [ty, val, rest]) = pure $ (ty, val) :: !(getFArgs rest)
+getFArgs (NmCon fc _ _ (Just 0) _) = pure []
+getFArgs (NmCon fc _ _ (Just 1) [ty, val, rest]) = pure $ (ty, val) :: !(getFArgs rest)
 getFArgs arg = Throw (getFC arg) ("Badly formed jvm call argument list " ++ show arg)
 
 getLineNumbers : FilePos -> FilePos -> (Int, Int)
 getLineNumbers (lineStart, _) (lineEnd, colEnd) =
     (lineStart + 1, if colEnd == 1 then lineEnd else lineEnd + 1)
+
+getFileName : OriginDesc -> String
+getFileName (PhysicalIdrSrc moduleIdent) = case unsafeUnfoldModuleIdent moduleIdent of
+  (moduleName :: _) => moduleName
+  _ => "(unknown-source)"
+getFileName (PhysicalPkgSrc fname) = fname
+getFileName (Virtual Interactive) = "(Interactive)"
+
+getSourceLocationFromOriginDesc : OriginDesc -> FilePos -> FilePos -> (String, Int, Int)
+getSourceLocationFromOriginDesc originDesc startPos endPos = (getFileName originDesc, getLineNumbers startPos endPos)
 
 export
 getSourceLocation : NamedCExp -> (String, Int, Int)
@@ -87,13 +97,16 @@ getSourceLocation expr = case getFC expr of
         (NmExtPrim _ _ (arg :: args)) => getSourceLocation arg
         (NmOp _ _ (arg :: _)) => getSourceLocation arg
         _ => ("Main.idr", 1, 1)
-    (MkFC fileName startPos endPos) =>
-        (fileName, getLineNumbers startPos endPos)
+    (MkVirtualFC originDesc startPos endPos) => getSourceLocationFromOriginDesc originDesc startPos endPos
+    (MkFC originDesc startPos endPos) => getSourceLocationFromOriginDesc originDesc startPos endPos
 
 export
 getSourceLocationFromFc : FC -> (String, Int, Int)
 getSourceLocationFromFc EmptyFC = ("Main.idr", 1, 1)
-getSourceLocationFromFc (MkFC fileName startPos endPos) = (fileName, getLineNumbers startPos endPos)
+getSourceLocationFromFc (MkVirtualFC originDesc startPos endPos) =
+    getSourceLocationFromOriginDesc originDesc startPos endPos
+getSourceLocationFromFc (MkFC originDesc startPos endPos) =
+    getSourceLocationFromOriginDesc originDesc startPos endPos
 
 mutual
     export
@@ -102,38 +115,40 @@ mutual
     used n (NmRef _ _) = False
     used n (NmLam _ param sc) = n == jvmSimpleName param || used n sc
     used n (NmLet _ var value sc) = n == jvmSimpleName var || used n value || used n sc
-    used n (NmApp _ f args) = used n f || anyTrue (map (used n) args)
-    used n (NmCon _ _ _ args) = anyTrue (map (used n) args)
-    used n (NmOp _ _ args) = anyTrue (map (used n) $ List.toList args)
-    used n (NmExtPrim _ _ args) = anyTrue (map (used n) args)
-    used n (NmForce _ t) = used n t
-    used n (NmDelay _ t) = used n t
+    used n (NmApp _ f args) = used n f || any (used n) args
+    used n (NmCon _ _ _ _ args) = any (used n) args
+    used n (NmOp _ _ args) = any (used n) $ List.toList args
+    used n (NmExtPrim _ _ args) = any (used n) args
+    used n (NmForce _ _ t) = used n t
+    used n (NmDelay _ _ t) = used n t
     used n (NmConCase _ sc alts def)
-        = used n sc || anyTrue (map (usedCon n) alts)
+        = used n sc || any (usedCon n) alts
               || maybe False (used n) def
     used n (NmConstCase _ sc alts def)
-        = used n sc || anyTrue (map (usedConst n) alts)
+        = used n sc || any (usedConst n) alts
               || maybe False (used n) def
     used n _ = False
 
     usedCon : String -> NamedConAlt -> Bool
-    usedCon n (MkNConAlt _ _ _ sc) = used n sc
+    usedCon n (MkNConAlt _ _ _ _ sc) = used n sc
 
     usedConst : String -> NamedConstAlt -> Bool
     usedConst n (MkNConstAlt _ sc) = used n sc
 
+%inline
 export
 extractedMethodArgumentName : String
 extractedMethodArgumentName = "$jvm$arg"
 
+%inline
 maxCasesInMethod : Int
 maxCasesInMethod = 12
 
 appliedLambdaSwitchIndicator : FC
-appliedLambdaSwitchIndicator = MkFC "$jvmAppliedLambdaSwitch$" (0, 0) (0, 0)
+appliedLambdaSwitchIndicator = MkFC (PhysicalPkgSrc "$jvmAppliedLambdaSwitch$") (0, 0) (0, 0)
 
 appliedLambdaLetIndicator : FC
-appliedLambdaLetIndicator = MkFC "$jvmAppliedLambdaLet$" (0, 0) (0, 0)
+appliedLambdaLetIndicator = MkFC (PhysicalPkgSrc "$jvmAppliedLambdaLet$") (0, 0) (0, 0)
 
 data AppliedLambdaType = AppliedLambdaSwitch | AppliedLambdaLet | AppliedLambdaUnknown
 
@@ -204,18 +219,20 @@ mutual
     goLiftToLambda _ (NmLam fc param sc) = pure $ NmLam fc param !(goLiftToLambda True sc)
     goLiftToLambda _ (NmApp fc f args) =
         pure $ NmApp fc !(goLiftToLambda False f) !(traverse (goLiftToLambda False) args)
-    goLiftToLambda _ expr@(NmCon fc name tag args) = pure $ NmCon fc name tag !(traverse (goLiftToLambda False) args)
+    goLiftToLambda _ expr@(NmCon fc name conInfo tag args) =
+        pure $ NmCon fc name conInfo tag !(traverse (goLiftToLambda False) args)
     goLiftToLambda _ (NmOp fc f args) = pure $ NmOp fc f !(traverse (goLiftToLambda False) args)
     goLiftToLambda _ (NmExtPrim fc f args) = pure $ NmExtPrim fc f !(traverse (goLiftToLambda False) args)
-    goLiftToLambda _ (NmForce fc t) = pure $ NmForce fc !(goLiftToLambda False t)
-    goLiftToLambda _ (NmDelay fc t) = pure $ NmDelay fc !(goLiftToLambda False t)
+    goLiftToLambda _ (NmForce fc reason t) = pure $ NmForce fc reason !(goLiftToLambda False t)
+    goLiftToLambda _ (NmDelay fc reason t) = pure $ NmDelay fc reason !(goLiftToLambda False t)
     goLiftToLambda _ expr = pure expr
 
     liftToLambdaDefault : NamedCExp -> State Int NamedCExp
     liftToLambdaDefault body = goLiftToLambda True body
 
     liftToLambdaCon : NamedConAlt -> State Int NamedConAlt
-    liftToLambdaCon (MkNConAlt n tag args body) = pure $ MkNConAlt n tag args !(goLiftToLambda True body)
+    liftToLambdaCon (MkNConAlt n conInfo tag args body) =
+      pure $ MkNConAlt n conInfo tag args !(goLiftToLambda True body)
 
     liftToLambdaConst : NamedConstAlt -> State Int NamedConstAlt
     liftToLambdaConst (MkNConstAlt constant body) = pure $ MkNConstAlt constant !(goLiftToLambda True body)
@@ -241,15 +258,15 @@ mutual
         getExpressionsFreeVariables freeVariables boundVariables args
     doGetFreeVariables freeVariables boundVariables (NmApp _ f args) =
         getExpressionsFreeVariables freeVariables boundVariables (f :: args)
-    doGetFreeVariables freeVariables boundVariables (NmCon _ _ _ args) =
+    doGetFreeVariables freeVariables boundVariables (NmCon _ _ _ _ args) =
         getExpressionsFreeVariables freeVariables boundVariables args
     doGetFreeVariables freeVariables boundVariables (NmOp _ _ args) =
         getExpressionsFreeVariables freeVariables boundVariables $ List.toList args
     doGetFreeVariables freeVariables boundVariables (NmExtPrim _ _ args) =
         getExpressionsFreeVariables freeVariables boundVariables args
-    doGetFreeVariables freeVariables boundVariables (NmForce _ t) =
+    doGetFreeVariables freeVariables boundVariables (NmForce _ _ t) =
         doGetFreeVariables freeVariables boundVariables t
-    doGetFreeVariables freeVariables boundVariables (NmDelay _ t) =
+    doGetFreeVariables freeVariables boundVariables (NmDelay _ _ t) =
         doGetFreeVariables freeVariables boundVariables t
     doGetFreeVariables freeVariables boundVariables (NmConCase _ sc alts def) =
         let switchExprFreeVariables = doGetFreeVariables freeVariables boundVariables sc
@@ -269,7 +286,7 @@ mutual
 
     doGetFreeVariablesCon : SortedSet String -> SortedSet String -> List NamedConAlt -> SortedSet String
     doGetFreeVariablesCon freeVariables _ [] = freeVariables
-    doGetFreeVariablesCon freeVariables boundVariables ((MkNConAlt _ _ properties sc) :: rest) =
+    doGetFreeVariablesCon freeVariables boundVariables ((MkNConAlt _ _ _ properties sc) :: rest) =
         let newBoundVariables = SortedSet.union boundVariables (SortedSet.fromList (jvmSimpleName <$> properties))
         in doGetFreeVariablesCon (doGetFreeVariables freeVariables newBoundVariables sc) boundVariables rest
 
@@ -302,18 +319,17 @@ mutual
     markTailRecursion expr = Pure expr
 
     markTailRecursionConAlt : NamedConAlt -> Asm NamedConAlt
-    markTailRecursionConAlt (MkNConAlt name tag args caseBody) =
-        MkNConAlt name tag args <$> markTailRecursion caseBody
+    markTailRecursionConAlt (MkNConAlt name conInfo tag args caseBody) =
+        MkNConAlt name conInfo tag args <$> markTailRecursion caseBody
 
     markTailRecursionConstAlt : NamedConstAlt -> Asm NamedConstAlt
     markTailRecursionConstAlt (MkNConstAlt constant caseBody) = MkNConstAlt constant <$> markTailRecursion caseBody
 
 mutual
     trampolineExpression : NamedCExp -> NamedCExp
-    trampolineExpression expr@(NmApp fc (NmRef nameFc (UN ":__jvmTailRec__:")) args) =
-        -- Do not trampoline as tail recursion will be eliminated
-        Pure expr
-    trampolineExpression expr@(NmCon _ _ _ _) = thunkExpr expr
+    -- Do not trampoline as tail recursion will be eliminated
+    trampolineExpression expr@(NmApp fc (NmRef nameFc (UN ":__jvmTailRec__:")) args) = expr
+    trampolineExpression expr@(NmCon _ _ _ _ _) = thunkExpr expr
     trampolineExpression expr@(NmApp _ _ _) = thunkExpr expr
     trampolineExpression expr@(NmLet fc var value body) =
         NmLet fc var value $ trampolineExpression body
@@ -328,8 +344,8 @@ mutual
     trampolineExpression expr = expr
 
     trampolineExpressionConAlt : NamedConAlt -> NamedConAlt
-    trampolineExpressionConAlt (MkNConAlt name tag args caseBody) =
-        MkNConAlt name tag args $ trampolineExpression caseBody
+    trampolineExpressionConAlt (MkNConAlt name conInfo tag args caseBody) =
+        MkNConAlt name conInfo tag args $ trampolineExpression caseBody
 
     trampolineExpressionConstAlt : NamedConstAlt -> NamedConstAlt
     trampolineExpressionConstAlt (MkNConstAlt constant caseBody) = MkNConstAlt constant $ trampolineExpression caseBody
@@ -482,11 +498,11 @@ getIntConstantValue fc x =
 sortConCases : List NamedConAlt -> List NamedConAlt
 sortConCases alts = sortBy (comparing getTag) alts where
     getTag : NamedConAlt -> Int
-    getTag (MkNConAlt _ tag _ _) = fromMaybe 0 tag
+    getTag (MkNConAlt _ _ tag _ _) = fromMaybe 0 tag
 
 export
 isTypeCase : NamedConAlt -> Bool
-isTypeCase (MkNConAlt _ Nothing _ _) = True
+isTypeCase (MkNConAlt _ _ Nothing _ _) = True
 isTypeCase _ = False
 
 export
@@ -503,9 +519,15 @@ combineSwitchTypes defaultTy altTypes@(altTy :: rest) = maybe (go altTy rest) (f
   go prevTy [] = prevTy
   go prevTy (currTy :: rest) = if prevTy == currTy then go currTy rest else inferredObjectType
 
+createNewVariable : (variablePrefix: String) -> InferredType -> Asm ()
+createNewVariable variablePrefix ty = do
+    variable <- generateVariable variablePrefix
+    addVariableType variable ty
+    Pure ()
+
 mutual
     inferExpr : InferredType -> NamedCExp -> Asm InferredType
-    inferExpr exprTy (NmDelay _ expr) = inferExprLam AppliedLambdaUnknown Nothing Nothing expr
+    inferExpr exprTy (NmDelay _ _ expr) = inferExprLam AppliedLambdaUnknown Nothing Nothing expr
     inferExpr exprTy expr@(NmLocal _ var) = addVariableType (jvmSimpleName var) exprTy
     inferExpr exprTy (NmRef _ _) = pure exprTy
     inferExpr _ (NmApp fc (NmLam _ var body) [expr]) =
@@ -513,11 +535,11 @@ mutual
     inferExpr _ (NmLam _ var body) = inferExprLam AppliedLambdaUnknown Nothing (Just var) body
     inferExpr exprTy (NmLet fc var value expr) = inferExprLet fc exprTy var value expr
     inferExpr exprTy app@(NmApp _ _ _) = inferExprApp exprTy app
-    inferExpr exprTy expr@(NmCon fc name tag args) =
+    inferExpr exprTy expr@(NmCon fc name _ tag args) =
         inferExprCon exprTy (fst $ getSourceLocation expr) name args
     inferExpr exprTy (NmOp _ fn args) = inferExprOp fn args
     inferExpr exprTy (NmExtPrim fc fn args) = inferExtPrim fc exprTy (toPrim fn) args
-    inferExpr exprTy (NmForce _ expr) = do
+    inferExpr exprTy (NmForce _ _ expr) = do
         inferExpr delayedType expr
         Pure inferredObjectType
 
@@ -525,18 +547,15 @@ mutual
     inferExpr exprTy (NmConCase _ sc [] (Just def)) = do
         inferConstructorSwitchExpr sc
         inferExpr exprTy def
-    inferExpr exprTy (NmConCase _ sc [MkNConAlt _ _ args expr] Nothing) = do
+    inferExpr exprTy (NmConCase _ sc [MkNConAlt _ _ _ args expr] Nothing) = do
         inferConstructorSwitchExpr sc
         inferConCaseExpr exprTy args expr
     inferExpr exprTy (NmConCase _ sc alts def) = do
         inferConstructorSwitchExpr sc
         let hasTypeCase = any isTypeCase alts
         when hasTypeCase $ do
-            constantExprVariable <- generateVariable "constructorCaseExpr"
-            addVariableType constantExprVariable inferredStringType
-            hashCodePositionVariable <- generateVariable "hashCodePosition"
-            addVariableType hashCodePositionVariable IInt
-            Pure ()
+            createNewVariable "constructorCaseExpr" inferredStringType
+            createNewVariable "hashCodePosition" IInt
         let sortedAlts = if hasTypeCase then alts else sortConCases alts
         altTypes <- traverse (inferExprConAlt exprTy) sortedAlts
         defaultTy <- traverse (inferExprWithNewScope exprTy) def
@@ -598,7 +617,7 @@ mutual
     inferExprWithNewScope : InferredType -> NamedCExp -> Asm InferredType
     inferExprWithNewScope returnType expr = do
          let fc = getFC expr
-         let (lineStart, lineEnd) = getLineNumbers (startPos fc) (endPos fc)
+         let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
          withInferenceScope lineStart lineEnd $ inferExpr returnType expr
 
     inferConCaseExpr : InferredType -> List Name -> NamedCExp -> Asm InferredType
@@ -612,9 +631,9 @@ mutual
                 in when (used variableName expr) $ createVariable variableName
 
     inferExprConAlt : InferredType -> NamedConAlt -> Asm InferredType
-    inferExprConAlt exprTy (MkNConAlt _ _ args expr) = do
+    inferExprConAlt exprTy (MkNConAlt _ _ _ args expr) = do
             let fc = getFC expr
-            let (lineStart, lineEnd) = getLineNumbers (startPos fc) (endPos fc)
+            let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
             withInferenceScope lineStart lineEnd $ inferConCaseExpr exprTy args expr
 
     inferParameter : (NamedCExp, InferredType) -> Asm InferredType
@@ -746,7 +765,7 @@ mutual
 
     inferExprLet : FC -> InferredType -> (x : Name) -> NamedCExp -> NamedCExp -> Asm InferredType
     inferExprLet fc exprTy var value expr = do
-        let (lineStart, lineEnd) = getLineNumbers (startPos fc) (endPos fc)
+        let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
         let varName = jvmSimpleName var
         createVariable varName
         let (_, lineStart, lineEnd) = getSourceLocation value
@@ -761,9 +780,20 @@ mutual
         let variableType = fromMaybe IUnknown optTy
         ty <- inferExpr variableType arg
         optName <- LiftIo $ Map.get {value=String} argumentNameByIndices index
-        maybe (Pure ()) (\name => do addVariableType name ty; Pure ()) optName
+        maybe (Pure ()) (doAddVariableType ty) optName
+      where
+        doAddVariableType : InferredType -> String -> Asm ()
+        doAddVariableType ty name = do
+            addVariableType name ty
+            case arg of
+                NmLocal _ loc => do
+                    let valueVariableName = jvmSimpleName loc
+                    valueVariableIndex <- retrieveVariableIndex valueVariableName
+                    when (index /= valueVariableIndex) $ createNewVariable "tailRecArg" ty
+                _ => createNewVariable "tailRecArg" ty
 
     inferExprApp : InferredType -> NamedCExp -> Asm InferredType
+    inferExprApp exprTy app@(NmApp _ (NmRef _ (UN ":__jvmUnwrap__:")) [arg]) = inferExpr IUnknown arg
     inferExprApp exprTy app@(NmApp _ (NmRef _ (UN ":__jvmTailRec__:")) args) =
         case args of
             [] => Pure exprTy
@@ -813,7 +843,7 @@ mutual
     inferExprOp (BAnd Bits8Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (BOr Bits8Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (BXOr Bits8Type) [x, y] = inferBinaryOp IInt x y
-    
+
     inferExprOp (Add Bits16Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (Sub Bits16Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (Mul Bits16Type) [x, y] = inferBinaryOp IInt x y
@@ -825,7 +855,7 @@ mutual
     inferExprOp (BAnd Bits16Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (BOr Bits16Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (BXOr Bits16Type) [x, y] = inferBinaryOp IInt x y
-    
+
     inferExprOp (Add Bits32Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (Sub Bits32Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (Mul Bits32Type) [x, y] = inferBinaryOp IInt x y
@@ -837,7 +867,7 @@ mutual
     inferExprOp (BAnd Bits32Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (BOr Bits32Type) [x, y] = inferBinaryOp IInt x y
     inferExprOp (BXOr Bits32Type) [x, y] = inferBinaryOp IInt x y
-    
+
     inferExprOp (Add Bits64Type) [x, y] = inferBinaryOp ILong x y
     inferExprOp (Sub Bits64Type) [x, y] = inferBinaryOp ILong x y
     inferExprOp (Mul Bits64Type) [x, y] = inferBinaryOp ILong x y
@@ -849,7 +879,7 @@ mutual
     inferExprOp (BAnd Bits64Type) [x, y] = inferBinaryOp ILong x y
     inferExprOp (BOr Bits64Type) [x, y] = inferBinaryOp ILong x y
     inferExprOp (BXOr Bits64Type) [x, y] = inferBinaryOp ILong x y
-    
+
     inferExprOp (Add IntType) [x, y] = inferBinaryOp IInt x y
     inferExprOp (Sub IntType) [x, y] = inferBinaryOp IInt x y
     inferExprOp (Mul IntType) [x, y] = inferBinaryOp IInt x y
@@ -968,19 +998,53 @@ mutual
     inferExprOp DoubleFloor [x] = inferUnaryOp IDouble x
     inferExprOp DoubleCeiling [x] = inferUnaryOp IDouble x
 
+    inferExprOp (Cast Bits8Type Bits16Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits8Type Bits32Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits8Type IntType) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits8Type Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast Bits8Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast Bits8Type StringType) [x] = inferExprCast IInt inferredStringType x
+
+    inferExprOp (Cast Bits16Type Bits8Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits16Type Bits32Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits16Type IntType) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits16Type Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast Bits16Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast Bits16Type StringType) [x] = inferExprCast IInt inferredStringType x
+
+    inferExprOp (Cast Bits32Type Bits8Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits32Type Bits16Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits32Type IntType) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast Bits32Type Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast Bits32Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast Bits32Type StringType) [x] = inferExprCast IInt inferredStringType x
+
+    inferExprOp (Cast Bits64Type Bits8Type) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type Bits16Type) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type Bits32Type) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type IntType) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type IntegerType) [x] = inferExprCast ILong inferredBigIntegerType x
     inferExprOp (Cast Bits64Type StringType) [x] = inferExprCast ILong inferredStringType x
+
+    inferExprOp (Cast IntType Bits8Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast IntType Bits16Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast IntType Bits32Type) [x] = inferExprCast IInt IInt x
+    inferExprOp (Cast IntType Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast IntType IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast IntType StringType) [x] = inferExprCast IInt inferredStringType x
+
+    inferExprOp (Cast IntegerType Bits8Type)  [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType Bits16Type) [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType Bits32Type) [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType IntType) [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType Bits64Type) [x] = inferExprCast inferredBigIntegerType ILong x
     inferExprOp (Cast IntegerType StringType) [x] = inferExprCast inferredBigIntegerType inferredStringType x
+
     inferExprOp (Cast DoubleType StringType) [x] = inferExprCast IDouble inferredStringType x
     inferExprOp (Cast CharType StringType) [x] = inferExprCast IChar inferredStringType x
-    inferExprOp (Cast IntType IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
     inferExprOp (Cast DoubleType IntegerType) [x] = inferExprCast IDouble inferredBigIntegerType x
     inferExprOp (Cast CharType IntegerType) [x] = inferExprCast IChar inferredBigIntegerType x
     inferExprOp (Cast StringType IntegerType) [x] = inferExprCast inferredStringType inferredBigIntegerType x
-    inferExprOp (Cast IntegerType IntType) [x] = inferExprCast inferredBigIntegerType IInt x
     inferExprOp (Cast DoubleType IntType) [x] = inferExprCast IDouble IInt x
     inferExprOp (Cast StringType IntType) [x] = inferExprCast inferredStringType IInt x
     inferExprOp (Cast CharType IntType) [x] = inferExprCast IChar IInt x
@@ -991,10 +1055,14 @@ mutual
 
     inferExprOp BelieveMe [_, _, x] = Pure IUnknown
     inferExprOp Crash [_, msg] = Pure IUnknown
-    inferExprOp op _ = Throw emptyFC ("Unsupported expr " ++ show op)
+    inferExprOp op _ = Throw emptyFC ("Unsupported primitive function " ++ show op)
 
-optimize : NamedCExp -> Asm NamedCExp
-optimize = markTailRecursion . liftToLambda
+optimize : TailCallCategory -> NamedCExp -> Asm NamedCExp
+optimize tailCallCategory expr = do
+  inlinedAndTailRecursionMarkedExpr <- markTailRecursion . liftToLambda $ expr
+  Pure $ if hasNonSelfTailCall tailCallCategory
+    then trampolineExpression inlinedAndTailRecursionMarkedExpr
+    else inlinedAndTailRecursionMarkedExpr
 
 export
 %inline
@@ -1005,10 +1073,13 @@ export
 inferDef : String -> Name -> FC -> NamedDef -> Asm ()
 inferDef programName idrisName fc (MkNmFun args body) = do
     let jname = jvmName idrisName
+    let hasSelfTailCall = hasTailCall (== idrisName) body
+    let hasNonSelfTailCall = hasTailCall (/= idrisName) body
     let jvmClassAndMethodName = getIdrisFunctionName programName (className jname) (methodName jname)
+    let tailCallCategory = MkTailCallCategory hasSelfTailCall hasNonSelfTailCall
     let arity = length args
     let arityInt = the Int $ cast arity
-    let expr = if arityInt == 0 then NmDelay fc body else body
+    let expr = if arityInt == 0 then NmDelay fc LLazy body else body
     let argumentNames = jvmSimpleName <$> args
     argIndices <- LiftIo $ getArgumentIndices arityInt argumentNames
     isUntyped <- isUntypedFunction jname
@@ -1028,7 +1099,7 @@ inferDef programName idrisName fc (MkNmFun args body) = do
             debug "Unoptimized"
             debug "---------"
             debug $ showNamedCExp 0 expr
-    optimizedExpr <- optimize expr
+    optimizedExpr <- optimize tailCallCategory expr
     updateCurrentFunction $ record { optimizedBody = optimizedExpr }
 
     resetScope
@@ -1045,7 +1116,7 @@ inferDef programName idrisName fc (MkNmFun args body) = do
     updateScopeVariableTypes
     inferredArgumentTypes <- if isUntyped then pure initialArgumentTypes else getArgumentTypes argumentNames
     let inferredFunctionType =
-        MkInferredFunctionType (if isUntyped then inferredObjectType else IUnknown) inferredArgumentTypes
+        MkInferredFunctionType (if isUntyped then inferredObjectType else retTy) inferredArgumentTypes
     updateCurrentFunction $ record { inferredFunctionType = inferredFunctionType }
   where
     getArgumentTypes : List String -> Asm (List InferredType)

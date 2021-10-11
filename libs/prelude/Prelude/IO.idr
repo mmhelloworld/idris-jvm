@@ -138,6 +138,7 @@ fork : (1 prog : IO ()) -> IO ThreadID
 fork act = fromPrim (prim__fork (toPrim act))
 
 %foreign "scheme:blodwen-thread-wait"
+         "jvm:await(java/util/concurrent/ForkJoinTask void),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 export
 prim__threadWait : (1 threadID : ThreadID) -> PrimIO ()
 

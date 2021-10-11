@@ -2,7 +2,7 @@ package io.github.mmhelloworld.idrisjvm.runtime;
 
 import java.util.NoSuchElementException;
 
-public interface IdrisObject extends io.github.mmhelloworld.idris2.runtime.IdrisObject {
+public interface IdrisObject {
     default int getConstructorId() {
         throw new UnsupportedOperationException("Not a data constructor");
     }

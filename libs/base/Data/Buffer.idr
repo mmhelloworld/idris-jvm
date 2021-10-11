@@ -64,6 +64,7 @@ prim__setByte : Buffer -> (offset : Int) -> (val : Int) -> PrimIO ()
 %foreign "scheme:blodwen-buffer-setbyte"
          "RefC:setBufferUInt8"
          "node:lambda:(buf,offset,value)=>buf.writeUInt8(value, offset)"
+         jvm bufferClass "setByte"
 prim__setBits8 : Buffer -> (offset : Int) -> (val: Bits8) -> PrimIO ()
 
 -- Assumes val is in the range 0-255
@@ -83,11 +84,13 @@ setBits8 buf offset val
 %foreign "scheme:blodwen-buffer-getbyte"
          "RefC:getBufferByte"
          "node:lambda:(buf,offset)=>buf.readUInt8(offset)"
+         jvm bufferClass "getByte"
 prim__getByte : Buffer -> (offset : Int) -> PrimIO Int
 
 %foreign "scheme:blodwen-buffer-getbyte"
          "RefC:getBufferUInt8"
          "node:lambda:(buf,offset)=>buf.readUInt8(offset)"
+         jvm bufferClass "getByte"
 prim__getBits8 : Buffer -> (offset : Int) -> PrimIO Bits8
 
 ||| Use `getBits8` instead, as its value is correctly limited.
@@ -105,6 +108,7 @@ getBits8 buf offset
 %foreign "scheme:blodwen-buffer-setbits16"
          "RefC:setBufferUInt16LE"
          "node:lambda:(buf,offset,value)=>buf.writeUInt16LE(value, offset)"
+         jvm bufferClass "setShort"
 prim__setBits16 : Buffer -> (offset : Int) -> (value : Bits16) -> PrimIO ()
 
 export %inline
@@ -115,6 +119,7 @@ setBits16 buf offset val
 %foreign "scheme:blodwen-buffer-getbits16"
          "RefC:getBufferUInt16LE"
          "node:lambda:(buf,offset)=>buf.readUInt16LE(offset)"
+         jvm bufferClass "getShort"
 prim__getBits16 : Buffer -> (offset : Int) -> PrimIO Bits16
 
 export %inline
@@ -125,6 +130,7 @@ getBits16 buf offset
 %foreign "scheme:blodwen-buffer-setbits32"
          "RefC:setBufferUInt32LE"
          "node:lambda:(buf,offset,value)=>buf.writeUInt32LE(value, offset)"
+         jvm bufferClass "setInt"
 prim__setBits32 : Buffer -> (offset : Int) -> (value : Bits32) -> PrimIO ()
 
 export %inline
@@ -135,6 +141,7 @@ setBits32 buf offset val
 %foreign "scheme:blodwen-buffer-getbits32"
          "RefC:getBufferUInt32LE"
          "node:lambda:(buf,offset)=>buf.readUInt32LE(offset)"
+         jvm bufferClass "getInt"
 prim__getBits32 : Buffer -> Int -> PrimIO Bits32
 
 export %inline
@@ -145,6 +152,7 @@ getBits32 buf offset
 %foreign "scheme:blodwen-buffer-setbits64"
          "RefC:setBufferUInt64LE"
          "node:lambda:(buf,offset,value)=>buf.writeBigUInt64LE(value, offset)"
+         jvm bufferClass "setLong"
 prim__setBits64 : Buffer -> Int -> Bits64 -> PrimIO ()
 
 export %inline
@@ -155,6 +163,7 @@ setBits64 buf offset val
 %foreign "scheme:blodwen-buffer-getbits64"
          "RefC:getBufferUInt64LE"
          "node:lambda:(buf,offset)=>buf.readBigUInt64LE(offset)"
+         jvm bufferClass "getLong"
 prim__getBits64 : Buffer -> (offset : Int) -> PrimIO Bits64
 
 export %inline

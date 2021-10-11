@@ -1,3 +1,5 @@
+%search_timeout 5000
+
 data List' a = Nil | Cons a (List' a)
 
 -- Generated with `:gd 4 mapList'`

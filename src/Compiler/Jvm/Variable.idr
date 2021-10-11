@@ -1,5 +1,6 @@
 module Compiler.Jvm.Variable
 
+import Core.Core
 import Core.FC
 
 import Compiler.Jvm.Asm
@@ -58,6 +59,10 @@ thunkInt : Asm ()
 thunkInt = let descriptor = "(I)" ++ getJvmTypeDescriptor (getThunkType IInt)
     in InvokeMethod InvokeStatic runtimeClass "createThunk" descriptor False
 
+thunkLong : Asm ()
+thunkLong = let descriptor = "(J)" ++ getJvmTypeDescriptor (getThunkType ILong)
+    in InvokeMethod InvokeStatic runtimeClass "createThunk" descriptor False
+
 thunkDouble : Asm ()
 thunkDouble = let descriptor = "(D)" ++ getJvmTypeDescriptor (getThunkType IDouble)
     in InvokeMethod InvokeStatic runtimeClass "createThunk" descriptor False
@@ -72,6 +77,12 @@ unboxToIntThunk =
             getJvmTypeDescriptor (getThunkType IInt)
     in InvokeMethod InvokeStatic runtimeClass "unboxToIntThunk" descriptor False
 
+unboxToLongThunk : Asm ()
+unboxToLongThunk =
+    let descriptor = "(" ++ getJvmTypeDescriptor (getThunkType inferredObjectType) ++ ")" ++
+            getJvmTypeDescriptor (getThunkType ILong)
+    in InvokeMethod InvokeStatic runtimeClass "unboxToLongThunk" descriptor False
+
 unboxToDoubleThunk : Asm ()
 unboxToDoubleThunk =
     let descriptor = "(" ++ getJvmTypeDescriptor (getThunkType inferredObjectType) ++ ")" ++
@@ -81,9 +92,13 @@ unboxToDoubleThunk =
 unwrapIntThunk : Asm ()
 unwrapIntThunk = InvokeMethod InvokeStatic runtimeClass "unwrapIntThunk" "(Ljava/lang/Object;)I" False
 
+unwrapLongThunk : Asm ()
+unwrapLongThunk = InvokeMethod InvokeStatic runtimeClass "unwrapLongThunk" "(Ljava/lang/Object;)J" False
+
 unwrapDoubleThunk : Asm ()
 unwrapDoubleThunk = InvokeMethod InvokeStatic runtimeClass "unwrapDoubleThunk" "(Ljava/lang/Object;)D" False
 
+export
 unwrapObjectThunk : Asm ()
 unwrapObjectThunk = InvokeMethod InvokeStatic runtimeClass "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
 
@@ -111,24 +126,25 @@ unboxDouble = InvokeMethod InvokeVirtual "java/lang/Double" "doubleValue" "()D" 
 unboxFloat : Asm ()
 unboxFloat = InvokeMethod InvokeVirtual "java/lang/Float" "floatValue" "()F" False
 
+%inline
 export
 conversionClass : String
 conversionClass = "io/github/mmhelloworld/idrisjvm/runtime/Conversion"
 
 boolObjToBool : Asm ()
-boolObjToBool = InvokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False
+boolObjToBool = InvokeMethod InvokeStatic conversionClass "toBoolean1" "(Ljava/lang/Object;)Z" False
 
 boolToInt : Asm ()
-boolToInt = InvokeMethod InvokeStatic conversionClass "boolToInt" "(Z)I" False
+boolToInt = InvokeMethod InvokeStatic conversionClass "boolToInt1" "(Z)I" False
 
 objToInt : Asm ()
-objToInt = InvokeMethod InvokeStatic conversionClass "toInt" "(Ljava/lang/Object;)I" False
+objToInt = InvokeMethod InvokeStatic conversionClass "toInt1" "(Ljava/lang/Object;)I" False
 
 objToChar : Asm ()
 objToChar = InvokeMethod InvokeStatic conversionClass "toChar" "(Ljava/lang/Object;)C" False
 
 objToBoolean : Asm ()
-objToBoolean = InvokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False
+objToBoolean = InvokeMethod InvokeStatic conversionClass "toBoolean1" "(Ljava/lang/Object;)Z" False
 
 objToByte : Asm ()
 objToByte = InvokeMethod InvokeStatic conversionClass "toByte" "(Ljava/lang/Object;)B" False
@@ -148,6 +164,7 @@ objToFloat = InvokeMethod InvokeStatic conversionClass "toFloat" "(Ljava/lang/Ob
 objToDouble : Asm ()
 objToDouble = InvokeMethod InvokeStatic conversionClass "toDouble" "(Ljava/lang/Object;)D" False
 
+export
 checkcast : String -> Asm ()
 checkcast "java/lang/Object" = pure ()
 checkcast cname              = Checkcast cname
@@ -155,22 +172,23 @@ checkcast cname              = Checkcast cname
 export
 asmCast : (sourceType: InferredType) -> (targetType: InferredType) -> Asm ()
 
-asmCast ty1@(IRef class1) ty2@(IRef class2) = when (class1 /= class2) $ do
-    if isThunkType ty1 && class2 == thunkClass
-        then Pure ()
-        else if class2 == thunkClass
-            then thunkObject
-            else if class1 == thunkClass && class2 == intThunkClass
-                then unboxToIntThunk
-                else if class1 == thunkClass && class2 == doubleThunkClass
-                    then unboxToDoubleThunk
-                    else if ty1 == inferredObjectType || isThunkType ty1
-                        then do {-unwrapObjectThunk;-} checkcast class2
-                            else checkcast class2
+asmCast ty1@(IRef "java/lang/Object") ty2@(IRef "java/lang/Object") = unwrapObjectThunk
+
+asmCast ty1@(IRef class1) ty2@(IRef class2) =
+  cond [
+      (class1 == class2, Pure ()),
+      (isThunkType ty1 && class2 == thunkClass, Pure ()),
+      (class2 == thunkClass, thunkObject),
+      (class1 == thunkClass && class2 == intThunkClass, unboxToIntThunk),
+      (class1 == thunkClass && class2 == longThunkClass, unboxToLongThunk),
+      (class1 == thunkClass && class2 == doubleThunkClass, unboxToDoubleThunk),
+      (ty1 == inferredObjectType || isThunkType ty1, do unwrapObjectThunk; checkcast class2)
+    ]
+    (checkcast class2)
 
 asmCast IUnknown ty@(IRef clazz) = if isThunkType ty
     then thunkObject
-    else do {-unwrapObjectThunk;-} checkcast clazz
+    else do unwrapObjectThunk; checkcast clazz
 
 asmCast IBool IBool     = Pure ()
 asmCast IByte IByte     = Pure ()
@@ -191,19 +209,19 @@ asmCast IDouble IFloat = D2f
 
 asmCast ty IBool = objToBoolean
 
-asmCast ty IByte = if isThunkType ty then {-unwrapIntThunk-} Pure () else objToByte
+asmCast ty IByte = unwrapIntThunk
 
 asmCast ty IChar = objToChar
 
-asmCast ty IShort = if isThunkType ty then {-unwrapIntThunk-} Pure () else objToShort
+asmCast ty IShort = unwrapIntThunk
 
-asmCast ty IInt = if isThunkType ty then {-unwrapIntThunk-} Pure () else objToInt
+asmCast ty IInt = unwrapIntThunk
 
-asmCast ty ILong = longObjToLong
+asmCast ty ILong = unwrapLongThunk
 
-asmCast ty IFloat = if isThunkType ty then {-unwrapDoubleThunk-} Pure () else objToFloat
+asmCast ty IFloat = unwrapDoubleThunk
 
-asmCast ty IDouble = if isThunkType ty then {-unwrapDoubleThunk-} Pure () else objToDouble
+asmCast ty IDouble = unwrapDoubleThunk
 
 asmCast IBool ty = if isThunkType ty then thunkInt else boxBool
 
@@ -220,7 +238,7 @@ asmCast IInt ty =
         InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
     else boxInt
 
-asmCast ILong ty = boxLong
+asmCast ILong ty = if isThunkType ty then thunkLong else boxLong
 
 asmCast IFloat ty = boxFloat
 
@@ -230,9 +248,10 @@ asmCast (IRef _) arr@(IArray _) = Checkcast $ getJvmTypeDescriptor arr
 
 asmCast IVoid IVoid = Pure ()
 asmCast IVoid (IRef _) = Aconstnull
-
 asmCast IVoid IUnknown = Aconstnull
-asmCast _ IUnknown = {-unwrapObjectThunk-} Pure ()
+asmCast IUnknown IUnknown = unwrapObjectThunk
+asmCast (IRef "java/lang/Object") IUnknown = unwrapObjectThunk
+asmCast _ IUnknown = Pure ()
 
 asmCast ty1 ty2 = Throw emptyFC $ "Cannot convert from " ++ show ty1 ++ " to " ++ show ty2
 
@@ -255,8 +274,8 @@ loadAndBoxShort ty = loadAndBox Iload (if ty == intThunkType then thunkInt else 
 loadAndBoxInt : InferredType -> Map Int InferredType -> Int -> Asm ()
 loadAndBoxInt ty = loadAndBox Iload (if ty == intThunkType then thunkInt else boxInt)
 
-loadAndBoxLong : Map Int InferredType -> Int -> Asm ()
-loadAndBoxLong = loadAndBox Lload boxLong
+loadAndBoxLong : InferredType -> Map Int InferredType -> Int -> Asm ()
+loadAndBoxLong ty = loadAndBox Lload (if ty == longThunkType then thunkLong else boxLong)
 
 loadAndBoxFloat : Map Int InferredType -> Int -> Asm ()
 loadAndBoxFloat = loadAndBox Fload boxFloat
@@ -266,32 +285,32 @@ loadAndBoxDouble ty = loadAndBox Dload (if ty == doubleThunkType then thunkDoubl
 
 loadAndUnboxBool : InferredType -> Map Int InferredType -> Int -> Asm ()
 loadAndUnboxBool ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; if ty == intThunkType then {-unwrapIntThunk-} Pure () else boolObjToBool
+    let loadInstr = \index => do Aload index; if ty == intThunkType then unwrapIntThunk else boolObjToBool
     in opWithWordSize sourceLocTys loadInstr var
 
 loadAndUnboxByte : InferredType -> Map Int InferredType -> Int -> Asm ()
 loadAndUnboxByte ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; if ty == intThunkType then {-unwrapIntThunk-} Pure () else objToByte
+    let loadInstr = \index => do Aload index; if ty == intThunkType then unwrapIntThunk else objToByte
     in opWithWordSize sourceLocTys loadInstr var
 
 loadAndUnboxChar : InferredType -> Map Int InferredType -> Int -> Asm ()
 loadAndUnboxChar ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; if ty == intThunkType then {-unwrapIntThunk-} Pure () else objToChar
+    let loadInstr = \index => do Aload index; if ty == intThunkType then unwrapIntThunk else objToChar
     in opWithWordSize sourceLocTys loadInstr var
 
 loadAndUnboxShort : InferredType -> Map Int InferredType -> Int -> Asm ()
 loadAndUnboxShort ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; if ty == intThunkType then {-unwrapIntThunk-} Pure () else objToShort
+    let loadInstr = \index => do Aload index; if ty == intThunkType then unwrapIntThunk else objToShort
     in opWithWordSize sourceLocTys loadInstr var
 
 loadAndUnboxInt : InferredType -> Map Int InferredType -> Int -> Asm ()
 loadAndUnboxInt ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; if ty == intThunkType then {-unwrapIntThunk-} Pure () else objToInt
+    let loadInstr = \index => do Aload index; if ty == intThunkType then unwrapIntThunk else objToInt
     in opWithWordSize sourceLocTys loadInstr var
 
 loadAndUnboxDouble : InferredType -> Map Int InferredType -> Int -> Asm ()
 loadAndUnboxDouble ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; if ty == doubleThunkType then {-unwrapDoubleThunk-} Pure () else objToDouble
+    let loadInstr = \index => do Aload index; if ty == doubleThunkType then unwrapDoubleThunk else objToDouble
     in opWithWordSize sourceLocTys loadInstr var
 
 export
@@ -320,7 +339,7 @@ loadVar sourceLocTys IChar ty var = loadAndBoxChar ty sourceLocTys var
 loadVar sourceLocTys IShort ty var  = loadAndBoxShort ty sourceLocTys var
 loadVar sourceLocTys IInt ty var  = loadAndBoxInt ty sourceLocTys var
 
-loadVar sourceLocTys ILong _ var = loadAndBoxLong sourceLocTys var
+loadVar sourceLocTys ILong ty var = loadAndBoxLong ty sourceLocTys var
 
 loadVar sourceLocTys IFloat _ var = loadAndBoxFloat sourceLocTys var
 

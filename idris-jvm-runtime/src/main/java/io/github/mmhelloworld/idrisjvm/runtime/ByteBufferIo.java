@@ -54,6 +54,23 @@ public class ByteBufferIo {
         return line;
     }
 
+    // follows Idris C implementation "idris2_seekLine"
+    int seekLine() throws IOException {
+        while (true) {
+            char c = getChar();
+            if (c == (char) -1) {
+                if (isEof()) {
+                    return 0;
+                } else {
+                    return -1;
+                }
+            }
+            if (c == '\n') {
+                return 0;
+            }
+        }
+    }
+
     public boolean isEof() throws IOException {
         if (charBuffer == null || lastReadLine == null) {
             return !ensureBuffer();

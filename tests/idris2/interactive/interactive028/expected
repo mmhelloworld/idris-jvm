@@ -17,5 +17,11 @@ Main> Expected string begin.
  1 | :load expected
            ^^^^^^^^
 
+Main> expected a log level.
+
+(Interactive):1:6--1:7
+ 1 | :log with
+          ^
+
 Main> 
 Bye for now!

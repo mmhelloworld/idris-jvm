@@ -1,7 +1,6 @@
 1/1: Building Issue637 (Issue637.idr)
 Main> 11
-Main> 
-Bye for now!
+Main> Bye for now!
 1/1: Building Issue637-2 (Issue637-2.idr)
 Error: Expected an indented non-empty block.
 

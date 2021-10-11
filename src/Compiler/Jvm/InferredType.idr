@@ -117,6 +117,26 @@ public export
 idrisConsType : InferredType
 idrisConsType = IRef idrisConsClass
 
+%inline
+public export
+idrisNothingClass : String
+idrisNothingClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Nothing"
+
+%inline
+public export
+idrisNothingType : InferredType
+idrisNothingType = IRef idrisNothingClass
+
+%inline
+public export
+idrisJustClass : String
+idrisJustClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Just"
+
+%inline
+public export
+idrisJustType : InferredType
+idrisJustType = IRef idrisJustClass
+
 export
 isPrimitive : InferredType -> Bool
 isPrimitive IBool = True
@@ -146,6 +166,11 @@ doubleThunkClass = getRuntimeClass "DoubleThunk"
 
 %inline
 public export
+longThunkClass : String
+longThunkClass = getRuntimeClass "LongThunk"
+
+%inline
+public export
 thunkClass : String
 thunkClass = getRuntimeClass "Thunk"
 
@@ -153,6 +178,11 @@ thunkClass = getRuntimeClass "Thunk"
 public export
 intThunkType : InferredType
 intThunkType = IRef intThunkClass
+
+%inline
+public export
+longThunkType : InferredType
+longThunkType = IRef longThunkClass
 
 %inline
 public export

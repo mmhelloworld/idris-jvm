@@ -28,6 +28,11 @@ public final class ObjectThunkResult implements Thunk {
     }
 
     @Override
+    public long getLong() {
+        return (long) result;
+    }
+
+    @Override
     public double getDouble() {
         return (double) result;
     }

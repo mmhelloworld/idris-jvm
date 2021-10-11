@@ -1,2 +1,2 @@
 main : IO ()
-main = putStrLn "Running Chez program located in folder with spaces"
+main = putStrLn "Running Jvm program located in folder with spaces"

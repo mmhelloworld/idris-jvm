@@ -13,6 +13,7 @@ strangeId : {a : Type} -> a -> a
 strangeId {a=Integer} x = x+1
 strangeId x = x
 
+partial
 strangeId' : {a : Type} -> a -> a
 strangeId' {a=Integer} x = x+1
 
@@ -28,4 +29,3 @@ main = do printLn (foo Nat)
           printLn (foo (List Int))
           printLn (strangeId 42)
           printLn (strangeId (the Int 42))
-

@@ -41,6 +41,7 @@ withString str f = f (fromString str)
   "scheme:blodwen-string-iterator-to-string"
   "RefC:stringIteratorToString"
   "javascript:stringIterator:toString"
+  "jvm:stringIteratorToString(java/lang/Object java/lang/String int java/util/function/Function java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 withIteratorString : (str : String)
                   -> (1 it : StringIterator str)

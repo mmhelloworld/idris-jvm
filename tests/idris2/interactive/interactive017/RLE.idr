@@ -2,6 +2,8 @@ module RLE
 
 import Decidable.Equality
 
+%search_timeout 5000
+
 rep : Nat -> a -> List a
 
 data RunLength : List a -> Type where

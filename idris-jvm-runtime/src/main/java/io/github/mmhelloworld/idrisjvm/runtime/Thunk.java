@@ -27,6 +27,15 @@ public interface Thunk {
         return thunk.getInt();
     }
 
+    default long getLong() {
+        Thunk thunk = this;
+        while (thunk != null && thunk.isRedex()) {
+            thunk = thunk.evaluate();
+        }
+        requireNonNull(thunk, "No long value at thunk");
+        return thunk.getLong();
+    }
+
     default double getDouble() {
         Thunk thunk = this;
         while (thunk != null && thunk.isRedex()) {

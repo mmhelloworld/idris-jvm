@@ -465,6 +465,7 @@ Traversable List where
   "scheme:string-concat"
   "RefC:fastConcat"
   "javascript:lambda:(xs)=>''.concat(...__prim_idris2js_array(xs))"
+  "jvm:concat(io/github/mmhelloworld/idrisjvm/runtime/IdrisList java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 fastConcat : List String -> String
 
@@ -621,6 +622,7 @@ unpack str = unpack' (prim__cast_IntegerInt (natToInteger (length str)) - 1) str
   "scheme:string-unpack"
   "RefC:fastUnpack"
   "javascript:lambda:(str)=>__prim_js2idris_array(Array.from(str))"
+  "jvm:unpack(java/lang/String io/github/mmhelloworld/idrisjvm/runtime/IdrisList),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 fastUnpack : String -> List Char
 

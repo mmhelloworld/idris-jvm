@@ -21,5 +21,4 @@ Main> Error: Undefined name lentgh.
  1 | :t lentgh
         ^^^^^^
 Did you mean: length?
-Main> 
-Bye for now!
+Main> Bye for now!

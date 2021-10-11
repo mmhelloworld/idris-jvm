@@ -8,6 +8,7 @@ import Compiler.ES.Node
 import Compiler.ES.Javascript
 import Compiler.Common
 import Compiler.RefC.RefC
+import Compiler.Jvm.Codegen
 import Compiler.Inline
 
 import Core.AutoSearch

@@ -4,6 +4,7 @@ public interface IdrisFile<T extends IdrisFile<T>> {
     void close();
     int getErrorNumber();
     String readLine();
+    int seekLine();
     String readChars(int numberOfCharacters);
     char readChar();
     int writeLine(String line);

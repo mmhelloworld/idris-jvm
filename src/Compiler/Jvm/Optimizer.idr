@@ -495,10 +495,18 @@ getIntConstantValue fc x =
         then Pure 0
         else Throw fc ("Constant " ++ show x ++ " cannot be converted to integer.")
 
+getConstructorTag : ConInfo -> Maybe Int -> Int
+getConstructorTag conInfo tag = case conInfo of
+  NOTHING => 0
+  NIL => 0
+  JUST => 1
+  CONS => 1
+  _ => fromMaybe 0 tag
+
 sortConCases : List NamedConAlt -> List NamedConAlt
 sortConCases alts = sortBy (comparing getTag) alts where
     getTag : NamedConAlt -> Int
-    getTag (MkNConAlt _ _ tag _ _) = fromMaybe 0 tag
+    getTag (MkNConAlt _ conInfo tag _ _) = getConstructorTag conInfo tag
 
 export
 isTypeCase : NamedConAlt -> Bool
@@ -1069,6 +1077,12 @@ export
 emptyFunction : NamedCExp
 emptyFunction = NmCrash emptyFC "uninitialized function"
 
+showScopes : Int -> Asm ()
+showScopes n = do
+    scope <- getScope n
+    debug $ show scope
+    when (n > 0) $ showScopes (n - 1)
+
 export
 inferDef : String -> Name -> FC -> NamedDef -> Asm ()
 inferDef programName idrisName fc (MkNmFun args body) = do
@@ -1118,6 +1132,7 @@ inferDef programName idrisName fc (MkNmFun args body) = do
     let inferredFunctionType =
         MkInferredFunctionType (if isUntyped then inferredObjectType else retTy) inferredArgumentTypes
     updateCurrentFunction $ record { inferredFunctionType = inferredFunctionType }
+    when shouldDebugExpr $ showScopes (scopeCounter !GetState - 1)
   where
     getArgumentTypes : List String -> Asm (List InferredType)
     getArgumentTypes argumentNames = do

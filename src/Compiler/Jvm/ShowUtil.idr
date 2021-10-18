@@ -59,8 +59,9 @@ mutual
 
     export
     showNamedConAlt : Nat -> NamedConAlt -> String
-    showNamedConAlt n (MkNConAlt x _ tag args exp) = indent n ("case " ++ show x ++ "(" ++ show tag ++ "): \n") ++
-        indent (n + 1) ("bind " ++ show args ++ ";\n") ++ (indent (n + 1) $ showNamedCExp (n + 1) exp)
+    showNamedConAlt n (MkNConAlt x conInfo tag args exp) = indent n ("case " ++ show x ++ show conInfo ++
+      "(" ++ show tag ++ "): \n") ++ indent (n + 1) ("bind " ++ show args ++ ";\n") ++
+      (indent (n + 1) $ showNamedCExp (n + 1) exp)
 
     export
     showNamedConstAlt : Nat -> NamedConstAlt -> String

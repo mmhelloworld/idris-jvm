@@ -1076,7 +1076,11 @@ retrieveVariableIndexAtScope currentScopeIndex name = go currentScopeIndex where
             Just index => Pure index
             Nothing => case parentIndex scope of
                 Just parentScopeIndex => go parentScopeIndex
-                Nothing => Throw emptyFC ("Unknown var " ++ name ++ " at index " ++ show currentScopeIndex)
+                Nothing => do
+                  rootMethodName <- getRootMethodName
+                  Throw emptyFC
+                    ("retrieveVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
+                      name ++ " at index " ++ show currentScopeIndex)
 
 export
 retrieveVariableIndex : String -> Asm Int
@@ -1123,7 +1127,11 @@ getVariableIndexAtScope currentScopeIndex name = do
     optIndex <- LiftIo $ Map.get {value=Int} variableIndicesByName name
     case optIndex of
         Just index => Pure index
-        Nothing => Throw emptyFC ("Unknown var " ++ name ++ " at index " ++ show currentScopeIndex)
+        Nothing => do
+          rootMethodName <- getRootMethodName
+          Throw emptyFC
+            ("getVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
+              name ++ " at index " ++ show currentScopeIndex)
 
 export
 getVariableIndex : String -> Asm Int
@@ -1554,14 +1562,12 @@ getCurrentThreadName = primIO prim_getCurrentThreadName
 export
 debug : Lazy String -> Asm ()
 debug msg =
-    if shouldDebug
-        then do
-            context <- LiftIo $ do
-                time <- currentTimeString
-                threadName <- getCurrentThreadName
-                pure $ time ++ " [" ++ threadName ++ "]"
-            Debug $ context ++ ": " ++ msg
-        else Pure ()
+  when shouldDebug $ do
+    context <- LiftIo $ do
+        time <- currentTimeString
+        threadName <- getCurrentThreadName
+        pure $ time ++ " [" ++ threadName ++ "]"
+    Debug $ context ++ ": " ++ msg
 
 public export
 data FArgList : Type where

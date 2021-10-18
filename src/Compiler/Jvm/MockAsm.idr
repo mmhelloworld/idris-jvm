@@ -18,8 +18,12 @@ import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
 import Compiler.Jvm.ShowUtil
 
-%foreign "jvm:.toString(java/lang/Object java/lang/String),java/lang/Object"
-objectToString : Object -> IO String
+%foreign "jvm:toString(java/lang/Object java/lang/String),java/util/Objects"
+prim_objectToString : AnyPtr -> PrimIO String
+
+export
+objectToString : a -> String
+objectToString value = unsafePerformIO $ primIO (prim_objectToString (believe_me value))
 
 export
 mockRunAsm : AsmState -> Asm a -> IO (a, AsmState)
@@ -76,7 +80,7 @@ mockRunAsm state (CreateField accs sourceFileName className fieldName desc sig f
     fieldName,
     desc,
     fromMaybe "" sig,
-    !(objectToString $ maybeToNullable (toJFieldInitialValue <$> fieldInitialValue))]
+    (objectToString $ maybeToNullable (toJFieldInitialValue <$> fieldInitialValue))]
 
 mockRunAsm state (CreateLabel label) = assemble state $ pure label
 
@@ -218,8 +222,8 @@ mockRunAsm state (InvokeDynamic mname desc handle bsmArgs) = assemble state $ do
     "invokeDynamic",
     mname,
     desc,
-    !(objectToString $ the Object $ believe_me jhandle),
-    !(objectToString $ the Object $ believe_me jbsmArgs)]
+    (objectToString $ the Object $ believe_me jhandle),
+    (objectToString $ the Object $ believe_me jbsmArgs)]
 
 mockRunAsm state Irem = assemble state $ putStrLn "irem"
 mockRunAsm state Ireturn = assemble state $ putStrLn "ireturn"
@@ -242,7 +246,7 @@ mockRunAsm state Lcompl = assemble state $ putStrLn "lcompl"
 mockRunAsm state (Ldc (TypeConst ty)) =
     assemble state $ putStrLn $ "ldcType " ++ ty
 mockRunAsm state (Ldc constant) = assemble state $ do
-    putStrLn ("ldc " ++ !(objectToString (constantToObject constant)))
+    putStrLn ("ldc " ++ (objectToString (constantToObject constant)))
 
 mockRunAsm state Ldiv = assemble state $ putStrLn "ldiv"
 
@@ -261,8 +265,8 @@ mockRunAsm state (LookupSwitch defaultLabel labels cases) = assemble state $ do
   putStrLn $ unwords [
     "lookupSwitch",
     defaultLabel,
-    !(objectToString (the Object $ believe_me labels)),
-    !(objectToString (the Object $ believe_me jcases))]
+    (objectToString (the Object $ believe_me labels)),
+    (objectToString (the Object $ believe_me jcases))]
 
 mockRunAsm state (LocalVariable name descriptor signature startLabel endLabel index) = assemble state $
     putStrLn $ unwords [

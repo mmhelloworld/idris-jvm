@@ -79,9 +79,11 @@ withScope op = do
     op
     exitScope scopeIndex
 
+%inline
 methodStartLabel : String
 methodStartLabel = "methodStartLabel"
 
+%inline
 methodEndLabel : String
 methodEndLabel = "methodEndLabel"
 

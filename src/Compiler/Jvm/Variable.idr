@@ -92,6 +92,9 @@ unboxToDoubleThunk =
 unwrapIntThunk : Asm ()
 unwrapIntThunk = InvokeMethod InvokeStatic runtimeClass "unwrapIntThunk" "(Ljava/lang/Object;)I" False
 
+unwrapIntThunkToChar : Asm ()
+unwrapIntThunkToChar = InvokeMethod InvokeStatic runtimeClass "unwrapIntThunkToChar" "(Ljava/lang/Object;)C" False
+
 unwrapLongThunk : Asm ()
 unwrapLongThunk = InvokeMethod InvokeStatic runtimeClass "unwrapLongThunk" "(Ljava/lang/Object;)J" False
 
@@ -295,7 +298,7 @@ loadAndUnboxByte ty sourceLocTys var =
 
 loadAndUnboxChar : InferredType -> Map Int InferredType -> Int -> Asm ()
 loadAndUnboxChar ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; if ty == intThunkType then unwrapIntThunk else objToChar
+    let loadInstr = \index => do Aload index; if ty == intThunkType then unwrapIntThunkToChar else objToChar
     in opWithWordSize sourceLocTys loadInstr var
 
 loadAndUnboxShort : InferredType -> Map Int InferredType -> Int -> Asm ()

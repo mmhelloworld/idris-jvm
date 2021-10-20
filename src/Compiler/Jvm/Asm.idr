@@ -719,7 +719,7 @@ Show Scope where
         ("parentIndex", show $ parentIndex scope),
         ("nextVariableIndex", show $ nextVariableIndex scope),
         ("lineNumbers", show $ lineNumbers scope),
-        ("labels", show $ labels scope),
+        ("variableIndices", toString $ variableIndices scope),
         ("returnType", show $ returnType scope),
         ("nextVariableIndex", show $ nextVariableIndex scope),
         ("childIndices", show $ childIndices scope)

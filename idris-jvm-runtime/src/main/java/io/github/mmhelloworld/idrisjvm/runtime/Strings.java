@@ -31,7 +31,7 @@ public final class Strings {
         Object[] objectArray = idrisCharacterList.toArray();
         char[] chars = new char[objectArray.length];
         for (int index = 0; index < objectArray.length; index++) {
-            chars[index] = (char) objectArray[index];
+            chars[index] = Conversion.toChar(objectArray[index]);
         }
         return String.valueOf(chars);
     }

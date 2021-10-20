@@ -136,7 +136,15 @@ public final class Runtime {
         if (possibleThunk instanceof Thunk) {
             return ((Thunk) possibleThunk).getInt();
         } else {
-            return (int) possibleThunk;
+            return Conversion.toInt1(possibleThunk);
+        }
+    }
+
+    public static char unwrapIntThunkToChar(Object possibleThunk) {
+        if (possibleThunk instanceof Thunk) {
+            return (char) ((Thunk) possibleThunk).getInt();
+        } else {
+            return (char) possibleThunk;
         }
     }
 

@@ -1220,12 +1220,6 @@ mutual
             assembleCaseWithScope labelStart labelEnd expr
 
     assembleConstantSwitch returnType constantType fc sc alts def = do
-            constantExprVariableSuffixIndex <- newDynamicVariableIndex
-            let constantExprVariableName = "constantCaseExpr" ++ show constantExprVariableSuffixIndex
-            constantExprVariableIndex <- getVariableIndex constantExprVariableName
-            hashCodePositionVariableSuffixIndex <- newDynamicVariableIndex
-            let hashCodePositionVariableName = "hashCodePosition" ++ show hashCodePositionVariableSuffixIndex
-            hashCodePositionVariableIndex <- getVariableIndex hashCodePositionVariableName
             hashPositionAndAlts <- traverse (constantAltHashCodeExpr fc) $
                 List.zip [0 .. the Int $ cast $ length $ drop 1 alts] alts
             let positionAndAltsByHash = multiValueMap fst snd hashPositionAndAlts
@@ -1236,6 +1230,12 @@ mutual
             CreateLabel switchEndLabel
             traverse_ CreateLabel labels
             assembleExpr False constantType sc
+            constantExprVariableSuffixIndex <- newDynamicVariableIndex
+            let constantExprVariableName = "constantCaseExpr" ++ show constantExprVariableSuffixIndex
+            constantExprVariableIndex <- getVariableIndex constantExprVariableName
+            hashCodePositionVariableSuffixIndex <- newDynamicVariableIndex
+            let hashCodePositionVariableName = "hashCodePosition" ++ show hashCodePositionVariableSuffixIndex
+            hashCodePositionVariableIndex <- getVariableIndex hashCodePositionVariableName
             storeVar constantType constantType constantExprVariableIndex
             constantClass <- getHashCodeSwitchClass fc constantType
             Iconst (-1)

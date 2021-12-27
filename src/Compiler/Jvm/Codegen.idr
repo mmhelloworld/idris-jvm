@@ -200,6 +200,9 @@ isInterfaceInvocation : InferredType -> Bool
 isInterfaceInvocation (IRef className) = "i:" `isPrefixOf` className
 isInterfaceInvocation _ = False
 
+%foreign "jvm:.startsWith(java/lang/String java/lang/String boolean),java/lang/String"
+startsWith : String -> String -> Bool
+
 assembleNil : (isTailCall: Bool) -> InferredType -> Asm ()
 assembleNil isTailCall returnType = do
     Field GetStatic idrisNilClass "INSTANCE" "Lio/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil;"
@@ -217,6 +220,38 @@ getDynamicVariableIndex variablePrefix = do
     suffixIndex <- newDynamicVariableIndex
     let variableName = variablePrefix ++ show suffixIndex
     getVariableIndex variableName
+
+assembleIdentityLambda : (isTailCall : Bool) -> Asm ()
+assembleIdentityLambda isTailCall = do
+  Field GetStatic functionsClass "IDENTITY" (getJvmTypeDescriptor inferredLambdaType)
+  when isTailCall $ asmReturn inferredLambdaType
+
+assembleIdentity1Lambda : (isTailCall : Bool) -> Asm ()
+assembleIdentity1Lambda isTailCall = do
+  Field GetStatic functionsClass "IDENTITY_1" (getJvmTypeDescriptor inferredLambdaType)
+  when isTailCall $ asmReturn inferredLambdaType
+
+assembleIdentity2Lambda : (isTailCall : Bool) -> Asm ()
+assembleIdentity2Lambda isTailCall = do
+  Field GetStatic functionsClass "IDENTITY_2" (getJvmTypeDescriptor inferredLambdaType)
+  when isTailCall $ asmReturn inferredLambdaType
+
+assembleConstantLambda : (isTailCall : Bool) -> Asm ()
+assembleConstantLambda isTailCall = do
+  Field GetStatic functionsClass "CONSTANT" (getJvmTypeDescriptor inferredLambdaType)
+  when isTailCall $ asmReturn inferredLambdaType
+
+assembleConstant1Lambda : (isTailCall : Bool) -> Asm ()
+assembleConstant1Lambda isTailCall = do
+  Field GetStatic functionsClass "CONSTANT_1" (getJvmTypeDescriptor inferredLambdaType)
+  when isTailCall $ asmReturn inferredLambdaType
+
+getLambdaTypeByArity: (arity: Nat) -> LambdaType
+getLambdaTypeByArity 2 = Function2Lambda
+getLambdaTypeByArity 3 = Function3Lambda
+getLambdaTypeByArity 4 = Function4Lambda
+getLambdaTypeByArity 5 = Function5Lambda
+getLambdaTypeByArity _ = FunctionLambda
 
 mutual
     assembleExpr : (isTailCall: Bool) -> InferredType -> NamedCExp -> Asm ()
@@ -297,9 +332,7 @@ mutual
         let jname = jvmName idrisName
         functionType <- case !(findFunctionType jname) of
             Just ty => Pure ty
-            Nothing => do
-                addUntypedFunction jname
-                Pure $ MkInferredFunctionType inferredObjectType $ replicate (length args) inferredObjectType
+            Nothing => Pure $ MkInferredFunctionType inferredObjectType $ replicate (length args) inferredObjectType
         let paramTypes = parameterTypes functionType
         if paramTypes == []
             then assembleNmAppNilArity isTailCall returnType idrisName
@@ -310,15 +343,20 @@ mutual
                 let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType paramTypes
                 let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
                 InvokeMethod InvokeStatic (className functionName) (methodName functionName) methodDescriptor False
-                asmCast methodReturnType returnType
+                currentMethodName <- currentMethodName <$> GetState
+                isCalleeTrampolined <- LiftIo $ AsmGlobalState.shouldTrampoline !getGlobalState (show jname)
+                let isLambda = startsWith (methodName currentMethodName) "lambda$"
+                let shouldUnwrap = isCalleeTrampolined && (not isTailCall || not isLambda)
+                let possibleThunkType = if shouldUnwrap then thunkType else methodReturnType
+                asmCast possibleThunkType returnType
                 when isTailCall $ asmReturn returnType
 
     assembleExpr isTailCall returnType (NmApp _ lambdaVariable [arg]) = do
         assembleExpr False inferredLambdaType lambdaVariable
         assembleExpr False IUnknown arg
-        InvokeMethod InvokeInterface "java/util/function/Function" "apply"
-            "(Ljava/lang/Object;)Ljava/lang/Object;" True
-        asmCast inferredObjectType returnType
+        InvokeMethod InvokeInterface "java/util/function/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" True
+        let possibleThunkType = if not isTailCall then thunkType else inferredObjectType
+        asmCast possibleThunkType returnType
         when isTailCall $ asmReturn returnType
 
     assembleExpr isTailCall returnType expr@(NmCon _ _ NOTHING _ []) = assembleNothing isTailCall returnType
@@ -1021,6 +1059,38 @@ mutual
         storeVar ty ty targetVariableIndex
         Pure targetVariableIndex
 
+    createMethodReference : (isTailCall: Bool) -> (arity: Nat) -> Name -> Asm ()
+    createMethodReference isTailCall arity name = do
+        let jname = jvmName name
+        functionType <- case !(findFunctionType jname) of
+            Just ty => Pure ty
+            Nothing => Pure $ MkInferredFunctionType inferredObjectType $ replicate arity inferredObjectType
+        let methodReturnType = InferredFunctionType.returnType functionType
+        let paramTypes = parameterTypes functionType
+        let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType paramTypes
+        let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
+        let functionInterface = getFunctionInterface arity
+        let invokeDynamicDescriptor = getMethodDescriptor $ MkInferredFunctionType functionInterface []
+        invokeDynamic (className functionName) (methodName functionName) "apply" invokeDynamicDescriptor
+           (getSamDesc (getLambdaTypeByArity arity)) methodDescriptor methodDescriptor
+        when (arity > 1) $ do
+          let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType inferredLambdaType [functionInterface]
+          InvokeMethod InvokeStatic functionsClass "curry" methodDescriptor False
+        when isTailCall $ asmReturn inferredLambdaType
+
+    assembleSubMethodWithScope1 : (isTailCall: Bool) -> InferredType -> (parameterName : Maybe Name) ->
+      NamedCExp -> Asm ()
+    assembleSubMethodWithScope1 isTailCall returnType parameterName body = do
+        parentScope <- getScope !getCurrentScopeIndex
+        withScope $ assembleSubMethod isTailCall returnType Nothing parameterName parentScope body
+
+    assembleMethodReference : (isTailCall: Bool) -> InferredType -> (isMethodReference : Bool) -> (arity: Nat) ->
+      (functionName: Name) -> (parameterName : Maybe Name) -> NamedCExp -> Asm ()
+    assembleMethodReference isTailCall returnType isMethodReference arity functionName parameterName body = do
+      if isMethodReference
+        then createMethodReference isTailCall arity functionName
+        else assembleSubMethodWithScope1 isTailCall returnType parameterName body
+
     assembleSubMethodWithScope : (isTailCall: Bool) -> InferredType -> (parameterValue: Maybe NamedCExp) ->
         (parameterName : Maybe Name) -> NamedCExp -> Asm ()
     assembleSubMethodWithScope isTailCall returnType (Just value) (Just name) body = do
@@ -1041,9 +1111,46 @@ mutual
             assembleExpr False !(getVariableType variableName) value
             updateCurrentScopeIndex lambdaScopeIndex
 
-    assembleSubMethodWithScope isTailCall returnType _ parameterName body = do
-        parentScope <- getScope !getCurrentScopeIndex
-        withScope $ assembleSubMethod isTailCall returnType Nothing parameterName parentScope body
+    assembleSubMethodWithScope isTailCall returnType _ p0
+      body@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmLam _ p4 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1,
+        NmLocal _ arg2, NmLocal _ arg3, NmLocal _ arg4]))))) = assembleMethodReference
+            isTailCall returnType
+            ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2 && p3 == arg3 && p4 == arg4)
+            5 name p0 body
+    assembleSubMethodWithScope isTailCall returnType _ p0
+      body@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2,
+        NmLocal _ arg3])))) = assembleMethodReference isTailCall returnType
+          ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2 && p3 == arg3) 4 name p0 body
+    assembleSubMethodWithScope isTailCall returnType _ p0
+      body@(NmLam _ p1 (NmLam _ p2 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2]))) =
+        assembleMethodReference isTailCall returnType ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2)
+          3 name p0 body
+    assembleSubMethodWithScope isTailCall returnType _ p0
+      body@(NmLam _ p1 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1])) =
+        assembleMethodReference isTailCall returnType ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1)
+          2 name p0 body
+    assembleSubMethodWithScope isTailCall returnType _ p0 body@(NmApp _ (NmRef _ name) [NmLocal _ arg0]) =
+      assembleMethodReference isTailCall returnType ((fromMaybe (UN "")  p0) == arg0) 1 name p0 body
+
+    assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLam _ c (NmLam _ a (NmLocal _ b))) =
+      let hasParameter = isJust parameterName
+      in if hasParameter && c == b
+          then assembleConstant1Lambda isTailCall
+          else if hasParameter && a == b
+            then assembleIdentity2Lambda isTailCall
+            else assembleSubMethodWithScope1 isTailCall returnType parameterName body
+    assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLam _ a (NmLocal _ b)) =
+      if (fromMaybe (UN "")  parameterName) == b
+        then assembleConstantLambda isTailCall
+        else if isJust parameterName && a == b
+          then assembleIdentity1Lambda isTailCall
+          else assembleSubMethodWithScope1 isTailCall returnType parameterName body
+    assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLocal _ b) =
+      if (fromMaybe (UN "")  parameterName) == b
+        then assembleIdentityLambda isTailCall
+        else assembleSubMethodWithScope1 isTailCall returnType parameterName body
+    assembleSubMethodWithScope isTailCall returnType _ parameterName body =
+      assembleSubMethodWithScope1 isTailCall returnType parameterName body
 
     assembleSubMethod : (isTailCall: Bool) -> InferredType -> (parameterValueExpr: (Maybe (Asm ()))) ->
         (parameterName: Maybe Name) -> Scope -> NamedCExp -> Asm ()
@@ -1051,7 +1158,7 @@ mutual
             scope <- getScope !getCurrentScopeIndex
             maybe (Pure ()) (setScopeCounter . succ) (parentIndex scope)
             let lambdaBodyReturnType = returnType scope
-            let lambdaType = getLambdaType parameterName
+            let lambdaType = getLambdaTypeByParameter parameterName
             when (lambdaType == DelayedLambda) $ do
                 New "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed"
                 Dup
@@ -1101,7 +1208,7 @@ mutual
             let lambdaReturnType =
                 if isExtracted
                     then lambdaBodyReturnType
-                    else if lambdaType == ThunkLambda then thunkType else IUnknown
+                    else if lambdaType == ThunkLambda then thunkType else inferredObjectType
             assembleExpr True lambdaReturnType expr
             addLambdaEndLabel scope labelEnd
             maybe (Pure ()) (\parentScopeIndex => updateScopeEndLabel parentScopeIndex labelEnd) (parentIndex scope)
@@ -1580,11 +1687,7 @@ assembleDefinition idrisName fc = do
         lineNumberLabels = lineNumberLabels }
     updateCurrentFunction $ record { dynamicVariableCounter = 0 }
     let optimizedExpr = optimizedBody function
-    debug $ "**********************"
-    debug $ "Assembling " ++ declaringClassName ++ "." ++ methodName
-    debug "Optimized"
-    debug "---------"
-    debug $ showNamedCExp 0 optimizedExpr
+    debug $ "Assembling " ++ declaringClassName ++ "." ++ methodName ++ ":\n" ++ showNamedCExp 0 optimizedExpr
     let fileName = fst $ getSourceLocationFromFc fc
     let descriptor = getMethodDescriptor functionType
     let isField = arity == 0
@@ -1648,8 +1751,8 @@ prim_waitForFuturesToComplete : List ThreadID -> PrimIO ()
 waitForFuturesToComplete : List ThreadID -> IO ()
 waitForFuturesToComplete futures = primIO $ prim_waitForFuturesToComplete futures
 
-goGroupByClassName : String -> List Name -> List (List Name)
-goGroupByClassName programName names = unsafePerformIO $ do
+groupByClassName : String -> List Name -> List (List Name)
+groupByClassName programName names = unsafePerformIO $ do
     namesByClassName <- Map.newTreeMap {key=String} {value=List Name}
     go1 namesByClassName names
     Map.values {key=String} namesByClassName
@@ -1664,10 +1767,6 @@ goGroupByClassName programName names = unsafePerformIO $ do
             let newNames = maybe [name] ((::) name) existingNamesOpt
             _ <- Map.put {key=String} {value=List Name} namesByClassName jvmClassName newNames
             go2 names
-
-groupByClassName : String -> List (List Name) -> List (List (List Name))
-groupByClassName programName [] = []
-groupByClassName programName (xs :: xxs) = goGroupByClassName programName xs :: groupByClassName programName xxs
 
 createAsmState : AsmGlobalState -> Name -> IO AsmState
 createAsmState globalState name = do
@@ -1692,19 +1791,15 @@ assemble globalState fcAndDefinitionsByName name = do
             pure ()
         Nothing => pure ()
 
-goAssembleAsync : AsmGlobalState -> Map String (FC, NamedDef) -> List (List Name) -> IO ()
-goAssembleAsync _ _ [] = pure ()
-goAssembleAsync globalState fcAndDefinitionsByName (xs :: xss) = do
+assembleAsync : AsmGlobalState -> Map String (FC, NamedDef) -> List (List Name) -> IO ()
+assembleAsync _ _ [] = pure ()
+assembleAsync globalState fcAndDefinitionsByName (xs :: xss) = do
     threadIds <- traverse forkAssemble xs
     waitForFuturesToComplete threadIds
-    goAssembleAsync globalState fcAndDefinitionsByName xss
+    assembleAsync globalState fcAndDefinitionsByName xss
   where
     forkAssemble : Name -> IO ThreadID
     forkAssemble name = fork $ assemble globalState fcAndDefinitionsByName name
-
-assembleAsync : AsmGlobalState -> Map String (FC, NamedDef) -> List (List Name) -> IO ()
-assembleAsync globalState fcAndDefinitionsByName names =
-    goAssembleAsync globalState fcAndDefinitionsByName $ transpose names
 
 getNameStrFcDef : (Name, FC, NamedDef) -> (String, FC, NamedDef)
 getNameStrFcDef (name, fc, def) = (jvmSimpleName name, fc, def)
@@ -1712,15 +1807,27 @@ getNameStrFcDef (name, fc, def) = (jvmSimpleName name, fc, def)
 getNameStrDef : (String, FC, NamedDef) -> (String, NamedDef)
 getNameStrDef (name, fc, def) = (name, def)
 
+getTrampolinePatterns : List String -> List String
+getTrampolinePatterns directives
+    = mapMaybe getPattern directives
+  where
+    getPattern : String -> Maybe String
+    getPattern directive =
+      let (k, v) = break (== '=') directive
+      in
+        if (trim k) == "trampoline"
+          then Just $ trim $ substr 1 (length v) v
+          else Nothing
+
 ||| Compile a TT expression to JVM bytecode
 compileToJvmBytecode : Ref Ctxt Defs -> String -> String -> ClosedTerm -> Core ()
 compileToJvmBytecode c outputDirectory outputFile term = do
     cdata <- getCompileData False Cases term
+    directives <- getDirectives Jvm
     let ndefs = namedDefs cdata
     let idrisMainBody = forget (mainExpr cdata)
-    let unwrappedExpr = unwrapExpr idrisMainBody
     let programName = if outputFile == "" then "repl" else outputFile
-    let nameFcDefs = (idrisMainFunctionName programName, emptyFC, MkNmFun [] unwrappedExpr) :: ndefs
+    let nameFcDefs = (idrisMainFunctionName programName, emptyFC, MkNmFun [] idrisMainBody) :: ndefs
     let nameStrFcDefs = getNameStrFcDef <$> nameFcDefs
     fcAndDefinitionsByName <- coreLift $ Map.fromList nameStrFcDefs
     let nameStrDefs = getNameStrDef <$> nameStrFcDefs
@@ -1728,10 +1835,10 @@ compileToJvmBytecode c outputDirectory outputFile term = do
     coreLift $ when shouldDebug $ do
         timeString <- currentTimeString
         putStrLn (timeString ++ ": Analyzing dependencies")
-    globalState <- coreLift $ newAsmGlobalState programName
-    let names = groupByClassName programName . levelOrder $ buildFunctionTreeMain programName definitionsByName
+    globalState <- coreLift $ newAsmGlobalState programName (getTrampolinePatterns directives)
+    let names = groupByClassName programName . traverseDepthFirst $ buildFunctionTreeMain programName definitionsByName
     coreLift $ do
-        traverse_ (assembleAsync globalState fcAndDefinitionsByName) names
+        assembleAsync globalState fcAndDefinitionsByName (transpose names)
         let mainFunctionName = jvmName (idrisMainFunctionName programName)
         asmState <- createAsmState globalState (idrisMainFunctionName programName)
         _ <- asm asmState $ createMainMethod programName mainFunctionName

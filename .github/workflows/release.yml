@@ -39,6 +39,6 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
-          title: "Release 0.4.0-rc.2"
+          title: "Release 0.4.0-rc.3"
           files: |
             idris-jvm-compiler/target/idris2-0.4.0-SNAPSHOT.zip

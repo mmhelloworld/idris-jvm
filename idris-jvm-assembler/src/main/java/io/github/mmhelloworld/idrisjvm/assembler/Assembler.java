@@ -1132,11 +1132,13 @@ public final class Assembler {
     public void localVariable(String name, String typeDescriptor, String signature, String lineNumberStartLabel,
                               String lineNumberEndLabel, int index) {
         Label start = (Label) env.get(lineNumberStartLabel);
-        requireNonNull(start, format("Line number start label '%s' for variable %s at index %d must not be null",
-            lineNumberStartLabel, name, index));
+        requireNonNull(start,
+            format("Line number start label '%s' for variable %s at index %d must not be null for method %s/%s",
+                lineNumberStartLabel, name, index, className, methodName));
         Label end = (Label) env.get(lineNumberEndLabel);
-        requireNonNull(end, format("Line number end label '%s' for variable %s at index %d must not be null",
-            lineNumberEndLabel, name, index));
+        requireNonNull(end,
+            format("Line number end label '%s' for variable %s at index %d must not be null for method %s/%s",
+                lineNumberEndLabel, name, index, className, methodName));
         mv.visitLocalVariable(name, typeDescriptor, signature, start, end, index);
     }
 

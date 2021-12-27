@@ -57,15 +57,23 @@ public export
 stringClass : String
 stringClass = "java/lang/String"
 
-%inline
 public export
 inferredStringType : InferredType
 inferredStringType = IRef stringClass
 
-%inline
 public export
 inferredLambdaType : InferredType
 inferredLambdaType = IRef "java/util/function/Function"
+
+export
+function2Type : InferredType
+function2Type = IRef "java/util/function/BiFunction"
+
+export
+getFunctionInterface : (arity: Nat) -> InferredType
+getFunctionInterface 1 = inferredLambdaType
+getFunctionInterface 2 = function2Type
+getFunctionInterface arity = IRef ("io/github/mmhelloworld/idrisjvm/runtime/Function" ++ show arity)
 
 %inline
 public export
@@ -136,6 +144,11 @@ idrisJustClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Just"
 public export
 idrisJustType : InferredType
 idrisJustType = IRef idrisJustClass
+
+%inline
+public export
+functionsClass : String
+functionsClass = "io/github/mmhelloworld/idrisjvm/runtime/Functions"
 
 export
 isPrimitive : InferredType -> Bool

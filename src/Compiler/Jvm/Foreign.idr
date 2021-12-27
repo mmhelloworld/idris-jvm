@@ -178,26 +178,20 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     let jname = jvmName idrisName
     let jvmClassAndMethodName = getIdrisFunctionName programName (className jname) (methodName jname)
     jvmArgumentTypes <- traverse (parse fc) argumentTypes
+    let arityNat = length jvmArgumentTypes
+    let isNilArity = arityNat == 0
     jvmDescriptor <- findJvmDescriptor fc idrisName foreignDescriptors
     jvmReturnType <- getInferredType fc !(parse fc returnType)
     (foreignFunctionClassName, foreignFunctionName, jvmReturnType, jvmArgumentTypes) <-
         parseForeignFunctionDescriptor fc jvmDescriptor jvmArgumentTypes jvmReturnType
     let jvmArgumentTypes = getInferredType <$> jvmArgumentTypes -- TODO: Do not discard Java lambda type descriptor
     scopeIndex <- newScopeIndex
-    let arityNat = length jvmArgumentTypes
     let arity = the Int $ cast arityNat
-    let isNilArity = arity == 0
     let argumentNames =
        if isNilArity then [] else (\argumentIndex => "arg" ++ show argumentIndex) <$> [0 .. arity - 1]
     let argumentTypesByName = SortedMap.fromList $ List.zip argumentNames jvmArgumentTypes
-    isUntyped <- isUntypedFunction jname
-    let methodReturnType =
-        if isNilArity
-            then delayedType
-            else if jvmReturnType == IVoid || isUntyped then inferredObjectType else jvmReturnType
-    let inferredFunctionType = MkInferredFunctionType
-            methodReturnType
-            (if isUntyped then replicate arityNat inferredObjectType else stripInterfacePrefix <$> jvmArgumentTypes)
+    let methodReturnType = if isNilArity then delayedType else inferredObjectType
+    let inferredFunctionType = MkInferredFunctionType methodReturnType (replicate arityNat inferredObjectType)
     scopes <- LiftIo $ JList.new {a=Scope}
     let externalFunctionBody =
         NmExtPrim fc (NS (mkNamespace "") $ UN $ getPrimMethodName foreignFunctionName) [
@@ -205,10 +199,7 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
            NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
            getJvmExtPrimArguments $ List.zip argumentTypes $ SortedMap.toList argumentTypesByName,
            NmPrimVal fc WorldVal]
-    let functionBody =
-        if isNilArity
-            then NmDelay fc LLazy externalFunctionBody
-            else externalFunctionBody
+    let functionBody = if isNilArity then NmDelay fc LLazy externalFunctionBody else externalFunctionBody
     let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName functionBody
     setCurrentFunction function
     LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
@@ -233,7 +224,7 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
             MkScope scopeIndex (Just parentScopeIndex) variableTypes allVariableTypes
                 variableIndices allVariableIndices IUnknown 0 (0, 0) ("", "") []
         saveScope delayLambdaScope
-    updateScopeVariableTypes
+    updateScopeVariableTypes arityNat
   where
     getJvmExtPrimArguments : List (CFType, String, InferredType) -> NamedCExp
     getJvmExtPrimArguments [] = NmCon fc (UN "emptyForeignArg") DATACON (Just 0) []

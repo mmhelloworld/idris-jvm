@@ -7,14 +7,19 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.synchronizedSet;
+import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
 public final class AsmGlobalState {
@@ -23,14 +28,23 @@ public final class AsmGlobalState {
     private final Set<String> untypedFunctions;
     private final Set<String> constructors;
     private final String programName;
+    private final Collection<Predicate<String>> trampolinePredicates;
     private final Map<String, Assembler> assemblers;
 
-    public AsmGlobalState(String programName) {
+    public AsmGlobalState(String programName, Collection<String> trampolinePatterns) {
         this.programName = programName;
+        this.trampolinePredicates = trampolinePatterns.stream()
+            .map(Pattern::compile)
+            .map(Pattern::asPredicate)
+            .collect(toList());
         functions = new ConcurrentHashMap<>();
         untypedFunctions = synchronizedSet(new HashSet<>());
         constructors = synchronizedSet(new HashSet<>());
         assemblers = new ConcurrentHashMap<>();
+    }
+
+    public AsmGlobalState(String programName) {
+        this(programName, emptyList());
     }
 
     public synchronized void addFunction(String name, Object value) {
@@ -105,4 +119,8 @@ public final class AsmGlobalState {
         }
     }
 
+    public boolean shouldTrampoline(String name) {
+        return trampolinePredicates.stream()
+            .anyMatch(trampolinePredicate -> trampolinePredicate.test(name));
+    }
 }

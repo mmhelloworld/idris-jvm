@@ -122,7 +122,11 @@ public final class Runtime {
 
     public static Object unwrap(Object possibleThunk) {
         if (possibleThunk instanceof Thunk) {
-            return ((Thunk) possibleThunk).getObject();
+            Thunk thunk = (Thunk) possibleThunk;
+            while (thunk != null && thunk.isRedex()) {
+                thunk = thunk.evaluate();
+            }
+            return thunk == null ? null : thunk.getObject();
         } else {
             return possibleThunk;
         }
@@ -165,9 +169,9 @@ public final class Runtime {
     }
 
     public static ForkJoinTask<?> fork(Function<Object, Object> action) {
-        return commonPool().submit((Runnable) () -> {
+        return commonPool().submit(() -> {
             try {
-                action.apply(0);
+                unwrap(action.apply(0));
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -175,7 +179,7 @@ public final class Runtime {
     }
 
     public static ForkJoinTask<?> fork(Delayed action) {
-        return commonPool().submit(action::evaluate);
+        return commonPool().submit(() -> unwrap(action.evaluate()));
     }
 
     public static void await(ForkJoinTask<?> task) {

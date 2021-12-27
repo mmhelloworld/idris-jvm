@@ -175,8 +175,6 @@ checkcast cname              = Checkcast cname
 export
 asmCast : (sourceType: InferredType) -> (targetType: InferredType) -> Asm ()
 
-asmCast ty1@(IRef "java/lang/Object") ty2@(IRef "java/lang/Object") = unwrapObjectThunk
-
 asmCast ty1@(IRef class1) ty2@(IRef class2) =
   cond [
       (class1 == class2, Pure ()),
@@ -185,13 +183,13 @@ asmCast ty1@(IRef class1) ty2@(IRef class2) =
       (class1 == thunkClass && class2 == intThunkClass, unboxToIntThunk),
       (class1 == thunkClass && class2 == longThunkClass, unboxToLongThunk),
       (class1 == thunkClass && class2 == doubleThunkClass, unboxToDoubleThunk),
-      (ty1 == inferredObjectType || isThunkType ty1, do unwrapObjectThunk; checkcast class2)
+      (isThunkType ty1, do unwrapObjectThunk; checkcast class2)
     ]
     (checkcast class2)
 
 asmCast IUnknown ty@(IRef clazz) = if isThunkType ty
     then thunkObject
-    else do unwrapObjectThunk; checkcast clazz
+    else checkcast clazz
 
 asmCast IBool IBool     = Pure ()
 asmCast IByte IByte     = Pure ()
@@ -252,9 +250,7 @@ asmCast (IRef _) arr@(IArray _) = Checkcast $ getJvmTypeDescriptor arr
 asmCast IVoid IVoid = Pure ()
 asmCast IVoid (IRef _) = Aconstnull
 asmCast IVoid IUnknown = Aconstnull
-asmCast IUnknown IUnknown = unwrapObjectThunk
-asmCast (IRef "java/lang/Object") IUnknown = unwrapObjectThunk
-asmCast _ IUnknown = Pure ()
+asmCast ty IUnknown = when (isThunkType ty) unwrapObjectThunk
 
 asmCast ty1 ty2 = Throw emptyFC $ "Cannot convert from " ++ show ty1 ++ " to " ++ show ty2
 

@@ -27,15 +27,9 @@ implementation Show a => Show (Tree a) where
   show tree = displayTree show tree
 
 export
-levelOrder : Tree a -> List (List a)
-levelOrder tree = go [] [tree]
-  where
-    element : Tree b -> b
-    element (Node value _) = value
-
-    subtrees : Tree b -> List (Tree b)
-    subtrees (Node _ children) = children
-
-    go : List (List b) -> List (Tree b) -> List (List b)
-    go acc [] = acc
-    go acc trees = go (map element trees :: acc) (concatMap subtrees trees)
+traverseDepthFirst : Tree a -> List a
+traverseDepthFirst tree = go [] [] tree where
+  go : (acc: List a) -> (stack: List (Tree a)) -> Tree a -> List a
+  go acc [] (Node d []) = d :: acc
+  go acc (next :: rest) (Node d []) = go (d :: acc) rest next
+  go acc stack (Node d (child :: children)) = go acc (child :: stack) (Node d children)

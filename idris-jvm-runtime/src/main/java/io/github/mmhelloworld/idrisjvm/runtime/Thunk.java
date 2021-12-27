@@ -1,5 +1,7 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
+import java.util.NoSuchElementException;
+
 import static java.util.Objects.requireNonNull;
 
 @FunctionalInterface
@@ -11,11 +13,7 @@ public interface Thunk {
     }
 
     default Object getObject() {
-        Thunk thunk = this;
-        while (thunk != null && thunk.isRedex()) {
-            thunk = thunk.evaluate();
-        }
-        return thunk == null ? null : thunk.getObject();
+        throw new NoSuchElementException("Unevaluated thunk");
     }
 
     default int getInt() {

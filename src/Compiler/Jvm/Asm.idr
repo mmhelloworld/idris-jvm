@@ -361,12 +361,12 @@ namespace AsmGlobalState
 
     public export
     %foreign
-        "jvm:<init>(String io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
-    prim_newAsmGlobalState : String -> PrimIO AsmGlobalState
+        "jvm:<init>(String java/util/Collection io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
+    prim_newAsmGlobalState : String -> List String -> PrimIO AsmGlobalState
 
     public export
-    newAsmGlobalState : HasIO io => String -> io AsmGlobalState
-    newAsmGlobalState programName = primIO $ prim_newAsmGlobalState programName
+    newAsmGlobalState : HasIO io => String -> List String -> io AsmGlobalState
+    newAsmGlobalState programName trampolinePatterns = primIO $ prim_newAsmGlobalState programName trampolinePatterns
 
     public export
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getAssembler"
@@ -465,6 +465,15 @@ namespace AsmGlobalState
     classCodeEnd : HasIO io => AsmGlobalState -> String -> String -> String -> io ()
     classCodeEnd state outputDirectory outputFile mainClass =
         primIO $ prim_classCodeEnd state outputDirectory outputFile mainClass
+
+    public export
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".shouldTrampoline"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "boolean"
+    prim_shouldTrampoline : AsmGlobalState -> String -> PrimIO Bool
+
+    public export
+    shouldTrampoline : HasIO io => AsmGlobalState -> String -> io Bool
+    shouldTrampoline state name = primIO $ prim_shouldTrampoline state name
 
 public export
 record AsmState where
@@ -1162,14 +1171,21 @@ export
 getVariableType : String -> Asm InferredType
 getVariableType name = getVariableTypeAtScope !getCurrentScopeIndex name
 
+updateArgumentsForUntyped : Map Int InferredType -> Nat -> IO ()
+updateArgumentsForUntyped _ Z = pure ()
+updateArgumentsForUntyped types (S n) = do
+  ignore $ Map.put types (cast n) inferredObjectType
+  updateArgumentsForUntyped types n
+
 export
-updateScopeVariableTypes : Asm ()
-updateScopeVariableTypes = go (scopeCounter !GetState - 1) where
+updateScopeVariableTypes : Nat -> Asm ()
+updateScopeVariableTypes arity = go (scopeCounter !GetState - 1) where
     go : Int -> Asm ()
     go scopeIndex =
         if scopeIndex < 0 then Pure ()
         else do
             variableTypes <- retrieveVariableTypesAtScope scopeIndex
+            when (scopeIndex == 0) $ LiftIo $ updateArgumentsForUntyped variableTypes arity
             variableIndices <- retrieveVariableIndicesByName scopeIndex
             scope <- getScope scopeIndex
             saveScope $ record {allVariableTypes = variableTypes, allVariableIndices = variableIndices} scope
@@ -1201,7 +1217,7 @@ addVariableType var ty = do
 %inline
 export
 lambdaMaxCountPerMethod: Int
-lambdaMaxCountPerMethod = 25
+lambdaMaxCountPerMethod = 50
 
 export
 getLambdaImplementationMethodName : String -> Asm Jname
@@ -1634,7 +1650,8 @@ runAsm state (ClassCodeStart version access className sig parent intf anns) = as
         the (JList String) $ believe_me intf, the (JList JAnnotation) $ believe_me janns]
 
 runAsm state (CreateClass opts) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createClass" [toJClassOpts opts]
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createClass"
+      [assembler state, toJClassOpts opts]
 runAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue) = assemble state $ do
   let jaccs = sum $ accessNum <$> accs
   jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createField"

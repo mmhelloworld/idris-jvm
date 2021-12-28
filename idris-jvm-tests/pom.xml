@@ -10,7 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>idris-jvm-tests</artifactId>
-    <name>Idris 2 JVM Tests</name>
+    <name>Idris JVM Tests</name>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
@@ -160,6 +160,13 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
             </plugin>
         </plugins>
     </build>

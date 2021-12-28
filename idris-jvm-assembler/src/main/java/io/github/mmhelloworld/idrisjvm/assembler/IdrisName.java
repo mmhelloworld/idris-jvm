@@ -63,7 +63,7 @@ public final class IdrisName {
     }
 
     public static String getIdrisConstructorClassName(String idrisName) {
-        return String.join("/", addModulePrefix("main", asList((idrisName).split("/"))));
+        return String.join("/", addModulePrefix("main", asList(idrisName.split("/"))));
     }
 
     public static String transformCharacters(String value) {

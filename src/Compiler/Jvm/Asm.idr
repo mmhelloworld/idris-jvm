@@ -597,7 +597,7 @@ data Asm : Type -> Type where
     CreateClass : ClassOpts -> Asm ()
     CreateField : List Access -> (sourceFileName: String) -> (className: String) -> (fieldName: String) -> (descriptor: String) ->
                     (signature: Maybe String) -> Maybe FieldInitialValue -> Asm ()
-    CreateLabel : String -> Asm String
+    CreateLabel : String -> Asm ()
     CreateMethod : List Access -> (sourceFileName: String) -> (className: String) ->
                     (methodName: String) -> (descriptor: String) ->
                     (signature: Maybe String) -> (exceptions: Maybe (List String)) ->
@@ -762,12 +762,6 @@ Show AsmState where
         ("lambdaCounter", show $ lambdaCounter asmState)
     ]
 
-namespace AsmDo
-  %inline
-  public export
-  (>>=) : Asm a -> (a -> Asm b) -> Asm b
-  (>>=) = Bind
-
 %inline
 public export
 Functor Asm where
@@ -781,6 +775,16 @@ Applicative Asm where
   (<*>) f a = Bind f (\f' =>
               Bind a (\a' =>
               Pure (f' a')))
+
+%inline
+public export
+Monad Asm where
+  (>>=) = Bind
+
+%inline
+public export
+HasIO Asm where
+  liftIO = LiftIo
 
 public export
 newAsmState : HasIO io => AsmGlobalState -> Assembler -> io AsmState
@@ -860,7 +864,7 @@ getAndUpdateFunction f = do
 
 export
 updateCurrentFunction : (Function -> Function) -> Asm ()
-updateCurrentFunction f = do getAndUpdateFunction f; Pure ()
+updateCurrentFunction f = ignore $ getAndUpdateFunction f
 
 export
 loadFunction : Jname -> Asm ()
@@ -1658,9 +1662,8 @@ runAsm state (CreateField accs sourceFileName className fieldName desc sig field
     [assembler state, jaccs, sourceFileName, className, fieldName, desc, maybeToNullable sig,
         maybeToNullable (toJFieldInitialValue <$> fieldInitialValue)]
 
-runAsm state (CreateLabel label) = assemble state $ do
+runAsm state (CreateLabel label) = assemble state $
   jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createLabel" [assembler state, label]
-  pure label
 
 runAsm state (CreateMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns) =
     let newState = record { currentMethodName = Jqualified className methodName } state

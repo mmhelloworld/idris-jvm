@@ -37,8 +37,7 @@ Show InferredType where
     show IUnknown = "unknown"
     show IVoid = "void"
 
-%inline
-public export
+export
 inferredObjectType : InferredType
 inferredObjectType = IRef "java/lang/Object"
 
@@ -47,8 +46,7 @@ public export
 bigIntegerClass : String
 bigIntegerClass = "java/math/BigInteger"
 
-%inline
-public export
+export
 inferredBigIntegerType : InferredType
 inferredBigIntegerType = IRef bigIntegerClass
 
@@ -57,11 +55,11 @@ public export
 stringClass : String
 stringClass = "java/lang/String"
 
-public export
+export
 inferredStringType : InferredType
 inferredStringType = IRef stringClass
 
-public export
+export
 inferredLambdaType : InferredType
 inferredLambdaType = IRef "java/util/function/Function"
 
@@ -100,8 +98,7 @@ public export
 idrisListClass : String
 idrisListClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList"
 
-%inline
-public export
+export
 idrisListType : InferredType
 idrisListType = IRef idrisListClass
 
@@ -110,8 +107,7 @@ public export
 idrisNilClass : String
 idrisNilClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil"
 
-%inline
-public export
+export
 idrisNilType : InferredType
 idrisNilType = IRef idrisNilClass
 
@@ -120,8 +116,7 @@ public export
 idrisConsClass : String
 idrisConsClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList$Cons"
 
-%inline
-public export
+export
 idrisConsType : InferredType
 idrisConsType = IRef idrisConsClass
 
@@ -130,8 +125,7 @@ public export
 idrisNothingClass : String
 idrisNothingClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Nothing"
 
-%inline
-public export
+export
 idrisNothingType : InferredType
 idrisNothingType = IRef idrisNothingClass
 
@@ -140,8 +134,7 @@ public export
 idrisJustClass : String
 idrisJustClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Just"
 
-%inline
-public export
+export
 idrisJustType : InferredType
 idrisJustType = IRef idrisJustClass
 
@@ -187,23 +180,19 @@ public export
 thunkClass : String
 thunkClass = getRuntimeClass "Thunk"
 
-%inline
-public export
+export
 intThunkType : InferredType
 intThunkType = IRef intThunkClass
 
-%inline
-public export
+export
 longThunkType : InferredType
 longThunkType = IRef longThunkClass
 
-%inline
-public export
+export
 doubleThunkType : InferredType
 doubleThunkType = IRef doubleThunkClass
 
-%inline
-public export
+export
 thunkType : InferredType
 thunkType = IRef thunkClass
 
@@ -212,8 +201,7 @@ public export
 delayedClass : String
 delayedClass = getRuntimeClass "Delayed"
 
-%inline
-public export
+export
 delayedType : InferredType
 delayedType = IRef delayedClass
 
@@ -232,13 +220,11 @@ public export
 refClass : String
 refClass = getRuntimeClass "Ref"
 
-%inline
-public export
+export
 refType : InferredType
 refType = IRef refClass
 
-%inline
-public export
+export
 idrisObjectType : InferredType
 idrisObjectType = IRef idrisObjectClass
 
@@ -293,3 +279,9 @@ createExtPrimTypeSpec (IArray ty) = "[" ++ createExtPrimTypeSpec ty
 createExtPrimTypeSpec IVoid = "void"
 createExtPrimTypeSpec IUnknown = createExtPrimTypeSpec inferredObjectType
 createExtPrimTypeSpec (IRef ty) = ty
+
+export
+isObjectType : InferredType -> Bool
+isObjectType IUnknown = True
+isObjectType (IRef "java/lang/Object") = True
+isObjectType _ = False

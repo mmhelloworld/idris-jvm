@@ -141,7 +141,7 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: className :: _) argumen
             Pure (className, fn, returnType, argumentDeclarationTypes)
         (fn, signature) => do
             let descriptorsWithIdrisTypes =
-                List.zip
+                zip
                     (toList $ Strings.split (== ' ') (assert_total $ strTail . fst $ break (== ')') signature))
                     (argumentTypes ++ [AtomicForeignImplementationType returnType])
             (argumentTypesReversed, returnType) <- go [] descriptorsWithIdrisTypes
@@ -164,7 +164,7 @@ findJvmDescriptor fc name descriptors = case parseCC ["jvm"] descriptors of
 export
 getArgumentIndices : (arity: Int) -> List String -> IO (Map String Int)
 getArgumentIndices 0 _ = Map.newTreeMap {key=String} {value=Int}
-getArgumentIndices argIndex args = Map.fromList $ List.zip args [0 .. argIndex - 1]
+getArgumentIndices argIndex args = Map.fromList $ zip args [0 .. argIndex - 1]
 
 getPrimMethodName : String -> String
 getPrimMethodName "" = "prim__jvmStatic"
@@ -189,7 +189,7 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     let arity = the Int $ cast arityNat
     let argumentNames =
        if isNilArity then [] else (\argumentIndex => "arg" ++ show argumentIndex) <$> [0 .. arity - 1]
-    let argumentTypesByName = SortedMap.fromList $ List.zip argumentNames jvmArgumentTypes
+    let argumentTypesByName = SortedMap.fromList $ zip argumentNames jvmArgumentTypes
     let methodReturnType = if isNilArity then delayedType else inferredObjectType
     let inferredFunctionType = MkInferredFunctionType methodReturnType (replicate arityNat inferredObjectType)
     scopes <- LiftIo $ JList.new {a=Scope}
@@ -197,7 +197,7 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
         NmExtPrim fc (NS (mkNamespace "") $ UN $ getPrimMethodName foreignFunctionName) [
            NmCon fc (UN $ createExtPrimTypeSpec jvmReturnType) DATACON Nothing [],
            NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
-           getJvmExtPrimArguments $ List.zip argumentTypes $ SortedMap.toList argumentTypesByName,
+           getJvmExtPrimArguments $ zip argumentTypes $ SortedMap.toList argumentTypesByName,
            NmPrimVal fc WorldVal]
     let functionBody = if isNilArity then NmDelay fc LLazy externalFunctionBody else externalFunctionBody
     let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName functionBody
@@ -207,8 +207,8 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     argumentTypesByIndex <- LiftIo $
         if isNilArity
             then Map.newTreeMap {key=Int} {value=InferredType}
-            else Map.fromList $ List.zip [0 .. arity - 1] parameterTypes
-    argumentTypesByName <- LiftIo $ Map.fromList $ List.zip argumentNames parameterTypes
+            else Map.fromList $ zip [0 .. arity - 1] parameterTypes
+    argumentTypesByName <- LiftIo $ Map.fromList $ zip argumentNames parameterTypes
     argIndices <- LiftIo $ getArgumentIndices arity argumentNames
     let functionScope = MkScope scopeIndex Nothing argumentTypesByName argumentTypesByIndex argIndices argIndices
                             methodReturnType arity (0, 0) ("", "") []

@@ -94,6 +94,5 @@ parameters (defs: Map String NamedDef)
                     in (visited, Node name children)
 
 export
-buildFunctionTreeMain : String -> Map String NamedDef -> Tree Name
-buildFunctionTreeMain rootPackage defs = snd $ buildFunctionTree defs SortedSet.empty
-    (idrisMainFunctionName rootPackage)
+buildFunctionTreeMain : Name -> Map String NamedDef -> Tree Name
+buildFunctionTreeMain mainFunctionName defs = snd $ buildFunctionTree defs SortedSet.empty mainFunctionName

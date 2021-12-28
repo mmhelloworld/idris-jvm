@@ -10,7 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>idris-jvm-compiler</artifactId>
-    <name>Idris 2 JVM Compiler</name>
+    <name>Idris JVM Compiler</name>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
@@ -20,41 +20,23 @@
         <skipIdrisClean>false</skipIdrisClean>
     </properties>
 
-    <profiles>
-        <profile>
-            <id>IDRIS2_PREFIX</id>
-            <activation>
-                <property>
-                    <name>!env.IDRIS2_PREFIX</name>
-                </property>
-            </activation>
-            <properties>
-                <env.IDRIS2_PREFIX>${user.home}/.idris2</env.IDRIS2_PREFIX>
-            </properties>
-        </profile>
-    </profiles>
-
     <build>
+        <sourceDirectory>${project.parent.basedir}/src</sourceDirectory>
         <plugins>
             <plugin>
-                <artifactId>maven-jar-plugin</artifactId>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>default-jar</id>
-                        <phase>none</phase>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
                         <configuration>
-                            <finalName>unwanted</finalName>
-                            <classifier>unwanted</classifier>
+                            <sources>
+                                <source>${project.parent.basedir}/libs</source>
+                            </sources>
                         </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-install-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>default-install</id>
-                        <phase>none</phase>
                     </execution>
                 </executions>
             </plugin>
@@ -139,9 +121,10 @@
                                 <move file="../build/exec/idris2_app/idris2.jar"
                                       tofile="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar"
                                       failonerror="false"
-                                      quiet="true"/>
+                                      overwrite="true"/>
                                 <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar"
-                                      tofile="./target/idris-jvm-compiler-${project.version}.jar"/>
+                                      tofile="./target/idris-jvm-compiler-${project.version}.jar"
+                                      overwrite="true"/>
                             </target>
                         </configuration>
                     </execution>
@@ -154,7 +137,8 @@
                         <configuration>
                             <target>
                                 <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar"
-                                      tofile="./target/assembly/lib/idris-jvm-compiler-${project.version}.jar"/>
+                                      tofile="./target/assembly/lib/idris-jvm-compiler-${project.version}.jar"
+                                      overwrite="true"/>
                             </target>
                         </configuration>
                     </execution>

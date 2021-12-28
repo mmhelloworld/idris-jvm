@@ -82,7 +82,7 @@ mockRunAsm state (CreateField accs sourceFileName className fieldName desc sig f
     fromMaybe "" sig,
     (objectToString $ maybeToNullable (toJFieldInitialValue <$> fieldInitialValue))]
 
-mockRunAsm state (CreateLabel label) = assemble state $ pure label
+mockRunAsm state (CreateLabel label) = assemble state $ pure ()
 
 mockRunAsm state (CreateMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns) =
     let newState = record { currentMethodName = Jqualified className methodName } state

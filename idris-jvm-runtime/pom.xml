@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <name>Idris 2 JVM Runtime</name>
+    <name>Idris JVM Runtime</name>
     <build>
         <plugins>
             <plugin>

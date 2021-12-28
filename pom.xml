@@ -8,7 +8,23 @@
     <artifactId>idris-jvm</artifactId>
     <version>0.4.0-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>Idris 2 JVM</name>
+    <name>Idris JVM</name>
+    <description>JVM bytecode backend for Idris</description>
+    <url>https://github.com/mmhelloworld/idris-jvm</url>
+
+    <licenses>
+        <license>
+            <name>BSD-3-Clause</name>
+            <url>https://opensource.org/licenses/BSD-3-Clause</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>mmhelloworld</id>
+            <name>Marimuthu Madasamy</name>
+        </developer>
+    </developers>
 
     <modules>
         <module>idris-jvm-assembler</module>
@@ -24,6 +40,8 @@
         <asm.version>9.0</asm.version>
         <assertj.version>3.16.1</assertj.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.scm.organization>mmhelloworld</project.scm.organization>
+        <project.scm.repository>idris-jvm</project.scm.repository>
         <java.version>1.8</java.version>
         <junit-jupiter.version>5.7.2</junit-jupiter.version>
         <log4j.version>2.11.0</log4j.version>
@@ -38,7 +56,27 @@
         <appassembler-maven-plugin.version>1.10</appassembler-maven-plugin.version>
         <maven-resources-plugin.version>3.2.0</maven-resources-plugin.version>
         <maven-antrun-plugin.version>3.0.0</maven-antrun-plugin.version>
+        <nexus-staging-maven-plugin.version>1.6.8</nexus-staging-maven-plugin.version>
+        <maven-gpg-plugin.version>3.0.1</maven-gpg-plugin.version>
+        <maven-deploy-plugin.version>3.0.0-M1</maven-deploy-plugin.version>
+        <maven-release-plugin.version>3.0.0-M4</maven-release-plugin.version>
     </properties>
+
+    <scm>
+        <url>http://github.com/${project.scm.organization}/${project.scm.repository}</url>
+        <connection>
+            scm:git:git://github.com/${project.scm.organization}/${project.scm.repository}.git
+        </connection>
+        <developerConnection>
+            scm:git:ssh://git@github.com/${project.scm.organization}/${project.scm.repository}.git
+        </developerConnection>
+        <tag>HEAD</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/${project.scm.organization}/${project.scm.repository}/issues</url>
+    </issueManagement>
 
     <dependencyManagement>
         <dependencies>
@@ -134,6 +172,11 @@
                     <version>${maven-resources-plugin.version}</version>
                 </plugin>
                 <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-gpg-plugin</artifactId>
+                    <version>${maven-gpg-plugin.version}</version>
+                </plugin>
+                <plugin>
                     <artifactId>maven-antrun-plugin</artifactId>
                     <version>${maven-antrun-plugin.version}</version>
                 </plugin>
@@ -142,8 +185,90 @@
                     <artifactId>versions-maven-plugin</artifactId>
                     <version>${versions-maven-plugin.version}</version>
                 </plugin>
+                <plugin>
+                    <groupId>org.sonatype.plugins</groupId>
+                    <artifactId>nexus-staging-maven-plugin</artifactId>
+                    <version>${nexus-staging-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-release-plugin</artifactId>
+                    <version>${maven-release-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>${maven-deploy-plugin.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                        <configuration>
+                            <skip>true</skip>
+                            <gpgArguments>
+                                <arg>--batch</arg>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <extensions>true</extensions>
+                <configuration>
+                    <serverId>ossrh</serverId>
+                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <configuration>
+                    <localCheckout>true</localCheckout>
+                    <pushChanges>false</pushChanges>
+                    <mavenExecutorId>forked-path</mavenExecutorId>
+                    <arguments>-Dgpg.passphrase=${gpg.passphrase}</arguments>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-deploy</id>
+                        <phase>deploy</phase>
+                        <goals>
+                            <goal>deploy</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
 
 </project>

@@ -42,6 +42,7 @@ import Compiler.Jvm.Tuples
 
 %hide System.FFI.runtimeClass
 %hide Compiler.Jvm.Asm.assemble
+%hide Core.Context.Constructor.arity
 
 addScopeLocalVariables : Scope -> Asm ()
 addScopeLocalVariables scope = do
@@ -70,7 +71,7 @@ enterScope = do
     updateCurrentScopeIndex scopeIndex
 
 exitScope : Int -> Asm ()
-exitScope scopeIndex = updateCurrentScopeIndex scopeIndex
+exitScope = updateCurrentScopeIndex
 
 withScope : Lazy (Asm ()) -> Asm ()
 withScope op = do
@@ -119,9 +120,6 @@ hashCode (BI value) = Just $ Object.hashCode value
 hashCode (Str value) = Just $ Object.hashCode value
 hashCode x = Nothing
 
-unwrapExpr : NamedCExp -> NamedCExp
-unwrapExpr expr = NmApp emptyFC (NmRef emptyFC (UN ":__jvmUnwrap__:")) [expr]
-
 getHashCodeSwitchClass : FC -> InferredType -> Asm String
 getHashCodeSwitchClass fc constantType =
     if constantType == inferredStringType
@@ -159,7 +157,7 @@ createDefaultLabel = do
     Pure label
 
 getSwitchCasesWithEndLabel : List (String, Int, a) -> List String -> List (String, Int, a, String)
-getSwitchCasesWithEndLabel switchCases labelStarts = go $ List.zip switchCases (drop 1 labelStarts ++ [methodEndLabel])
+getSwitchCasesWithEndLabel switchCases labelStarts = go $ zip switchCases (drop 1 labelStarts ++ [methodEndLabel])
     where
         go : List ((String, Int, a), String) -> List (String, Int, a, String)
         go (((labelStart, constExpr, body), labelEnd) :: xs) = (labelStart, constExpr, body, labelEnd) :: go xs
@@ -300,11 +298,6 @@ mutual
             updateScopeEndLabel targetExprScopeIndex methodEndLabel
             assembleExpr isTailCall returnType expr
 
-    assembleExpr isTailCall returnType app@(NmApp _ (NmRef _ (UN ":__jvmUnwrap__:")) [arg]) = do
-       assembleExpr False IUnknown arg
-       InvokeMethod InvokeStatic runtimeClass "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
-       when isTailCall $ asmReturn returnType
-
     -- Tail recursion. Store arguments and recur to the beginning of the method
     assembleExpr _ returnType app@(NmApp fc (NmRef _ (UN ":__jvmTailRec__:")) args) =
         case length args of
@@ -312,11 +305,11 @@ mutual
             (S lastArgIndex) => do
                 jname <- idrisName <$> getCurrentFunction
                 parameterTypes <- getFunctionParameterTypes jname
-                let argsWithTypes = List.zip args parameterTypes
+                let argsWithTypes = zip args parameterTypes
                 variableTypes <- getVariableTypes
                 let argIndices = [0 .. the Int $ cast lastArgIndex]
-                targetVariableIndices <- traverse (storeParameter variableTypes) $ List.zip argIndices argsWithTypes
-                traverse (assign variableTypes) $ List.zip targetVariableIndices $ List.zip argIndices parameterTypes
+                targetVariableIndices <- traverse (storeParameter variableTypes) $ zip argIndices argsWithTypes
+                traverse_ (assign variableTypes) $ zip targetVariableIndices $ zip argIndices parameterTypes
                 Goto methodStartLabel
               where
                 assign : Map Int InferredType -> (Int, Int, InferredType) -> Asm ()
@@ -337,8 +330,8 @@ mutual
         if paramTypes == []
             then assembleNmAppNilArity isTailCall returnType idrisName
             else do
-                let argsWithTypes = List.zip args paramTypes
-                traverse assembleParameter argsWithTypes
+                let argsWithTypes = zip args paramTypes
+                traverse_ assembleParameter argsWithTypes
                 let methodReturnType = InferredFunctionType.returnType functionType
                 let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType paramTypes
                 let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
@@ -389,7 +382,7 @@ mutual
         defaultValue returnType
         when isTailCall $ asmReturn returnType
     assembleExpr isTailCall returnType (NmConCase fc sc [] (Just expr)) = do
-        assembleConstructorSwitchExpr sc
+        ignore $ assembleConstructorSwitchExpr sc
         assembleExpr isTailCall returnType expr
     assembleExpr _ returnType (NmConCase fc sc [MkNConAlt name _ _ args expr] Nothing) = do
         idrisObjectVariableIndex <- assembleConstructorSwitchExpr sc
@@ -479,8 +472,8 @@ mutual
         let constructorParameterCountNat = length args
         let constructorParameterCount = the Int $ cast constructorParameterCountNat
         let constructorTypes = constructorType :: replicate constructorParameterCountNat inferredObjectType
-        let argsWithTypes = List.zip args $ drop 1 constructorTypes
-        traverse assembleParameter argsWithTypes
+        let argsWithTypes = zip args $ drop 1 constructorTypes
+        traverse_ assembleParameter argsWithTypes
         let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid constructorTypes
         globalState <- getGlobalState
         hasConstructor <- LiftIo $ AsmGlobalState.hasConstructor globalState constructorClassName
@@ -1328,7 +1321,7 @@ mutual
 
     assembleConstantSwitch returnType constantType fc sc alts def = do
             hashPositionAndAlts <- traverse (constantAltHashCodeExpr fc) $
-                List.zip [0 .. the Int $ cast $ length $ drop 1 alts] alts
+                zip [0 .. the Int $ cast $ length $ drop 1 alts] alts
             let positionAndAltsByHash = multiValueMap fst snd hashPositionAndAlts
             hashCodeSwitchCases <- getHashCodeCasesWithLabels positionAndAltsByHash
             let labels = fst <$> hashCodeSwitchCases
@@ -1508,7 +1501,7 @@ mutual
         let hashCodePositionVariableName = "hashCodePosition" ++ show hashCodePositionVariableSuffixIndex
         hashCodePositionVariableIndex <- getVariableIndex hashCodePositionVariableName
         hashPositionAndAlts <- traverse (conAltHashCodeExpr fc) $
-            List.zip [0 .. the Int $ cast $ length $ drop 1 alts] alts
+            zip [0 .. the Int $ cast $ length $ drop 1 alts] alts
         let positionAndAltsByHash = multiValueMap fst snd hashPositionAndAlts
         hashCodeSwitchCases <- getHashCodeCasesWithLabels positionAndAltsByHash
         let labels = fst <$> hashCodeSwitchCases
@@ -1593,7 +1586,7 @@ mutual
         argTypes <- traverse tySpec (map fst instanceMethodArgs)
         methodReturnType <- tySpec ret
         let (cname, mnameWithDot) = break (== '.') fn
-        traverse assembleParameter $ List.zip (snd obj :: map snd instanceMethodArgs) (IRef cname :: argTypes)
+        traverse_ assembleParameter $ zip (snd obj :: map snd instanceMethodArgs) (IRef cname :: argTypes)
         let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType argTypes
         let (_, mname) = break (/= '.') mnameWithDot
         instanceType <- tySpec $ fst obj
@@ -1611,7 +1604,7 @@ mutual
         when isConstructor $ do
             New cname
             Dup
-        traverse assembleParameter $ List.zip (map snd args) argTypes
+        traverse_ assembleParameter $ zip (map snd args) argTypes
         let descriptorReturnType = if isConstructor then IVoid else methodReturnType
         let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType descriptorReturnType argTypes
         let invocationType = if isConstructor then InvokeSpecial else InvokeStatic
@@ -1782,13 +1775,11 @@ assemble globalState fcAndDefinitionsByName name = do
         Just (fc, def) => do
             programName <- AsmGlobalState.getProgramName globalState
             asmState <- createAsmState globalState name
-            _ <- asm asmState $ do
-                state <- GetState
+            ignore $ runAsm asmState $ do
                 inferDef programName name fc def
                 assembleDefinition name fc
                 scopes <- LiftIo $ JList.new {a=Scope}
                 updateCurrentFunction $ record { scopes = scopes, optimizedBody = emptyFunction }
-            pure ()
         Nothing => pure ()
 
 assembleAsync : AsmGlobalState -> Map String (FC, NamedDef) -> List (List Name) -> IO ()
@@ -1827,7 +1818,8 @@ compileToJvmBytecode c outputDirectory outputFile term = do
     let ndefs = namedDefs cdata
     let idrisMainBody = forget (mainExpr cdata)
     let programName = if outputFile == "" then "repl" else outputFile
-    let nameFcDefs = (idrisMainFunctionName programName, emptyFC, MkNmFun [] idrisMainBody) :: ndefs
+    let mainFunctionName = idrisMainFunctionName programName
+    let nameFcDefs = (mainFunctionName, emptyFC, MkNmFun [] idrisMainBody) :: ndefs
     let nameStrFcDefs = getNameStrFcDef <$> nameFcDefs
     fcAndDefinitionsByName <- coreLift $ Map.fromList nameStrFcDefs
     let nameStrDefs = getNameStrDef <$> nameStrFcDefs
@@ -1836,29 +1828,28 @@ compileToJvmBytecode c outputDirectory outputFile term = do
         timeString <- currentTimeString
         putStrLn (timeString ++ ": Analyzing dependencies")
     globalState <- coreLift $ newAsmGlobalState programName (getTrampolinePatterns directives)
-    let names = groupByClassName programName . traverseDepthFirst $ buildFunctionTreeMain programName definitionsByName
+    let names = groupByClassName programName . traverseDepthFirst $
+      buildFunctionTreeMain mainFunctionName definitionsByName
     coreLift $ do
         assembleAsync globalState fcAndDefinitionsByName (transpose names)
-        let mainFunctionName = jvmName (idrisMainFunctionName programName)
-        asmState <- createAsmState globalState (idrisMainFunctionName programName)
-        _ <- asm asmState $ createMainMethod programName mainFunctionName
-        classCodeEnd globalState outputDirectory outputFile (className mainFunctionName)
+        asmState <- createAsmState globalState mainFunctionName
+        let mainFunctionJname = jvmName mainFunctionName
+        _ <- runAsm asmState $ createMainMethod programName mainFunctionJname
+        classCodeEnd globalState outputDirectory outputFile (className mainFunctionJname)
 
 ||| JVM bytecode implementation of the `compileExpr` interface.
 compileExprJvm : Ref Ctxt Defs -> (tmpDir : String) -> (outDir: String) -> ClosedTerm ->
                     (outputFile : String) -> Core (Maybe String)
 compileExprJvm c tmpDir outDir term outputFile
     = do let outputDirectory = if outputFile == "" then "" else outDir </> (outputFile ++ "_app")
-         when (outputDirectory /= "") $ do
-            coreLift $ mkdirAll outputDirectory
-            pure ()
+         when (outputDirectory /= "") $ ignore $ coreLift $ mkdirAll outputDirectory
          compileToJvmBytecode c outputDirectory outputFile term
          pure $ Just outputDirectory
 
 ||| JVM bytecode implementation of the `executeExpr` interface.
 ||| This implementation simply runs the usual compiler, saving it to a temp file, then interpreting it.
 executeExprJvm : Ref Ctxt Defs -> (execDir : String) -> ClosedTerm -> Core ()
-executeExprJvm c execDir term = do compileExprJvm c execDir "" term ""; pure ()
+executeExprJvm c execDir term = ignore $ compileExprJvm c execDir "" term ""
 
 ||| Codegen wrapper for JVM implementation.
 export

@@ -49,4 +49,4 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 
 ## License
 This repository extends [idris-lang/Idris2](https://github.com/idris-lang/Idris2) repository with JVM backend. Files from [idris-lang/Idris2](https://github.com/idris-lang/Idris2) are covered by that repository's [license](https://github.com/idris-lang/Idris2/blob/main/LICENSE).
-All other files from this repository are covered by BSD-3-Clause License. See [LICENSE](IDRIS2-LICENSE).
+All other files from this repository are covered by BSD-3-Clause License. See [LICENSE](LICENSE).

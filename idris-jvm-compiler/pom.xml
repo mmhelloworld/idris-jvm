@@ -24,6 +24,44 @@
         <sourceDirectory>${project.parent.basedir}/src</sourceDirectory>
         <plugins>
             <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-jar</id>
+                        <phase>none</phase>
+                        <configuration>
+                            <finalName>unwanted</finalName>
+                            <classifier>unwanted</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-install-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-install</id>
+                        <goals>
+                            <goal>install</goal>
+                        </goals>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>custom-install</id>
+                        <goals>
+                            <goal>install-file</goal>
+                        </goals>
+                        <phase>install</phase>
+                        <configuration>
+                            <file>${project.build.directory}/${project.artifactId}-${project.version}.jar</file>
+                            <pomFile>pom.xml</pomFile>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
                 <executions>
@@ -111,8 +149,8 @@
                         </configuration>
                     </execution>
                     <execution>
-                        <id>copy-compiler-jar</id>
-                        <phase>compile</phase>
+                        <id>version-compiler-jar</id>
+                        <phase>process-classes</phase>
                         <goals>
                             <goal>run</goal>
                         </goals>
@@ -122,6 +160,17 @@
                                       tofile="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar"
                                       failonerror="false"
                                       overwrite="true"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>copy-compiler-jar</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
                                 <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar"
                                       tofile="./target/idris-jvm-compiler-${project.version}.jar"
                                       overwrite="true"/>
@@ -150,7 +199,7 @@
                 <executions>
                     <execution>
                         <id>idrisOutputScripts</id>
-                        <phase>compile</phase>
+                        <phase>process-classes</phase>
                         <goals>
                             <goal>assemble</goal>
                         </goals>

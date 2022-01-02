@@ -93,32 +93,14 @@ castInt [NPrimVal fc (Ch i)] = Just (NPrimVal fc (I (cast i)))
 castInt [NPrimVal fc (Str i)] = Just (NPrimVal fc (I (cast i)))
 castInt _ = Nothing
 
-b8max : Int
-b8max = 0x100
-
-b16max : Int
-b16max = 0x10000
-
-b32max : Int
-b32max = 0x100000000
-
-b64max : Integer
-b64max = 18446744073709551616 -- 0x10000000000000000
-
-bitCastWrap : Ord a => Integral a => (i : a) -> (max : a) -> a
-bitCastWrap i max
-    = if i >= 0 -- oops, we don't have `rem` yet!
-        then i `mod` max
-        else max + i `mod` max
-
 bit8CastWrap : (i : Int) -> Int
-bit8CastWrap i = bitCastWrap i b8max
+bit8CastWrap i = cast $ bitCastWrap (cast i) (cast b8max)
 
 bit16CastWrap : (i : Int) -> Int
-bit16CastWrap i = bitCastWrap i b16max
+bit16CastWrap i = cast $ bitCastWrap (cast i) (cast b16max)
 
 bit32CastWrap : (i : Int) -> Int
-bit32CastWrap i = bitCastWrap i b32max
+bit32CastWrap i = cast $ bitCastWrap (cast i) b32max
 
 bit64CastWrap : (i : Integer) -> Integer
 bit64CastWrap i = bitCastWrap i b64max

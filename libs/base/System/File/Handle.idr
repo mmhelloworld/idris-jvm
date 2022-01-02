@@ -4,15 +4,21 @@ import public System.File.Error
 import public System.File.Mode
 import System.File.Support
 import public System.File.Types
+import System.FFI
 
 %default total
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
+
 %foreign support "idris2_openFile"
          "node:support:openFile,support_system_file"
+         jvm' fileClass "open" "String String" fileClass
 prim__open : String -> String -> PrimIO FilePtr
 
 %foreign support "idris2_closeFile"
          "node:lambda:(fp) => require('fs').closeSync(fp.fd)"
+         jvm' fileClass "close" fileClass "void"
 prim__close : FilePtr -> PrimIO ()
 
 export

@@ -4,11 +4,16 @@ import public System.File.Error
 import System.File.Meta
 import System.File.Support
 import public System.File.Types
+import System.FFI
 
 %default total
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
+
 %foreign support "idris2_chmod"
          "node:support:chmod,support_system_file"
+         jvm' fileClass "chmod" "String int" "int"
 prim__chmod : String -> Int -> PrimIO Int
 
 namespace FileMode

@@ -20,8 +20,7 @@ Compiled: [{arg:0}]: (%case !{arg:0} [(%constcase 0 0)] Just (%let {e:0} (-Integ
 Refers to: [Prelude.Basics.True, Prelude.Basics.False]
 Refers to (runtime): []
 Flags: [allguarded, covering]
-Issue1831_1> 
-Bye for now!
+Issue1831_1> Bye for now!
 1/1: Building Issue1831_2 (Issue1831_2.idr)
 Issue1831_2> Issue1831_2.test2 ==> [{arg:0}];
 Compile time tree: case {arg:0}[0] : [__] of
@@ -44,5 +43,4 @@ Compiled: [{arg:0}]: (%case !{arg:0} [(%constcase 0 0)] Just (%let {e:0} (-Integ
 Refers to: [Prelude.Basics.True, Prelude.Basics.False]
 Refers to (runtime): []
 Flags: [allguarded, covering]
-Issue1831_2> 
-Bye for now!
+Issue1831_2> Bye for now!

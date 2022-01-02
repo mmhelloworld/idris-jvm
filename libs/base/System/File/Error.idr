@@ -4,15 +4,21 @@ import System.Errno
 
 import System.File.Support
 import public System.File.Types
+import System.FFI
 
 %default total
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
+
 %foreign support "idris2_fileError"
          "node:lambda:x=>(x===1?1:0)"
+         jvm' fileClass "getErrorNumber" fileClass "int"
 prim__error : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileErrno"
          "node:support:fileErrno,support_system_file"
+         jvm' runtimeClass "getErrorNumber" "java/lang/Object" "int"
 prim__fileErrno : PrimIO Int
 
 public export

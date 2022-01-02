@@ -18,6 +18,7 @@ isWindows : Bool
 isWindows = os `elem` ["windows", "mingw32", "cygwin32"]
 
 %foreign "C:idris2_getNProcessors, libidris2_support, idris_support.h"
+         "jvm:getAvailableProcessors(int),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 prim__getNProcessors : PrimIO Int
 
 export

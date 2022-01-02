@@ -3,24 +3,33 @@ module System.File.Meta
 import System.File.Handle
 import System.File.Support
 import public System.File.Types
+import System.FFI
 
 %default total
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
+
 %foreign support "idris2_fileSize"
          "node:lambda:fp=>require('fs').fstatSync(fp.fd).size"
+         jvm' fileClass "size" fileClass "int"
 prim__fileSize : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileSize"
+         jvm' fileClass "size" fileClass "int"
 prim__fPoll : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileAccessTime"
+         jvm' fileClass "getAccessTime" fileClass "int"
 prim__fileAccessTime : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileModifiedTime"
          "node:lambda:fp=>require('fs').fstatSync(fp.fd).mtimeMs / 1000"
+         jvm' fileClass "getModifiedTime" fileClass "int"
 prim__fileModifiedTime : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileStatusTime"
+         jvm' fileClass "getStatusTime" fileClass "int"
 prim__fileStatusTime : FilePtr -> PrimIO Int
 
 %foreign support "idris2_fileIsTTY"

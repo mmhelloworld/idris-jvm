@@ -924,8 +924,7 @@ fillNull : HasIO io => Int -> JList a -> io ()
 fillNull index list = do
     size <- JList.size list
     nulls <- JList.nCopies (index - size) nullValue
-    _ <- JList.addAll list (believe_me nulls)
-    pure ()
+    ignore $ JList.addAll list (believe_me nulls)
 
 export
 saveScope : Scope -> Asm ()
@@ -933,15 +932,12 @@ saveScope scope = do
     scopes <- scopes <$> getCurrentFunction
     size <- LiftIo $ JList.size {a=Scope} scopes
     let scopeIndex = index scope
-    _ <- LiftIo $
-        if scopeIndex < size
-            then do
-                _ <- JList.set scopes scopeIndex scope
-                pure ()
-            else do
-                fillNull scopeIndex scopes
-                JList.add scopes scopeIndex scope
-    pure ()
+    LiftIo $
+      if scopeIndex < size
+          then ignore $ JList.set scopes scopeIndex scope
+          else do
+              fillNull scopeIndex scopes
+              JList.add scopes scopeIndex scope
 
 export
 getScope : Int -> Asm Scope

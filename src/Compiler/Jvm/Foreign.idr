@@ -12,7 +12,7 @@ import Libraries.Data.SortedMap
 import Data.List
 import Data.List1
 import Data.Vect
-import Data.Strings
+import Data.String
 
 import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
@@ -119,7 +119,7 @@ getForeignCallbackDeclarationType fc _ = throwExplicitFunctionDescriptorRequired
  -}
 export
 parseForeignType : FC -> String -> ForeignImplementationType -> Asm ForeignType
-parseForeignType fc descriptor implementationType = case toList $ Strings.split (== '#') descriptor of
+parseForeignType fc descriptor implementationType = case toList $ String.split (== '#') descriptor of
     [] => Throw fc $ "Invalid descriptor: " ++ descriptor
     (interfaceName :: interfaceMethodName :: signatureParts) =>
         case implementationType of
@@ -135,14 +135,14 @@ export
 parseForeignFunctionDescriptor : FC -> List String -> List ForeignImplementationType ->
     InferredType -> Asm (String, String, InferredType, List ForeignType)
 parseForeignFunctionDescriptor fc (functionDescriptor :: className :: _) argumentTypes returnType =
-    case Strings.break (== '(') functionDescriptor of
+    case String.break (== '(') functionDescriptor of
         (fn, "") => do
             argumentDeclarationTypes <- traverse (getForeignCallbackDeclarationType fc) argumentTypes
             Pure (className, fn, returnType, argumentDeclarationTypes)
         (fn, signature) => do
             let descriptorsWithIdrisTypes =
                 zip
-                    (toList $ Strings.split (== ' ') (assert_total $ strTail . fst $ break (== ')') signature))
+                    (toList $ String.split (== ' ') (assert_total $ strTail . fst $ break (== ')') signature))
                     (argumentTypes ++ [AtomicForeignImplementationType returnType])
             (argumentTypesReversed, returnType) <- go [] descriptorsWithIdrisTypes
             Pure (className, fn, returnType, List.reverse argumentTypesReversed)

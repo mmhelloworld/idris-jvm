@@ -1,6 +1,6 @@
 module Compiler.Jvm.InferredType
 
-import Data.Strings
+import Data.String
 
 public export
 data InferredType = IBool | IByte | IChar | IShort | IInt | ILong | IFloat | IDouble | IRef String

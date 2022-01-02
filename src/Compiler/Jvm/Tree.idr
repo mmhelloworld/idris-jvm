@@ -1,7 +1,7 @@
 module Compiler.Jvm.Tree
 
 import Data.List
-import Data.Strings
+import Data.String
 
 public export
 data Tree a = Node a (List (Tree a))

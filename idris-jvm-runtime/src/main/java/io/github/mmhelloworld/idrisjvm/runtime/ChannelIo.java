@@ -42,6 +42,7 @@ import static java.nio.file.attribute.PosixFilePermission.OWNER_READ;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_WRITE;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toSet;
 
@@ -187,6 +188,14 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
         return file.getErrorNumber();
     }
 
+    public BasicFileAttributes getFileAttributes() {
+        try {
+            return Files.readAttributes(path, BasicFileAttributes.class);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Override
     public char readChar() {
         return (char) withExceptionHandling(() -> {
@@ -211,6 +220,7 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
 
     public void handleException(Exception e) {
         this.exception = e;
+        Runtime.setException(exception);
         Runtime.setErrorNumber(getErrorNumber(e));
     }
 
@@ -288,6 +298,13 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
         });
     }
 
+    public int closeWithExitStatus() {
+        return withExceptionHandling(() -> {
+            channel.close();
+            return 0;
+        }, -1);
+    }
+
     @Override
     public int getErrorNumber() {
         return getErrorNumber(exception);
@@ -326,6 +343,30 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
     @Override
     public int getAccessTime() {
         return (int) getTimeAttribute(BasicFileAttributes::lastAccessTime);
+    }
+
+    public static int getAccessTimeSec(BasicFileAttributes attributes) {
+        return (int) attributes.lastAccessTime().to(SECONDS);
+    }
+
+    public static int getAccessTimeNsec(BasicFileAttributes attributes) {
+        return (int) attributes.lastAccessTime().to(NANOSECONDS);
+    }
+
+    public static int getModifiedTimeSec(BasicFileAttributes attributes) {
+        return (int) attributes.lastModifiedTime().to(SECONDS);
+    }
+
+    public static int getModifiedTimeNsec(BasicFileAttributes attributes) {
+        return (int) attributes.lastModifiedTime().to(NANOSECONDS);
+    }
+
+    public static int getCreationTimeSec(BasicFileAttributes attributes) {
+        return (int) attributes.creationTime().to(SECONDS);
+    }
+
+    public static int getCreationTimeNsec(BasicFileAttributes attributes) {
+        return (int) attributes.creationTime().to(NANOSECONDS);
     }
 
     @Override

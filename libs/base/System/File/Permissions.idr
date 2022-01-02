@@ -3,11 +3,16 @@ module System.File.Permissions
 import public System.File.Error
 import System.File.Support
 import public System.File.Types
+import System.FFI
 
 %default total
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
+
 %foreign supportC "idris2_chmod"
          supportNode "chmod"
+         jvm' fileClass "chmod" "String int" "int"
 prim__chmod : String -> Int -> PrimIO Int
 
 ||| The UNIX file modes.

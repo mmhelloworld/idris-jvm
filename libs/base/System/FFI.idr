@@ -48,6 +48,18 @@ setField : {sn : _} -> (s : Struct sn fs) -> (n : String) ->
            {auto fieldok : FieldType n ty fs} -> (val : ty) -> IO ()
 setField s n val = primIO (prim__setField s n fieldok val)
 
+public export
+runtimeClass : String
+runtimeClass = "io/github/mmhelloworld/idrisjvm/runtime/Runtime"
+
+public export
+jvm' : String -> String -> String -> String -> String
+jvm' className methodName arguments ret = "jvm:" ++ methodName ++ "(" ++ arguments ++ " " ++ ret ++ ")," ++ className
+
+public export
+jvm : String -> String -> String
+jvm className methodName = "jvm:" ++ methodName ++ "," ++ className
+
 %foreign "C:idris2_malloc, libidris2_support, idris_memory.h"
          "jvm:malloc(int java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 prim__malloc : (size : Int) -> PrimIO AnyPtr
@@ -68,16 +80,3 @@ malloc size = primIO $ prim__malloc size
 export
 free : HasIO io => AnyPtr -> io ()
 free ptr = primIO $ prim__free ptr
-
-public export
-jvm' : String -> String -> String -> String -> String
-jvm' className methodName arguments ret = "jvm:" ++ methodName ++ "(" ++
-    arguments ++ " " ++ ret ++ ")," ++ className
-
-public export
-jvm : String -> String -> String
-jvm className methodName = "jvm:" ++ methodName ++ "," ++ className
-
-public export
-runtimeClass : String
-runtimeClass = "io/github/mmhelloworld/idrisjvm/runtime/Runtime"

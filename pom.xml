@@ -6,7 +6,7 @@
 
     <groupId>io.github.mmhelloworld</groupId>
     <artifactId>idris-jvm</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.5.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Idris JVM</name>
     <description>JVM bytecode backend for Idris</description>
@@ -60,6 +60,7 @@
         <maven-gpg-plugin.version>3.0.1</maven-gpg-plugin.version>
         <maven-deploy-plugin.version>3.0.0-M1</maven-deploy-plugin.version>
         <maven-release-plugin.version>3.0.0-M4</maven-release-plugin.version>
+        <versions-maven-plugin.version>2.8.1</versions-maven-plugin.version>
     </properties>
 
     <scm>

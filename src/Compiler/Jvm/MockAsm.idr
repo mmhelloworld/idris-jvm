@@ -10,7 +10,7 @@ import Core.TT
 
 import Data.Maybe
 import Libraries.Data.SortedMap
-import Data.Strings
+import Data.String
 import Data.Vect
 
 import Compiler.Jvm.Asm

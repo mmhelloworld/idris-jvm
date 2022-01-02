@@ -36,5 +36,4 @@ TrailingLam:3:9--3:22
              ^^^^^^^^^^^^^
 
 Main> 1 hole: Main.a : Nat -> Nat
-Main> 
-Bye for now!
+Main> Bye for now!

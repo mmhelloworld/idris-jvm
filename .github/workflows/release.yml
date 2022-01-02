@@ -29,7 +29,7 @@ jobs:
         run: echo "PREFIX=$IDRIS2_PREFIX" >> $GITHUB_ENV
       - name: Download previous version
         run: |
-          wget https://github.com/mmhelloworld/idris-jvm/releases/download/v0.4.0-rc.4/idris2-0.4.0-SNAPSHOT.zip
+          wget https://github.com/mmhelloworld/idris-jvm/releases/download/v0.4.0/idris2-0.4.0-SNAPSHOT.zip
           unzip idris2-0.4.0-SNAPSHOT.zip -d $HOME/bin
           echo "::add-path::$HOME/bin/idris2-0.4.0-SNAPSHOT/bin"
       - name: Build
@@ -39,6 +39,6 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
-          title: "Release 0.4.0"
+          title: "Release 0.5.1-rc.1"
           files: |
-            idris-jvm-compiler/target/idris2-0.4.0-SNAPSHOT.zip
+            idris-jvm-compiler/target/idris2-0.5.1-SNAPSHOT.zip

@@ -19,7 +19,7 @@ public final class Directories {
             java.nio.file.Files.createDirectory(Paths.createPath(pathString));
             return 0;
         } catch (Exception exception) {
-            Runtime.setErrorNumber(ChannelIo.getErrorNumber(exception));
+            handleException(exception);
             return -1;
         }
     }
@@ -51,40 +51,48 @@ public final class Directories {
     }
 
     public static void delete(String pathString) {
+        Runtime.setErrorNumber(0);
         try {
             Files.delete(Paths.createPath(pathString));
         } catch (IOException exception) {
-            Runtime.setErrorNumber(ChannelIo.getErrorNumber(exception));
+            handleException(exception);
         }
     }
 
     public static Object openDirectory(String name) {
+        Runtime.setErrorNumber(0);
         Path path = Paths.createPath(name);
         try {
             DirectoryStream<Path> stream = newDirectoryStream(path);
             return new Directory(path, stream, stream.iterator());
         } catch (Exception exception) {
-            Runtime.setErrorNumber(ChannelIo.getErrorNumber(exception));
+            handleException(exception);
             return null;
         }
     }
 
     public static void closeDirectory(Object directory) {
+        Runtime.setErrorNumber(0);
         try {
             if (directory != null) {
                 ((Directory) directory).getStream().close();
             }
         } catch (IOException exception) {
-            Runtime.setErrorNumber(ChannelIo.getErrorNumber(exception));
+            handleException(exception);
         }
     }
 
+    private static void handleException(Exception exception) {
+        Runtime.setException(exception);
+        Runtime.setErrorNumber(ChannelIo.getErrorNumber(exception));
+    }
+
     public static Object getNextDirectoryEntry(Object directory) {
+        Runtime.setErrorNumber(0);
         Iterator<Path> iterator = ((Directory) directory).getIterator();
         if (iterator.hasNext()) {
             return iterator.next().getFileName().toString();
         } else {
-            Runtime.setErrorNumber(2);
             return null;
         }
     }

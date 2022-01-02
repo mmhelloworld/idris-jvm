@@ -194,8 +194,8 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     let inferredFunctionType = MkInferredFunctionType methodReturnType (replicate arityNat inferredObjectType)
     scopes <- LiftIo $ JList.new {a=Scope}
     let externalFunctionBody =
-        NmExtPrim fc (NS (mkNamespace "") $ UN $ getPrimMethodName foreignFunctionName) [
-           NmCon fc (UN $ createExtPrimTypeSpec jvmReturnType) DATACON Nothing [],
+        NmExtPrim fc (NS (mkNamespace "") $ UN $ Basic $ getPrimMethodName foreignFunctionName) [
+           NmCon fc (UN $ Basic $ createExtPrimTypeSpec jvmReturnType) DATACON Nothing [],
            NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
            getJvmExtPrimArguments $ zip argumentTypes $ SortedMap.toList argumentTypesByName,
            NmPrimVal fc WorldVal]
@@ -227,9 +227,9 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     updateScopeVariableTypes arityNat
   where
     getJvmExtPrimArguments : List (CFType, String, InferredType) -> NamedCExp
-    getJvmExtPrimArguments [] = NmCon fc (UN "emptyForeignArg") DATACON (Just 0) []
+    getJvmExtPrimArguments [] = NmCon fc (UN $ Basic "emptyForeignArg") DATACON (Just 0) []
     getJvmExtPrimArguments ((CFWorld, _, _) :: rest) = getJvmExtPrimArguments rest
-    getJvmExtPrimArguments ((_, name, ty) :: rest) = NmCon fc (UN "foreignArg") DATACON (Just 1) [
-        NmCon fc (UN $ createExtPrimTypeSpec ty) DATACON (Just 0) [],
-        NmLocal fc (UN name),
+    getJvmExtPrimArguments ((_, name, ty) :: rest) = NmCon fc (UN $ Basic "foreignArg") DATACON (Just 1) [
+        NmCon fc (UN . Basic $ createExtPrimTypeSpec ty) DATACON (Just 0) [],
+        NmLocal fc (UN $ Basic name),
         getJvmExtPrimArguments rest ]

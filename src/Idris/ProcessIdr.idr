@@ -10,6 +10,7 @@ import Compiler.ES.Javascript
 import Compiler.Common
 import Compiler.Inline
 import Compiler.Interpreter.VMCode
+import Compiler.Jvm.Codegen
 
 import Core.Binary
 import Core.Context

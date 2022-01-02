@@ -63,7 +63,7 @@ public final class IdrisSocket implements Closeable {
                     return null;
             }
         } catch (Exception exception) {
-            Runtime.setErrorNumber(getErrorNumber(exception));
+            handleException(exception);
             return null;
         }
     }
@@ -346,7 +346,7 @@ public final class IdrisSocket implements Closeable {
         }
     }
 
-    private void handleException(Exception e) {
+    private static void handleException(Exception e) {
         Runtime.setException(e);
         Runtime.setErrorNumber(getErrorNumber(e));
     }

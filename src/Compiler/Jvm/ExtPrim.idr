@@ -36,20 +36,20 @@ Show ExtPrim where
 export
 toPrim : Name -> ExtPrim
 toPrim pn@(NS _ n)
-    = cond [(n == UN "prim__jvmStatic", JvmStaticMethodCall),
-            (n == UN "prim__jvmInstance", JvmInstanceMethodCall),
-            (n == UN "prim__newIORef", NewIORef),
-            (n == UN "prim__readIORef", ReadIORef),
-            (n == UN "prim__writeIORef", WriteIORef),
-            (n == UN "prim__newArray", NewArray),
-            (n == UN "prim__arrayGet", ArrayGet),
-            (n == UN "prim__arraySet", ArraySet),
-            (n == UN "prim__getField", GetField),
-            (n == UN "prim__setField", SetField),
-            (n == UN "void", VoidElim),
-            (n == UN "prim__os", SysOS),
-            (n == UN "prim__codegen", SysCodegen),
-            (n == UN "prim__makeFuture", MakeFuture)
+    = cond [(n == UN (Basic "prim__jvmStatic"), JvmStaticMethodCall),
+            (n == UN (Basic "prim__jvmInstance"), JvmInstanceMethodCall),
+            (n == UN (Basic "prim__newIORef"), NewIORef),
+            (n == UN (Basic "prim__readIORef"), ReadIORef),
+            (n == UN (Basic "prim__writeIORef"), WriteIORef),
+            (n == UN (Basic "prim__newArray"), NewArray),
+            (n == UN (Basic "prim__arrayGet"), ArrayGet),
+            (n == UN (Basic "prim__arraySet"), ArraySet),
+            (n == UN (Basic "prim__getField"), GetField),
+            (n == UN (Basic "prim__setField"), SetField),
+            (n == UN (Basic "void"), VoidElim),
+            (n == UN (Basic "prim__os"), SysOS),
+            (n == UN (Basic "prim__codegen"), SysCodegen),
+            (n == UN (Basic "prim__makeFuture"), MakeFuture)
             ]
            (Unknown pn)
 toPrim pn = Unknown pn

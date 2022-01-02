@@ -65,6 +65,10 @@ public final class Runtime {
         return Integer.parseInt(ManagementFactory.getRuntimeMXBean().getName().split("@")[0]);
     }
 
+    public static int getAvailableProcessors() {
+        return java.lang.Runtime.getRuntime().availableProcessors();
+    }
+
     public static <T> T crash(String message) {
         throw new RuntimeException(message);
     }
@@ -86,11 +90,18 @@ public final class Runtime {
     }
 
     static void setErrorNumber(int errorNumber) {
+        if (errorNumber == 0) {
+            setException(null);
+        }
         ERROR_NUMBER.set(errorNumber);
     }
 
     public static int getEagain() {
         return EAGAIN;
+    }
+
+    public static String getErrorMessage(int errorNumber) {
+        return "Error code: " + errorNumber;
     }
 
     public static void free(Object object) {

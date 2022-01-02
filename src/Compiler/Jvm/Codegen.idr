@@ -42,7 +42,7 @@ import Compiler.Jvm.Tuples
 
 %hide System.FFI.runtimeClass
 %hide Compiler.Jvm.Asm.assemble
-%hide Core.Context.Constructor.arity
+%hide Core.Context.Context.Constructor.arity
 
 addScopeLocalVariables : Scope -> Asm ()
 addScopeLocalVariables scope = do
@@ -299,7 +299,7 @@ mutual
             assembleExpr isTailCall returnType expr
 
     -- Tail recursion. Store arguments and recur to the beginning of the method
-    assembleExpr _ returnType app@(NmApp fc (NmRef _ (UN ":__jvmTailRec__:")) args) =
+    assembleExpr _ returnType app@(NmApp fc (NmRef _ (UN (Basic "$jvmTailRec"))) args) =
         case length args of
             Z => Goto methodStartLabel
             (S lastArgIndex) => do
@@ -610,8 +610,8 @@ mutual
     assembleExprOp returnType fc (Mod Bits32Type) [x, y] =
         assembleExprBinaryOp returnType IInt integerRemainderUnsigned x y
 
-    assembleExprOp returnType fc (ShiftL Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lshl x y
-    assembleExprOp returnType fc (ShiftR Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lushr x y
+    assembleExprOp returnType fc (ShiftL Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong (do L2i; Lshl) x y
+    assembleExprOp returnType fc (ShiftR Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong (do L2i; Lushr) x y
     assembleExprOp returnType fc (BAnd Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Land x y
     assembleExprOp returnType fc (BOr Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lor x y
     assembleExprOp returnType fc (BXOr Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lxor x y
@@ -676,7 +676,8 @@ mutual
     assembleExprOp returnType fc (Neg ty) [x] = assembleExprUnaryOp returnType IInt Ineg x
 
     assembleExprOp returnType fc (ShiftL ty) [x, y] = assembleExprBinaryOp returnType IInt Ishl x y
-    assembleExprOp returnType fc (ShiftR ty) [x, y] = assembleExprBinaryOp returnType IInt Iushr x y
+    assembleExprOp returnType fc (ShiftR Bits32Type) [x, y] = assembleExprBinaryOp returnType IInt Iushr x y
+    assembleExprOp returnType fc (ShiftR ty) [x, y] = assembleExprBinaryOp returnType IInt Ishr x y
     assembleExprOp returnType fc (BAnd ty) [x, y] = assembleExprBinaryOp returnType IInt Iand x y
     assembleExprOp returnType fc (BOr ty) [x, y] = assembleExprBinaryOp returnType IInt Ior x y
     assembleExprOp returnType fc (BXOr ty) [x, y] = assembleExprBinaryOp returnType IInt Ixor x y
@@ -1088,14 +1089,15 @@ mutual
         (parameterName : Maybe Name) -> NamedCExp -> Asm ()
     assembleSubMethodWithScope isTailCall returnType (Just value) (Just name) body = do
         parentScope <- getScope !getCurrentScopeIndex
-        let shouldGenerateVariable = name == UN extractedMethodArgumentName
+        let shouldGenerateVariable = name == extractedMethodArgumentName
         parameterValueVariable <-
             if shouldGenerateVariable
                 then Pure $ jvmSimpleName name ++ show !newDynamicVariableIndex
                 else Pure $ jvmSimpleName name
+        let parameterValueVariableName = UN $ Basic parameterValueVariable
         withScope $ assembleSubMethod isTailCall returnType (Just (assembleValue parentScope parameterValueVariable))
-            (Just $ UN parameterValueVariable) parentScope
-            (substituteVariableSubMethodBody (NmLocal (getFC body) $ UN parameterValueVariable) body)
+            (Just parameterValueVariableName) parentScope
+            (substituteVariableSubMethodBody (NmLocal (getFC body) parameterValueVariableName) body)
       where
           assembleValue : Scope -> String -> Asm ()
           assembleValue enclosingScope variableName = do
@@ -1108,22 +1110,22 @@ mutual
       body@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmLam _ p4 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1,
         NmLocal _ arg2, NmLocal _ arg3, NmLocal _ arg4]))))) = assembleMethodReference
             isTailCall returnType
-            ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2 && p3 == arg3 && p4 == arg4)
+            (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2 && p3 == arg3 && p4 == arg4)
             5 name p0 body
     assembleSubMethodWithScope isTailCall returnType _ p0
       body@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2,
         NmLocal _ arg3])))) = assembleMethodReference isTailCall returnType
-          ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2 && p3 == arg3) 4 name p0 body
+          (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2 && p3 == arg3) 4 name p0 body
     assembleSubMethodWithScope isTailCall returnType _ p0
       body@(NmLam _ p1 (NmLam _ p2 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2]))) =
-        assembleMethodReference isTailCall returnType ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2)
+        assembleMethodReference isTailCall returnType (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2)
           3 name p0 body
     assembleSubMethodWithScope isTailCall returnType _ p0
       body@(NmLam _ p1 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1])) =
-        assembleMethodReference isTailCall returnType ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1)
+        assembleMethodReference isTailCall returnType (maybe False ((==) arg0) p0 && p1 == arg1)
           2 name p0 body
     assembleSubMethodWithScope isTailCall returnType _ p0 body@(NmApp _ (NmRef _ name) [NmLocal _ arg0]) =
-      assembleMethodReference isTailCall returnType ((fromMaybe (UN "")  p0) == arg0) 1 name p0 body
+      assembleMethodReference isTailCall returnType (maybe False ((==) arg0) p0) 1 name p0 body
 
     assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLam _ c (NmLam _ a (NmLocal _ b))) =
       let hasParameter = isJust parameterName
@@ -1133,13 +1135,13 @@ mutual
             then assembleIdentity2Lambda isTailCall
             else assembleSubMethodWithScope1 isTailCall returnType parameterName body
     assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLam _ a (NmLocal _ b)) =
-      if (fromMaybe (UN "")  parameterName) == b
+      if maybe False ((==) b) parameterName
         then assembleConstantLambda isTailCall
         else if isJust parameterName && a == b
           then assembleIdentity1Lambda isTailCall
           else assembleSubMethodWithScope1 isTailCall returnType parameterName body
     assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLocal _ b) =
-      if (fromMaybe (UN "")  parameterName) == b
+      if maybe False ((==) b) parameterName
         then assembleIdentityLambda isTailCall
         else assembleSubMethodWithScope1 isTailCall returnType parameterName body
     assembleSubMethodWithScope isTailCall returnType _ parameterName body =
@@ -1158,7 +1160,7 @@ mutual
             let lambdaInterfaceType = getLambdaInterfaceType lambdaType lambdaBodyReturnType
             parameterType <-
                 the (Asm (Maybe InferredType)) $ traverse getVariableType
-                    (jvmSimpleName <$> (if parameterName == Just (UN "$jvm$thunk") then Nothing else parameterName))
+                    (jvmSimpleName <$> (if parameterName == Just thunkParamName then Nothing else parameterName))
             variableTypes <- LiftIo $ Map.values {key=Int} !(loadClosures declaringScope scope)
             maybe (Pure ()) id parameterValueExpr
             let invokeDynamicDescriptor = getMethodDescriptor $ MkInferredFunctionType lambdaInterfaceType variableTypes
@@ -1351,7 +1353,7 @@ mutual
             let lineNumberStart = fst $ lineNumbers scope
             LabelStart switchEndLabel
             addLineNumber lineNumberStart switchEndLabel
-            assembleConstantSwitch returnType IInt fc (NmLocal fc $ UN hashCodePositionVariableName)
+            assembleConstantSwitch returnType IInt fc (NmLocal fc $ UN $ Basic hashCodePositionVariableName)
                 (hashPositionSwitchAlts hashPositionAndAlts) def
         where
             constantAltHashCodeExpr : FC -> (Int, NamedConstAlt) -> Asm (Int, Int, NamedConstAlt)
@@ -1524,7 +1526,7 @@ mutual
         let lineNumberStart = fst $ lineNumbers scope
         LabelStart switchEndLabel
         addLineNumber lineNumberStart switchEndLabel
-        assembleExpr False IInt (NmLocal fc $ UN hashCodePositionVariableName)
+        assembleExpr False IInt (NmLocal fc $ UN $ Basic hashCodePositionVariableName)
         assembleConstructorSwitch returnType fc idrisObjectVariableIndex
             (hashPositionSwitchAlts hashPositionAndAlts) def
     where
@@ -1775,7 +1777,7 @@ assemble globalState fcAndDefinitionsByName name = do
         Just (fc, def) => do
             programName <- AsmGlobalState.getProgramName globalState
             asmState <- createAsmState globalState name
-            ignore $ runAsm asmState $ do
+            ignore $ asm asmState $ do
                 inferDef programName name fc def
                 assembleDefinition name fc
                 scopes <- LiftIo $ JList.new {a=Scope}
@@ -1854,4 +1856,4 @@ executeExprJvm c execDir term = ignore $ compileExprJvm c execDir "" term ""
 ||| Codegen wrapper for JVM implementation.
 export
 codegenJvm : Codegen
-codegenJvm = MkCG compileExprJvm executeExprJvm
+codegenJvm = MkCG compileExprJvm executeExprJvm Nothing Nothing

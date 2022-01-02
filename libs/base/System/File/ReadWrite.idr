@@ -12,29 +12,39 @@ import System.FFI
 
 %default total
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
+
 %foreign supportC "idris2_seekLine"
          supportNode "seekLine"
+         jvm' fileClass ".seekLine" fileClass "int"
 prim__seekLine : FilePtr -> PrimIO Int
 
 %foreign supportC "idris2_readLine"
          supportNode "readLine"
+         jvm' fileClass "readLine" fileClass "String"
 prim__readLine : FilePtr -> PrimIO (Ptr String)
 
 %foreign supportC "idris2_readChars"
+         jvm' fileClass "readChars" ("int " ++ fileClass) "String"
 prim__readChars : Int -> FilePtr -> PrimIO (Ptr String)
 %foreign "C:fgetc,libc 6"
+         jvm' fileClass "readChar" fileClass "char"
 prim__readChar : FilePtr -> PrimIO Int
 
 %foreign supportC "idris2_writeLine"
          "node:lambda:(filePtr, line) => require('fs').writeSync(filePtr.fd, line, undefined, 'utf-8')"
+         jvm' fileClass "writeLine" (fileClass ++ " String") "int"
 prim__writeLine : FilePtr -> String -> PrimIO Int
 
 %foreign supportC "idris2_eof"
          "node:lambda:x=>(x.eof?1:0)"
+         jvm' fileClass "isEof" fileClass "int"
 prim__eof : FilePtr -> PrimIO Int
 
 %foreign supportC "idris2_removeFile"
          supportNode "removeFile"
+         jvm' fileClass "delete" "String" "int"
 prim__removeFile : String -> PrimIO Int
 
 ||| Seek through the next newline.

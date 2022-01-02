@@ -92,7 +92,8 @@ public final class AsmGlobalState {
 
     public void interpret(String mainClass) {
         Map<String, byte[]> classes = getClassNameAndClassWriters()
-            .collect(toMap(Entry::getKey, entry -> entry.getValue().toByteArray()));
+            .collect(toMap(Entry::getKey, entry -> entry.getValue().toByteArray(),
+                (first, second) -> second));
         try {
             new InterpreterClassLoader(classes)
                 .loadClass(mainClass)

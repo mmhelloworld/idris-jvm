@@ -211,6 +211,7 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
 
     public void handleException(Exception e) {
         this.exception = e;
+        Runtime.setException(exception);
         Runtime.setErrorNumber(getErrorNumber(e));
     }
 

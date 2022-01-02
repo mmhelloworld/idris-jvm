@@ -5,12 +5,20 @@ import public System.File.Error
 import public System.File.Mode
 import System.File.Support
 import public System.File.Types
+import System.FFI
+
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
 
 %foreign "C:fflush,libc 6"
+         jvm' fileClass "flush" fileClass "int"
 prim__flush : FilePtr -> PrimIO Int
+
 %foreign supportC "idris2_popen"
+         jvm' fileClass "popen" "String String" fileClass
 prim__popen : String -> String -> PrimIO FilePtr
 %foreign supportC "idris2_pclose"
+         jvm' fileClass "close" fileClass "void"
 prim__pclose : FilePtr -> PrimIO Int
 
 ||| Force a write of all user-space buffered data for the given `File`.

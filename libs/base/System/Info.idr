@@ -24,6 +24,7 @@ isWindows = os `elem` ["windows", "mingw32", "cygwin32"]
 
 %foreign "C:idris2_getNProcessors, libidris2_support, idris_support.h"
          "node:lambda:() => require('os').cpus().length"
+         "jvm:getAvailableProcessors(int),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 prim__getNProcessors : PrimIO Int
 
 ||| Get the number of processors on the system. Returns `Nothing` if we somehow

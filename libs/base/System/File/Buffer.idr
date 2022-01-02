@@ -14,10 +14,12 @@ import Data.Buffer
 
 %foreign supportC "idris2_readBufferData"
          "node:lambda:(f,b,l,m) => require('fs').readSync(f.fd,b,l,m)"
+         "jvm:readFromFile(java/nio/channels/ReadableByteChannel io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer int int int),io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer"
 prim__readBufferData : FilePtr -> Buffer -> (offset : Int) -> (maxbytes : Int) -> PrimIO Int
 
 %foreign supportC "idris2_writeBufferData"
          "node:lambda:(f,b,l,m) => require('fs').writeSync(f.fd,b,l,m)"
+         "jvm:writeToFile(java/nio/channels/WritableByteChannel io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer int int int),io/github/mmhelloworld/idrisjvm/runtime/IdrisBuffer"
 prim__writeBufferData : FilePtr -> Buffer -> (offset : Int) -> (size : Int) -> PrimIO Int
 
 ||| Read the data from the file into the given buffer.

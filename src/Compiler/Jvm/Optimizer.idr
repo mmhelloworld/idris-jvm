@@ -24,14 +24,14 @@ import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
 import Compiler.Jvm.ShowUtil
 
-%hide Core.Context.Constructor.arity
+%hide Core.Context.Context.Constructor.arity
 
 mutual
     hasTailCall : (predicate: Name -> Bool) -> NamedCExp -> Bool
     hasTailCall predicate (NmLet _ _ _ expr) = hasTailCall predicate expr
     hasTailCall predicate (NmApp _ (NmRef _ name) _) = predicate name
-    hasTailCall predicate (NmApp _ lambdaVariable _) = predicate (UN "")
-    hasTailCall predicate (NmExtPrim fc p args) = predicate (UN "")
+    hasTailCall predicate (NmApp _ lambdaVariable _) = predicate (UN $ Basic "")
+    hasTailCall predicate (NmExtPrim fc p args) = predicate (UN $ Basic "")
     hasTailCall predicate (NmConCase _ _ conAlts def) =
         maybe False (\defExp => hasTailCall predicate defExp) def || hasTailCallConAlt predicate conAlts
     hasTailCall predicate (NmConstCase _ _ constAlts def) =
@@ -48,27 +48,31 @@ mutual
     hasTailCallConstAlt predicate ((MkNConstAlt _ expr) :: alts) =
         hasTailCall predicate expr || hasTailCallConstAlt predicate alts
 
+export
+thunkParamName : Name
+thunkParamName = UN $ Basic "$jvm$thunk"
+
 thunkExpr : NamedCExp -> NamedCExp
-thunkExpr expr = NmLam (getFC expr) (UN "$jvm$thunk") expr
+thunkExpr expr = NmLam (getFC expr) thunkParamName expr
 
 isBoolTySpec : String -> Name -> Bool
-isBoolTySpec "Prelude" (UN "Bool") = True
-isBoolTySpec "Prelude.Basics" (UN "Bool") = True
+isBoolTySpec "Prelude" (UN (Basic "Bool")) = True
+isBoolTySpec "Prelude.Basics" (UN (Basic "Bool")) = True
 isBoolTySpec _ _ = False
 
 export
 tySpec : NamedCExp -> Asm InferredType
-tySpec (NmCon fc (UN "Int") _ _ []) = pure IInt
-tySpec (NmCon fc (UN "Integer") _ _ []) = pure inferredBigIntegerType
-tySpec (NmCon fc (UN "String") _ _ []) = pure inferredStringType
-tySpec (NmCon fc (UN "Double") _ _ []) = pure IDouble
-tySpec (NmCon fc (UN "Char") _ _ []) = pure IChar
-tySpec (NmCon fc (UN "Bool") _ _ []) = pure IBool
-tySpec (NmCon fc (UN "long") _ _ []) = pure ILong
-tySpec (NmCon fc (UN "void") _ _ []) = pure IVoid
-tySpec (NmCon fc (UN ty) _ _ []) = pure $ IRef ty
+tySpec (NmCon fc (UN (Basic "Int")) _ _ []) = pure IInt
+tySpec (NmCon fc (UN (Basic "Integer")) _ _ []) = pure inferredBigIntegerType
+tySpec (NmCon fc (UN (Basic "String")) _ _ []) = pure inferredStringType
+tySpec (NmCon fc (UN (Basic "Double")) _ _ []) = pure IDouble
+tySpec (NmCon fc (UN (Basic "Char")) _ _ []) = pure IChar
+tySpec (NmCon fc (UN (Basic "Bool")) _ _ []) = pure IBool
+tySpec (NmCon fc (UN (Basic "long")) _ _ []) = pure ILong
+tySpec (NmCon fc (UN (Basic "void")) _ _ []) = pure IVoid
+tySpec (NmCon fc (UN (Basic ty)) _ _ []) = pure $ IRef ty
 tySpec (NmCon fc (NS namespaces n) _ _ []) = cond
-    [(n == UN "Unit", pure IVoid),
+    [(n == UN (Basic "Unit"), pure IVoid),
       (isBoolTySpec (show namespaces) n, pure IBool)] (pure inferredObjectType)
 tySpec ty = pure inferredObjectType
 
@@ -137,10 +141,9 @@ mutual
     usedConst : String -> NamedConstAlt -> Bool
     usedConst n (MkNConstAlt _ sc) = used n sc
 
-%inline
 export
-extractedMethodArgumentName : String
-extractedMethodArgumentName = "$jvm$arg"
+extractedMethodArgumentName : Name
+extractedMethodArgumentName = UN (Basic "$jvm$arg")
 
 %inline
 maxCasesInMethod : Int
@@ -169,7 +172,7 @@ getAppliedLambdaType fc =
 mutual
     goLiftToLambda : (isTailPosition: Bool) -> NamedCExp -> State Int NamedCExp
     goLiftToLambda False (NmLet fc var value sc) = do
-        let extractedMethodArgumentVarName = UN extractedMethodArgumentName
+        let extractedMethodArgumentVarName = extractedMethodArgumentName
         let extractedMethodArgumentVar = NmLocal fc extractedMethodArgumentVarName
         liftedValue <- goLiftToLambda False value
         liftedSc <- goLiftToLambda True sc
@@ -179,7 +182,7 @@ mutual
         pure $ NmLet fc var !(goLiftToLambda False value) !(goLiftToLambda True sc)
     goLiftToLambda False (NmConCase fc sc alts def) = do
         put $ succ !get
-        let var = UN extractedMethodArgumentName
+        let var = extractedMethodArgumentName
         liftedSc <- goLiftToLambda False sc
         liftedAlts <- traverse liftToLambdaCon alts
         liftedDef <- traverse liftToLambdaDefault def
@@ -198,7 +201,7 @@ mutual
                 pure $ NmConCase fc !(goLiftToLambda False sc) liftedAlts liftedDef
     goLiftToLambda False (NmConstCase fc sc alts def) = do
         put $ succ !get
-        let var = UN extractedMethodArgumentName
+        let var = extractedMethodArgumentName
         liftedAlts <- traverse liftToLambdaConst alts
         liftedDef <- traverse liftToLambdaDefault def
         liftedSc <- goLiftToLambda False sc
@@ -298,13 +301,16 @@ mutual
 getFreeVariables : SortedSet String -> NamedCExp -> SortedSet String
 getFreeVariables boundVariables expr = doGetFreeVariables SortedSet.empty boundVariables expr
 
+jvmTailRecName : Name
+jvmTailRecName = UN $ Basic "$jvmTailRec"
+
 mutual
     markTailRecursion : NamedCExp -> Asm NamedCExp
     markTailRecursion expr@(NmApp fc (NmRef nameFc idrisName) args) =
         let jname = jvmName idrisName
             functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
         in if functionName == !getRootMethodName
-               then Pure (NmApp fc (NmRef nameFc (UN ":__jvmTailRec__:")) args)
+               then Pure (NmApp fc (NmRef nameFc jvmTailRecName) args)
                else Pure expr
     markTailRecursion expr@(NmLet fc var value body) =
         NmLet fc var value <$> markTailRecursion body
@@ -332,8 +338,8 @@ optThunkExpr _ = id
 mutual
     trampolineExpression : (isTailRec: Bool) -> NamedCExp -> NamedCExp
     -- Do not trampoline as tail recursion will be eliminated
-    trampolineExpression _ (NmApp fc (NmRef nameFc (UN ":__jvmTailRec__:")) args) =
-      NmApp fc (NmRef nameFc (UN ":__jvmTailRec__:")) (trampolineExpression False <$> args)
+    trampolineExpression _ (NmApp fc (NmRef nameFc (UN (Basic "$jvmTailRec"))) args) =
+      NmApp fc (NmRef nameFc jvmTailRecName) (trampolineExpression False <$> args)
     trampolineExpression isTailRec (NmApp fc f args) =
       optThunkExpr isTailRec $ NmApp fc (trampolineExpression False f) (trampolineExpression False <$> args)
     trampolineExpression _ (NmLam fc param body) = NmLam fc param $ trampolineExpression False body
@@ -451,7 +457,7 @@ Eq LambdaType where
 
 export
 getLambdaTypeByParameter : (parameterName: Maybe Name) -> LambdaType
-getLambdaTypeByParameter (Just (UN "$jvm$thunk")) = ThunkLambda
+getLambdaTypeByParameter (Just (UN (Basic "$jvm$thunk"))) = ThunkLambda
 getLambdaTypeByParameter Nothing = DelayedLambda
 getLambdaTypeByParameter _ = FunctionLambda
 
@@ -777,14 +783,14 @@ mutual
                 else if appliedLambdaType == AppliedLambdaLet
                         then Pure inferredObjectType
                         else Pure IUnknown
-        let shouldGenerateVariable = parameterName == UN extractedMethodArgumentName
+        let shouldGenerateVariable = parameterName == extractedMethodArgumentName
         generatedJvmVariableName <-
             if shouldGenerateVariable
                 then Pure $ jvmSimpleName parameterName ++ show !newDynamicVariableIndex
                 else Pure $ jvmSimpleName parameterName
         let generatedVariableName =
             if shouldGenerateVariable
-                then UN generatedJvmVariableName
+                then UN $ Basic generatedJvmVariableName
                 else parameterName
         let valueExpr = NmLocal (getFC lambdaBody) generatedVariableName
         parentScope <- getScope !getCurrentScopeIndex
@@ -805,24 +811,24 @@ mutual
     inferExprLam _ _ p0 expr@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmLam _ p4 (NmApp _ (NmRef _ name)
       [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2, NmLocal _ arg3, NmLocal _ arg4]))))) =
         inferExprLamWithParameterType1
-          ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2 && p3 == arg3 && p4 == arg4) p0 expr
+          (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2 && p3 == arg3 && p4 == arg4) p0 expr
     inferExprLam _ _ p0 expr@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmApp _ (NmRef _ name)
       [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2, NmLocal _ arg3])))) =
         inferExprLamWithParameterType1
-          ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2 && p3 == arg3) p0 expr
+          (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2 && p3 == arg3) p0 expr
     inferExprLam _ _ p0 expr@(NmLam _ p1 (NmLam _ p2 (NmApp _ (NmRef _ name)
       [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2]))) =
-        inferExprLamWithParameterType1 ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1 && p2 == arg2) p0 expr
+        inferExprLamWithParameterType1 (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2) p0 expr
     inferExprLam _ _ p0 expr@(NmLam _ p1 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1])) =
-        inferExprLamWithParameterType1 ((fromMaybe (UN "")  p0) == arg0 && p1 == arg1) p0 expr
+        inferExprLamWithParameterType1 (maybe False ((==) arg0) p0 && p1 == arg1) p0 expr
     inferExprLam _ _ p0 expr@(NmApp _ (NmRef _ _) [NmLocal _ b]) =
-      inferExprLamWithParameterType1 ((fromMaybe (UN "")  p0) == b) p0 expr
+      inferExprLamWithParameterType1 (maybe False ((==) b) p0) p0 expr
     inferExprLam _ _ p0 expr@(NmLam _ c (NmLam _ a (NmLocal _ b))) =
       inferExprLamWithParameterType1 (isJust p0 && (c == b || a == b)) p0 expr
     inferExprLam _ _ p0 expr@(NmLam _ a (NmLocal _ b)) =
-      inferExprLamWithParameterType1 ((fromMaybe (UN "")  p0) == b || (isJust p0 && a == b)) p0 expr
+      inferExprLamWithParameterType1 (maybe False ((==) b) p0 || (isJust p0 && a == b)) p0 expr
     inferExprLam _ _ p0 expr@(NmLocal _ b) =
-      inferExprLamWithParameterType1 ((fromMaybe (UN "")  p0) == b) p0 expr
+      inferExprLamWithParameterType1 (maybe False ((==) b) p0) p0 expr
     inferExprLam _ _ p0 expr = inferExprLamWithParameterType1 False p0 expr
 
     inferExprLet : FC -> InferredType -> (x : Name) -> NamedCExp -> NamedCExp -> Asm InferredType
@@ -855,7 +861,7 @@ mutual
                 _ => createNewVariable "tailRecArg" ty
 
     inferExprApp : InferredType -> NamedCExp -> Asm InferredType
-    inferExprApp exprTy app@(NmApp _ (NmRef _ (UN ":__jvmTailRec__:")) args) =
+    inferExprApp exprTy app@(NmApp _ (NmRef _ (UN (Basic "$jvmTailRec"))) args) =
         case args of
             [] => Pure exprTy
             args@(_ :: argsTail) => do
@@ -1176,10 +1182,6 @@ inferDef programName idrisName fc (MkNmFun args body) = do
     retTy <- inferExpr IUnknown optimizedExpr
     updateScopeVariableTypes arity
     updateCurrentFunction $ record { inferredFunctionType = inferredFunctionType }
-    when shouldDebugExpr $
-      debug $ "Inferring " ++ (className jvmClassAndMethodName) ++ "." ++ (methodName jvmClassAndMethodName) ++
-        ":\n" ++ showNamedCExp 0 expr ++ "\n" ++ show inferredFunctionType
-    when shouldDebugExpr $ showScopes (scopeCounter !GetState - 1)
   where
     getArgumentTypes : List String -> Asm (List InferredType)
     getArgumentTypes argumentNames = do

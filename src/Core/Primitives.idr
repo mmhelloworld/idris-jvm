@@ -92,6 +92,49 @@ castInt [NPrimVal fc (Ch i)] = Just (NPrimVal fc (I (cast i)))
 castInt [NPrimVal fc (Str i)] = Just (NPrimVal fc (I (cast i)))
 castInt _ = Nothing
 
+bit8CastWrap : (i : Int) -> Int
+bit8CastWrap i = cast $ bitCastWrap (cast i) (cast b8max)
+
+bit16CastWrap : (i : Int) -> Int
+bit16CastWrap i = cast $ bitCastWrap (cast i) (cast b16max)
+
+bit32CastWrap : (i : Int) -> Int
+bit32CastWrap i = cast $ bitCastWrap (cast i) b32max
+
+bit64CastWrap : (i : Integer) -> Integer
+bit64CastWrap i = bitCastWrap i b64max
+
+int8max : Integer
+int8max = 0x80
+
+int16max : Integer
+int16max = 0x8000
+
+int32max : Integer
+int32max = 0x80000000
+
+int64max : Integer
+int64max = 0x8000000000000000
+
+intCastWrap : (i : Integer) -> (max : Integer) -> Integer
+intCastWrap i max =
+  let max2 = 2*max
+      i2   = i `mod` max2
+      i3   = if i2 < 0 then i2 + max2 else i2
+   in if i3 >= max then i3 - max2 else i3
+
+int8CastWrap : (i : Integer) -> Integer
+int8CastWrap i = intCastWrap i int8max
+
+int16CastWrap : (i : Integer) -> Integer
+int16CastWrap i = intCastWrap i int16max
+
+int32CastWrap : (i : Integer) -> Integer
+int32CastWrap i = intCastWrap i int32max
+
+int64CastWrap : (i : Integer) -> Integer
+int64CastWrap i = intCastWrap i int64max
+
 constantIntegerValue : Constant -> Maybe Integer
 constantIntegerValue (I i)   = Just $ cast i
 constantIntegerValue (I8 i)   = Just $ cast i

@@ -1,44 +1,65 @@
 name: "release"
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      release-version:
+        description: 'Release version'
+        required: true
+        default: '0.5.1'
+      development-version:
+        description: 'Development version'
+        required: true
+        default: '0.5.2-SNAPSHOT'
 
 env:
   IDRIS2_TESTS_CG: jvm
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
 
 jobs:
-  tagged-release:
-    name: "Tagged Release"
+  release:
+    name: "Release"
     runs-on: "ubuntu-latest"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
       - name: Set up JDK 8
         uses: actions/setup-java@v2
         with:
           java-version: '8'
           distribution: 'adopt'
           cache: 'maven'
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
+
       - name: Set IDRIS2_PREFIX
         run: echo "IDRIS2_PREFIX=$HOME/bin/idris2-0.5.1-SNAPSHOT/lib" >> $GITHUB_ENV
+
       - name: Set PREFIX
         run: echo "PREFIX=$IDRIS2_PREFIX" >> $GITHUB_ENV
+
       - name: Download previous version
         run: |
-          wget https://github.com/mmhelloworld/idris-jvm/releases/download/v0.5.1-rc.1/idris2-0.5.1-SNAPSHOT.zip
-          unzip idris2-0.5.1-SNAPSHOT.zip -d $HOME/bin
+          mvn dependency:copy -Dartifact=io.github.mmhelloworld:idris-jvm-compiler:0.5.1-SNAPSHOT:zip -DoutputDirectory=. -U
+          unzip idris-jvm-compiler-0.5.1*.zip -d $HOME/bin
           echo "::add-path::$HOME/bin/idris2-0.5.1-SNAPSHOT/bin"
-      - name: Build
-        run: mvn --batch-mode install -DskipTests
 
-      - uses: "marvinpinto/action-automatic-releases@latest"
+      - name: Publish to Maven Central
+        run: mvn -B release:prepare release:perform -DreleaseVersion=${{ github.event.inputs.release-version }} -DdevelopmentVersion=${{ github.event.inputs.development-version }} -DskipTests
+        env:
+          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Publish to Github
+        uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
-          title: "Release 0.5.1"
+          title: "Release ${{ github.event.inputs.release-version }}"
           files: |
             idris-jvm-compiler/target/idris2-0.5.1-SNAPSHOT.zip

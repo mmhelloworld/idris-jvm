@@ -31,8 +31,8 @@ jobs:
         run: echo "PREFIX=$IDRIS2_PREFIX" >> $GITHUB_ENV
       - name: Download previous version
         run: |
-          wget https://github.com/mmhelloworld/idris-jvm/releases/download/v0.5.1-rc.1/idris2-0.5.1-SNAPSHOT.zip
-          unzip idris2-0.5.1-SNAPSHOT.zip -d $HOME/bin
+          mvn dependency:copy -Dartifact=io.github.mmhelloworld:idris-jvm-compiler:0.5.1-SNAPSHOT:zip -DoutputDirectory=. -U
+          unzip idris-jvm-compiler-0.5.1*.zip -d $HOME/bin
           echo "::add-path::$HOME/bin/idris2-0.5.1-SNAPSHOT/bin"
       - name: Build
         run: mvn --batch-mode install -Dinteractive= -Didris.tests="only=jvm"

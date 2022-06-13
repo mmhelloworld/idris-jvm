@@ -27,13 +27,8 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <executions>
                     <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                        <configuration>
-                            <classifier>placeholder</classifier>
-                        </configuration>
+                        <id>default-jar</id>
+                        <phase>compile</phase>
                     </execution>
                 </executions>
             </plugin>

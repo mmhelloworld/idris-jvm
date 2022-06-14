@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GH_PAT }}
 
       - name: Set up JDK 8 to prepare release
         uses: actions/setup-java@v2
@@ -32,6 +34,8 @@ jobs:
           distribution: 'adopt'
           cache: 'maven'
           server-id: github
+          server-username: mmhelloworld
+          server-password: ${{ secrets.GH_PAT }}
 
       - name: Set IDRIS2_PREFIX
         run: echo "IDRIS2_PREFIX=$HOME/bin/idris2-0.5.1-SNAPSHOT/lib" >> $GITHUB_ENV

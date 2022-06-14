@@ -6,11 +6,10 @@ on:
       release-version:
         description: 'Release version'
         required: true
-        default: '0.0.1'
       development-version:
         description: 'Development version'
         required: true
-        default: '0.0.2-SNAPSHOT'
+        default: '0-SNAPSHOT'
 
 env:
   IDRIS2_TESTS_CG: jvm
@@ -82,6 +81,7 @@ jobs:
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: latest
           prerelease: false
           title: "Release ${{ github.event.inputs.release-version }}"
           files: |

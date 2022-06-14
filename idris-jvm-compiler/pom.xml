@@ -19,8 +19,37 @@
     </properties>
 
     <build>
-        <sourceDirectory>${project.parent.basedir}/src</sourceDirectory>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/build/**</exclude>
+                                <exclude>**/*.md</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
                 <executions>
@@ -63,6 +92,7 @@
                         </goals>
                         <configuration>
                             <sources>
+                                <source>${project.parent.basedir}/src</source>
                                 <source>${project.parent.basedir}/libs</source>
                             </sources>
                         </configuration>

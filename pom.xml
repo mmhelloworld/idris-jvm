@@ -223,7 +223,7 @@
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                     <releaseProfiles>release</releaseProfiles>
                     <arguments>-DskipTests</arguments>
-                    <preparationGoals>validate</preparationGoals>
+                    <preparationGoals>clean</preparationGoals>
                     <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration @{releaseLabel}></scmDevelopmentCommitComment>
                 </configuration>
             </plugin>

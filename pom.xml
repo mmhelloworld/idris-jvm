@@ -60,7 +60,7 @@
             scm:git:git://github.com/${project.scm.organization}/${project.scm.repository}.git
         </connection>
         <developerConnection>
-            scm:git:ssh://git@github.com/${project.scm.organization}/${project.scm.repository}.git
+            scm:git:https://github.com/${project.scm.organization}/${project.scm.repository}.git
         </developerConnection>
         <tag>HEAD</tag>
     </scm>

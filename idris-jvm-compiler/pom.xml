@@ -93,7 +93,7 @@
                     </execution>
                     <execution>
                         <id>idris-install-libs</id>
-                        <phase>install</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>exec</goal>
                         </goals>
@@ -172,7 +172,7 @@
                     </execution>
                     <execution>
                         <id>assemble-compiler-jar</id>
-                        <phase>package</phase>
+                        <phase>prepare-package</phase>
                         <goals>
                             <goal>run</goal>
                         </goals>
@@ -212,7 +212,7 @@
                     </execution>
                     <execution>
                         <id>package</id>
-                        <phase>package</phase>
+                        <phase>prepare-package</phase>
                         <goals>
                             <goal>assemble</goal>
                         </goals>
@@ -236,7 +236,7 @@
                 <executions>
                     <execution>
                         <id>create-zip</id>
-                        <phase>install</phase>
+                        <phase>prepare-package</phase>
                         <goals>
                             <goal>single</goal>
                         </goals>

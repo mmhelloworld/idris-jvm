@@ -6,11 +6,11 @@ on:
       release-version:
         description: 'Release version'
         required: true
-        default: '0.5.1'
+        default: '0.0.1'
       development-version:
         description: 'Development version'
         required: true
-        default: '0.5.2-SNAPSHOT'
+        default: '0.0.2-SNAPSHOT'
 
 env:
   IDRIS2_TESTS_CG: jvm
@@ -25,17 +25,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Set up JDK 8
+      - name: Set up JDK 8 to prepare release
         uses: actions/setup-java@v2
         with:
           java-version: '8'
           distribution: 'adopt'
           cache: 'maven'
-          server-id: ossrh
-          server-username: MAVEN_USERNAME
-          server-password: MAVEN_PASSWORD
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-passphrase: GPG_PASSPHRASE
 
       - name: Set IDRIS2_PREFIX
         run: echo "IDRIS2_PREFIX=$HOME/bin/idris2-0.5.1-SNAPSHOT/lib" >> $GITHUB_ENV
@@ -49,8 +44,30 @@ jobs:
           unzip idris-jvm-compiler-0.5.1*.zip -d $HOME/bin
           echo "::add-path::$HOME/bin/idris2-0.5.1-SNAPSHOT/bin"
 
+      - name: Configure Git user
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Prepare release
+        run: mvn -B release:prepare -DreleaseVersion=${{ github.event.inputs.release-version }} -DdevelopmentVersion=${{ github.event.inputs.development-version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up JDK 8 to perform release
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          cache: 'maven'
+          server-id: ossrh
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
+
       - name: Publish to Maven Central
-        run: mvn -B release:prepare release:perform -DreleaseVersion=${{ github.event.inputs.release-version }} -DdevelopmentVersion=${{ github.event.inputs.development-version }} -DskipTests
+        run: mvn -B release:perform
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}

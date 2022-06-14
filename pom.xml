@@ -32,6 +32,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.scm.organization>mmhelloworld</project.scm.organization>
         <project.scm.repository>idris-jvm</project.scm.repository>
+        <project.scm.id>github</project.scm.id>
         <java.version>1.8</java.version>
         <junit-jupiter.version>5.7.2</junit-jupiter.version>
         <log4j.version>2.11.0</log4j.version>
@@ -211,6 +212,7 @@
                     <tagNameFormat>v@{project.version}</tagNameFormat>
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                     <releaseProfiles>release</releaseProfiles>
+                    <arguments>-DskipTests</arguments>
                 </configuration>
             </plugin>
         </plugins>
@@ -231,6 +233,9 @@
         </profile>
         <profile>
             <id>release</id>
+            <properties>
+                <skipTests>true</skipTests>
+            </properties>
             <modules>
                 <module>idris-jvm-assembler</module>
                 <module>idris-jvm-runtime</module>

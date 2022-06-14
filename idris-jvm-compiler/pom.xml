@@ -21,6 +21,13 @@
     <build>
         <plugins>
             <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                </configuration>
+            </plugin>
+            <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
                 <executions>
                     <execution>
@@ -37,17 +44,6 @@
                         <goals>
                             <goal>install</goal>
                         </goals>
-                    </execution>
-                    <execution>
-                        <id>custom-install</id>
-                        <goals>
-                            <goal>install-file</goal>
-                        </goals>
-                        <phase>install</phase>
-                        <configuration>
-                            <file>${project.build.directory}/${project.artifactId}-${project.version}.jar</file>
-                            <pomFile>pom.xml</pomFile>
-                        </configuration>
                     </execution>
                 </executions>
             </plugin>

@@ -53,7 +53,7 @@ jobs:
       - name: Prepare release
         run: mvn -B release:prepare -DreleaseVersion=${{ github.event.inputs.release-version }} -DdevelopmentVersion=${{ github.event.inputs.development-version }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
       - name: Set up JDK 8 to perform release
         uses: actions/setup-java@v2

@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.5.1-SNAPSHOT</version>
+        <version>0.0.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -65,7 +63,7 @@
                         </goals>
                         <configuration>
                             <environmentVariables>
-                                <INTERACTIVE/>
+                                <INTERACTIVE />
                             </environmentVariables>
                             <skip>${skipTests}</skip>
                             <executable>make</executable>
@@ -125,12 +123,8 @@
                         </goals>
                         <configuration>
                             <target>
-                                <move file="../tests/build/exec/runtests_app/runtests.jar"
-                                      tofile="../tests/build/exec/runtests_app/idris-jvm-tests-${project.version}.jar"
-                                      failonerror="false"
-                                      quiet="true"/>
-                                <copy file="../tests/build/exec/runtests_app/idris-jvm-tests-${project.version}.jar"
-                                      tofile="./target/idris-jvm-tests-${project.version}.jar"/>
+                                <move file="../tests/build/exec/runtests_app/runtests.jar" tofile="../tests/build/exec/runtests_app/idris-jvm-tests-${project.version}.jar" failonerror="false" quiet="true" />
+                                <copy file="../tests/build/exec/runtests_app/idris-jvm-tests-${project.version}.jar" tofile="./target/idris-jvm-tests-${project.version}.jar" />
                             </target>
                         </configuration>
                     </execution>

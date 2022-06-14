@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.5.1-SNAPSHOT</version>
+        <version>0.0.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -136,7 +134,7 @@
                             <skip>${skipIdrisCompile}</skip>
                             <target>
                                 <delete failonerror="false">
-                                    <fileset dir="../build/exec/idris2_app" includes="*.jar"/>
+                                    <fileset dir="../build/exec/idris2_app" includes="*.jar" />
                                 </delete>
                             </target>
                         </configuration>
@@ -149,10 +147,7 @@
                         </goals>
                         <configuration>
                             <target>
-                                <move file="../build/exec/idris2_app/idris2.jar"
-                                      tofile="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar"
-                                      failonerror="false"
-                                      overwrite="true"/>
+                                <move file="../build/exec/idris2_app/idris2.jar" tofile="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar" failonerror="false" overwrite="true" />
                             </target>
                         </configuration>
                     </execution>
@@ -164,9 +159,7 @@
                         </goals>
                         <configuration>
                             <target>
-                                <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar"
-                                      tofile="./target/idris-jvm-compiler-${project.version}.jar"
-                                      overwrite="true"/>
+                                <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar" tofile="./target/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
                             </target>
                         </configuration>
                     </execution>
@@ -178,9 +171,7 @@
                         </goals>
                         <configuration>
                             <target>
-                                <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar"
-                                      tofile="./target/assembly/lib/idris-jvm-compiler-${project.version}.jar"
-                                      overwrite="true"/>
+                                <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar" tofile="./target/assembly/lib/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
                             </target>
                         </configuration>
                     </execution>

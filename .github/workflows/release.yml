@@ -31,6 +31,7 @@ jobs:
           java-version: '8'
           distribution: 'adopt'
           cache: 'maven'
+          server-id: github
 
       - name: Set IDRIS2_PREFIX
         run: echo "IDRIS2_PREFIX=$HOME/bin/idris2-0.5.1-SNAPSHOT/lib" >> $GITHUB_ENV

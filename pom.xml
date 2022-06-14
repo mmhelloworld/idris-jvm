@@ -28,8 +28,6 @@
         <asm.version>9.0</asm.version>
         <assertj.version>3.16.1</assertj.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.scm.organization>mmhelloworld</project.scm.organization>
-        <project.scm.repository>idris-jvm</project.scm.repository>
         <project.scm.id>github</project.scm.id>
         <java.version>1.8</java.version>
         <junit-jupiter.version>5.7.2</junit-jupiter.version>
@@ -55,19 +53,19 @@
     </properties>
 
     <scm>
-        <url>http://github.com/${project.scm.organization}/${project.scm.repository}</url>
+        <url>http://github.com/mmhelloworld/idris-jvm</url>
         <connection>
-            scm:git:git://github.com/${project.scm.organization}/${project.scm.repository}.git
+            scm:git:git://github.com/mmhelloworld/idris-jvm.git
         </connection>
         <developerConnection>
-            scm:git:https://github.com/${project.scm.organization}/${project.scm.repository}.git
+            scm:git:https://github.com/mmhelloworld/idris-jvm.git
         </developerConnection>
         <tag>HEAD</tag>
     </scm>
 
     <issueManagement>
         <system>GitHub</system>
-        <url>https://github.com/${project.scm.organization}/${project.scm.repository}/issues</url>
+        <url>https://github.com/mmhelloworld/idris-jvm/issues</url>
     </issueManagement>
 
     <dependencyManagement>
@@ -223,7 +221,8 @@
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                     <releaseProfiles>release</releaseProfiles>
                     <arguments>-DskipTests</arguments>
-                    <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration from @{releaseLabel}</scmDevelopmentCommitComment>
+                    <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration [skip ci]</scmDevelopmentCommitComment>
+                    <scmReleaseCommitComment>@{prefix} prepare release @{releaseLabel} [skip ci]</scmReleaseCommitComment>
                 </configuration>
             </plugin>
         </plugins>

@@ -223,6 +223,7 @@
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                     <releaseProfiles>release</releaseProfiles>
                     <arguments>-DskipTests</arguments>
+                    <preparationGoals/>
                 </configuration>
             </plugin>
         </plugins>

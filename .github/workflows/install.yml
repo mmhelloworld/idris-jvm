@@ -12,6 +12,7 @@ on:
 env:
   IDRIS2_TESTS_CG: jvm
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+  PREVIOUS_VERSION: 0.5.1-SNAPSHOT
 
 jobs:
   build:
@@ -19,20 +20,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
       - name: Set up JDK 8
         uses: actions/setup-java@v2
         with:
           java-version: '8'
           distribution: 'adopt'
           cache: 'maven'
+
       - name: Set IDRIS2_PREFIX
-        run: echo "IDRIS2_PREFIX=$HOME/bin/idris2-0.5.1-SNAPSHOT/lib" >> $GITHUB_ENV
+        run: echo "IDRIS2_PREFIX=$HOME/bin/idris2-$PREVIOUS_VERSION/lib" >> $GITHUB_ENV
+
       - name: Set PREFIX
         run: echo "PREFIX=$IDRIS2_PREFIX" >> $GITHUB_ENV
+        
       - name: Download previous version
         run: |
-          mvn dependency:copy -Dartifact=io.github.mmhelloworld:idris-jvm-compiler:0.5.1-SNAPSHOT:zip -DoutputDirectory=. -U
-          unzip idris-jvm-compiler-0.5.1*.zip -d $HOME/bin
-          echo "::add-path::$HOME/bin/idris2-0.5.1-SNAPSHOT/bin"
+          mvn dependency:copy -Dartifact=io.github.mmhelloworld:idris-jvm-compiler:$PREVIOUS_VERSION:zip -DoutputDirectory=. -U
+          unzip idris-jvm-compiler-*.zip -d $HOME/bin
+          echo "::add-path::$HOME/bin/idris2-$PREVIOUS_VERSION/bin"
+
       - name: Build
-        run: mvn --batch-mode install -Dinteractive= -Didris.tests="only=jvm"
+        run: mvn -B install -Dinteractive= -Didris.tests="only=jvm"

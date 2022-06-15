@@ -86,4 +86,4 @@ jobs:
           prerelease: false
           title: "Release ${{ github.event.inputs.release-version }}"
           files: |
-            idris-jvm-compiler/target/idris2-${{ github.event.inputs.release-version }.zip
+            idris-jvm-compiler/target/idris2-*.zip

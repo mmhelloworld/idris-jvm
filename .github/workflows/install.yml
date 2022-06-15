@@ -12,7 +12,7 @@ on:
 env:
   IDRIS2_TESTS_CG: jvm
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-  PREVIOUS_VERSION: 0.5.1-SNAPSHOT
+  PREVIOUS_VERSION: 0.5.1
 
 jobs:
   build:
@@ -33,7 +33,7 @@ jobs:
 
       - name: Set PREFIX
         run: echo "PREFIX=$IDRIS2_PREFIX" >> $GITHUB_ENV
-        
+
       - name: Download previous version
         run: |
           mvn dependency:copy -Dartifact=io.github.mmhelloworld:idris-jvm-compiler:$PREVIOUS_VERSION:zip -DoutputDirectory=. -U

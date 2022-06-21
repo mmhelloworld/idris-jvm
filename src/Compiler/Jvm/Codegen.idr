@@ -17,7 +17,6 @@ import Data.Vect
 
 import Core.Directory
 import Core.Options
-import Libraries.Utils.Hex
 import Libraries.Utils.Path
 
 import Libraries.Data.NameMap
@@ -397,12 +396,15 @@ mutual
         constantType <- getConstantType alts
         assembleConstantSwitch returnType constantType fc sc alts def
 
-    assembleExpr isTailCall returnType (NmPrimVal fc (B8 value)) = assembleInt isTailCall returnType value
-    assembleExpr isTailCall returnType (NmPrimVal fc (B16 value)) = assembleInt isTailCall returnType value
-    assembleExpr isTailCall returnType (NmPrimVal fc (B32 value)) = assembleInt isTailCall returnType value
+    assembleExpr isTailCall returnType (NmPrimVal fc (B8 value)) = assembleInt isTailCall returnType (cast value)
+    assembleExpr isTailCall returnType (NmPrimVal fc (B16 value)) = assembleInt isTailCall returnType (cast value)
+    assembleExpr isTailCall returnType (NmPrimVal fc (B32 value)) = assembleInt isTailCall returnType (cast value)
     assembleExpr isTailCall returnType (NmPrimVal fc (I value)) = assembleInt isTailCall returnType value
+    assembleExpr isTailCall returnType (NmPrimVal fc (I8 value)) = assembleInt isTailCall returnType (cast value)
+    assembleExpr isTailCall returnType (NmPrimVal fc (I16 value)) = assembleInt isTailCall returnType (cast value)
+    assembleExpr isTailCall returnType (NmPrimVal fc (I32 value)) = assembleInt isTailCall returnType (cast value)
     assembleExpr isTailCall returnType (NmPrimVal fc (B64 value)) = do
-        loadBigInteger value
+        loadBigInteger (cast value)
         InvokeMethod InvokeVirtual "java/math/BigInteger" "longValue" "()J" False
         asmCast ILong returnType
         when isTailCall $ asmReturn returnType

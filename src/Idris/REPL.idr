@@ -23,8 +23,6 @@ import Core.Termination
 import Core.Unify
 import Core.Value
 
-import Core.SchemeEval
-
 import Parser.Unlit
 
 import Idris.Desugar
@@ -883,13 +881,7 @@ process (Eval itm)
          let emode = evalMode opts
          case emode of
             Execute => do ignore (execExp itm); pure (Executed itm)
-            Scheme =>
-              do (tm `WithType` ty) <- inferAndElab InExpr itm []
-                 qtm <- logTimeWhen !getEvalTiming 0 "Evaluation" $
-                           (do nf <- snfAll [] tm
-                               quote [] nf)
-                 itm <- logTimeWhen False 0 "Resugar" $ resugar [] qtm
-                 pure (Evaluated itm Nothing)
+            Scheme => pure (REPLError "Scheme evaluation is not supported on the JVM")
             _ =>
               do (ntm `WithType` ty) <- logTimeWhen !getEvalTiming 0 "Evaluation" $
                                            inferAndNormalize emode itm

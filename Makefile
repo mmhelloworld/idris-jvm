@@ -10,7 +10,7 @@ TARGET = ${TARGETDIR}/${NAME}
 
 # Default code generator. This is passed to the libraries for incremental
 # builds, but overridable via environment variables or arguments to make
-IDRIS2_CG ?= chez
+IDRIS2_CG ?= jvm
 
 MAJOR=0
 MINOR=5

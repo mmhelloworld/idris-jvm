@@ -497,39 +497,32 @@ getConstantType : List NamedConstAlt -> Asm InferredType
 getConstantType [] = Throw emptyFC "Unknown constant switch type"
 getConstantType ((MkNConstAlt constant _) :: _) = case constant of
     I _ => Pure IInt
+    I8 _ => Pure IInt
+    I16 _ => Pure IInt
+    I32 _ => Pure IInt
     B8 _ => Pure IInt
     B16 _ => Pure IInt
     B32 _ => Pure IInt
     Ch _ => Pure IInt
     Str _ => Pure inferredStringType
     BI _ => Pure inferredBigIntegerType
+    I64 _ => Pure inferredBigIntegerType
     B64 _ => Pure inferredBigIntegerType
-    unsupportedConstant => Throw emptyFC $ "Unsupported constant switch " ++ show unsupportedConstant
-
-export
-isTypeConst : TT.Constant -> Bool
-isTypeConst Bits8Type   = True
-isTypeConst Bits16Type  = True
-isTypeConst Bits32Type  = True
-isTypeConst Bits64Type  = True
-isTypeConst IntType     = True
-isTypeConst IntegerType = True
-isTypeConst StringType  = True
-isTypeConst CharType    = True
-isTypeConst DoubleType  = True
-isTypeConst WorldType   = True
-isTypeConst _           = False
+    unsupportedConstant => if isPrimType unsupportedConstant then Pure IInt else Throw emptyFC ("Unsupported constant switch " ++ show unsupportedConstant)
 
 export
 getIntConstantValue : FC -> TT.Constant -> Asm Int
 getIntConstantValue _ (I i) = Pure i
-getIntConstantValue _ (B8 i) = Pure i
-getIntConstantValue _ (B16 i) = Pure i
-getIntConstantValue _ (B32 i) = Pure i
+getIntConstantValue _ (I8 i) = Pure (cast i)
+getIntConstantValue _ (I16 i) = Pure (cast i)
+getIntConstantValue _ (I32 i) = Pure (cast i)
+getIntConstantValue _ (B8 i) = Pure (cast i)
+getIntConstantValue _ (B16 i) = Pure (cast i)
+getIntConstantValue _ (B32 i) = Pure (cast i)
 getIntConstantValue _ (Ch c) = Pure $ ord c
 getIntConstantValue _ WorldVal = Pure 0
 getIntConstantValue fc x =
-    if isTypeConst x
+    if isPrimType x
         then Pure 0
         else Throw fc ("Constant " ++ show x ++ " cannot be converted to integer.")
 

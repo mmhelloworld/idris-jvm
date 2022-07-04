@@ -606,6 +606,7 @@ data Asm : Type -> Type where
     CreateIdrisConstructorClass : String -> Bool -> Int -> Asm ()
     D2i : Asm ()
     D2f : Asm ()
+    D2l : Asm ()
     Dadd : Asm ()
     Daload : Asm ()
     Dastore : Asm ()
@@ -682,8 +683,7 @@ data Asm : Type -> Type where
     Laload : Asm ()
     Land : Asm ()
     Lastore : Asm ()
-    Lor : Asm ()
-    Lxor : Asm ()
+    Lcmp : Asm ()
     Lcompl : Asm ()
     Ldc : Asm.Constant -> Asm ()
     Ldiv : Asm ()
@@ -691,6 +691,7 @@ data Asm : Type -> Type where
     Lload : Int  -> Asm ()
     Lmul : Asm ()
     Lneg : Asm ()
+    Lor : Asm ()
     LocalVariable : (name: String) -> (descriptor: String) -> (signature: Maybe String) -> (startLabel: String) ->
                         (endLabel: String) -> (index: Int) -> Asm ()
     LookupSwitch : (defaultLabel: String) -> (labels: List String) -> (cases: List Int) -> Asm ()
@@ -701,6 +702,7 @@ data Asm : Type -> Type where
     Lstore : Int -> Asm ()
     Lsub : Asm ()
     Lushr : Asm ()
+    Lxor : Asm ()
     MaxStackAndLocal : Int -> Int -> Asm ()
     MethodCodeStart : Asm ()
     MethodCodeEnd : Asm ()
@@ -1680,6 +1682,8 @@ runAsm state D2i =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2i" [assembler state]
 runAsm state D2f =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2f" [assembler state]
+runAsm state D2l =
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2l" [assembler state]
 runAsm state Dadd =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dadd" [assembler state]
 runAsm state Dcmpg =
@@ -1837,6 +1841,7 @@ runAsm state Ladd = assemble state $ jvmInstance () "io/github/mmhelloworld/idri
 runAsm state Land = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.land" [assembler state]
 runAsm state Laload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.laload" [assembler state]
 runAsm state Lastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lastore" [assembler state]
+runAsm state Lcmp = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcmp" [assembler state]
 runAsm state Lor = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lor" [assembler state]
 runAsm state Lxor = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lxor" [assembler state]
 runAsm state Lcompl = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcompl" [assembler state]

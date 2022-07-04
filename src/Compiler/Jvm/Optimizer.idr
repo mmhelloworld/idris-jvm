@@ -630,16 +630,20 @@ mutual
             Pure $ fst <$> (sortBy (comparing snd) $ zip alts constValues)
         sortConstCases _ alts = Pure alts
 
+    inferExpr _ (NmPrimVal fc (I _)) = pure IInt
+    inferExpr _ (NmPrimVal fc (I8 _)) = pure IInt
+    inferExpr _ (NmPrimVal fc (I16 _)) = pure IInt
+    inferExpr _ (NmPrimVal fc (I32 _)) = pure IInt
+    inferExpr _ (NmPrimVal fc (I64 _)) = pure ILong
     inferExpr _ (NmPrimVal fc (B8 _)) = pure IInt
     inferExpr _ (NmPrimVal fc (B16 _)) = pure IInt
     inferExpr _ (NmPrimVal fc (B32 _)) = pure IInt
     inferExpr _ (NmPrimVal fc (B64 _)) = pure ILong
-    inferExpr _ (NmPrimVal fc (I _)) = pure IInt
     inferExpr _ (NmPrimVal fc (BI _)) = pure inferredBigIntegerType
     inferExpr _ (NmPrimVal fc (Str _)) = pure inferredStringType
     inferExpr _ (NmPrimVal fc (Ch _)) = pure IChar
     inferExpr _ (NmPrimVal fc (Db _)) = pure IDouble
-    inferExpr _ (NmPrimVal fc WorldVal) = pure IInt
+    inferExpr _ (NmPrimVal fc _) = pure IInt
     inferExpr exprTy (NmErased fc) = pure exprTy
     inferExpr exprTy (NmCrash fc msg) = pure exprTy
     inferExpr exprTy expr = Throw (getFC expr) ("Unsupported expr " ++ show expr)
@@ -897,42 +901,6 @@ mutual
         pure targetType
 
     inferExprOp : PrimFn arity -> Vect arity NamedCExp -> Asm InferredType
-    inferExprOp (Add Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Sub Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mul Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Div Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mod Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Neg Bits8Type) [x] = inferUnaryOp IInt x
-    inferExprOp (ShiftL Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (ShiftR Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BAnd Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BOr Bits8Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BXOr Bits8Type) [x, y] = inferBinaryOp IInt x y
-
-    inferExprOp (Add Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Sub Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mul Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Div Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mod Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Neg Bits16Type) [x] = inferUnaryOp IInt x
-    inferExprOp (ShiftL Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (ShiftR Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BAnd Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BOr Bits16Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BXOr Bits16Type) [x, y] = inferBinaryOp IInt x y
-
-    inferExprOp (Add Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Sub Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mul Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Div Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mod Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Neg Bits32Type) [x] = inferUnaryOp IInt x
-    inferExprOp (ShiftL Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (ShiftR Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BAnd Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BOr Bits32Type) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BXOr Bits32Type) [x, y] = inferBinaryOp IInt x y
-
     inferExprOp (Add Bits64Type) [x, y] = inferBinaryOp ILong x y
     inferExprOp (Sub Bits64Type) [x, y] = inferBinaryOp ILong x y
     inferExprOp (Mul Bits64Type) [x, y] = inferBinaryOp ILong x y
@@ -944,18 +912,6 @@ mutual
     inferExprOp (BAnd Bits64Type) [x, y] = inferBinaryOp ILong x y
     inferExprOp (BOr Bits64Type) [x, y] = inferBinaryOp ILong x y
     inferExprOp (BXOr Bits64Type) [x, y] = inferBinaryOp ILong x y
-
-    inferExprOp (Add IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Sub IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mul IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Div IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mod IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Neg IntType) [x] = inferUnaryOp IInt x
-    inferExprOp (ShiftL IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (ShiftR IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BAnd IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BOr IntType) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BXOr IntType) [x, y] = inferBinaryOp IInt x y
 
     inferExprOp (Add IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
     inferExprOp (Sub IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
@@ -975,55 +931,57 @@ mutual
     inferExprOp (Div DoubleType) [x, y] = inferBinaryOp IDouble x y
     inferExprOp (Neg DoubleType) [x] = inferUnaryOp IDouble x
 
-    inferExprOp (LT Bits8Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (LT Bits16Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (LT Bits32Type) [x, y] = inferBoolOp IInt x y
+    inferExprOp (Add _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (Sub _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (Mul _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (Div _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (Mod _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (Neg _) [x] = inferUnaryOp IInt x
+    inferExprOp (ShiftL _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (ShiftR _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (BAnd _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (BOr _) [x, y] = inferBinaryOp IInt x y
+    inferExprOp (BXOr _) [x, y] = inferBinaryOp IInt x y
+
+    inferExprOp (LT Int64Type) [x, y] = inferBoolOp ILong x y
     inferExprOp (LT Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (LT IntType) [x, y] = inferBoolOp IInt x y
     inferExprOp (LT CharType) [x, y] = inferBoolOp IChar x y
     inferExprOp (LT IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
     inferExprOp (LT DoubleType) [x, y] = inferBoolOp IDouble x y
     inferExprOp (LT StringType) [x, y] = inferBoolOp inferredStringType x y
+    inferExprOp (LT _) [x, y] = inferBoolOp IInt x y
 
-    inferExprOp (LTE Bits8Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (LTE Bits16Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (LTE Bits32Type) [x, y] = inferBoolOp IInt x y
+    inferExprOp (LTE Int64Type) [x, y] = inferBoolOp ILong x y
     inferExprOp (LTE Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (LTE IntType) [x, y] = inferBoolOp IInt x y
     inferExprOp (LTE CharType) [x, y] = inferBoolOp IChar x y
     inferExprOp (LTE IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
     inferExprOp (LTE DoubleType) [x, y] = inferBoolOp IDouble x y
     inferExprOp (LTE StringType) [x, y] = inferBoolOp inferredStringType x y
+    inferExprOp (LTE _) [x, y] = inferBoolOp IInt x y
 
-    inferExprOp (EQ Bits8Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (EQ Bits16Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (EQ Bits32Type) [x, y] = inferBoolOp IInt x y
+    inferExprOp (EQ Int64Type) [x, y] = inferBoolOp ILong x y
     inferExprOp (EQ Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (EQ IntType) [x, y] = inferBoolOp IInt x y
     inferExprOp (EQ CharType) [x, y] = inferBoolOp IChar x y
     inferExprOp (EQ IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
     inferExprOp (EQ DoubleType) [x, y] = inferBoolOp IDouble x y
     inferExprOp (EQ StringType) [x, y] = inferBoolOp inferredStringType x y
+    inferExprOp (EQ _) [x, y] = inferBoolOp IInt x y
 
-    inferExprOp (GT Bits8Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (GT Bits16Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (GT Bits32Type) [x, y] = inferBoolOp IInt x y
+    inferExprOp (GT Int64Type) [x, y] = inferBoolOp ILong x y
     inferExprOp (GT Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (GT IntType) [x, y] = inferBoolOp IInt x y
     inferExprOp (GT CharType) [x, y] = inferBoolOp IChar x y
     inferExprOp (GT IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
     inferExprOp (GT DoubleType) [x, y] = inferBoolOp IDouble x y
     inferExprOp (GT StringType) [x, y] = inferBoolOp inferredStringType x y
+    inferExprOp (GT _) [x, y] = inferBoolOp IInt x y
 
-    inferExprOp (GTE Bits8Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (GTE Bits16Type) [x, y] = inferBoolOp IInt x y
-    inferExprOp (GTE Bits32Type) [x, y] = inferBoolOp IInt x y
+    inferExprOp (GTE Int64Type) [x, y] = inferBoolOp ILong x y
     inferExprOp (GTE Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (GTE IntType) [x, y] = inferBoolOp IInt x y
     inferExprOp (GTE CharType) [x, y] = inferBoolOp IChar x y
     inferExprOp (GTE IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
     inferExprOp (GTE DoubleType) [x, y] = inferBoolOp IDouble x y
     inferExprOp (GTE StringType) [x, y] = inferBoolOp inferredStringType x y
+    inferExprOp (GTE _) [x, y] = inferBoolOp IInt x y
 
     inferExprOp StrLength [x] = do
         ignore $ inferExpr inferredStringType x
@@ -1063,60 +1021,48 @@ mutual
     inferExprOp DoubleFloor [x] = inferUnaryOp IDouble x
     inferExprOp DoubleCeiling [x] = inferUnaryOp IDouble x
 
-    inferExprOp (Cast Bits8Type Bits16Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits8Type Bits32Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits8Type IntType) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits8Type Bits64Type) [x] = inferExprCast IInt ILong x
-    inferExprOp (Cast Bits8Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
-    inferExprOp (Cast Bits8Type StringType) [x] = inferExprCast IInt inferredStringType x
+    inferExprOp (Cast Int64Type Bits64Type) [x] = inferExprCast ILong ILong x
+    inferExprOp (Cast Int64Type IntegerType) [x] = inferExprCast ILong inferredBigIntegerType x
+    inferExprOp (Cast Int64Type DoubleType) [x] = inferExprCast ILong IDouble x
+    inferExprOp (Cast Int64Type StringType) [x] = inferExprCast ILong inferredStringType x
+    inferExprOp (Cast Int64Type _) [x] = inferExprCast ILong IInt x
 
-    inferExprOp (Cast Bits16Type Bits8Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits16Type Bits32Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits16Type IntType) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits16Type Bits64Type) [x] = inferExprCast IInt ILong x
-    inferExprOp (Cast Bits16Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
-    inferExprOp (Cast Bits16Type StringType) [x] = inferExprCast IInt inferredStringType x
-
-    inferExprOp (Cast Bits32Type Bits8Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits32Type Bits16Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits32Type IntType) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast Bits32Type Bits64Type) [x] = inferExprCast IInt ILong x
-    inferExprOp (Cast Bits32Type IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
-    inferExprOp (Cast Bits32Type StringType) [x] = inferExprCast IInt inferredStringType x
-
-    inferExprOp (Cast Bits64Type Bits8Type) [x] = inferExprCast ILong IInt x
-    inferExprOp (Cast Bits64Type Bits16Type) [x] = inferExprCast ILong IInt x
-    inferExprOp (Cast Bits64Type Bits32Type) [x] = inferExprCast ILong IInt x
-    inferExprOp (Cast Bits64Type IntType) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast Bits64Type Int64Type) [x] = inferExprCast ILong ILong x
     inferExprOp (Cast Bits64Type IntegerType) [x] = inferExprCast ILong inferredBigIntegerType x
+    inferExprOp (Cast Bits64Type DoubleType) [x] = inferExprCast ILong IDouble x
     inferExprOp (Cast Bits64Type StringType) [x] = inferExprCast ILong inferredStringType x
+    inferExprOp (Cast Bits64Type _) [x] = inferExprCast ILong IInt x
 
-    inferExprOp (Cast IntType Bits8Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast IntType Bits16Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast IntType Bits32Type) [x] = inferExprCast IInt IInt x
-    inferExprOp (Cast IntType Bits64Type) [x] = inferExprCast IInt ILong x
-    inferExprOp (Cast IntType IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
-    inferExprOp (Cast IntType StringType) [x] = inferExprCast IInt inferredStringType x
-
-    inferExprOp (Cast IntegerType Bits8Type)  [x] = inferExprCast inferredBigIntegerType IInt x
-    inferExprOp (Cast IntegerType Bits16Type) [x] = inferExprCast inferredBigIntegerType IInt x
-    inferExprOp (Cast IntegerType Bits32Type) [x] = inferExprCast inferredBigIntegerType IInt x
-    inferExprOp (Cast IntegerType IntType) [x] = inferExprCast inferredBigIntegerType IInt x
+    inferExprOp (Cast IntegerType Int64Type) [x] = inferExprCast inferredBigIntegerType ILong x
     inferExprOp (Cast IntegerType Bits64Type) [x] = inferExprCast inferredBigIntegerType ILong x
     inferExprOp (Cast IntegerType StringType) [x] = inferExprCast inferredBigIntegerType inferredStringType x
-
-    inferExprOp (Cast DoubleType StringType) [x] = inferExprCast IDouble inferredStringType x
-    inferExprOp (Cast CharType StringType) [x] = inferExprCast IChar inferredStringType x
-    inferExprOp (Cast DoubleType IntegerType) [x] = inferExprCast IDouble inferredBigIntegerType x
-    inferExprOp (Cast CharType IntegerType) [x] = inferExprCast IChar inferredBigIntegerType x
-    inferExprOp (Cast StringType IntegerType) [x] = inferExprCast inferredStringType inferredBigIntegerType x
-    inferExprOp (Cast DoubleType IntType) [x] = inferExprCast IDouble IInt x
-    inferExprOp (Cast StringType IntType) [x] = inferExprCast inferredStringType IInt x
-    inferExprOp (Cast CharType IntType) [x] = inferExprCast IChar IInt x
     inferExprOp (Cast IntegerType DoubleType) [x] = inferExprCast inferredBigIntegerType IDouble x
-    inferExprOp (Cast IntType DoubleType) [x] = inferExprCast IInt IDouble x
+    inferExprOp (Cast IntegerType _) [x] = inferExprCast inferredBigIntegerType IInt x
+
+    inferExprOp (Cast CharType Int64Type) [x] = inferExprCast IChar ILong x
+    inferExprOp (Cast CharType Bits64Type) [x] = inferExprCast IChar ILong x
+    inferExprOp (Cast CharType StringType) [x] = inferExprCast IChar inferredStringType x
+    inferExprOp (Cast CharType DoubleType) [x] = inferExprCast IChar IDouble x
+    inferExprOp (Cast CharType IntegerType) [x] = inferExprCast IChar inferredBigIntegerType x
+    inferExprOp (Cast CharType _) [x] = inferExprCast IChar IInt x
+
+    inferExprOp (Cast DoubleType Int64Type) [x] = inferExprCast IDouble ILong x
+    inferExprOp (Cast DoubleType Bits64Type) [x] = inferExprCast IDouble ILong x
+    inferExprOp (Cast DoubleType StringType) [x] = inferExprCast IDouble inferredStringType x
+    inferExprOp (Cast DoubleType IntegerType) [x] = inferExprCast IDouble inferredBigIntegerType x
+    inferExprOp (Cast DoubleType _) [x] = inferExprCast IDouble IInt x
+
+    inferExprOp (Cast StringType IntegerType) [x] = inferExprCast inferredStringType inferredBigIntegerType x
+    inferExprOp (Cast StringType IntType) [x] = inferExprCast inferredStringType IInt x
     inferExprOp (Cast StringType DoubleType) [x] = inferExprCast inferredStringType IDouble x
-    inferExprOp (Cast IntType CharType) [x] = inferExprCast IInt IChar x
+
+    inferExprOp (Cast _ Int64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast _ Bits64Type) [x] = inferExprCast IInt ILong x
+    inferExprOp (Cast _ IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
+    inferExprOp (Cast _ StringType) [x] = inferExprCast IInt inferredStringType x
+    inferExprOp (Cast _ DoubleType) [x] = inferExprCast IInt IDouble x
+    inferExprOp (Cast _ CharType) [x] = inferExprCast IInt IChar x
+    inferExprOp (Cast _ _) [x] = inferExprCast IInt IInt x
 
     inferExprOp BelieveMe [_, _, x] = Pure IUnknown
     inferExprOp Crash [_, msg] = Pure IUnknown

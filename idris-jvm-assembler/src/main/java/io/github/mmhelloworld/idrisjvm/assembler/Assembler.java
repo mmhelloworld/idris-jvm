@@ -59,6 +59,7 @@ import static org.objectweb.asm.Opcodes.CASTORE;
 import static org.objectweb.asm.Opcodes.CHECKCAST;
 import static org.objectweb.asm.Opcodes.D2F;
 import static org.objectweb.asm.Opcodes.D2I;
+import static org.objectweb.asm.Opcodes.D2L;
 import static org.objectweb.asm.Opcodes.DADD;
 import static org.objectweb.asm.Opcodes.DALOAD;
 import static org.objectweb.asm.Opcodes.DASTORE;
@@ -136,6 +137,7 @@ import static org.objectweb.asm.Opcodes.LADD;
 import static org.objectweb.asm.Opcodes.LALOAD;
 import static org.objectweb.asm.Opcodes.LAND;
 import static org.objectweb.asm.Opcodes.LASTORE;
+import static org.objectweb.asm.Opcodes.LCMP;
 import static org.objectweb.asm.Opcodes.LCONST_0;
 import static org.objectweb.asm.Opcodes.LCONST_1;
 import static org.objectweb.asm.Opcodes.LDIV;
@@ -588,6 +590,10 @@ public final class Assembler {
         mv.visitInsn(D2F);
     }
 
+    public void d2l() {
+        mv.visitInsn(D2L);
+    }
+
     public void dadd() {
         mv.visitInsn(DADD);
     }
@@ -964,6 +970,10 @@ public final class Assembler {
 
     public void lastore() {
         mv.visitInsn(LASTORE);
+    }
+
+    public void lcmp() {
+        mv.visitInsn(LCMP);
     }
 
     public void lor() {

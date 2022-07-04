@@ -47,6 +47,8 @@ data JBsmArgHandle : Type where [external]
 
 data JInteger : Type where [external]
 data JDouble : Type where [external]
+data JLong : Type where [external]
+data JPrimitiveLong : Type where [external]
 
 namespace Collection
     export
@@ -507,6 +509,7 @@ public export
 data Constant = DoubleConst Double
               | IntegerConst Int
               | StringConst String
+              | LongConst JLong
               | TypeConst String
 
 public export
@@ -606,6 +609,7 @@ data Asm : Type -> Type where
     CreateIdrisConstructorClass : String -> Bool -> Int -> Asm ()
     D2i : Asm ()
     D2f : Asm ()
+    D2l : Asm ()
     Dadd : Asm ()
     Daload : Asm ()
     Dastore : Asm ()
@@ -682,8 +686,7 @@ data Asm : Type -> Type where
     Laload : Asm ()
     Land : Asm ()
     Lastore : Asm ()
-    Lor : Asm ()
-    Lxor : Asm ()
+    Lcmp : Asm ()
     Lcompl : Asm ()
     Ldc : Asm.Constant -> Asm ()
     Ldiv : Asm ()
@@ -691,6 +694,7 @@ data Asm : Type -> Type where
     Lload : Int  -> Asm ()
     Lmul : Asm ()
     Lneg : Asm ()
+    Lor : Asm ()
     LocalVariable : (name: String) -> (descriptor: String) -> (signature: Maybe String) -> (startLabel: String) ->
                         (endLabel: String) -> (index: Int) -> Asm ()
     LookupSwitch : (defaultLabel: String) -> (labels: List String) -> (cases: List Int) -> Asm ()
@@ -701,6 +705,7 @@ data Asm : Type -> Type where
     Lstore : Int -> Asm ()
     Lsub : Asm ()
     Lushr : Asm ()
+    Lxor : Asm ()
     MaxStackAndLocal : Int -> Int -> Asm ()
     MethodCodeStart : Asm ()
     MethodCodeEnd : Asm ()
@@ -809,17 +814,6 @@ getAndUpdateState f = do
 public export
 %foreign "jvm:crash(String java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 crash : String -> Object
-
-export
-newBigInteger : String -> Asm ()
-newBigInteger "0" = Field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-newBigInteger "1" = Field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-newBigInteger "10" = Field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
-newBigInteger i = do
-    New "java/math/BigInteger"
-    Dup
-    Ldc $ StringConst i
-    InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export
 getGlobalState : Asm AsmGlobalState
@@ -1314,11 +1308,29 @@ integerValueOf : Int -> JInteger
 export
 doubleValueOf : Double -> JDouble
 
+%foreign
+    jvm' "java/lang/Long" "valueOf" "long" "java/lang/Long"
+export
+longValueOf : JPrimitiveLong -> JLong
+
+%foreign jvm' "java/math/BigInteger" ".longValue" "java/math/BigInteger" "long"
+export
+bigIntegerToLong : Integer -> JPrimitiveLong
+
+%foreign jvm' "java/math/BigInteger" ".intValue" "java/math/BigInteger" "int"
+export
+bigIntegerToInt : Integer -> Int
+
+%foreign jvm' "java/lang/Long" "hashCode" "long" "int"
+export
+longHashCode : JPrimitiveLong -> Int
+
 export
 constantToObject : Asm.Constant -> Object
 constantToObject (DoubleConst d) = believe_me $ doubleValueOf d
 constantToObject (IntegerConst n) = believe_me $ integerValueOf n
 constantToObject (StringConst str) = believe_me str
+constantToObject (LongConst value) = believe_me value
 constantToObject (TypeConst str) = believe_me str
 
 toJClassOpts : ClassOpts -> Int
@@ -1680,6 +1692,8 @@ runAsm state D2i =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2i" [assembler state]
 runAsm state D2f =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2f" [assembler state]
+runAsm state D2l =
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2l" [assembler state]
 runAsm state Dadd =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dadd" [assembler state]
 runAsm state Dcmpg =
@@ -1837,6 +1851,7 @@ runAsm state Ladd = assemble state $ jvmInstance () "io/github/mmhelloworld/idri
 runAsm state Land = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.land" [assembler state]
 runAsm state Laload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.laload" [assembler state]
 runAsm state Lastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lastore" [assembler state]
+runAsm state Lcmp = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcmp" [assembler state]
 runAsm state Lor = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lor" [assembler state]
 runAsm state Lxor = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lxor" [assembler state]
 runAsm state Lcompl = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcompl" [assembler state]

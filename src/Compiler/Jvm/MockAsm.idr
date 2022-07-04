@@ -25,43 +25,49 @@ export
 objectToString : a -> String
 objectToString value = unsafePerformIO $ primIO (prim_objectToString (believe_me value))
 
+log : String -> IO ()
+log message = do
+  time <- currentTimeString
+  threadName <- getCurrentThreadName
+  putStrLn $ time ++ " [" ++ threadName ++ "]" ++ message
+
 export
 mockRunAsm : AsmState -> Asm a -> IO (a, AsmState)
-mockRunAsm state Aaload = assemble state $ putStrLn "aaload"
-mockRunAsm state Aastore = assemble state $ putStrLn "aastore"
-mockRunAsm state Aconstnull = assemble state $ putStrLn "aconstnull"
+mockRunAsm state Aaload = assemble state $ log "aaload"
+mockRunAsm state Aastore = assemble state $ log "aastore"
+mockRunAsm state Aconstnull = assemble state $ log "aconstnull"
 mockRunAsm state (Aload n) = assemble state $
-    putStrLn $ "aload " ++ show n
+    log $ "aload " ++ show n
 mockRunAsm state (Anewarray desc) = assemble state $
-    putStrLn $ "anewarray " ++ desc
+    log $ "anewarray " ++ desc
 mockRunAsm state Anewintarray     = assemble state $
-    putStrLn "anewintarray"
+    log "anewintarray"
 mockRunAsm state Anewbooleanarray = assemble state $
-    putStrLn "anewbooleanarray"
+    log "anewbooleanarray"
 mockRunAsm state Anewbytearray    = assemble state $
-    putStrLn "anewbytearray"
+    log "anewbytearray"
 mockRunAsm state Anewchararray    = assemble state $
-    putStrLn "anewchararray"
+    log "anewchararray"
 mockRunAsm state Anewshortarray   = assemble state $
-    putStrLn "anewshortarray"
+    log "anewshortarray"
 mockRunAsm state Anewlongarray    = assemble state $
-    putStrLn "anewlongarray"
+    log "anewlongarray"
 mockRunAsm state Anewfloatarray   = assemble state $
-    putStrLn "anewfloatarray"
+    log "anewfloatarray"
 mockRunAsm state Anewdoublearray  = assemble state $
-    putStrLn "anewdoublearray"
-mockRunAsm state Arraylength      = assemble state $ putStrLn "arraylength"
-mockRunAsm state Areturn          = assemble state $ putStrLn "areturn"
+    log "anewdoublearray"
+mockRunAsm state Arraylength      = assemble state $ log "arraylength"
+mockRunAsm state Areturn          = assemble state $ log "areturn"
 mockRunAsm state (Astore n)       = assemble state $
-    putStrLn $ "astore " ++ show n
-mockRunAsm state Baload           = assemble state $ putStrLn "baload"
-mockRunAsm state Bastore          = assemble state $ putStrLn "bastore"
-mockRunAsm state Caload           = assemble state $ putStrLn "caload"
-mockRunAsm state Castore          = assemble state $ putStrLn "castore"
+    log $ "astore " ++ show n
+mockRunAsm state Baload           = assemble state $ log "baload"
+mockRunAsm state Bastore          = assemble state $ log "bastore"
+mockRunAsm state Caload           = assemble state $ log "caload"
+mockRunAsm state Castore          = assemble state $ log "castore"
 mockRunAsm state (Checkcast desc) = assemble state $
-    putStrLn $ "checkcast " ++ desc
+    log $ "checkcast " ++ desc
 mockRunAsm state (ClassCodeStart version access className sig parent intf anns) = assemble state $
-  putStrLn $ unwords [
+  log $ unwords [
     "classCodeStart",
     show version,
     show (accessNum access),
@@ -69,10 +75,10 @@ mockRunAsm state (ClassCodeStart version access className sig parent intf anns) 
     (fromMaybe "" sig),
     parent]
 
-mockRunAsm state (CreateClass opts) = assemble state $ putStrLn $ "createClass " ++ show opts
+mockRunAsm state (CreateClass opts) = assemble state $ log $ "createClass " ++ show opts
 mockRunAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue) = assemble state $ do
   let jaccs = sum $ accessNum <$> accs
-  putStrLn $ unwords [
+  log $ unwords [
     "createField",
     show jaccs,
     sourceFileName,
@@ -87,8 +93,8 @@ mockRunAsm state (CreateLabel label) = assemble state $ pure ()
 mockRunAsm state (CreateMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns) =
     let newState = record { currentMethodName = Jqualified className methodName } state
     in assemble newState $ do
-        putStrLn $ "**************** " ++ methodName ++ " ******************"
-        putStrLn $ unwords [
+        log $ "**************** " ++ methodName ++ " ******************"
+        log $ unwords [
             "createMethod",
             show accs,
             sourceFileName,
@@ -97,117 +103,117 @@ mockRunAsm state (CreateMethod accs sourceFileName className methodName desc sig
             desc]
 
 mockRunAsm state (CreateIdrisConstructorClass className isStringConstructor constructorParameterCount) =
-    assemble state $ putStrLn ("CreateIdrisConstructorClass " ++ className ++ " " ++
+    assemble state $ log ("CreateIdrisConstructorClass " ++ className ++ " " ++
         show isStringConstructor ++ " " ++ show constructorParameterCount)
 
-mockRunAsm state D2i = assemble state $ putStrLn "d2i"
-mockRunAsm state D2f = assemble state $ putStrLn "d2f"
-mockRunAsm state Dadd = assemble state $ putStrLn "dadd"
-mockRunAsm state Dcmpl = assemble state $ putStrLn "dcmpl"
-mockRunAsm state Dcmpg = assemble state $ putStrLn "dcmpg"
-mockRunAsm state (Dconst n) = assemble state $ putStrLn $ "dconst " ++ show n
-mockRunAsm state Daload = assemble state $ putStrLn "daload"
-mockRunAsm state Dastore = assemble state $ putStrLn "dastore"
-mockRunAsm state Ddiv = assemble state $ putStrLn "ddiv"
+mockRunAsm state D2i = assemble state $ log "d2i"
+mockRunAsm state D2f = assemble state $ log "d2f"
+mockRunAsm state Dadd = assemble state $ log "dadd"
+mockRunAsm state Dcmpl = assemble state $ log "dcmpl"
+mockRunAsm state Dcmpg = assemble state $ log "dcmpg"
+mockRunAsm state (Dconst n) = assemble state $ log $ "dconst " ++ show n
+mockRunAsm state Daload = assemble state $ log "daload"
+mockRunAsm state Dastore = assemble state $ log "dastore"
+mockRunAsm state Ddiv = assemble state $ log "ddiv"
 
-mockRunAsm state (Debug message) = assemble state $ putStrLn message
+mockRunAsm state (Debug message) = assemble state $ log message
 
 mockRunAsm state (Dload n) =
-    assemble state $ putStrLn $ "dload " ++ show n
-mockRunAsm state Dmul = assemble state $ putStrLn "dmul"
-mockRunAsm state Dneg = assemble state $ putStrLn "dneg"
-mockRunAsm state Drem = assemble state $ putStrLn "drem"
-mockRunAsm state Dreturn = assemble state $ putStrLn "dreturn"
+    assemble state $ log $ "dload " ++ show n
+mockRunAsm state Dmul = assemble state $ log "dmul"
+mockRunAsm state Dneg = assemble state $ log "dneg"
+mockRunAsm state Drem = assemble state $ log "drem"
+mockRunAsm state Dreturn = assemble state $ log "dreturn"
 mockRunAsm state (Dstore n) =
-    assemble state $ putStrLn $ "dstore " ++ show n
-mockRunAsm state Dsub = assemble state $ putStrLn "dsub"
-mockRunAsm state Dup = assemble state $ putStrLn "dup"
+    assemble state $ log $ "dstore " ++ show n
+mockRunAsm state Dsub = assemble state $ log "dsub"
+mockRunAsm state Dup = assemble state $ log "dup"
 mockRunAsm state (Error err) =
-    assemble state $ putStrLn $ "error " ++ err
-mockRunAsm state F2d = assemble state $ putStrLn "f2d"
-mockRunAsm state Faload = assemble state $ putStrLn "faload"
-mockRunAsm state Fastore = assemble state $ putStrLn "fastore"
+    assemble state $ log $ "error " ++ err
+mockRunAsm state F2d = assemble state $ log "f2d"
+mockRunAsm state Faload = assemble state $ log "faload"
+mockRunAsm state Fastore = assemble state $ log "fastore"
 mockRunAsm state (Fconst n) =
-    assemble state $ putStrLn $ "fconst " ++ show n
+    assemble state $ log $ "fconst " ++ show n
 mockRunAsm state (Field finsType cname fname desc) = assemble state $ do
   let finsTypeNum = fieldInsTypeNum finsType
-  putStrLn $ unwords [
+  log $ unwords [
     "field",
     show finsTypeNum,
     cname,
     fname,
     desc]
 
-mockRunAsm state FieldEnd = assemble state $ putStrLn "fieldEnd"
+mockRunAsm state FieldEnd = assemble state $ log "fieldEnd"
 
 mockRunAsm state (Fload n) =
-    assemble state $ putStrLn $ "fload " ++ show n
+    assemble state $ log $ "fload " ++ show n
 
 mockRunAsm state (Frame frameType nLocal localSigs nStack stackSigs) = assemble state $ do
   let ftypeNum = frameTypeNum frameType
-  putStrLn $ unwords [
+  log $ unwords [
     "frame",
     show ftypeNum,
     show nLocal,
     show nStack]
 
-mockRunAsm state Freturn = assemble state $ putStrLn "freturn"
+mockRunAsm state Freturn = assemble state $ log "freturn"
 mockRunAsm state (Fstore n) =
-    assemble state $ putStrLn $ "fstore " ++ show n
+    assemble state $ log $ "fstore " ++ show n
 
 mockRunAsm state (Goto label) =
-    assemble state $ putStrLn $ "goto " ++ label
+    assemble state $ log $ "goto " ++ label
 
-mockRunAsm state I2b = assemble state $ putStrLn "i2b"
-mockRunAsm state I2c = assemble state $ putStrLn "i2c"
-mockRunAsm state I2d = assemble state $ putStrLn "i2d"
-mockRunAsm state I2l = assemble state $ putStrLn "i2l"
-mockRunAsm state I2s = assemble state $ putStrLn "i2s"
-mockRunAsm state Iadd = assemble state $ putStrLn "iadd"
-mockRunAsm state Iaload = assemble state $ putStrLn "iaload"
-mockRunAsm state Iand = assemble state $ putStrLn "iand"
-mockRunAsm state Iastore = assemble state $ putStrLn "iastore"
-mockRunAsm state Ior = assemble state $ putStrLn "ior"
-mockRunAsm state Ixor = assemble state $ putStrLn "ixor"
-mockRunAsm state Icompl = assemble state $ putStrLn "icompl"
-mockRunAsm state (Iconst n) = assemble state $ putStrLn $ "iconst " ++ show n
-mockRunAsm state Idiv = assemble state $ putStrLn "idiv"
+mockRunAsm state I2b = assemble state $ log "i2b"
+mockRunAsm state I2c = assemble state $ log "i2c"
+mockRunAsm state I2d = assemble state $ log "i2d"
+mockRunAsm state I2l = assemble state $ log "i2l"
+mockRunAsm state I2s = assemble state $ log "i2s"
+mockRunAsm state Iadd = assemble state $ log "iadd"
+mockRunAsm state Iaload = assemble state $ log "iaload"
+mockRunAsm state Iand = assemble state $ log "iand"
+mockRunAsm state Iastore = assemble state $ log "iastore"
+mockRunAsm state Ior = assemble state $ log "ior"
+mockRunAsm state Ixor = assemble state $ log "ixor"
+mockRunAsm state Icompl = assemble state $ log "icompl"
+mockRunAsm state (Iconst n) = assemble state $ log $ "iconst " ++ show n
+mockRunAsm state Idiv = assemble state $ log "idiv"
 mockRunAsm state (Ifeq label) =
-    assemble state $ putStrLn $ "ifeq " ++ label
+    assemble state $ log $ "ifeq " ++ label
 mockRunAsm state (Ifge label) =
-    assemble state $ putStrLn $ "ifge " ++ label
+    assemble state $ log $ "ifge " ++ label
 mockRunAsm state (Ifgt label) =
-    assemble state $ putStrLn $ "ifgt " ++ label
+    assemble state $ log $ "ifgt " ++ label
 mockRunAsm state (Ificmpeq label) =
-    assemble state $ putStrLn $ "ificmpeq " ++ label
+    assemble state $ log $ "ificmpeq " ++ label
 mockRunAsm state (Ificmpge label) =
-    assemble state $ putStrLn $ "ificmpge " ++ label
+    assemble state $ log $ "ificmpge " ++ label
 mockRunAsm state (Ificmpgt label) =
-    assemble state $ putStrLn $ "ificmpgt " ++ label
+    assemble state $ log $ "ificmpgt " ++ label
 mockRunAsm state (Ificmple label) =
-    assemble state $ putStrLn $ "ificmple " ++ label
+    assemble state $ log $ "ificmple " ++ label
 mockRunAsm state (Ificmplt label) =
-    assemble state $ putStrLn $ "ificmplt " ++ label
+    assemble state $ log $ "ificmplt " ++ label
 mockRunAsm state (Ificmpne label) =
-    assemble state $ putStrLn $ "ificmpne " ++ label
+    assemble state $ log $ "ificmpne " ++ label
 mockRunAsm state (Ifle label) =
-    assemble state $ putStrLn $ "ifle " ++ label
+    assemble state $ log $ "ifle " ++ label
 mockRunAsm state (Iflt label) =
-    assemble state $ putStrLn $ "iflt " ++ label
+    assemble state $ log $ "iflt " ++ label
 mockRunAsm state (Ifne label) =
-    assemble state $ putStrLn $ "ifne " ++ label
+    assemble state $ log $ "ifne " ++ label
 mockRunAsm state (Ifnonnull label) =
-    assemble state $ putStrLn $ "ifnonnull " ++ label
+    assemble state $ log $ "ifnonnull " ++ label
 mockRunAsm state (Ifnull label) =
-    assemble state $ putStrLn $ "ifnull " ++ label
+    assemble state $ log $ "ifnull " ++ label
 mockRunAsm state (Iload n) =
-    assemble state $ putStrLn $ "iload " ++ show n
-mockRunAsm state Imul = assemble state $ putStrLn "imul"
-mockRunAsm state Ineg = assemble state $ putStrLn "ineg"
+    assemble state $ log $ "iload " ++ show n
+mockRunAsm state Imul = assemble state $ log "imul"
+mockRunAsm state Ineg = assemble state $ log "ineg"
 mockRunAsm state (InstanceOf className) =
-    assemble state $ putStrLn $ "instanceOf " ++ className
+    assemble state $ log $ "instanceOf " ++ className
 mockRunAsm state (InvokeMethod invocType cname mname desc isIntf) = assemble state $ do
-  putStrLn $ unwords [
+  log $ unwords [
     "invokeMethod",
     show invocType,
     cname,
@@ -218,58 +224,58 @@ mockRunAsm state (InvokeMethod invocType cname mname desc isIntf) = assemble sta
 mockRunAsm state (InvokeDynamic mname desc handle bsmArgs) = assemble state $ do
   jbsmArgs <- sequence $ toJbsmArg <$> bsmArgs
   jhandle <- toJHandle handle
-  putStrLn $ unwords [
+  log $ unwords [
     "invokeDynamic",
     mname,
     desc,
     (objectToString $ the Object $ believe_me jhandle),
     (objectToString $ the Object $ believe_me jbsmArgs)]
 
-mockRunAsm state Irem = assemble state $ putStrLn "irem"
-mockRunAsm state Ireturn = assemble state $ putStrLn "ireturn"
-mockRunAsm state Ishl = assemble state $ putStrLn "ishl"
-mockRunAsm state Ishr = assemble state $ putStrLn "ishr"
+mockRunAsm state Irem = assemble state $ log "irem"
+mockRunAsm state Ireturn = assemble state $ log "ireturn"
+mockRunAsm state Ishl = assemble state $ log "ishl"
+mockRunAsm state Ishr = assemble state $ log "ishr"
 mockRunAsm state (Istore n) = assemble state $
-    putStrLn $ "istore " ++ show n
-mockRunAsm state Isub = assemble state $ putStrLn "isub"
-mockRunAsm state Iushr = assemble state $ putStrLn "iushr"
-mockRunAsm state L2i = assemble state $ putStrLn "l2i"
-mockRunAsm state (LabelStart label) = assemble state $ putStrLn (label ++ ":")
-mockRunAsm state Ladd = assemble state $ putStrLn "ladd"
-mockRunAsm state Land = assemble state $ putStrLn "land"
-mockRunAsm state Laload = assemble state $ putStrLn "laload"
-mockRunAsm state Lastore = assemble state $ putStrLn "lastore"
-mockRunAsm state Lor = assemble state $ putStrLn "lor"
-mockRunAsm state Lxor = assemble state $ putStrLn "lxor"
-mockRunAsm state Lcompl = assemble state $ putStrLn "lcompl"
+    log $ "istore " ++ show n
+mockRunAsm state Isub = assemble state $ log "isub"
+mockRunAsm state Iushr = assemble state $ log "iushr"
+mockRunAsm state L2i = assemble state $ log "l2i"
+mockRunAsm state (LabelStart label) = assemble state $ log (label ++ ":")
+mockRunAsm state Ladd = assemble state $ log "ladd"
+mockRunAsm state Land = assemble state $ log "land"
+mockRunAsm state Laload = assemble state $ log "laload"
+mockRunAsm state Lastore = assemble state $ log "lastore"
+mockRunAsm state Lor = assemble state $ log "lor"
+mockRunAsm state Lxor = assemble state $ log "lxor"
+mockRunAsm state Lcompl = assemble state $ log "lcompl"
 
 mockRunAsm state (Ldc (TypeConst ty)) =
-    assemble state $ putStrLn $ "ldcType " ++ ty
+    assemble state $ log $ "ldcType " ++ ty
 mockRunAsm state (Ldc constant) = assemble state $ do
-    putStrLn ("ldc " ++ (objectToString (constantToObject constant)))
+    log ("ldc " ++ (objectToString (constantToObject constant)))
 
-mockRunAsm state Ldiv = assemble state $ putStrLn "ldiv"
+mockRunAsm state Ldiv = assemble state $ log "ldiv"
 
 mockRunAsm state (LineNumber lineNumber label) = assemble state $
-    putStrLn $ unwords [
+    log $ unwords [
         "lineNumber",
         show lineNumber,
         label]
 
 mockRunAsm state (Lload n) = assemble state $
-    putStrLn $ "lload " ++ show n
-mockRunAsm state Lmul = assemble state $ putStrLn "lmul"
-mockRunAsm state Lneg = assemble state $ putStrLn "lneg"
+    log $ "lload " ++ show n
+mockRunAsm state Lmul = assemble state $ log "lmul"
+mockRunAsm state Lneg = assemble state $ log "lneg"
 mockRunAsm state (LookupSwitch defaultLabel labels cases) = assemble state $ do
   let jcases = integerValueOf <$> cases
-  putStrLn $ unwords [
+  log $ unwords [
     "lookupSwitch",
     defaultLabel,
     (objectToString (the Object $ believe_me labels)),
     (objectToString (the Object $ believe_me jcases))]
 
 mockRunAsm state (LocalVariable name descriptor signature startLabel endLabel index) = assemble state $
-    putStrLn $ unwords [
+    log $ unwords [
         "localVariable",
         name,
         descriptor,
@@ -278,32 +284,32 @@ mockRunAsm state (LocalVariable name descriptor signature startLabel endLabel in
         endLabel,
         show index]
 
-mockRunAsm state Lrem = assemble state $ putStrLn "lrem"
-mockRunAsm state Lreturn = assemble state $ putStrLn "lreturn"
-mockRunAsm state Lshl = assemble state $ putStrLn "lshl"
-mockRunAsm state Lshr = assemble state $ putStrLn "lshr"
+mockRunAsm state Lrem = assemble state $ log "lrem"
+mockRunAsm state Lreturn = assemble state $ log "lreturn"
+mockRunAsm state Lshl = assemble state $ log "lshl"
+mockRunAsm state Lshr = assemble state $ log "lshr"
 mockRunAsm state (Lstore n) = assemble state $
-    putStrLn $ "lstore " ++ show n
-mockRunAsm state Lsub = assemble state $ putStrLn "lsub"
-mockRunAsm state Lushr = assemble state $ putStrLn "lushr"
+    log $ "lstore " ++ show n
+mockRunAsm state Lsub = assemble state $ log "lsub"
+mockRunAsm state Lushr = assemble state $ log "lushr"
 mockRunAsm state (MaxStackAndLocal stack local) = assemble state $
-    putStrLn $ "maxStackAndLocal " ++ show stack ++ " " ++ show local
+    log $ "maxStackAndLocal " ++ show stack ++ " " ++ show local
 mockRunAsm state MethodCodeStart = assemble state $
-    putStrLn "methodCodeStart"
+    log "methodCodeStart"
 mockRunAsm state MethodCodeEnd = assemble state $ do
-    putStrLn "methodCodeEnd"
-    putStrLn $ "***********************************"
+    log "methodCodeEnd"
+    log $ "***********************************"
 mockRunAsm state (Multianewarray desc dims) = assemble state $
-    putStrLn $ unwords ["multiANewArray", desc, show dims]
+    log $ unwords ["multiANewArray", desc, show dims]
 mockRunAsm state (New cname) = assemble state $
-    putStrLn $ "asmNew " ++ cname
-mockRunAsm state Pop = assemble state $ putStrLn "pop"
-mockRunAsm state Pop2 = assemble state $ putStrLn "pop2"
-mockRunAsm state Return = assemble state $ putStrLn "voidReturn"
-mockRunAsm state Saload = assemble state $ putStrLn "saload"
-mockRunAsm state Sastore = assemble state $ putStrLn "sastore"
+    log $ "asmNew " ++ cname
+mockRunAsm state Pop = assemble state $ log "pop"
+mockRunAsm state Pop2 = assemble state $ log "pop2"
+mockRunAsm state Return = assemble state $ log "voidReturn"
+mockRunAsm state Saload = assemble state $ log "saload"
+mockRunAsm state Sastore = assemble state $ log "sastore"
 mockRunAsm state (SourceInfo sourceFileName)
-  = assemble state $ putStrLn $ "sourceInfo " ++ sourceFileName
+  = assemble state $ log $ "sourceInfo " ++ sourceFileName
 mockRunAsm state (LiftIo action) = assemble state action
 
 mockRunAsm state (Throw fc message) = pure (believe_me $ crash $ show fc ++ ": " ++ message, state)

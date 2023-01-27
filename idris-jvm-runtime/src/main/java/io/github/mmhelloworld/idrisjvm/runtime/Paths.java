@@ -7,7 +7,7 @@ public final class Paths {
     }
 
     public static Path createPath(String pathStr) {
-        return createPath(pathStr, Directories.workingDir);
+        return createPath(pathStr, Directories.getWorkingDir());
     }
 
     private static Path createPath(String pathStr, String workingDir) {

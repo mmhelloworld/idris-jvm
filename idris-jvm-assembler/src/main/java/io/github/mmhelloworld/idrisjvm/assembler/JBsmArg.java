@@ -11,6 +11,13 @@ public abstract class JBsmArg {
         return type;
     }
 
+    @Override
+    public String toString() {
+        return "JBsmArg{"
+            + "type=" + type
+            + '}';
+    }
+
     public enum BsmArgType {
         BsmArgGetType,
         BsmArgHandle
@@ -30,10 +37,10 @@ public abstract class JBsmArg {
 
         @Override
         public String toString() {
-            return "JBsmArgGetType{" +
-                "type=" + getType() +
-                ", desc='" + desc + '\'' +
-                '}';
+            return "JBsmArgGetType{"
+                + "type=" + getType()
+                + ", desc='" + desc + '\''
+                + '}';
         }
     }
 
@@ -51,17 +58,10 @@ public abstract class JBsmArg {
 
         @Override
         public String toString() {
-            return "JBsmArgHandle{" +
-                "type=" + getType() +
-                ", handle=" + handle +
-                '}';
+            return "JBsmArgHandle{"
+                + "type=" + getType()
+                + ", handle=" + handle
+                + '}';
         }
-    }
-
-    @Override
-    public String toString() {
-        return "JBsmArg{" +
-            "type=" + type +
-            '}';
     }
 }

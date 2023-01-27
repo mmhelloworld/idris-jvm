@@ -3,8 +3,8 @@ package io.github.mmhelloworld.idrisjvm.runtime;
 import java.nio.ByteBuffer;
 
 final class ClientSocketReaderState {
-    private ByteBuffer buffer;
     private final ResettableCountDownLatch doneSignal;
+    private ByteBuffer buffer;
     private int bytesRead;
 
     ClientSocketReaderState(ByteBuffer buffer, ResettableCountDownLatch doneSignal) {

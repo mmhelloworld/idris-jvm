@@ -10,7 +10,7 @@ TARGET = ${TARGETDIR}/${NAME}
 
 # Default code generator. This is passed to the libraries for incremental
 # builds, but overridable via environment variables or arguments to make
-IDRIS2_CG ?= chez
+IDRIS2_CG ?= jvm
 
 MAJOR=0
 MINOR=7
@@ -58,6 +58,10 @@ export IDRIS2_BOOT_PATH := "$(IDRIS2_BOOT_PATH)"
 export SCHEME
 
 .PHONY: all idris2-exec libdocs testenv testenv-clean support clean-support clean FORCE
+
+maven-property:
+	mkdir -p ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes
+	echo idris.version=${IDRIS2_VERSION} > ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes/config.properties
 
 all:
 	${MAKE} ${TARGET}

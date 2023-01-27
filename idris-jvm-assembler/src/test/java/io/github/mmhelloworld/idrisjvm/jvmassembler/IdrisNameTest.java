@@ -12,7 +12,7 @@ import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
-public class IdrisNameTest {
+public final class IdrisNameTest {
 
     @ParameterizedTest
     @MethodSource
@@ -30,11 +30,11 @@ public class IdrisNameTest {
 
     static Stream<Arguments> getFunctionName() {
         return Stream.of(
-            arguments("Data/List", "take", IdrisList.fromIterable(asList("M_Data/List","take"))),
-            arguments("Main", "bar", IdrisList.fromIterable(asList("main/Main","bar"))),
-            arguments("Foo", "bar", IdrisList.fromIterable(asList("main/Foo","bar"))),
-            arguments("Main/Foo", "bar", IdrisList.fromIterable(asList("M_Main/Foo","bar"))),
-            arguments("Main/Foo/Bar/Baz", "bar", IdrisList.fromIterable(asList("M_Main/M_Foo/M_Bar/Baz","bar"))));
+            arguments("Data/List", "take", IdrisList.fromIterable(asList("M_Data/List", "take"))),
+            arguments("Main", "bar", IdrisList.fromIterable(asList("main/Main", "bar"))),
+            arguments("Foo", "bar", IdrisList.fromIterable(asList("main/Foo", "bar"))),
+            arguments("Main/Foo", "bar", IdrisList.fromIterable(asList("M_Main/Foo", "bar"))),
+            arguments("Main/Foo/Bar/Baz", "bar", IdrisList.fromIterable(asList("M_Main/M_Foo/M_Bar/Baz", "bar"))));
     }
 
     static Stream<Arguments> getConstructorClassName() {

@@ -12,7 +12,6 @@ import public Core.Options.Log
 import public Core.TT
 
 import Libraries.Utils.Binary
-import Libraries.Utils.Scheme
 import Libraries.Text.PrettyPrint.Prettyprinter
 
 import Idris.Syntax.Pragmas
@@ -349,7 +348,6 @@ newDef fc n rig vars ty vis def
         , compexpr = Nothing
         , namedcompexpr = Nothing
         , sizeChange = []
-        , schemeExpr = Nothing
         }
 
 -- Rewrite rules, applied after type checking, for runtime code only
@@ -1347,7 +1345,6 @@ addBuiltin n ty tot op
          , compexpr = Nothing
          , namedcompexpr = Nothing
          , sizeChange = []
-         , schemeExpr = Nothing
          }
 
 export
@@ -1359,8 +1356,7 @@ updateDef n fdef
              | Nothing => pure ()
          case fdef (definition gdef) of
               Nothing => pure ()
-              Just def' => ignore $ addDef n ({ definition := def',
-                                                schemeExpr := Nothing } gdef)
+              Just def' => ignore $ addDef n ({ definition := def' } gdef)
 
 export
 updateTy : {auto c : Ref Ctxt Defs} ->

@@ -47,6 +47,7 @@ modules =
     Compiler.Scheme.Common,
 
     Compiler.Jvm.Tuples,
+    Compiler.Jvm.Math,
     Compiler.Jvm.Asm,
     Compiler.Jvm.Codegen,
     Compiler.Jvm.ExtPrim,

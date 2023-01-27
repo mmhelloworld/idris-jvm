@@ -76,7 +76,9 @@ public final class IdrisSystem {
     }
 
     public static int setEnv(String name, String value, int shouldOverwrite) {
-        System.setProperty(name, value);
+        if (shouldOverwrite == 1 || getEnv(name) == null) {
+            System.setProperty(name, value);
+        }
         return 0;
     }
 

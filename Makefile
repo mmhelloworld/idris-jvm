@@ -55,6 +55,10 @@ export SCHEME
 
 .PHONY: all idris2-exec libdocs testenv testenv-clean support support-clean clean FORCE
 
+maven-property:
+	mkdir -p ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes
+	echo idris.version=${IDRIS2_VERSION} > ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes/config.properties
+
 all: support ${TARGET} libs
 
 idris2-exec: ${TARGET}
@@ -72,25 +76,25 @@ src/IdrisPaths.idr: FORCE
 FORCE:
 
 prelude:
-	${MAKE} -C libs/prelude IDRIS2=${TARGET} IDRIS2_INC_CGS=${IDRIS2_CG} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/prelude IDRIS2=${TARGET}  IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 base: prelude
-	${MAKE} -C libs/base IDRIS2=${TARGET} IDRIS2_INC_CGS=${IDRIS2_CG} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/base IDRIS2=${TARGET}  IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 network: prelude linear
-	${MAKE} -C libs/network IDRIS2=${TARGET} IDRIS2_INC_CGS=${IDRIS2_CG} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/network IDRIS2=${TARGET}  IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 contrib: base
-	${MAKE} -C libs/contrib IDRIS2=${TARGET} IDRIS2_INC_CGS=${IDRIS2_CG} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/contrib IDRIS2=${TARGET}  IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 test-lib: contrib
-	${MAKE} -C libs/test IDRIS2=${TARGET} IDRIS2_INC_CGS=${IDRIS2_CG} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/test IDRIS2=${TARGET}  IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 linear: prelude
-	${MAKE} -C libs/linear IDRIS2=${TARGET} IDRIS2_INC_CGS=${IDRIS2_CG} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/linear IDRIS2=${TARGET}  IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 papers: contrib linear
-	${MAKE} -C libs/papers IDRIS2=${TARGET} IDRIS2_INC_CGS=${IDRIS2_CG} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/papers IDRIS2=${TARGET}  IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 bootstrap-libs : prelude base linear network
 libs : prelude base contrib network test-lib linear papers
@@ -216,22 +220,22 @@ install-support:
 	@${MAKE} -C support/chez install
 
 install-bootstrap-libs:
-	${MAKE} -C libs/prelude install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/base install    IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/linear install  IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/network install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
+	${MAKE} -C libs/prelude install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/base install    IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/linear install  IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/network install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 install-libs: install-bootstrap-libs
-	${MAKE} -C libs/contrib install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/test install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
+	${MAKE} -C libs/contrib install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/test install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 install-with-src-libs:
-	${MAKE} -C libs/prelude install-with-src IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/base install-with-src    IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/contrib install-with-src IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/network install-with-src IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/test install-with-src    IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
-	${MAKE} -C libs/linear install-with-src    IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
+	${MAKE} -C libs/prelude install-with-src IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/base install-with-src    IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/contrib install-with-src IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/network install-with-src IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/test install-with-src    IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
+	${MAKE} -C libs/linear install-with-src    IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH}
 
 install-libdocs: libdocs
 	mkdir -p ${PREFIX}/${NAME_VERSION}/docs/prelude

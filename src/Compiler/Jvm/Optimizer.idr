@@ -76,6 +76,17 @@ tySpec (NmCon fc (NS namespaces n) _ _ []) = cond
       (isBoolTySpec (show namespaces) n, pure IBool)] (pure inferredObjectType)
 tySpec ty = pure inferredObjectType
 
+namespace InferredPrimType
+  export
+  getInferredType : PrimType -> InferredType
+  getInferredType Bits64Type = ILong
+  getInferredType Int64Type = ILong
+  getInferredType IntegerType = inferredBigIntegerType
+  getInferredType DoubleType = IDouble
+  getInferredType StringType = inferredStringType
+  getInferredType CharType = IChar
+  getInferredType _ = IInt
+
 export
 getFArgs : NamedCExp -> Asm (List (NamedCExp, NamedCExp))
 getFArgs (NmCon fc _ _ (Just 0) _) = pure []
@@ -497,41 +508,32 @@ getConstantType : List NamedConstAlt -> Asm InferredType
 getConstantType [] = Throw emptyFC "Unknown constant switch type"
 getConstantType ((MkNConstAlt constant _) :: _) = case constant of
     I _ => Pure IInt
+    I8 _ => Pure IInt
+    I16 _ => Pure IInt
+    I32 _ => Pure IInt
+    I64 _ => Pure ILong
     B8 _ => Pure IInt
     B16 _ => Pure IInt
     B32 _ => Pure IInt
+    B64 _ => Pure ILong
     Ch _ => Pure IInt
     Str _ => Pure inferredStringType
     BI _ => Pure inferredBigIntegerType
-    B64 _ => Pure inferredBigIntegerType
     unsupportedConstant => Throw emptyFC $ "Unsupported constant switch " ++ show unsupportedConstant
-
-export
-isTypeConst : TT.Constant -> Bool
-isTypeConst Bits8Type   = True
-isTypeConst Bits16Type  = True
-isTypeConst Bits32Type  = True
-isTypeConst Bits64Type  = True
-isTypeConst IntType     = True
-isTypeConst IntegerType = True
-isTypeConst StringType  = True
-isTypeConst CharType    = True
-isTypeConst DoubleType  = True
-isTypeConst WorldType   = True
-isTypeConst _           = False
 
 export
 getIntConstantValue : FC -> TT.Constant -> Asm Int
 getIntConstantValue _ (I i) = Pure i
-getIntConstantValue _ (B8 i) = Pure i
-getIntConstantValue _ (B16 i) = Pure i
-getIntConstantValue _ (B32 i) = Pure i
+getIntConstantValue _ (I8 i) = Pure (cast i)
+getIntConstantValue _ (I16 i) = Pure (cast i)
+getIntConstantValue _ (I32 i) = Pure (cast i)
+getIntConstantValue _ (B8 i) = Pure (cast i)
+getIntConstantValue _ (B16 i) = Pure (cast i)
+getIntConstantValue _ (B32 i) = Pure (cast i)
 getIntConstantValue _ (Ch c) = Pure $ ord c
 getIntConstantValue _ WorldVal = Pure 0
-getIntConstantValue fc x =
-    if isTypeConst x
-        then Pure 0
-        else Throw fc ("Constant " ++ show x ++ " cannot be converted to integer.")
+getIntConstantValue _ (PrT _) = Pure 0
+getIntConstantValue fc x = Throw fc ("Constant " ++ show x ++ " cannot be converted to integer.")
 
 getConstructorTag : ConInfo -> Maybe Int -> Int
 getConstructorTag conInfo tag = case conInfo of
@@ -740,6 +742,7 @@ mutual
     inferExtPrim _ returnType SysOS [] = pure inferredStringType
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
     inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
+    inferExtPrim _ returnType (Unknown name) _ = asmCrash $ "Can't compile unknown external directive " ++ show name
     inferExtPrim _ returnType MakeFuture [_, action] = do
         ignore $ inferExpr delayedType action
         pure inferredForkJoinTaskType
@@ -901,87 +904,22 @@ mutual
         pure targetType
 
     inferExprOp : PrimFn arity -> Vect arity NamedCExp -> Asm InferredType
-    inferExprOp (Add Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (Sub Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (Mul Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (Div Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (Mod Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (Neg Bits64Type) [x] = inferUnaryOp ILong x
-    inferExprOp (ShiftL Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (ShiftR Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (BAnd Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (BOr Bits64Type) [x, y] = inferBinaryOp ILong x y
-    inferExprOp (BXOr Bits64Type) [x, y] = inferBinaryOp ILong x y
-
-    inferExprOp (Add IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (Sub IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (Mul IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (Div IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (Mod IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (Neg IntegerType) [x] = inferUnaryOp inferredBigIntegerType x
-    inferExprOp (ShiftL IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (ShiftR IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (BAnd IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (BOr IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-    inferExprOp (BXOr IntegerType) [x, y] = inferBinaryOp inferredBigIntegerType x y
-
-    inferExprOp (Add DoubleType) [x, y] = inferBinaryOp IDouble x y
-    inferExprOp (Sub DoubleType) [x, y] = inferBinaryOp IDouble x y
-    inferExprOp (Mul DoubleType) [x, y] = inferBinaryOp IDouble x y
-    inferExprOp (Div DoubleType) [x, y] = inferBinaryOp IDouble x y
-    inferExprOp (Neg DoubleType) [x] = inferUnaryOp IDouble x
-
-    inferExprOp (Add _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Sub _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mul _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Div _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Mod _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (Neg _) [x] = inferUnaryOp IInt x
-    inferExprOp (ShiftL _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (ShiftR _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BAnd _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BOr _) [x, y] = inferBinaryOp IInt x y
-    inferExprOp (BXOr _) [x, y] = inferBinaryOp IInt x y
-
-    inferExprOp (LT Int64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (LT Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (LT CharType) [x, y] = inferBoolOp IChar x y
-    inferExprOp (LT IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
-    inferExprOp (LT DoubleType) [x, y] = inferBoolOp IDouble x y
-    inferExprOp (LT StringType) [x, y] = inferBoolOp inferredStringType x y
-    inferExprOp (LT _) [x, y] = inferBoolOp IInt x y
-
-    inferExprOp (LTE Int64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (LTE Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (LTE CharType) [x, y] = inferBoolOp IChar x y
-    inferExprOp (LTE IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
-    inferExprOp (LTE DoubleType) [x, y] = inferBoolOp IDouble x y
-    inferExprOp (LTE StringType) [x, y] = inferBoolOp inferredStringType x y
-    inferExprOp (LTE _) [x, y] = inferBoolOp IInt x y
-
-    inferExprOp (EQ Int64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (EQ Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (EQ CharType) [x, y] = inferBoolOp IChar x y
-    inferExprOp (EQ IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
-    inferExprOp (EQ DoubleType) [x, y] = inferBoolOp IDouble x y
-    inferExprOp (EQ StringType) [x, y] = inferBoolOp inferredStringType x y
-    inferExprOp (EQ _) [x, y] = inferBoolOp IInt x y
-
-    inferExprOp (GT Int64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (GT Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (GT CharType) [x, y] = inferBoolOp IChar x y
-    inferExprOp (GT IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
-    inferExprOp (GT DoubleType) [x, y] = inferBoolOp IDouble x y
-    inferExprOp (GT StringType) [x, y] = inferBoolOp inferredStringType x y
-    inferExprOp (GT _) [x, y] = inferBoolOp IInt x y
-
-    inferExprOp (GTE Int64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (GTE Bits64Type) [x, y] = inferBoolOp ILong x y
-    inferExprOp (GTE CharType) [x, y] = inferBoolOp IChar x y
-    inferExprOp (GTE IntegerType) [x, y] = inferBoolOp inferredBigIntegerType x y
-    inferExprOp (GTE DoubleType) [x, y] = inferBoolOp IDouble x y
-    inferExprOp (GTE StringType) [x, y] = inferBoolOp inferredStringType x y
-    inferExprOp (GTE _) [x, y] = inferBoolOp IInt x y
+    inferExprOp (Add ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (Sub ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (Mul ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (Div ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (Mod ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (Neg ty) [x] = inferUnaryOp (getInferredType ty) x
+    inferExprOp (ShiftL ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (ShiftR ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (BAnd ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (BOr ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (BXOr ty) [x, y] = inferBinaryOp (getInferredType ty) x y
+    inferExprOp (LT ty) [x, y] = inferBoolOp (getInferredType ty) x y
+    inferExprOp (LTE ty) [x, y] = inferBoolOp (getInferredType ty) x y
+    inferExprOp (EQ ty) [x, y] = inferBoolOp (getInferredType ty) x y
+    inferExprOp (GT ty) [x, y] = inferBoolOp (getInferredType ty) x y
+    inferExprOp (GTE ty) [x, y] = inferBoolOp (getInferredType ty) x y
 
     inferExprOp StrLength [x] = do
         ignore $ inferExpr inferredStringType x
@@ -1021,51 +959,16 @@ mutual
     inferExprOp DoubleFloor [x] = inferUnaryOp IDouble x
     inferExprOp DoubleCeiling [x] = inferUnaryOp IDouble x
 
-    inferExprOp (Cast Int64Type Bits64Type) [x] = inferExprCast ILong ILong x
-    inferExprOp (Cast Int64Type IntegerType) [x] = inferExprCast ILong inferredBigIntegerType x
-    inferExprOp (Cast Int64Type DoubleType) [x] = inferExprCast ILong IDouble x
-    inferExprOp (Cast Int64Type StringType) [x] = inferExprCast ILong inferredStringType x
-    inferExprOp (Cast Int64Type _) [x] = inferExprCast ILong IInt x
+    inferExprOp (Cast ty1 ty2) [x] = inferExprCast (getInferredType ty1) (getInferredType ty2) x
 
-    inferExprOp (Cast Bits64Type Int64Type) [x] = inferExprCast ILong ILong x
-    inferExprOp (Cast Bits64Type IntegerType) [x] = inferExprCast ILong inferredBigIntegerType x
-    inferExprOp (Cast Bits64Type DoubleType) [x] = inferExprCast ILong IDouble x
-    inferExprOp (Cast Bits64Type StringType) [x] = inferExprCast ILong inferredStringType x
-    inferExprOp (Cast Bits64Type _) [x] = inferExprCast ILong IInt x
-
-    inferExprOp (Cast IntegerType Int64Type) [x] = inferExprCast inferredBigIntegerType ILong x
-    inferExprOp (Cast IntegerType Bits64Type) [x] = inferExprCast inferredBigIntegerType ILong x
-    inferExprOp (Cast IntegerType StringType) [x] = inferExprCast inferredBigIntegerType inferredStringType x
-    inferExprOp (Cast IntegerType DoubleType) [x] = inferExprCast inferredBigIntegerType IDouble x
-    inferExprOp (Cast IntegerType _) [x] = inferExprCast inferredBigIntegerType IInt x
-
-    inferExprOp (Cast CharType Int64Type) [x] = inferExprCast IChar ILong x
-    inferExprOp (Cast CharType Bits64Type) [x] = inferExprCast IChar ILong x
-    inferExprOp (Cast CharType StringType) [x] = inferExprCast IChar inferredStringType x
-    inferExprOp (Cast CharType DoubleType) [x] = inferExprCast IChar IDouble x
-    inferExprOp (Cast CharType IntegerType) [x] = inferExprCast IChar inferredBigIntegerType x
-    inferExprOp (Cast CharType _) [x] = inferExprCast IChar IInt x
-
-    inferExprOp (Cast DoubleType Int64Type) [x] = inferExprCast IDouble ILong x
-    inferExprOp (Cast DoubleType Bits64Type) [x] = inferExprCast IDouble ILong x
-    inferExprOp (Cast DoubleType StringType) [x] = inferExprCast IDouble inferredStringType x
-    inferExprOp (Cast DoubleType IntegerType) [x] = inferExprCast IDouble inferredBigIntegerType x
-    inferExprOp (Cast DoubleType _) [x] = inferExprCast IDouble IInt x
-
-    inferExprOp (Cast StringType IntegerType) [x] = inferExprCast inferredStringType inferredBigIntegerType x
-    inferExprOp (Cast StringType IntType) [x] = inferExprCast inferredStringType IInt x
-    inferExprOp (Cast StringType DoubleType) [x] = inferExprCast inferredStringType IDouble x
-
-    inferExprOp (Cast _ Int64Type) [x] = inferExprCast IInt ILong x
-    inferExprOp (Cast _ Bits64Type) [x] = inferExprCast IInt ILong x
-    inferExprOp (Cast _ IntegerType) [x] = inferExprCast IInt inferredBigIntegerType x
-    inferExprOp (Cast _ StringType) [x] = inferExprCast IInt inferredStringType x
-    inferExprOp (Cast _ DoubleType) [x] = inferExprCast IInt IDouble x
-    inferExprOp (Cast _ CharType) [x] = inferExprCast IInt IChar x
-    inferExprOp (Cast _ _) [x] = inferExprCast IInt IInt x
-
-    inferExprOp BelieveMe [_, _, x] = Pure IUnknown
-    inferExprOp Crash [_, msg] = Pure IUnknown
+    inferExprOp BelieveMe [a, b, x] = do
+      ignore $ inferExpr IUnknown a
+      ignore $ inferExpr IUnknown b
+      ignore $ inferExpr IUnknown x
+      Pure IUnknown
+    inferExprOp Crash [_, msg] = do
+      ignore $ inferExpr inferredStringType msg
+      Pure IUnknown
     inferExprOp op _ = Throw emptyFC ("Unsupported primitive function " ++ show op)
 
 optimize : Jname -> TailCallCategory -> NamedCExp -> Asm NamedCExp
@@ -1108,7 +1011,7 @@ inferDef programName idrisName fc (MkNmFun args body) = do
     setCurrentFunction function
     LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
     let shouldDebugExpr = shouldDebug &&
-        (fromMaybe True $ ((\name => name `isInfixOf` (getSimpleName jname)) <$> debugFunction))
+        fromMaybe True ((\name => name `isInfixOf` (getSimpleName jname)) <$> debugFunction)
     when shouldDebugExpr $
       debug $ "Inferring " ++ (className jvmClassAndMethodName) ++ "." ++ (methodName jvmClassAndMethodName) ++
         ":\n" ++ showNamedCExp 0 expr
@@ -1128,6 +1031,7 @@ inferDef programName idrisName fc (MkNmFun args body) = do
     retTy <- inferExpr IUnknown optimizedExpr
     updateScopeVariableTypes arity
     updateCurrentFunction $ record { inferredFunctionType = inferredFunctionType }
+    when shouldDebugExpr $ showScopes (scopeCounter !GetState - 1)
   where
     getArgumentTypes : List String -> Asm (List InferredType)
     getArgumentTypes argumentNames = do

@@ -4,7 +4,7 @@
 
     <groupId>io.github.mmhelloworld</groupId>
     <artifactId>idris-jvm</artifactId>
-    <version>0.5.1.1-SNAPSHOT</version>
+    <version>0.6.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Idris JVM</name>
     <description>JVM bytecode backend for Idris</description>
@@ -25,7 +25,7 @@
     </developers>
 
     <properties>
-        <asm.version>9.0</asm.version>
+        <asm.version>9.4</asm.version>
         <assertj.version>3.16.1</assertj.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.scm.id>github</project.scm.id>
@@ -50,6 +50,8 @@
         <versions-maven-plugin.version>2.8.1</versions-maven-plugin.version>
         <maven-source-plugin.version>3.2.0</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.4.0</maven-javadoc-plugin.version>
+        <maven-artifact.version>3.6.0</maven-artifact.version>
+        <properties-maven-plugin.version>1.1.0</properties-maven-plugin.version>
     </properties>
 
     <scm>
@@ -74,6 +76,12 @@
                 <groupId>org.ow2.asm</groupId>
                 <artifactId>asm</artifactId>
                 <version>${asm.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.maven</groupId>
+                <artifactId>maven-artifact</artifactId>
+                <version>${maven-artifact.version}</version>
             </dependency>
 
             <dependency>
@@ -170,6 +178,11 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-resources-plugin</artifactId>
                     <version>${maven-resources-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>properties-maven-plugin</artifactId>
+                    <version>${properties-maven-plugin.version}</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>

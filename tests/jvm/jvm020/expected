@@ -1,3 +1,5 @@
-1/1: Building DoubleInJvmStack (DoubleInJvmStack.idr)
-Main> True
+1/1: Building Popen (Popen.idr)
+Main> opened
+closed
+Idris 2
 Main> Bye for now!

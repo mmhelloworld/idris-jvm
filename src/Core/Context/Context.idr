@@ -334,7 +334,6 @@ record GlobalDef where
   compexpr : Maybe CDef
   namedcompexpr : Maybe NamedDef
   sizeChange : List SCCall
-  schemeExpr : Maybe (SchemeMode, SchemeObj Write)
 
 export
 gDefKindedName : GlobalDef -> KindedName

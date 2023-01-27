@@ -11,7 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-import static io.github.mmhelloworld.idrisjvm.runtime.Directories.workingDir;
+import static io.github.mmhelloworld.idrisjvm.runtime.Directories.getWorkingDir;
 import static java.lang.String.format;
 import static java.lang.System.currentTimeMillis;
 import static java.util.Locale.ROOT;
@@ -20,13 +20,13 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 public final class IdrisSystem {
     public static final String OS_NAME;
-    private static final Map<String, String> environmentVariables;
-    private static final List<String> environmentVariableNames;
+    private static final Map<String, String> ENVIRONMENT_VARIABLES;
+    private static final List<String> ENVIRONMENT_VARIABLE_NAMES;
 
     static {
-        environmentVariables = new LinkedHashMap<>(System.getenv());
-        environmentVariables.putAll((Map) System.getProperties());
-        environmentVariableNames = new ArrayList<>(environmentVariables.keySet());
+        ENVIRONMENT_VARIABLES = new LinkedHashMap<>(System.getenv());
+        ENVIRONMENT_VARIABLES.putAll((Map) System.getProperties());
+        ENVIRONMENT_VARIABLE_NAMES = new ArrayList<>(ENVIRONMENT_VARIABLES.keySet());
 
         // To conform to support/chez/support.ss
         String osNameProperty = getOsNameProperty();
@@ -52,7 +52,7 @@ public final class IdrisSystem {
     public static int runCommand(String command) throws IOException, InterruptedException {
         String[] commandParts = getCommand(command);
         return new ProcessBuilder(commandParts)
-            .directory(new File(workingDir))
+            .directory(new File(getWorkingDir()))
             .inheritIO()
             .start()
             .waitFor();
@@ -76,16 +76,18 @@ public final class IdrisSystem {
     }
 
     public static int setEnv(String name, String value, int shouldOverwrite) {
-        System.setProperty(name, value);
+        if (shouldOverwrite == 1 || getEnv(name) == null) {
+            System.setProperty(name, value);
+        }
         return 0;
     }
 
     public static String getEnvPair(int index) {
-        if (index >= environmentVariableNames.size()) {
+        if (index >= ENVIRONMENT_VARIABLE_NAMES.size()) {
             return null;
         } else {
-            String name = environmentVariableNames.get(index);
-            return name + "=" + environmentVariables.get(name);
+            String name = ENVIRONMENT_VARIABLE_NAMES.get(index);
+            return name + "=" + ENVIRONMENT_VARIABLES.get(name);
         }
     }
 

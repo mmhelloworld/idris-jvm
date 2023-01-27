@@ -12,8 +12,6 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
     private IdrisList() {
     }
 
-    public abstract int getConstructorId();
-
     public static IdrisList fromIterable(Iterable<?> iterable) {
         List<Object> items = new ArrayList<>();
         iterable.forEach(items::add);
@@ -103,6 +101,8 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
         return result;
     }
 
+    public abstract int getConstructorId();
+
     public static final class Nil extends IdrisList {
         public static final Nil INSTANCE = new Nil();
 
@@ -174,9 +174,9 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
             return 1 + ((IdrisList) tail).size();
         }
 
-        private static class Node {
-            private Node previous;
+        private static final class Node {
             private final Object element;
+            private Node previous;
             private Node next;
 
             private Node(Node previous, Object element, Node next) {
@@ -190,7 +190,7 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
             }
         }
 
-        private static class Iterator implements ListIterator<Object> {
+        private static final class Iterator implements ListIterator<Object> {
             private static final Object EMPTY_ELEMENT = new Object();
             private int index;
             private Node node;
@@ -198,29 +198,6 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
             private Iterator(int index, IdrisList idrisList) {
                 this.index = index;
                 this.node = createNode(index, idrisList);
-            }
-
-            private static Node createNode(int index, IdrisList idrisList) {
-                if (idrisList == Nil.INSTANCE) {
-                    return null;
-                }
-                Cons cons = (Cons) idrisList;
-                Node currNode = new Node(cons.head);
-                int startIndex = -1;
-                Node start = new Node(null, EMPTY_ELEMENT, currNode);
-                for (IdrisList currList = (IdrisList) cons.tail; currList != Nil.INSTANCE; currList =
-                    (IdrisList) ((Cons) currList).tail) {
-                    Cons newCons = (Cons) currList;
-                    Node newNode = new Node(newCons.head);
-                    currNode.next = newNode;
-                    newNode.previous = currNode;
-                    currNode = currNode.next;
-                    if (startIndex + 1 < index) {
-                        start = newNode.previous;
-                        startIndex++;
-                    }
-                }
-                return startIndex + 1 != index ? null : start;
             }
 
             @Override
@@ -278,6 +255,29 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
             @Override
             public void add(Object o) {
                 throw new UnsupportedOperationException("immutable list");
+            }
+
+            private static Node createNode(int index, IdrisList idrisList) {
+                if (idrisList == Nil.INSTANCE) {
+                    return null;
+                }
+                Cons cons = (Cons) idrisList;
+                Node currNode = new Node(cons.head);
+                int startIndex = -1;
+                Node start = new Node(null, EMPTY_ELEMENT, currNode);
+                for (IdrisList currList = (IdrisList) cons.tail; currList != Nil.INSTANCE; currList =
+                    (IdrisList) ((Cons) currList).tail) {
+                    Cons newCons = (Cons) currList;
+                    Node newNode = new Node(newCons.head);
+                    currNode.next = newNode;
+                    newNode.previous = currNode;
+                    currNode = currNode.next;
+                    if (startIndex + 1 < index) {
+                        start = newNode.previous;
+                        startIndex++;
+                    }
+                }
+                return startIndex + 1 != index ? null : start;
             }
         }
     }

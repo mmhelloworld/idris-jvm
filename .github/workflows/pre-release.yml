@@ -8,7 +8,7 @@ on:
 env:
   IDRIS2_TESTS_CG: jvm
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-  PREVIOUS_VERSION: 0.5.1
+  PREVIOUS_VERSION: 0.5.1.2
 
 jobs:
   pre-release:
@@ -32,16 +32,16 @@ jobs:
           gpg-passphrase: GPG_PASSPHRASE
 
       - name: Set IDRIS2_PREFIX
-        run: echo "IDRIS2_PREFIX=$HOME/bin/idris2-$PREVIOUS_VERSION/lib" >> $GITHUB_ENV
+        run: echo IDRIS2_PREFIX="$HOME/bin/idris2-$PREVIOUS_VERSION/env" >> "$GITHUB_ENV"
 
       - name: Set PREFIX
-        run: echo "PREFIX=$IDRIS2_PREFIX" >> $GITHUB_ENV
+        run: echo PREFIX="$IDRIS2_PREFIX" >> "$GITHUB_ENV"
 
       - name: Download previous version
         run: |
-          mvn dependency:copy -Dartifact=io.github.mmhelloworld:idris-jvm-compiler:$PREVIOUS_VERSION:zip -DoutputDirectory=. -U
-          unzip idris-jvm-compiler-*.zip -d $HOME/bin
-          echo "::add-path::$HOME/bin/idris2-$PREVIOUS_VERSION/bin"
+          mvn dependency:copy "-Dartifact=io.github.mmhelloworld:idris-jvm-compiler:$PREVIOUS_VERSION:zip" -DoutputDirectory=. -U
+          unzip idris-jvm-compiler-*.zip -d "$HOME/bin"
+          echo "::add-path::$HOME/bin/idris2-$PREVIOUS_VERSION/exec"
 
       - name: Publish to Maven Central
         run: mvn -B -Prelease deploy

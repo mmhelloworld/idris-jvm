@@ -47,6 +47,7 @@ toPrim pn@(NS _ n)
             (n == UN (Basic "prim__getField"), GetField),
             (n == UN (Basic "prim__setField"), SetField),
             (n == UN (Basic "void"), VoidElim),
+            (n == UN (Basic "prim__void"), VoidElim),
             (n == UN (Basic "prim__os"), SysOS),
             (n == UN (Basic "prim__codegen"), SysCodegen),
             (n == UN (Basic "prim__makeFuture"), MakeFuture)

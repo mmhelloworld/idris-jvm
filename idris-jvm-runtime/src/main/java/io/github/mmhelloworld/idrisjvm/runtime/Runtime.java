@@ -4,24 +4,27 @@ import java.lang.management.ManagementFactory;
 import java.nio.channels.Channels;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static java.util.concurrent.ForkJoinPool.commonPool;
 import static java.util.stream.Collectors.toList;
 
 public final class Runtime {
     public static final long START_TIME = System.nanoTime();
-    static final ChannelIo stdin = new ChannelIo(null, Channels.newChannel(System.in));
-    static final ChannelIo stdout = new ChannelIo(null, Channels.newChannel(System.out));
-    static final ChannelIo stderr = new ChannelIo(null, Channels.newChannel(System.err));
+    static final ChannelIo STDIN = new ChannelIo(null, Channels.newChannel(System.in));
+    static final ChannelIo STDOUT = new ChannelIo(null, Channels.newChannel(System.out));
+    static final ChannelIo STDERR = new ChannelIo(null, Channels.newChannel(System.err));
+    private static final ForkJoinPool FORK_JOIN_POOL = new ForkJoinPool(
+        java.lang.Runtime.getRuntime().availableProcessors() * 2);
     private static final ThreadLocal<Integer> ERROR_NUMBER = ThreadLocal.withInitial(() -> 0);
     private static final int EAGAIN = 11;
     private static String[] programArgs;
     private static IdrisList programArgsList;
     private static Exception exception;
+
 
     private Runtime() {
     }
@@ -50,15 +53,15 @@ public final class Runtime {
     }
 
     public static Object getStdin() {
-        return stdin;
+        return STDIN;
     }
 
     public static Object getStdout() {
-        return stdout;
+        return STDOUT;
     }
 
     public static Object getStderr() {
-        return stderr;
+        return STDERR;
     }
 
     public static int getPid() {
@@ -70,7 +73,9 @@ public final class Runtime {
     }
 
     public static <T> T crash(String message) {
-        throw new RuntimeException(message);
+        System.out.println("ERROR: " + message);
+        System.exit(1);
+        return null;
     }
 
     public static <T> T nullValue() {
@@ -81,19 +86,19 @@ public final class Runtime {
         return ERROR_NUMBER.get();
     }
 
+    static void setErrorNumber(int errorNumber) {
+        if (errorNumber == 0) {
+            setException(null);
+        }
+        ERROR_NUMBER.set(errorNumber);
+    }
+
     public static Exception getException() {
         return exception;
     }
 
     static void setException(Exception exception) {
         Runtime.exception = exception;
-    }
-
-    static void setErrorNumber(int errorNumber) {
-        if (errorNumber == 0) {
-            setException(null);
-        }
-        ERROR_NUMBER.set(errorNumber);
     }
 
     public static int getEagain() {
@@ -151,7 +156,7 @@ public final class Runtime {
         if (possibleThunk instanceof Thunk) {
             return ((Thunk) possibleThunk).getInt();
         } else {
-            return Conversion.toInt1(possibleThunk);
+            return Conversion.toInt(possibleThunk);
         }
     }
 
@@ -180,7 +185,7 @@ public final class Runtime {
     }
 
     public static ForkJoinTask<?> fork(Function<Object, Object> action) {
-        return commonPool().submit(() -> {
+        return FORK_JOIN_POOL.submit(() -> {
             try {
                 unwrap(action.apply(0));
             } catch (Exception e) {
@@ -190,7 +195,7 @@ public final class Runtime {
     }
 
     public static ForkJoinTask<?> fork(Delayed action) {
-        return commonPool().submit(() -> unwrap(action.evaluate()));
+        return FORK_JOIN_POOL.submit(() -> unwrap(action.evaluate()));
     }
 
     public static void await(ForkJoinTask<?> task) {

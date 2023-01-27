@@ -1,6 +1,6 @@
-1/1: Building LetInNonTailPosition (LetInNonTailPosition.idr)
-Main> x
-y
-z
-result ["3", "3", "3"]
+1/1: Building partial (partial.idr)
+Main> ERROR: Unhandled input for Main.foo at partial:4:1--4:17
+Main> 2
+Main> ERROR: Unhandled input for Main.lookup' at partial:19:1--19:40
+Main> ERROR: Unhandled input for Main.lookup' at partial:19:1--19:40
 Main> Bye for now!

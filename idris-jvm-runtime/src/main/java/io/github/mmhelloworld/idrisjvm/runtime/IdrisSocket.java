@@ -37,6 +37,8 @@ public final class IdrisSocket implements Closeable {
     private static final int AF_INET = 2;
     private static final int AF_INET6 = 10;
     private static final int EAGAIN = 112;
+    private static final int ONE_KB = 1024;
+    private static final int SOCKET_BUFFER_CAPACITY_IN_KB = 8;
     private AbstractSelectableChannel channel;
     private int socketType;
 
@@ -124,10 +126,10 @@ public final class IdrisSocket implements Closeable {
         return EAGAIN;
     }
 
-    public int bind(int socketFamily, int socketType, String hostName, int port) {
+    public int bind(int socketFamily, int newSocketType, String hostName, int port) {
         return withExceptionHandling(() -> {
             InetSocketAddress socketAddress = new InetSocketAddress(hostName, port);
-            switch (socketType) {
+            switch (newSocketType) {
                 case STREAM_SOCKET_TYPE:
                     channel = ServerSocketChannel.open();
                     ((ServerSocketChannel) channel).socket().bind(socketAddress);
@@ -141,17 +143,17 @@ public final class IdrisSocket implements Closeable {
                     Runtime.setErrorNumber(errorCode);
                     return errorCode;
             }
-            this.socketType = socketType;
+            this.socketType = newSocketType;
             Server.register(channel, OP_ACCEPT);
             Server.start();
             return 0;
         }, -1);
     }
 
-    public int connect(int socketFamily, int socketType, String hostName, int port) {
+    public int connect(int socketFamily, int newSocketType, String hostName, int port) {
         return withExceptionHandling(() -> {
             InetAddress inetAddress = InetAddress.getByName(hostName);
-            switch (socketType) {
+            switch (newSocketType) {
                 case STREAM_SOCKET_TYPE:
                     channel = SocketChannel.open(new InetSocketAddress(inetAddress, port));
                     initialize(channel);
@@ -234,12 +236,12 @@ public final class IdrisSocket implements Closeable {
     }
 
     public ResultPayload<String> receive(int length) {
-        SocketChannel channel = (SocketChannel) this.channel;
+        SocketChannel socketChannel = (SocketChannel) this.channel;
         ResultPayload<String> resultPayload = withExceptionHandling(() -> {
             ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
             do {
                 buffer.rewind();
-            } while (channel.read(buffer) <= 0);
+            } while (socketChannel.read(buffer) <= 0);
 
             StringBuilder builder = new StringBuilder(length);
             int read;
@@ -247,20 +249,20 @@ public final class IdrisSocket implements Closeable {
                 buffer.flip();
                 builder.append(UTF_8.decode(buffer));
                 buffer.rewind();
-                read = channel.read(buffer);
+                read = socketChannel.read(buffer);
             } while (read > 0 && builder.length() < length);
-            return new ResultPayload<>(builder.length(), builder.toString(), channel.getRemoteAddress());
+            return new ResultPayload<>(builder.length(), builder.toString(), socketChannel.getRemoteAddress());
         });
         return resultPayload != null ? resultPayload : new ResultPayload<>(Runtime.getErrorNumber(), null, null);
     }
 
     public ResultPayload<byte[]> receive(Object arrayObject, int length) {
         ResultPayload<byte[]> resultPayload = withExceptionHandling(() -> {
-            SocketChannel channel = (SocketChannel) this.channel;
+            SocketChannel socketChannel = (SocketChannel) this.channel;
             ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
             do {
                 buffer.rewind();
-            } while (channel.read(buffer) <= 0);
+            } while (socketChannel.read(buffer) <= 0);
             int read;
             int size = 0;
             byte[] array = (byte[]) arrayObject;
@@ -268,12 +270,12 @@ public final class IdrisSocket implements Closeable {
                 buffer.flip();
                 System.arraycopy(buffer.array(), 0, array, size, Math.min(buffer.limit(), array.length));
                 buffer.rewind();
-                read = channel.read(buffer);
+                read = socketChannel.read(buffer);
                 if (read > 0) {
                     size += read;
                 }
             } while (read > 0 && size < length);
-            return new ResultPayload<>(0, array, channel.getRemoteAddress());
+            return new ResultPayload<>(0, array, socketChannel.getRemoteAddress());
         });
         return resultPayload != null ? resultPayload : new ResultPayload<>(Runtime.getErrorNumber(), null, null);
     }
@@ -290,16 +292,21 @@ public final class IdrisSocket implements Closeable {
         });
     }
 
-    private void initialize(AbstractSelectableChannel channel) throws IOException {
-        this.channel = channel;
-        channel.configureBlocking(false);
-        Server.register(channel, channel.validOps());
-        ClientSocketReaderState readerState = new ClientSocketReaderState(ByteBuffer.allocate(1024 * 8),
-            new ResettableCountDownLatch(1));
-        Server.putState(channel, readerState);
-        ClientSocketWriterState writerState = new ClientSocketWriterState(ByteBuffer.allocate(1024 * 8),
-            new ResettableCountDownLatch(1));
-        Server.putState(channel, writerState);
+    private static void handleException(Exception e) {
+        Runtime.setException(e);
+        Runtime.setErrorNumber(getErrorNumber(e));
+    }
+
+    private void initialize(AbstractSelectableChannel newChannel) throws IOException {
+        this.channel = newChannel;
+        newChannel.configureBlocking(false);
+        Server.register(newChannel, newChannel.validOps());
+        ClientSocketReaderState readerState = new ClientSocketReaderState(
+            ByteBuffer.allocate(ONE_KB * SOCKET_BUFFER_CAPACITY_IN_KB), new ResettableCountDownLatch(1));
+        Server.putState(newChannel, readerState);
+        ClientSocketWriterState writerState = new ClientSocketWriterState(ByteBuffer.allocate(
+            ONE_KB * SOCKET_BUFFER_CAPACITY_IN_KB), new ResettableCountDownLatch(1));
+        Server.putState(newChannel, writerState);
     }
 
     private <T> T withExceptionHandling(SupplierE<T, ? extends Exception> action) {
@@ -346,9 +353,28 @@ public final class IdrisSocket implements Closeable {
         }
     }
 
-    private static void handleException(Exception e) {
-        Runtime.setException(e);
-        Runtime.setErrorNumber(getErrorNumber(e));
+    public static final class ResultPayload<T> {
+        private final int result;
+        private final T payload;
+        private final SocketAddress remoteAddress;
+
+        private ResultPayload(int result, T payload, SocketAddress remoteAddress) {
+            this.result = result;
+            this.payload = payload;
+            this.remoteAddress = remoteAddress;
+        }
+
+        public int getResult() {
+            return result;
+        }
+
+        public T getPayload() {
+            return payload;
+        }
+
+        public SocketAddress getRemoteAddress() {
+            return remoteAddress;
+        }
     }
 
     static int getErrorNumber(Exception exception) {
@@ -373,30 +399,6 @@ public final class IdrisSocket implements Closeable {
             return ErrorCodes.NO_ROUTE_TO_HOST;
         } else {
             return ErrorCodes.IO_ERROR;
-        }
-    }
-
-    public static final class ResultPayload<T> {
-        private final int result;
-        private final T payload;
-        private final SocketAddress remoteAddress;
-
-        private ResultPayload(int result, T payload, SocketAddress remoteAddress) {
-            this.result = result;
-            this.payload = payload;
-            this.remoteAddress = remoteAddress;
-        }
-
-        public int getResult() {
-            return result;
-        }
-
-        public T getPayload() {
-            return payload;
-        }
-
-        public SocketAddress getRemoteAddress() {
-            return remoteAddress;
         }
     }
 }

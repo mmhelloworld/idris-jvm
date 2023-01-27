@@ -9,7 +9,7 @@ import java.util.Iterator;
 import static java.nio.file.Files.newDirectoryStream;
 
 public final class Directories {
-    static String workingDir = System.getProperty("user.dir");
+    private static String workingDir = System.getProperty("user.dir");
 
     private Directories() {
     }
@@ -82,11 +82,6 @@ public final class Directories {
         }
     }
 
-    private static void handleException(Exception exception) {
-        Runtime.setException(exception);
-        Runtime.setErrorNumber(ChannelIo.getErrorNumber(exception));
-    }
-
     public static Object getNextDirectoryEntry(Object directory) {
         Runtime.setErrorNumber(0);
         Iterator<Path> iterator = ((Directory) directory).getIterator();
@@ -95,5 +90,14 @@ public final class Directories {
         } else {
             return null;
         }
+    }
+
+    public static String getWorkingDir() {
+        return workingDir;
+    }
+
+    private static void handleException(Exception exception) {
+        Runtime.setException(exception);
+        Runtime.setErrorNumber(ChannelIo.getErrorNumber(exception));
     }
 }

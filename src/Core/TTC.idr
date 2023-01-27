@@ -20,7 +20,6 @@ import Libraries.Data.SparseMatrix
 import Libraries.Data.WithDefault
 
 import Libraries.Utils.Binary
-import Libraries.Utils.Scheme
 
 %default covering
 

@@ -3,7 +3,7 @@
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.5.1.1-SNAPSHOT</version>
+        <version>0.6.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -11,6 +11,12 @@
     <name>Idris JVM Assembler</name>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

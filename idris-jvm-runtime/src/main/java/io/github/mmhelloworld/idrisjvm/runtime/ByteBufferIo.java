@@ -7,7 +7,8 @@ import java.nio.charset.Charset;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-public class ByteBufferIo {
+public final class ByteBufferIo {
+    public static final int DEFAULT_BUFFER_SIZE = 1024;
     private final FunctionE<ByteBuffer, Integer, IOException> reader;
     private final FunctionE<ByteBuffer, Integer, IOException> writer;
     private final Charset charset;
@@ -18,7 +19,7 @@ public class ByteBufferIo {
 
     ByteBufferIo(FunctionE<ByteBuffer, Integer, IOException> reader,
                  FunctionE<ByteBuffer, Integer, IOException> writer) {
-        this(reader, writer, UTF_8, 1024);
+        this(reader, writer, UTF_8, DEFAULT_BUFFER_SIZE);
     }
 
     private ByteBufferIo(FunctionE<ByteBuffer, Integer, IOException> reader,
@@ -37,6 +38,35 @@ public class ByteBufferIo {
             return (char) -1;
         }
         return charBuffer.get();
+    }
+
+    public boolean isEof() throws IOException {
+        if (charBuffer == null || lastReadLine == null) {
+            return !ensureBuffer();
+        }
+        if (!lastReadLine.isEmpty()) {
+            isEof = false;
+        }
+        lastReadLine = null;
+        return isEof;
+    }
+
+    private boolean ensureBuffer() throws IOException {
+        final boolean hasRemaining;
+        if (charBuffer == null || !charBuffer.hasRemaining()) {
+            buffer.rewind();
+            int read = reader.apply(buffer);
+            buffer.flip();
+            if (read > 0) {
+                charBuffer = UTF_8.decode(buffer);
+                hasRemaining = charBuffer.hasRemaining();
+            } else {
+                hasRemaining = false;
+            }
+        } else {
+            hasRemaining = true;
+        }
+        return hasRemaining;
     }
 
     String getLine() throws IOException {
@@ -71,40 +101,11 @@ public class ByteBufferIo {
         }
     }
 
-    public boolean isEof() throws IOException {
-        if (charBuffer == null || lastReadLine == null) {
-            return !ensureBuffer();
-        }
-        if (!lastReadLine.isEmpty()) {
-            isEof = false;
-        }
-        lastReadLine = null;
-        return isEof;
-    }
-
     int writeString(String str) throws IOException {
         return writer.apply(charset.encode(str));
     }
 
     int writeChar(char c) throws IOException {
         return writer.apply(charset.encode(CharBuffer.wrap(new char[]{c})));
-    }
-
-    private boolean ensureBuffer() throws IOException {
-        final boolean hasRemaining;
-        if (charBuffer == null || !charBuffer.hasRemaining()) {
-            buffer.rewind();
-            int read = reader.apply(buffer);
-            buffer.flip();
-            if (read > 0) {
-                charBuffer = UTF_8.decode(buffer);
-                hasRemaining = charBuffer.hasRemaining();
-            } else {
-                hasRemaining = false;
-            }
-        } else {
-            hasRemaining = true;
-        }
-        return hasRemaining;
     }
 }

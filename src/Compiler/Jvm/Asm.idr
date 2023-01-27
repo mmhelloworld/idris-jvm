@@ -47,6 +47,7 @@ data JBsmArgHandle : Type where [external]
 
 data JInteger : Type where [external]
 data JDouble : Type where [external]
+data JLong : Type where [external]
 
 namespace Collection
     export
@@ -507,6 +508,8 @@ public export
 data Constant = DoubleConst Double
               | IntegerConst Int
               | StringConst String
+              | Bits64Const Bits64
+              | Int64Const Int64
               | TypeConst String
 
 public export
@@ -677,6 +680,7 @@ data Asm : Type -> Type where
     Istore : Int -> Asm ()
     Isub : Asm ()
     Iushr : Asm ()
+    L2d : Asm ()
     L2i : Asm ()
     LabelStart : (label: String) -> Asm ()
     Ladd : Asm ()
@@ -813,6 +817,10 @@ public export
 crash : String -> Object
 
 export
+asmCrash : String -> Asm a
+asmCrash message = Pure $ believe_me $ crash message
+
+export
 newBigInteger : String -> Asm ()
 newBigInteger "0" = Field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
 newBigInteger "1" = Field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
@@ -833,7 +841,7 @@ findFunction name = LiftIo $ AsmGlobalState.findFunction !getGlobalState name
 
 export
 getFunction : Jname -> Asm Function
-getFunction name = maybe (Throw emptyFC $ "Unknown function " ++ show name) Pure !(findFunction name)
+getFunction name = maybe (asmCrash $ "Unknown function " ++ show name) Pure !(findFunction name)
 
 export
 getCurrentFunction : Asm Function
@@ -1140,8 +1148,7 @@ getVariableIndexAtScope currentScopeIndex name = do
         Just index => Pure index
         Nothing => do
           rootMethodName <- getRootMethodName
-          Throw emptyFC
-            ("getVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
+          asmCrash ("getVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
               name ++ " at index " ++ show currentScopeIndex)
 
 export
@@ -1203,7 +1210,7 @@ getVariableScope name = go !getCurrentScopeIndex where
             Just _ => Pure scope
             Nothing => case parentIndex scope of
                 Just parentScopeIndex => go parentScopeIndex
-                Nothing => Throw emptyFC ("Unknown variable " ++ name)
+                Nothing => asmCrash ("Unknown variable " ++ name)
 
 export
 addVariableType : String -> InferredType -> Asm InferredType
@@ -1316,10 +1323,22 @@ integerValueOf : Int -> JInteger
 export
 doubleValueOf : Double -> JDouble
 
+%foreign
+    jvm' "java/lang/Long" "valueOf" "long" "java/lang/Long"
+export
+bits64ToJLong : Bits64 -> JLong
+
+%foreign
+    jvm' "java/lang/Long" "valueOf" "long" "java/lang/Long"
+export
+int64ToJLong : Int64 -> JLong
+
 export
 constantToObject : Asm.Constant -> Object
 constantToObject (DoubleConst d) = believe_me $ doubleValueOf d
 constantToObject (IntegerConst n) = believe_me $ integerValueOf n
+constantToObject (Int64Const n) = believe_me $ int64ToJLong n
+constantToObject (Bits64Const n) = believe_me $ bits64ToJLong n
 constantToObject (StringConst str) = believe_me str
 constantToObject (TypeConst str) = believe_me str
 
@@ -1834,6 +1853,7 @@ runAsm state (Istore n) = assemble state $
     jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.istore" [assembler state, n]
 runAsm state Isub = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.isub" [assembler state]
 runAsm state Iushr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iushr" [assembler state]
+runAsm state L2d = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2d" [assembler state]
 runAsm state L2i = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2i" [assembler state]
 runAsm state (LabelStart label) =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.labelStart" [assembler state, label]

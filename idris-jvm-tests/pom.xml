@@ -3,7 +3,7 @@
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.5.1.1-SNAPSHOT</version>
+        <version>0.6.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -38,6 +38,10 @@
                             <arguments>
                                 <argument>testenv</argument>
                             </arguments>
+                            <environmentVariables>
+                                <INTERACTIVE />
+                                <JAVA_OPTS>-Xss8m -Xms2g -Xmx3g</JAVA_OPTS>
+                            </environmentVariables>
                         </configuration>
                     </execution>
                     <execution>
@@ -64,6 +68,7 @@
                         <configuration>
                             <environmentVariables>
                                 <INTERACTIVE />
+                                <JAVA_OPTS>-Xss16m -Xms2g -Xmx3g</JAVA_OPTS>
                             </environmentVariables>
                             <skip>${skipTests}</skip>
                             <executable>make</executable>
@@ -123,34 +128,8 @@
                         </goals>
                         <configuration>
                             <target>
-                                <move file="../tests/build/exec/runtests_app/runtests.jar" tofile="../tests/build/exec/runtests_app/idris-jvm-tests-${project.version}.jar" failonerror="false" quiet="true" />
-                                <copy file="../tests/build/exec/runtests_app/idris-jvm-tests-${project.version}.jar" tofile="./target/idris-jvm-tests-${project.version}.jar" />
+                                <copy file="../tests/build/exec/runtests_app/runtests.jar" tofile="./target/idris-jvm-tests-${project.version}.jar" />
                             </target>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>appassembler-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>assemble</goal>
-                        </goals>
-                        <configuration>
-                            <binFolder>exec</binFolder>
-                            <repositoryName>exec/runtests_app</repositoryName>
-                            <repositoryLayout>flat</repositoryLayout>
-                            <assembleDirectory>${project.parent.basedir}/tests/build</assembleDirectory>
-                            <extraJvmArguments>-Xss8m -Xms2g -Xmx3g</extraJvmArguments>
-                            <programs>
-                                <program>
-                                    <mainClass>runtests.Main</mainClass>
-                                    <id>runtests</id>
-                                </program>
-                            </programs>
                         </configuration>
                     </execution>
                 </executions>

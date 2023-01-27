@@ -6,20 +6,20 @@ public final class Console {
     }
 
     public static void printString(String string) {
-        Runtime.stdout.writeLine(string);
+        Runtime.STDOUT.writeLine(string);
     }
 
     public static String getString() {
-        String line = Runtime.stdin.readLine();
+        String line = Runtime.STDIN.readLine();
         // conforming to Idris C implementation
         return line == null ? "" : line.replaceAll("[\\r\\n]+$", "");
     }
 
     public static void putChar(char c) {
-        Runtime.stdout.writeChar(c);
+        Runtime.STDOUT.writeChar(c);
     }
 
     public static char getChar() {
-        return Runtime.stdin.readChar();
+        return Runtime.STDIN.readChar();
     }
 }

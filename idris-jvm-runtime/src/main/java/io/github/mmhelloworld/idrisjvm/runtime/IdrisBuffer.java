@@ -16,6 +16,7 @@ import static java.nio.file.StandardOpenOption.WRITE;
 
 public final class IdrisBuffer {
 
+    private static final int BUFFER_SIZE = 1024;
     private final ByteBuffer buffer;
 
     public IdrisBuffer(int size) {
@@ -127,6 +128,20 @@ public final class IdrisBuffer {
         ((IdrisBuffer) buffer).writeToFile(file, location, length);
     }
 
+    public static void copy(Object from, int start, int length, Object to, int location) {
+        ((IdrisBuffer) from).copy(start, length, (IdrisBuffer) to, location);
+    }
+
+    public static int writeToFile(String fileName, Object buffer, int length) {
+        try {
+            FileChannel channel = FileChannel.open(Paths.createPath(fileName), CREATE, WRITE);
+            ((IdrisBuffer) buffer).writeToFile(channel, 0, length);
+            return 0;
+        } catch (IOException exception) {
+            return -1;
+        }
+    }
+
     public int size() {
         return buffer.capacity();
     }
@@ -138,10 +153,6 @@ public final class IdrisBuffer {
                 to.buffer.put(this.buffer.get(i));
             }
         }
-    }
-
-    public static void copy(Object from, int start, int length, Object to, int location) {
-        ((IdrisBuffer) from).copy(start, length, (IdrisBuffer) to, location);
     }
 
     public void setByte(int location, byte value) {
@@ -259,10 +270,10 @@ public final class IdrisBuffer {
             }
             int end = location + length;
             buffer.position(location);
-            byte[] data = new byte[1024];
+            byte[] data = new byte[BUFFER_SIZE];
             int numberOfBytesRead = 0;
-            for (int index = location; index < end; index += 1024) {
-                int limit = Math.min(end - index, 1024);
+            for (int index = location; index < end; index += BUFFER_SIZE) {
+                int limit = Math.min(end - index, BUFFER_SIZE);
                 numberOfBytesRead += file.read(ByteBuffer.wrap(data, 0, limit));
                 buffer.put(data, 0, limit);
             }
@@ -280,26 +291,16 @@ public final class IdrisBuffer {
                 length = size - location;
             }
             int end = location + length;
-            byte[] data = new byte[1024];
+            byte[] data = new byte[BUFFER_SIZE];
             buffer.position(location);
 
-            for (int index = location; index < end; index += 1024) {
-                int limit = Math.min(end - index, 1024);
+            for (int index = location; index < end; index += BUFFER_SIZE) {
+                int limit = Math.min(end - index, BUFFER_SIZE);
                 buffer.get(data, 0, limit);
                 written += file.write(ByteBuffer.wrap(data, 0, limit));
             }
         }
         return written;
-    }
-
-    public static int writeToFile(String fileName, Object buffer, int length) {
-        try {
-            FileChannel channel = FileChannel.open(Paths.createPath(fileName), CREATE, WRITE);
-            ((IdrisBuffer) buffer).writeToFile(channel, 0, length);
-            return 0;
-        } catch (IOException exception) {
-            return -1;
-        }
     }
 
     int readFromFile(File file, int location, int length) throws IOException {

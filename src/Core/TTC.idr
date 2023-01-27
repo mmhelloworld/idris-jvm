@@ -17,7 +17,6 @@ import Libraries.Data.IOArray
 import Data.Vect
 
 import Libraries.Utils.Binary
-import Libraries.Utils.Scheme
 
 %default covering
 
@@ -1132,10 +1131,10 @@ TTC GlobalDef where
                       sc <- fromBuf b
                       pure (MkGlobalDef loc name ty eargs seargs specargs iargs
                                         mul vars vis
-                                        tot fl refs refsR inv c True def cdef Nothing sc Nothing)
+                                        tot fl refs refsR inv c True def cdef Nothing sc)
               else pure (MkGlobalDef loc name (Erased loc Placeholder) [] [] [] []
                                      mul [] Public unchecked [] refs refsR
-                                     False False True def cdef Nothing [] Nothing)
+                                     False False True def cdef Nothing [])
 
 export
 TTC Transform where

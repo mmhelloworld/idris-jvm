@@ -72,12 +72,17 @@ namespace ForeignImplementationType
         parse : FC -> CFType -> Asm ForeignImplementationType
         parse _ CFUnit = Pure $ AtomicForeignImplementationType IVoid
         parse _ CFInt = Pure $ AtomicForeignImplementationType IInt
+        parse _ CFInt8 = Pure $ AtomicForeignImplementationType IInt
+        parse _ CFInt16 = Pure $ AtomicForeignImplementationType IInt
+        parse _ CFInt32 = Pure $ AtomicForeignImplementationType IInt
+        parse _ CFInt64 = Pure $ AtomicForeignImplementationType ILong
         parse _ CFUnsigned8 = Pure $ AtomicForeignImplementationType IInt
         parse _ CFUnsigned16 = Pure $ AtomicForeignImplementationType IInt
         parse _ CFUnsigned32 = Pure $ AtomicForeignImplementationType IInt
         parse _ CFUnsigned64 = Pure $ AtomicForeignImplementationType ILong
         parse _ CFString = Pure $ AtomicForeignImplementationType inferredStringType
         parse _ CFDouble = Pure $ AtomicForeignImplementationType IDouble
+        parse _ CFInteger = Pure $ AtomicForeignImplementationType inferredBigIntegerType
         parse _ CFChar = Pure $ AtomicForeignImplementationType IChar
         parse _ CFWorld = Pure $ AtomicForeignImplementationType IInt
         parse fc (CFIORes returnType) = parse fc returnType

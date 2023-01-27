@@ -7,9 +7,9 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 
 ## Install
 
-* Download the latest Idris 2 JVM release from here https://github.com/mmhelloworld/idris-jvm/releases/latest.
-* Extract the archive and add `idris2` launcher script directory `<EXTRACTED_DIRECTORY_ROOT>/bin` to PATH.
-* Create an environment variable `IDRIS2_PREFIX` pointing to `<EXTRACTED_DIRECTORY_ROOT>/lib`
+* Download the latest Idris 2 JVM release from [releases page](https://github.com/mmhelloworld/idris-jvm/releases/latest).
+* Extract the archive and add `idris2` launcher script directory `<EXTRACTED_DIRECTORY_ROOT>/exec` to PATH.
+* Create an environment variable `IDRIS2_PREFIX` pointing to `<EXTRACTED_DIRECTORY_ROOT>/env`
 
 ## Example
 
@@ -44,8 +44,7 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 
 #### Run
 
-* On Linux/Mac OS:  `java -cp "build/exec/main_app/main.jar:$IDRIS2_PREFIX/*" main.Main`
-* On Windows:  `java -cp "build\exec\main_app\main.jar;%IDRIS2_PREFIX%\*" main.Main`
+`build/exec/main_app/main`
 
 ## License
 This repository extends [idris-lang/Idris2](https://github.com/idris-lang/Idris2) repository with JVM backend. Files from [idris-lang/Idris2](https://github.com/idris-lang/Idris2) are covered by that repository's [license](https://github.com/idris-lang/Idris2/blob/main/LICENSE).

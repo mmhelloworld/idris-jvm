@@ -2,6 +2,7 @@ package io.github.mmhelloworld.idrisjvm.runtime;
 
 public final class Random {
     private static final java.util.Random RANDOM = new java.util.Random();
+
     private Random() {
     }
 

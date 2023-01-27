@@ -21,7 +21,7 @@ displayTree show tree = unlines . reverse $ go [] [] 0 tree where
       go (showNodeData nodeLevel d :: acc) nextTree treeLevel tree
     go acc stack level (Node d (child :: children)) =
       let childrenWithLevel = ((\c => (level + 1, c)) <$> children)
-      in go (showNodeData level d :: acc) (childrenWithLevel ++ stack) (level + 1) child
+      in assert_total $ go (showNodeData level d :: acc) (childrenWithLevel ++ stack) (level + 1) child
 
 implementation Show a => Show (Tree a) where
   show tree = displayTree show tree

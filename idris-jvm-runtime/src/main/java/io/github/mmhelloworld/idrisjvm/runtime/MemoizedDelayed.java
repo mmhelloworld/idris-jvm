@@ -8,8 +8,8 @@ public final class MemoizedDelayed implements Delayed {
 
     public MemoizedDelayed(Delayed delayed) {
         this.delayed = () -> {
-            synchronized(this) {
-                if(!initialized) {
+            synchronized (this) {
+                if (!initialized) {
                     Object value = unwrap(delayed.evaluate());
                     this.delayed = () -> value;
                     initialized = true;

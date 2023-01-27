@@ -1,0 +1,6 @@
+1/1: Building LetInNonTailPosition (LetInNonTailPosition.idr)
+Main> x
+y
+z
+result ["3", "3", "3"]
+Main> Bye for now!

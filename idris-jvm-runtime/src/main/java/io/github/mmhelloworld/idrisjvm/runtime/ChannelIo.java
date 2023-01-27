@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-import static io.github.mmhelloworld.idrisjvm.runtime.Directories.workingDir;
+import static io.github.mmhelloworld.idrisjvm.runtime.Directories.getWorkingDir;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_READ;
@@ -45,20 +45,22 @@ import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toSet;
 
-public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Closeable, IdrisFile<ChannelIo> {
+public final class ChannelIo implements ReadableByteChannel, WritableByteChannel, Closeable, IdrisFile<ChannelIo> {
     private static final boolean IS_POSIX = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
-    private static final Map<Integer, PosixFilePermission> modeToPermissions = new HashMap<>();
+    private static final Map<Integer, PosixFilePermission> MODE_TO_PERMISSIONS = new HashMap<>();
+    private static final int MISSING_FILE_ERROR_CODE = 2;
+    private static final int SECURITY_ERROR_CODE = 3;
+    private static final int EXISTING_FILE_ERROR_CODE = 4;
+    private static final int GENERAL_ERROR_CODE = 10;
 
     static {
-        modeToPermissions.put(256, OWNER_READ);
-        modeToPermissions.put(128, OWNER_WRITE);
-        modeToPermissions.put(64, OWNER_EXECUTE);
-        modeToPermissions.put(32, GROUP_READ);
-        modeToPermissions.put(16, GROUP_WRITE);
-        modeToPermissions.put(8, GROUP_EXECUTE);
-        modeToPermissions.put(4, OTHERS_READ);
-        modeToPermissions.put(2, OTHERS_WRITE);
-        modeToPermissions.put(1, OTHERS_EXECUTE);
+        PosixFilePermission[] permissions = {
+            OTHERS_EXECUTE, OTHERS_WRITE, OTHERS_READ,
+            GROUP_EXECUTE, GROUP_WRITE, GROUP_READ,
+            OWNER_EXECUTE, OWNER_WRITE, OWNER_READ};
+        for (int index = 0; index < permissions.length; index++) {
+            MODE_TO_PERMISSIONS.put(1 << index, permissions[index]);
+        }
     }
 
     private final Path path;
@@ -69,14 +71,14 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
     ChannelIo(Path path, Channel channel) {
         this.path = path;
         this.channel = channel;
-        FunctionE<ByteBuffer, Integer, IOException> reader = channel instanceof ReadableByteChannel ?
-            ((ReadableByteChannel) channel)::read : buffer -> {
-            throw new IOException("File is not readable");
-        };
-        FunctionE<ByteBuffer, Integer, IOException> writer = channel instanceof WritableByteChannel ?
-            ((WritableByteChannel) channel)::write : buffer -> {
-            throw new IOException("File is not writable");
-        };
+        FunctionE<ByteBuffer, Integer, IOException> reader =
+            channel instanceof ReadableByteChannel ? ((ReadableByteChannel) channel)::read : buffer -> {
+                throw new IOException("File is not readable");
+            };
+        FunctionE<ByteBuffer, Integer, IOException> writer =
+            channel instanceof WritableByteChannel ? ((WritableByteChannel) channel)::write : buffer -> {
+                throw new IOException("File is not writable");
+            };
         this.byteBufferIo = new ByteBufferIo(reader, writer);
     }
 
@@ -125,7 +127,7 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
 
     public static ChannelIo popen(String command, String mode) throws IOException {
         Process process = new ProcessBuilder(IdrisSystem.getCommand(command))
-            .directory(new File(workingDir))
+            .directory(new File(getWorkingDir()))
             .start();
         return new ChannelIo(null, new ReadableWritableChannel(Channels.newChannel(process.getInputStream()),
             Channels.newChannel(process.getOutputStream())));
@@ -386,19 +388,11 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
         }
     }
 
-
-    static int getErrorNumber(Exception exception) {
-        if (exception == null) {
-            return 0;
-        } else if (exception instanceof FileNotFoundException || exception instanceof NoSuchFileException) {
-            return 2; // To return error codes to conform to Idris functions with C FFIs
-        } else if (exception instanceof AccessDeniedException || exception instanceof SecurityException) {
-            return 3;
-        } else if (exception instanceof FileAlreadyExistsException) {
-            return 4;
-        } else {
-            return 10;
-        }
+    private static Set<PosixFilePermission> createPosixFilePermissions(int mode) {
+        return MODE_TO_PERMISSIONS.entrySet().stream()
+            .filter(modeAndPermission -> (mode & modeAndPermission.getKey()) == modeAndPermission.getKey())
+            .map(Map.Entry::getValue)
+            .collect(toSet());
     }
 
     private <T> T withExceptionHandling(SupplierE<T, ? extends Exception> action) {
@@ -421,8 +415,8 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
         Runtime.setErrorNumber(0);
         try {
             return action.get();
-        } catch (Exception exception) {
-            handleException(exception);
+        } catch (Exception newException) {
+            handleException(newException);
             return fallback;
         }
     }
@@ -432,8 +426,8 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
         Runtime.setErrorNumber(0);
         try {
             return action.get();
-        } catch (Exception exception) {
-            handleException(exception);
+        } catch (Exception currentException) {
+            handleException(currentException);
             return fallback;
         }
     }
@@ -443,16 +437,25 @@ public class ChannelIo implements ReadableByteChannel, WritableByteChannel, Clos
         Runtime.setErrorNumber(0);
         try {
             return action.get();
-        } catch (Exception exception) {
-            handleException(exception);
+        } catch (Exception currentException) {
+            handleException(currentException);
             return fallback;
         }
     }
 
-    private static Set<PosixFilePermission> createPosixFilePermissions(int mode) {
-        return modeToPermissions.entrySet().stream()
-            .filter(modeAndPermission -> (mode & modeAndPermission.getKey()) == modeAndPermission.getKey())
-            .map(Map.Entry::getValue)
-            .collect(toSet());
+    static int getErrorNumber(Exception currentException) {
+        if (currentException == null) {
+            return 0;
+        } else if (currentException instanceof FileNotFoundException
+            || currentException instanceof NoSuchFileException) {
+            return MISSING_FILE_ERROR_CODE; // To return error codes to conform to Idris functions with C FFIs
+        } else if (currentException instanceof AccessDeniedException
+            || currentException instanceof SecurityException) {
+            return SECURITY_ERROR_CODE;
+        } else if (currentException instanceof FileAlreadyExistsException) {
+            return EXISTING_FILE_ERROR_CODE;
+        } else {
+            return GENERAL_ERROR_CODE;
+        }
     }
 }

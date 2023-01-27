@@ -37,7 +37,7 @@ public final class Strings {
     }
 
     public static IdrisList unpack(String string) {
-        return IdrisList.fromArray(string.toCharArray());
+        return string == null ? IdrisList.Nil.INSTANCE : IdrisList.fromArray(string.toCharArray());
     }
 
     public static int bytesLengthUtf8(String string) {

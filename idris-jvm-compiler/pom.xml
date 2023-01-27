@@ -3,7 +3,7 @@
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.5.1.1-SNAPSHOT</version>
+        <version>0.6.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -49,6 +49,23 @@
             </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
+                <artifactId>properties-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>read-project-properties</goal>
+                        </goals>
+                        <configuration>
+                            <files>
+                                <file>${project.build.outputDirectory}/config.properties</file>
+                            </files>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
                 <executions>
                     <execution>
@@ -66,9 +83,38 @@
                 </executions>
             </plugin>
             <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <includeScope>compile</includeScope>
+                            <outputDirectory>${project.parent.basedir}/build/exec/idris2_app</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <executions>
+                    <execution>
+                        <id>read-config</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>make</executable>
+                            <workingDirectory>${project.parent.basedir}</workingDirectory>
+                            <arguments>
+                                <argument>maven-property</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>idris-compile</id>
                         <phase>compile</phase>
@@ -82,6 +128,37 @@
                             <arguments>
                                 <argument>support</argument>
                                 <argument>idris2-exec</argument>
+                            </arguments>
+                            <environmentVariables>
+                                <JAVA_OPTS>-Xss70m -Xms3g -Xmx3g</JAVA_OPTS>
+                                <IDRIS2_CG>jvm</IDRIS2_CG>
+                            </environmentVariables>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>runtime-jar-cleanup</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${skipIdrisCompile}</skip>
+                            <!--
+                            This is a hack to remove bootstrap compiler runtime JAR under "build/exec/idris2_app".
+                            Idris JVM compiler copies runtime JAR into application output directories so that we don't
+                            have to setup the JAR explicitly in the classpath to run programs but for compiler code
+                            itself, we want to use the runtime JAR from the current version, not of the compiler that
+                            compiles the current code. This program compares the semantic versions of runtime JARs
+                            and removes the old JAR. This is specifically inside "test" directory so that dependencies
+                            for this class like "maven-artifact" dependency wouldn't be copied
+                            into "build/exec/idris2_app" directory.
+                            -->
+                            <mainClass>
+                                io.github.mmhelloworld.idrisjvm.compiler.RuntimeJarCleanup
+                            </mainClass>
+                            <classpathScope>test</classpathScope>
+                            <arguments>
+                                <argument>${project.parent.basedir}/build/exec/idris2_app</argument>
                             </arguments>
                         </configuration>
                     </execution>
@@ -98,6 +175,10 @@
                             <arguments>
                                 <argument>install</argument>
                             </arguments>
+                            <environmentVariables>
+                                <IDRIS2_CG>jvm</IDRIS2_CG>
+                                <JAVA_OPTS>-Xss70m -Xms3g -Xmx3g</JAVA_OPTS>
+                            </environmentVariables>
                         </configuration>
                     </execution>
                     <execution>
@@ -113,6 +194,9 @@
                             <arguments>
                                 <argument>clean</argument>
                             </arguments>
+                            <environmentVariables>
+                                <IDRIS2_CG>jvm</IDRIS2_CG>
+                            </environmentVariables>
                         </configuration>
                     </execution>
                 </executions>
@@ -121,33 +205,6 @@
                 <artifactId>maven-antrun-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>clean-jars</id>
-                        <phase>validate</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <skip>${skipIdrisCompile}</skip>
-                            <target>
-                                <delete failonerror="false">
-                                    <fileset dir="../build/exec/idris2_app" includes="*.jar" />
-                                </delete>
-                            </target>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>version-compiler-jar</id>
-                        <phase>process-classes</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <move file="../build/exec/idris2_app/idris2.jar" tofile="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar" failonerror="false" overwrite="true" />
-                            </target>
-                        </configuration>
-                    </execution>
-                    <execution>
                         <id>copy-compiler-jar</id>
                         <phase>process-classes</phase>
                         <goals>
@@ -155,65 +212,9 @@
                         </goals>
                         <configuration>
                             <target>
-                                <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar" tofile="./target/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
+                                <copy file="../build/exec/idris2_app/idris2.jar"
+                                      tofile="./target/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
                             </target>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>assemble-compiler-jar</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar" tofile="./target/assembly/lib/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
-                            </target>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>appassembler-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>idrisOutputScripts</id>
-                        <phase>process-classes</phase>
-                        <goals>
-                            <goal>assemble</goal>
-                        </goals>
-                        <configuration>
-                            <binFolder>exec</binFolder>
-                            <repositoryName>exec/idris2_app</repositoryName>
-                            <repositoryLayout>flat</repositoryLayout>
-                            <assembleDirectory>${project.parent.basedir}/build</assembleDirectory>
-                            <extraJvmArguments>-Xss70m -Xms3g -Xmx3g</extraJvmArguments>
-                            <programs>
-                                <program>
-                                    <mainClass>idris2.Main</mainClass>
-                                    <id>idris2</id>
-                                </program>
-                            </programs>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>package</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>assemble</goal>
-                        </goals>
-                        <configuration>
-                            <repositoryName>lib</repositoryName>
-                            <repositoryLayout>flat</repositoryLayout>
-                            <assembleDirectory>${project.build.directory}/assembly</assembleDirectory>
-                            <extraJvmArguments>-Xss70m -Xms3g -Xmx3g</extraJvmArguments>
-                            <programs>
-                                <program>
-                                    <mainClass>idris2.Main</mainClass>
-                                    <id>idris2</id>
-                                </program>
-                            </programs>
                         </configuration>
                     </execution>
                 </executions>
@@ -223,7 +224,7 @@
                 <executions>
                     <execution>
                         <id>create-zip</id>
-                        <phase>prepare-package</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>single</goal>
                         </goals>
@@ -286,6 +287,12 @@
         <dependency>
             <groupId>org.ow2.asm</groupId>
             <artifactId>asm</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.maven</groupId>
+            <artifactId>maven-artifact</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

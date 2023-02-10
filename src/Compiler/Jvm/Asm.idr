@@ -816,6 +816,10 @@ public export
 crash : String -> Object
 
 export
+asmCrash : String -> Asm a
+asmCrash message = Pure $ believe_me $ crash message
+
+export
 getGlobalState : Asm AsmGlobalState
 getGlobalState = Pure $ globalState !GetState
 

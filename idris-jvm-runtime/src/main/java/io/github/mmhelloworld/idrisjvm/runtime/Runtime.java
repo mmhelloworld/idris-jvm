@@ -4,6 +4,7 @@ import java.lang.management.ManagementFactory;
 import java.nio.channels.Channels;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.Future;
 import java.util.function.Function;
@@ -14,6 +15,10 @@ import static java.util.stream.Collectors.toList;
 
 public final class Runtime {
     public static final long START_TIME = System.nanoTime();
+
+    private static final ForkJoinPool FORK_JOIN_POOL = new ForkJoinPool(
+            java.lang.Runtime.getRuntime().availableProcessors() * 2);
+
     static final ChannelIo stdin = new ChannelIo(null, Channels.newChannel(System.in));
     static final ChannelIo stdout = new ChannelIo(null, Channels.newChannel(System.out));
     static final ChannelIo stderr = new ChannelIo(null, Channels.newChannel(System.err));
@@ -70,7 +75,9 @@ public final class Runtime {
     }
 
     public static <T> T crash(String message) {
-        throw new RuntimeException(message);
+        System.out.println(message);
+        System.exit(1);
+        return null;
     }
 
     public static <T> T nullValue() {
@@ -180,7 +187,7 @@ public final class Runtime {
     }
 
     public static ForkJoinTask<?> fork(Function<Object, Object> action) {
-        return commonPool().submit(() -> {
+        return FORK_JOIN_POOL.submit(() -> {
             try {
                 unwrap(action.apply(0));
             } catch (Exception e) {
@@ -190,7 +197,7 @@ public final class Runtime {
     }
 
     public static ForkJoinTask<?> fork(Delayed action) {
-        return commonPool().submit(() -> unwrap(action.evaluate()));
+        return FORK_JOIN_POOL.submit(() -> unwrap(action.evaluate()));
     }
 
     public static void await(ForkJoinTask<?> task) {

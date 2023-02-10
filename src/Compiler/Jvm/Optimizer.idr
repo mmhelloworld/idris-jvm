@@ -76,6 +76,17 @@ tySpec (NmCon fc (NS namespaces n) _ _ []) = cond
       (isBoolTySpec (show namespaces) n, pure IBool)] (pure inferredObjectType)
 tySpec ty = pure inferredObjectType
 
+namespace InferredPrimType
+  export
+  getInferredType : TT.Constant -> InferredType
+  getInferredType Bits64Type = ILong
+  getInferredType Int64Type = ILong
+  getInferredType IntegerType = inferredBigIntegerType
+  getInferredType DoubleType = IDouble
+  getInferredType StringType = inferredStringType
+  getInferredType CharType = IChar
+  getInferredType _ = IInt
+
 export
 getFArgs : NamedCExp -> Asm (List (NamedCExp, NamedCExp))
 getFArgs (NmCon fc _ _ (Just 0) _) = pure []
@@ -702,15 +713,6 @@ mutual
         ignore $ inferExpr ty y
         pure ty
 
-    getInferredType : TT.Constant -> InferredType
-    getInferredType Bits64Type = ILong
-    getInferredType Int64Type = ILong
-    getInferredType IntegerType = inferredBigIntegerType
-    getInferredType DoubleType = IDouble
-    getInferredType StringType = inferredStringType
-    getInferredType CharType = IChar
-    getInferredType _ = IInt
-
     inferBoolOp : InferredType -> NamedCExp -> NamedCExp -> Asm InferredType
     inferBoolOp ty x y = do
         ignore $ inferExpr ty x
@@ -760,6 +762,7 @@ mutual
     inferExtPrim _ returnType SysOS [] = pure inferredStringType
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
     inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
+    inferExtPrim _ returnType (Unknown name) _ = asmCrash $ "Can't compile unknown external directive " ++ show name
     inferExtPrim _ returnType MakeFuture [_, action] = do
         ignore $ inferExpr delayedType action
         pure inferredForkJoinTaskType

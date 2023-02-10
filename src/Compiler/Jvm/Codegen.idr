@@ -27,6 +27,7 @@ import System.FFI
 import System.Info
 
 import Compiler.Jvm.Asm
+import Compiler.Jvm.Math
 import Compiler.Jvm.MockAsm
 import Compiler.Jvm.Optimizer
 import Compiler.Jvm.InferredType
@@ -98,6 +99,9 @@ defaultValue ILong = Ldc $ LongConst $ longValueOf $ bigIntegerToLong 0
 defaultValue IFloat = Fconst 0
 defaultValue IDouble = Dconst 0
 defaultValue _ = Aconstnull
+
+jIntKind : TT.Constant -> IntKind
+jIntKind ty = fromMaybe (Signed (P 32)) (intKind ty)
 
 multiValueMap : Ord k => (a -> k) -> (a -> v) -> List a -> SortedMap k (List v)
 multiValueMap f g xs = go SortedMap.empty xs where
@@ -176,24 +180,6 @@ labelHashCodeAlt (hash, expressions) = Pure (!newLabel, hash, expressions)
 getHashCodeCasesWithLabels : SortedMap Int (List (Int, a)) ->
     Asm (List (String, Int, List (Int, a)))
 getHashCodeCasesWithLabels positionAndAltsByHash = traverse labelHashCodeAlt $ SortedMap.toList positionAndAltsByHash
-
-longDivideUnsigned : Asm ()
-longDivideUnsigned = InvokeMethod InvokeStatic "java/lang/Long" "divideUnsigned" "(JJ)J" False
-
-longRemainderUnsigned : Asm ()
-longRemainderUnsigned = InvokeMethod InvokeStatic "java/lang/Long" "remainderUnsigned" "(JJ)J" False
-
-longCompareUnsigned : Asm ()
-longCompareUnsigned = InvokeMethod InvokeStatic "java/lang/Long" "compareUnsigned" "(JJ)I" False
-
-integerDivideUnsigned : Asm ()
-integerDivideUnsigned = InvokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
-
-integerRemainderUnsigned : Asm ()
-integerRemainderUnsigned = InvokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
-
-integerCompareUnsigned : Asm ()
-integerCompareUnsigned = InvokeMethod InvokeStatic "java/lang/Integer" "compareUnsigned" "(II)I" False
 
 assembleInt : (isTailCall: Bool) -> InferredType -> Int -> Asm ()
 assembleInt isTailCall returnType value = do
@@ -862,62 +848,21 @@ mutual
         asmCast IInt returnType
 
     assembleExprOp : InferredType -> FC -> PrimFn arity -> Vect arity NamedCExp -> Asm ()
-    assembleExprOp returnType fc (Add Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Ladd x y
-    assembleExprOp returnType fc (Sub Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lsub x y
-    assembleExprOp returnType fc (Mul Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lmul x y
-    assembleExprOp returnType fc (Div Bits64Type) [x, y] =
-        assembleExprBinaryOp returnType ILong longDivideUnsigned x y
-    assembleExprOp returnType fc (Mod Bits64Type) [x, y] =
-        assembleExprBinaryOp returnType ILong longRemainderUnsigned x y
     assembleExprOp returnType fc (Neg Bits64Type) [x] = assembleExprUnaryOp returnType ILong Lneg x
-    assembleExprOp returnType fc (ShiftL Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong (do L2i; Lshl) x y
     assembleExprOp returnType fc (ShiftR Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong (do L2i; Lushr) x y
     assembleExprOp returnType fc (BAnd Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Land x y
     assembleExprOp returnType fc (BOr Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lor x y
     assembleExprOp returnType fc (BXOr Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lxor x y
 
-    assembleExprOp returnType fc (Add Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Ladd x y
-    assembleExprOp returnType fc (Sub Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Lsub x y
-    assembleExprOp returnType fc (Mul Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Lmul x y
-    assembleExprOp returnType fc (Div Int64Type) [x, y] =
-        assembleExprBinaryOp returnType ILong Ldiv x y
-    assembleExprOp returnType fc (Mod Int64Type) [x, y] =
-        assembleExprBinaryOp returnType ILong longRemainderUnsigned x y
     assembleExprOp returnType fc (Neg Int64Type) [x] = assembleExprUnaryOp returnType ILong Lneg x
-    assembleExprOp returnType fc (ShiftL Int64Type) [x, y] = assembleExprBinaryOp returnType ILong (do L2i; Lshl) x y
     assembleExprOp returnType fc (ShiftR Int64Type) [x, y] = assembleExprBinaryOp returnType ILong (do L2i; Lushr) x y
     assembleExprOp returnType fc (BAnd Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Land x y
     assembleExprOp returnType fc (BOr Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Lor x y
     assembleExprOp returnType fc (BXOr Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Lxor x y
 
-    assembleExprOp returnType fc (Add IntegerType) [x, y] =
-        let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "add"
-                "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-        in assembleExprBinaryOp returnType inferredBigIntegerType op x y
-    assembleExprOp returnType fc (Sub IntegerType) [x, y] =
-        let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "subtract"
-                "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-        in assembleExprBinaryOp returnType inferredBigIntegerType op x y
-    assembleExprOp returnType fc (Mul IntegerType) [x, y] =
-        let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "multiply"
-                "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-        in assembleExprBinaryOp returnType inferredBigIntegerType op x y
-    assembleExprOp returnType fc (Div IntegerType) [x, y] =
-        let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "divide"
-                "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-        in assembleExprBinaryOp returnType inferredBigIntegerType op x y
-    assembleExprOp returnType fc (Mod IntegerType) [x, y] =
-        let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "remainder"
-                    "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-        in assembleExprBinaryOp returnType inferredBigIntegerType op x y
     assembleExprOp returnType fc (Neg IntegerType) [x] =
         let op = InvokeMethod InvokeVirtual "java/math/BigInteger" "negate" "()Ljava/math/BigInteger;" False
         in assembleExprUnaryOp returnType inferredBigIntegerType op x
-    assembleExprOp returnType fc (ShiftL IntegerType) [x, y] = do
-        let op = do
-            InvokeMethod InvokeVirtual "java/math/BigInteger" "intValueExact" "()I" False
-            InvokeMethod InvokeVirtual "java/math/BigInteger" "shiftLeft" "(I)Ljava/math/BigInteger;" False
-        assembleExprBinaryOp returnType inferredBigIntegerType op x y
     assembleExprOp returnType fc (ShiftR IntegerType) [x, y] = do
         let op = do
             InvokeMethod InvokeVirtual "java/math/BigInteger" "intValueExact" "()I" False
@@ -942,19 +887,20 @@ mutual
     assembleExprOp returnType fc (Div DoubleType) [x, y] = assembleExprBinaryOp returnType IDouble Ddiv x y
     assembleExprOp returnType fc (Neg DoubleType) [x] = assembleExprUnaryOp returnType IDouble Dneg x
 
-    assembleExprOp returnType fc (Add ty) [x, y] = assembleExprBinaryOp returnType IInt Iadd x y
-    assembleExprOp returnType fc (Sub ty) [x, y] = assembleExprBinaryOp returnType IInt Isub x y
-    assembleExprOp returnType fc (Mul ty) [x, y] = assembleExprBinaryOp returnType IInt Imul x y
-    assembleExprOp returnType fc (Div Bits32Type) [x, y] =
-        assembleExprBinaryOp returnType IInt integerDivideUnsigned x y
-    assembleExprOp returnType fc (Div ty) [x, y] = assembleExprBinaryOp returnType IInt Idiv x y
-    assembleExprOp returnType fc (Mod Bits32Type) [x, y] =
-        assembleExprBinaryOp returnType IInt integerRemainderUnsigned x y
-    assembleExprOp returnType fc (Mod ty) [x, y] = assembleExprBinaryOp returnType IInt Irem x y
+    assembleExprOp returnType fc (Add ty) [x, y] =
+      assembleExprBinaryOp returnType (getInferredType ty) (add (jIntKind ty)) x y
+    assembleExprOp returnType fc (Sub ty) [x, y] =
+      assembleExprBinaryOp returnType (getInferredType ty) (sub (jIntKind ty)) x y
+    assembleExprOp returnType fc (Mul ty) [x, y] =
+      assembleExprBinaryOp returnType (getInferredType ty) (mul (jIntKind ty)) x y
+    assembleExprOp returnType fc (Div ty) [x, y] =
+      assembleExprBinaryOp returnType (getInferredType ty) (div (jIntKind ty)) x y
+    assembleExprOp returnType fc (Mod ty) [x, y] =
+      assembleExprBinaryOp returnType (getInferredType ty) (mod (jIntKind ty)) x y
     assembleExprOp returnType fc (Neg ty) [x] = assembleExprUnaryOp returnType IInt Ineg x
 
-    assembleExprOp returnType fc (ShiftL ty) [x, y] = assembleExprBinaryOp returnType IInt Ishl x y
-    assembleExprOp returnType fc (ShiftR Bits32Type) [x, y] = assembleExprBinaryOp returnType IInt Iushr x y
+    assembleExprOp returnType fc (ShiftL ty) [x, y] =
+      assembleExprBinaryOp returnType (getInferredType ty) (shl (jIntKind ty)) x y
     assembleExprOp returnType fc (ShiftR ty) [x, y] = assembleExprBinaryOp returnType IInt Ishr x y
     assembleExprOp returnType fc (BAnd ty) [x, y] = assembleExprBinaryOp returnType IInt Iand x y
     assembleExprOp returnType fc (BOr ty) [x, y] = assembleExprBinaryOp returnType IInt Ior x y
@@ -1746,6 +1692,7 @@ mutual
         assembleExpr False delayedType action
         InvokeMethod InvokeStatic runtimeClass "fork" "(Lio/github/mmhelloworld/idrisjvm/runtime/Delayed;)Ljava/util/concurrent/ForkJoinTask;" False
         asmCast inferredForkJoinTaskType returnType
+    jvmExtPrim _ returnType (Unknown name) _ = asmCrash $ "Can't compile unknown external directive " ++ show name
     jvmExtPrim fc _ prim args = Throw fc $ "Unsupported external function " ++ show prim ++ "(" ++
         (show $ showNamedCExp 0 <$> args) ++ ")"
 

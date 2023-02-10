@@ -20,7 +20,7 @@ public final class Conversion {
         } else if (that instanceof Thunk) {
             return ((Thunk) that).getInt();
         } else if (that instanceof BigInteger) {
-            return ((BigInteger) that).intValueExact();
+            return ((BigInteger) that).intValue();
         } else if (that instanceof Character) {
             return (char) that;
         } else if (that instanceof Boolean) {

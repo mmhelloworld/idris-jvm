@@ -13,8 +13,10 @@ import Data.IORef
 -- Thread mailboxes
 
 %foreign "scheme:blodwen-set-thread-data"
+         "jvm:setThreadData(java/lang/Object java/lang/Object void),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
 prim__setThreadData : {a : Type} -> a -> PrimIO ()
 %foreign "scheme:blodwen-get-thread-data"
+         "jvm:getThreadData(java/lang/Object java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
 prim__getThreadData : (a : Type) -> PrimIO a
 
 export
@@ -32,10 +34,13 @@ export
 data Mutex : Type where [external]
 
 %foreign "scheme:blodwen-make-mutex"
+         "jvm:<init>(java/util/concurrent/locks/ReentrantLock),java/util/concurrent/locks/ReentrantLock"
 prim__makeMutex : PrimIO Mutex
 %foreign "scheme:blodwen-mutex-acquire"
+         "jvm:.lock(java/util/concurrent/locks/ReentrantLock void),java/util/concurrent/locks/ReentrantLock"
 prim__mutexAcquire : Mutex -> PrimIO ()
 %foreign "scheme:blodwen-mutex-release"
+         "jvm:.unlock(java/util/concurrent/locks/ReentrantLock void),java/util/concurrent/locks/ReentrantLock"
 prim__mutexRelease : Mutex -> PrimIO ()
 
 ||| Creates and returns a new mutex.
@@ -68,22 +73,27 @@ data Condition : Type where [external]
 
 %foreign "scheme,racket:blodwen-make-cv"
          "scheme,chez:blodwen-make-condition"
+         "jvm:<init>(io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition),io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition"
 prim__makeCondition : PrimIO Condition
 
 %foreign "scheme,racket:blodwen-cv-wait"
          "scheme,chez:blodwen-condition-wait"
+         "jvm:.await(io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition java/util/concurrent/locks/Lock void),io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition"
 prim__conditionWait : Condition -> Mutex -> PrimIO ()
 
 %foreign "scheme,chez:blodwen-condition-wait-timeout"
+         "jvm:.await(io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition java/util/concurrent/locks/Lock int void),io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition"
 --         "scheme,racket:blodwen-cv-wait-timeout"
 prim__conditionWaitTimeout : Condition -> Mutex -> Int -> PrimIO ()
 
 %foreign "scheme,racket:blodwen-cv-signal"
          "scheme,chez:blodwen-condition-signal"
+         "jvm:.signal(io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition void),io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition"
 prim__conditionSignal : Condition -> PrimIO ()
 
 %foreign "scheme,racket:blodwen-cv-broadcast"
          "scheme,chez:blodwen-condition-broadcast"
+         "jvm:.signalAll(io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition void),io/github/mmhelloworld/idrisjvm/runtime/IdrisCondition"
 prim__conditionBroadcast : Condition -> PrimIO ()
 
 
@@ -126,10 +136,13 @@ export
 data Semaphore : Type where [external]
 
 %foreign "scheme:blodwen-make-semaphore"
+         "jvm:<init>(int java/util/concurrent/Semaphore),java/util/concurrent/Semaphore"
 prim__makeSemaphore : Int -> PrimIO Semaphore
 %foreign "scheme:blodwen-semaphore-post"
+         "jvm:.release(java/util/concurrent/Semaphore void),java/util/concurrent/Semaphore"
 prim__semaphorePost : Semaphore -> PrimIO ()
 %foreign "scheme:blodwen-semaphore-wait"
+         "jvm:.acquire(java/util/concurrent/Semaphore void),java/util/concurrent/Semaphore"
 prim__semaphoreWait : Semaphore -> PrimIO ()
 
 
@@ -158,8 +171,10 @@ export
 data Barrier : Type where [external]
 
 %foreign "scheme:blodwen-make-barrier"
+         "jvm:<init>(int java/util/concurrent/CyclicBarrier),java/util/concurrent/CyclicBarrier"
 prim__makeBarrier : Int -> PrimIO Barrier
 %foreign "scheme:blodwen-barrier-wait"
+         "jvm:.await(java/util/concurrent/CyclicBarrier int),java/util/concurrent/CyclicBarrier"
 prim__barrierWait : Barrier -> PrimIO ()
 
 ||| Creates a new barrier that can block a given number of threads.
@@ -179,10 +194,13 @@ export
 data Channel : Type -> Type where [external]
 
 %foreign "scheme:blodwen-make-channel"
+         "jvm:<init>(java/util/concurrent/LinkedBlockingQueue),java/util/concurrent/LinkedBlockingQueue"
 prim__makeChannel : PrimIO (Channel a)
 %foreign "scheme:blodwen-channel-get"
+         "jvm:channelGet(java/lang/Object java/lang/Object java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
 prim__channelGet : Channel a -> PrimIO a
 %foreign "scheme:blodwen-channel-put"
+         "jvm:channelPut(java/lang/Object java/lang/Object java/lang/Object void),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
 prim__channelPut : Channel a -> a -> PrimIO ()
 
 ||| Creates and returns a new channel. The channel can be used with channelGet

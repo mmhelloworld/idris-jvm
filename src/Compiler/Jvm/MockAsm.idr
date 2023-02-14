@@ -239,6 +239,7 @@ mockRunAsm state (Istore n) = assemble state $
     log $ "istore " ++ show n
 mockRunAsm state Isub = assemble state $ log "isub"
 mockRunAsm state Iushr = assemble state $ log "iushr"
+mockRunAsm state L2d = assemble state $ log "l2d"
 mockRunAsm state L2i = assemble state $ log "l2i"
 mockRunAsm state (LabelStart label) = assemble state $ log (label ++ ":")
 mockRunAsm state Ladd = assemble state $ log "ladd"

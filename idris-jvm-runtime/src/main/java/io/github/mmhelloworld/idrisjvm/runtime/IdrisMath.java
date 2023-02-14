@@ -36,6 +36,10 @@ public final class IdrisMath {
         return ushl(num, bits, 16);
     }
 
+    public static int intMax(int bits) {
+        return (1 << bits) - 1;
+    }
+
     private static int ushl(int num, int bits, int radix) {
         return (num << bits) & intMax(radix);
     }
@@ -50,13 +54,5 @@ public final class IdrisMath {
 
     private static int umul(int x, int y, int bits) {
         return (x * y) & intMax(bits);
-    }
-
-    private static int intMax(int bits) {
-        return (1 << bits) - 1;
-    }
-
-    public static void main(String[] args) {
-        System.out.println(Long.parseLong(args[0]) % 2L);
     }
 }

@@ -680,6 +680,7 @@ data Asm : Type -> Type where
     Istore : Int -> Asm ()
     Isub : Asm ()
     Iushr : Asm ()
+    L2d : Asm ()
     L2i : Asm ()
     LabelStart : (label: String) -> Asm ()
     Ladd : Asm ()
@@ -1848,6 +1849,7 @@ runAsm state (Istore n) = assemble state $
     jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.istore" [assembler state, n]
 runAsm state Isub = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.isub" [assembler state]
 runAsm state Iushr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iushr" [assembler state]
+runAsm state L2d = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2d" [assembler state]
 runAsm state L2i = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2i" [assembler state]
 runAsm state (LabelStart label) =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.labelStart" [assembler state, label]

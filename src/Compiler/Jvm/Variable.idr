@@ -135,19 +135,19 @@ conversionClass : String
 conversionClass = "io/github/mmhelloworld/idrisjvm/runtime/Conversion"
 
 boolObjToBool : Asm ()
-boolObjToBool = InvokeMethod InvokeStatic conversionClass "toBoolean1" "(Ljava/lang/Object;)Z" False
+boolObjToBool = InvokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False
 
 boolToInt : Asm ()
 boolToInt = InvokeMethod InvokeStatic conversionClass "boolToInt1" "(Z)I" False
 
 objToInt : Asm ()
-objToInt = InvokeMethod InvokeStatic conversionClass "toInt1" "(Ljava/lang/Object;)I" False
+objToInt = InvokeMethod InvokeStatic conversionClass "toInt" "(Ljava/lang/Object;)I" False
 
 objToChar : Asm ()
 objToChar = InvokeMethod InvokeStatic conversionClass "toChar" "(Ljava/lang/Object;)C" False
 
 objToBoolean : Asm ()
-objToBoolean = InvokeMethod InvokeStatic conversionClass "toBoolean1" "(Ljava/lang/Object;)Z" False
+objToBoolean = InvokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False
 
 objToByte : Asm ()
 objToByte = InvokeMethod InvokeStatic conversionClass "toByte" "(Ljava/lang/Object;)B" False
@@ -158,8 +158,8 @@ charObjToChar = do Checkcast "java/lang/Character"; unboxChar
 objToShort : Asm ()
 objToShort = InvokeMethod InvokeStatic conversionClass "toShort" "(Ljava/lang/Object;)S" False
 
-longObjToLong : Asm ()
-longObjToLong = do Checkcast "java/lang/Long"; unboxLong
+objToLong : Asm ()
+objToLong = InvokeMethod InvokeStatic conversionClass "toLong" "(Ljava/lang/Object;)J" False
 
 objToFloat : Asm ()
 objToFloat = InvokeMethod InvokeStatic conversionClass "toFloat" "(Ljava/lang/Object;)F" False
@@ -355,7 +355,7 @@ loadVar sourceLocTys ty IShort var = loadAndUnboxShort ty sourceLocTys var
 loadVar sourceLocTys ty IInt var = loadAndUnboxInt ty sourceLocTys var
 
 loadVar sourceLocTys ty ILong var =
-    let loadInstr = \index => do Aload index; longObjToLong
+    let loadInstr = \index => do Aload index; objToLong
     in opWithWordSize sourceLocTys loadInstr var
 
 loadVar sourceLocTys ty IFloat var =

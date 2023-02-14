@@ -132,6 +132,7 @@ import static org.objectweb.asm.Opcodes.ISTORE;
 import static org.objectweb.asm.Opcodes.ISUB;
 import static org.objectweb.asm.Opcodes.IUSHR;
 import static org.objectweb.asm.Opcodes.IXOR;
+import static org.objectweb.asm.Opcodes.L2D;
 import static org.objectweb.asm.Opcodes.L2I;
 import static org.objectweb.asm.Opcodes.LADD;
 import static org.objectweb.asm.Opcodes.LALOAD;
@@ -947,6 +948,10 @@ public final class Assembler {
 
     public void iushr() {
         mv.visitInsn(IUSHR);
+    }
+
+    public void l2d() {
+        mv.visitInsn(L2D);
     }
 
     public void l2i() {

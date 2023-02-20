@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.mmhelloworld</groupId>
@@ -50,6 +51,7 @@
         <versions-maven-plugin.version>2.8.1</versions-maven-plugin.version>
         <maven-source-plugin.version>3.2.0</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.4.0</maven-javadoc-plugin.version>
+        <maven-dependency-plugin.version>3.5.0</maven-dependency-plugin.version>
     </properties>
 
     <scm>
@@ -113,6 +115,11 @@
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>build-helper-maven-plugin</artifactId>
                     <version>${build-helper-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>${maven-dependency-plugin.version}</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
@@ -221,8 +228,10 @@
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                     <releaseProfiles>release</releaseProfiles>
                     <arguments>-DskipTests</arguments>
-                    <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration [skip ci]</scmDevelopmentCommitComment>
-                    <scmReleaseCommitComment>@{prefix} prepare release @{releaseLabel} [skip ci]</scmReleaseCommitComment>
+                    <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration [skip ci]
+                    </scmDevelopmentCommitComment>
+                    <scmReleaseCommitComment>@{prefix} prepare release @{releaseLabel} [skip ci]
+                    </scmReleaseCommitComment>
                 </configuration>
             </plugin>
         </plugins>

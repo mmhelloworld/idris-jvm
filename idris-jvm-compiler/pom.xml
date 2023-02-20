@@ -66,6 +66,20 @@
                 </executions>
             </plugin>
             <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.parent.basedir}/tests/build/exec/idris2_app</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <executions>
@@ -121,21 +135,6 @@
                 <artifactId>maven-antrun-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>clean-jars</id>
-                        <phase>validate</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <skip>${skipIdrisCompile}</skip>
-                            <target>
-                                <delete failonerror="false">
-                                    <fileset dir="../build/exec/idris2_app" includes="*.jar" />
-                                </delete>
-                            </target>
-                        </configuration>
-                    </execution>
-                    <execution>
                         <id>version-compiler-jar</id>
                         <phase>process-classes</phase>
                         <goals>
@@ -156,18 +155,6 @@
                         <configuration>
                             <target>
                                 <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar" tofile="./target/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
-                            </target>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>assemble-compiler-jar</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <copy file="../build/exec/idris2_app/idris-jvm-compiler-${project.version}.jar" tofile="./target/assembly/lib/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
                             </target>
                         </configuration>
                     </execution>

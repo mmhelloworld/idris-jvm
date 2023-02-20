@@ -519,7 +519,22 @@ getConstantType ((MkNConstAlt constant _) :: _) = case constant of
     Ch _ => Pure IInt
     Str _ => Pure inferredStringType
     BI _ => Pure inferredBigIntegerType
-    unsupportedConstant => Throw emptyFC $ "Unsupported constant switch " ++ show unsupportedConstant
+    Db _ => Throw emptyFC "Unsupported constant Db for switch"
+    WorldVal => Throw emptyFC "Unsupported constant WorldVal for switch"
+    IntType     => Throw emptyFC "Unsupported constant IntType for switch"
+    IntegerType => Throw emptyFC "Unsupported constant IntegerType for switch"
+    Int8Type    => Throw emptyFC "Unsupported constant Int8Type for switch"
+    Int16Type   => Throw emptyFC "Unsupported constant Int16Type for switch"
+    Int32Type   => Throw emptyFC "Unsupported constant Int32Type for switch"
+    Int64Type   => Throw emptyFC "Unsupported constant Int64Type for switch"
+    Bits8Type   => Throw emptyFC "Unsupported constant Bits8Type for switch"
+    Bits16Type  => Throw emptyFC "Unsupported constant Bits16Type for switch"
+    Bits32Type  => Throw emptyFC "Unsupported constant Bits32Type for switch"
+    Bits64Type  => Throw emptyFC "Unsupported constant Bits64Type for switch"
+    StringType  => Throw emptyFC "Unsupported constant StringType for for switch"
+    CharType    => Throw emptyFC "Unsupported constant CharType for switch"
+    DoubleType  => Throw emptyFC "Unsupported constant DoubleType for switch"
+    WorldType   => Throw emptyFC "Unsupported constant WorldType for switch"
 
 export
 isTypeConst : TT.Constant -> Bool

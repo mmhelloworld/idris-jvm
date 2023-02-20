@@ -12,8 +12,9 @@ import org.objectweb.asm.Type;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Deque;
 import java.util.HashMap;
@@ -26,10 +27,14 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static io.github.mmhelloworld.idrisjvm.runtime.Conversion.intToBoolean;
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.Files.newOutputStream;
+import static java.nio.file.Files.setPosixFilePermissions;
 import static java.util.Objects.requireNonNull;
 import static java.util.jar.Attributes.Name.MAIN_CLASS;
 import static java.util.jar.Attributes.Name.MANIFEST_VERSION;
@@ -173,7 +178,8 @@ import static org.objectweb.asm.Opcodes.T_SHORT;
 
 public final class Assembler {
     private static final boolean shouldDebug = parseBoolean(System.getProperty("IDRIS_JVM_DEBUG",
-            System.getenv("IDRIS_JVM_DEBUG")));
+        System.getenv("IDRIS_JVM_DEBUG")));
+
     private final Map<String, ClassWriter> cws;
     private final Deque<ClassMethodVisitor> classMethodVisitorStack = new LinkedList<>();
     private Map<String, Object> env;
@@ -315,10 +321,49 @@ public final class Assembler {
         String jarFileName = fileName + ".jar";
         File jarFile = new File(directory, jarFileName);
         jarFile.delete();
-        try (JarOutputStream target = new JarOutputStream(new FileOutputStream(jarFile), createManifest(mainClass))) {
+        try (JarOutputStream target =
+                 new JarOutputStream(newOutputStream(jarFile.toPath()), createManifest(mainClass))) {
             File sourceDirectory = new File(directory);
             add(sourceDirectory, target, jarFile, sourceDirectory);
         }
+    }
+
+    public static void createExecutable(String directoryName, String fileName, String mainClass) throws IOException {
+        String javaOptsProp = System.getProperty("JAVA_OPTS", System.getenv("JAVA_OPTS"));
+        String javaOpts = javaOptsProp == null ? "-Xss8m -Xms2g -Xmx3g" : javaOptsProp;
+        createPosixExecutable(directoryName, fileName, mainClass, javaOpts);
+        createWindowsExecutable(directoryName, fileName, mainClass, javaOpts);
+    }
+
+    private static void createWindowsExecutable(String directoryName, String fileName, String mainClass,
+                                                String javaOpts) throws IOException {
+        File batExe = new File(directoryName, fileName + ".bat");
+        String batHeader = "@echo off";
+        String classpath = "%~dp0\\" + fileName + "_app\\*";
+        String javaCommand = Stream.of("java", "%JAVA_OPTS%", javaOpts, "-cp", classpath, mainClass, "%*")
+            .filter(Assembler::isNotNullOrEmpty)
+            .collect(joining(" "));
+        Files.write(batExe.toPath(), createExecutableFileContent(batHeader, javaCommand));
+    }
+
+    private static void createPosixExecutable(String directoryName, String fileName, String mainClass,
+                                              String javaOpts) throws IOException {
+        File shExe = new File(directoryName, fileName);
+        String shHeader = "#!/bin/sh";
+        String classpath = "\"`dirname $0`/" + fileName + "_app/*\"";
+        String javaCommand = Stream.of("java", "$JAVA_OPTS", javaOpts, "-cp", classpath, mainClass, "\"$@\"")
+            .filter(Assembler::isNotNullOrEmpty)
+            .collect(joining(" "));
+        Files.write(shExe.toPath(), createExecutableFileContent(shHeader, javaCommand));
+        setPosixFilePermissions(shExe.toPath(), PosixFilePermissions.fromString("rwxr-xr-x"));
+    }
+
+    private static boolean isNotNullOrEmpty(String value) {
+        return value != null && !value.isEmpty();
+    }
+
+    private static byte[] createExecutableFileContent(String... lines) {
+        return String.join(System.lineSeparator(), lines).getBytes(UTF_8);
     }
 
     private static Manifest createManifest(String mainClass) {

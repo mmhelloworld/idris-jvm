@@ -664,6 +664,8 @@ mutual
     getCastAsmOp Int32Type Int16Type = I2s
     getCastAsmOp Int32Type Int64Type = I2l
     getCastAsmOp Int32Type Bits64Type = I2l
+    getCastAsmOp Int32Type Bits16Type = toUnsignedInt 16
+    getCastAsmOp Int32Type Bits8Type = toUnsignedInt 8
     getCastAsmOp Int32Type IntegerType = intToBigInteger
     getCastAsmOp Int32Type DoubleType = I2d
     getCastAsmOp Int32Type CharType = InvokeMethod InvokeStatic conversionClass "toChar" "(I)C" False
@@ -672,6 +674,8 @@ mutual
     getCastAsmOp IntType Int16Type = I2s
     getCastAsmOp IntType Int64Type = I2l
     getCastAsmOp IntType Bits64Type = I2l
+    getCastAsmOp IntType Bits16Type = toUnsignedInt 16
+    getCastAsmOp IntType Bits8Type = toUnsignedInt 8
     getCastAsmOp IntType IntegerType = intToBigInteger
     getCastAsmOp IntType DoubleType = I2d
     getCastAsmOp IntType CharType = InvokeMethod InvokeStatic conversionClass "toChar" "(I)C" False
@@ -868,7 +872,7 @@ mutual
     assembleExprOp returnType fc (BXOr Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong Lxor x y
 
     assembleExprOp returnType fc (Neg Int64Type) [x] = assembleExprUnaryOp returnType ILong Lneg x
-    assembleExprOp returnType fc (ShiftR Int64Type) [x, y] = assembleExprBinaryOp returnType ILong (do L2i; Lushr) x y
+    assembleExprOp returnType fc (ShiftR Int64Type) [x, y] = assembleExprBinaryOp returnType ILong (do L2i; Lshr) x y
     assembleExprOp returnType fc (BAnd Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Land x y
     assembleExprOp returnType fc (BOr Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Lor x y
     assembleExprOp returnType fc (BXOr Int64Type) [x, y] = assembleExprBinaryOp returnType ILong Lxor x y
@@ -1891,7 +1895,7 @@ compileToJvmBytecode c outputDirectory outputFile term = do
 compileExprJvm : Ref Ctxt Defs -> (tmpDir : String) -> (outDir: String) -> ClosedTerm ->
                     (outputFile : String) -> Core (Maybe String)
 compileExprJvm c tmpDir outDir term outputFile
-    = do let outputDirectory = if outputFile == "" then "" else outDir </> (outputFile ++ "_app")
+    = do let outputDirectory = if outputFile == "" then "" else outDir
          when (outputDirectory /= "") $ ignore $ coreLift $ mkdirAll outputDirectory
          compileToJvmBytecode c outputDirectory outputFile term
          pure $ Just outputDirectory

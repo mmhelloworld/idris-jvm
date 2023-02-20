@@ -7,11 +7,7 @@
     </formats>
     <fileSets>
         <fileSet>
-            <directory>${env.IDRIS2_PREFIX}/idris2-0.5.1</directory>
-            <outputDirectory>lib/idris2-0.5.1</outputDirectory>
-        </fileSet>
-        <fileSet>
-            <directory>${project.build.directory}/assembly</directory>
+            <directory>${project.parent.basedir}/build</directory>
             <outputDirectory>/</outputDirectory>
         </fileSet>
     </fileSets>

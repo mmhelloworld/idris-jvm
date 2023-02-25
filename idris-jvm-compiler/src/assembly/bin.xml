@@ -7,8 +7,28 @@
     </formats>
     <fileSets>
         <fileSet>
-            <directory>${project.parent.basedir}/build</directory>
-            <outputDirectory>/</outputDirectory>
+            <directory>${project.parent.basedir}/libs/base/build/ttc</directory>
+            <outputDirectory>/env/idris2-${idris.version}/base-${idris.version}</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.parent.basedir}/libs/contrib/build/ttc</directory>
+            <outputDirectory>/env/idris2-${idris.version}/contrib-${idris.version}</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.parent.basedir}/libs/network/build/ttc</directory>
+            <outputDirectory>/env/idris2-${idris.version}/network-${idris.version}</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.parent.basedir}/libs/prelude/build/ttc</directory>
+            <outputDirectory>/env/idris2-${idris.version}/prelude-${idris.version}</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.parent.basedir}/libs/test/build/ttc</directory>
+            <outputDirectory>/env/idris2-${idris.version}/test-${idris.version}</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.parent.basedir}/build/exec</directory>
+            <outputDirectory>/exec</outputDirectory>
         </fileSet>
     </fileSets>
 </assembly>

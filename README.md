@@ -8,8 +8,8 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 ## Install
 
 * Download the latest Idris 2 JVM release from here https://github.com/mmhelloworld/idris-jvm/releases/latest.
-* Extract the archive and add `idris2` launcher script directory `<EXTRACTED_DIRECTORY_ROOT>/bin` to PATH.
-* Create an environment variable `IDRIS2_PREFIX` pointing to `<EXTRACTED_DIRECTORY_ROOT>/lib`
+* Extract the archive and add `idris2` launcher script directory `<EXTRACTED_DIRECTORY_ROOT>/exec` to PATH.
+* Create an environment variable `IDRIS2_PREFIX` pointing to `<EXTRACTED_DIRECTORY_ROOT>/env`
 
 ## Example
 

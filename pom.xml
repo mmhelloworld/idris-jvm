@@ -52,6 +52,7 @@
         <maven-source-plugin.version>3.2.0</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.4.0</maven-javadoc-plugin.version>
         <maven-dependency-plugin.version>3.5.0</maven-dependency-plugin.version>
+        <properties-maven-plugin.version>1.1.0</properties-maven-plugin.version>
     </properties>
 
     <scm>
@@ -189,6 +190,11 @@
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>properties-maven-plugin</artifactId>
+                    <version>${properties-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
                     <artifactId>versions-maven-plugin</artifactId>
                     <version>${versions-maven-plugin.version}</version>
                 </plugin>
@@ -228,10 +234,8 @@
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                     <releaseProfiles>release</releaseProfiles>
                     <arguments>-DskipTests</arguments>
-                    <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration [skip ci]
-                    </scmDevelopmentCommitComment>
-                    <scmReleaseCommitComment>@{prefix} prepare release @{releaseLabel} [skip ci]
-                    </scmReleaseCommitComment>
+                    <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration [skip ci]</scmDevelopmentCommitComment>
+                    <scmReleaseCommitComment>@{prefix} prepare release @{releaseLabel} [skip ci]</scmReleaseCommitComment>
                 </configuration>
             </plugin>
         </plugins>

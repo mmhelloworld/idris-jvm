@@ -4,7 +4,7 @@
 
     <groupId>io.github.mmhelloworld</groupId>
     <artifactId>idris-jvm</artifactId>
-    <version>0.5.1.1</version>
+    <version>0.6.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Idris JVM</name>
     <description>JVM bytecode backend for Idris</description>
@@ -62,7 +62,7 @@
         <developerConnection>
             scm:git:https://github.com/mmhelloworld/idris-jvm.git
         </developerConnection>
-        <tag>v0.5.1.1</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <issueManagement>

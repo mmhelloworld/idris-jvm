@@ -3,7 +3,7 @@
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.6.0-SNAPSHOT</version>
+        <version>0.6.0-rc.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -212,8 +212,7 @@
                         </goals>
                         <configuration>
                             <target>
-                                <copy file="../build/exec/idris2_app/idris2.jar"
-                                      tofile="./target/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
+                                <copy file="../build/exec/idris2_app/idris2.jar" tofile="./target/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
                             </target>
                         </configuration>
                     </execution>

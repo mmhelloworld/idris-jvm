@@ -17,6 +17,7 @@ modules =
     Compiler.NoMangle,
     Compiler.Opts.CSE,
     Compiler.Separate,
+    Compiler.TailRec,
     Compiler.VMCode,
 
     Compiler.Opts.ConstantFold,
@@ -29,7 +30,6 @@ modules =
     Compiler.ES.Javascript,
     Compiler.ES.Node,
     Compiler.ES.State,
-    Compiler.ES.TailRec,
     Compiler.ES.ToAst,
 
     Compiler.Interpreter.VMCode,

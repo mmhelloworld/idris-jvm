@@ -13,7 +13,7 @@ import Data.String
 import Compiler.ES.Ast
 import Compiler.ES.Doc
 import Compiler.ES.ToAst
-import Compiler.ES.TailRec
+import Compiler.TailRec
 import Compiler.ES.State
 import Compiler.NoMangle
 import Libraries.Data.SortedMap
@@ -734,7 +734,7 @@ def :  {auto c : Ref Ctxt Defs}
     -> {auto nm : Ref NoMangleMap NoMangleMap}
     -> Function
     -> Core String
-def (MkFunction n as body) = do
+def (MkFunction n _ as body) = do
   reset
   defs <- get Ctxt
   mty <- do log "compiler.javascript.doc" 50 $ "Looking up \{show n}"

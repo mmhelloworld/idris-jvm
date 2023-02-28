@@ -114,7 +114,7 @@
 ||| While the above example is in Javascript, this module operates
 ||| on `NamedCExp` exclusively, so it might be used with any backend
 ||| where the things described above can be expressed.
-module Compiler.ES.TailRec
+module Compiler.TailRec
 
 import Data.List
 import Data.List1
@@ -159,6 +159,8 @@ record TcFunction where
   ||| Function's definition
   exp   : NamedCExp
 
+  fc : FC
+
 ||| A group of mutually tail recursive toplevel functions.
 public export
 record TcGroup where
@@ -170,10 +172,14 @@ record TcGroup where
   ||| Set of mutually recursive functions.
   functions : SortedMap Name TcFunction
 
+export
+idrisTailRecName : Name
+idrisTailRecName = UN $ Basic "$idrisTailRec"
+
 -- tail calls made from an expression
 tailCalls : NamedCExp -> SortedSet Name
 tailCalls (NmLet _ _ _ z) = tailCalls z
-tailCalls (NmApp _ (NmRef _ x) _) = singleton x
+tailCalls (NmApp _ (NmRef _ x) _) = if x == idrisTailRecName then empty else singleton x
 tailCalls (NmConCase fc sc xs x) =
   concatMap (\(MkNConAlt _ _ _ _ x) => tailCalls x) xs <+>
   concatMap tailCalls x
@@ -196,7 +202,7 @@ hasTailCalls _ _           = True
 
 -- Given a strongly connected group of functions, plus
 -- a unique index, convert them to the `TcGroup` they belong to.
-toGroup :  SortedMap Name (Name,List Name,NamedCExp)
+toGroup :  SortedMap Name (Name, FC, List Name, NamedCExp)
         -> (Int,List1 Name)
         -> TcGroup
 toGroup funMap (groupIndex,functions) =
@@ -204,16 +210,16 @@ toGroup funMap (groupIndex,functions) =
    in MkTcGroup groupIndex . fromList $ mapMaybe fun ns
   where fun : (Int,Name) -> Maybe (Name,TcFunction)
         fun (fx, n) = do
-          (_,args,exp) <- lookup n funMap
-          pure (n,MkTcFunction n fx args exp)
+          (_, fc, args, exp) <- lookup n funMap
+          pure (n,MkTcFunction n fx args exp fc)
 
 -- Returns the connected components of the tail call graph
 -- of a set of toplevel function definitions.
 -- Every `TcGroup` consists of a set of mutually tail-recursive functions.
-tailCallGroups :  List (Name,List Name,NamedCExp) -> List TcGroup
+tailCallGroups :  List (Name, FC, List Name, NamedCExp) -> List TcGroup
 tailCallGroups funs =
-  let funMap = M.fromList $ map (\t => (fst t,t)) funs
-      graph  = map (\(_,_,x) => tailCalls x) funMap
+  let funMap = M.fromList $ map (\(name, fc, args, exp) => (name, (name, fc, args, exp))) funs
+      graph  = map (\(_, _, _, x) => tailCalls x) funMap
       groups = filter (hasTailCalls graph) $ tarjan graph
    in map (toGroup funMap) (zipWithIndices groups)
 
@@ -225,6 +231,7 @@ public export
 record Function where
   constructor MkFunction
   name : Name
+  fc: FC
   args : List Name
   body : NamedCExp
 
@@ -234,11 +241,17 @@ tcFunction = MN "$tcOpt"
 tcArgName : Name
 tcArgName = MN "$a" 0
 
-tcContinueName : (groupIndex : Int) -> (functionIndex : Int) -> Name
-tcContinueName gi fi = MN ("TcContinue" ++ show gi) fi
+tcContinueName : (arity: Nat) -> Name
+tcContinueName arity = UN (Basic $ "TcContinue_" ++ show arity)
 
-tcDoneName : (groupIndex : Int) -> Name
-tcDoneName gi = MN "TcDone" gi
+tcDoneName : Name
+tcDoneName = UN $ Basic "TcDone"
+
+export
+appendToName : String -> Name -> Name
+appendToName suffix n =
+  let (ns, name) = splitNS n
+  in NS ns (UN $ Basic (show name ++ suffix))
 
 -- Converts a single function in a mutually tail-recursive
 -- group of functions to a single branch in a pattern match.
@@ -246,31 +259,41 @@ tcDoneName gi = MN "TcDone" gi
 -- applied data constructor whose tag indicates the
 -- branch in the pattern match to use next, and whose values
 -- will be used as the arguments for the next function.
-conAlt : TcGroup -> TcFunction -> NamedConAlt
-conAlt (MkTcGroup tcIx funs) (MkTcFunction n ix args exp) =
-  let name = tcContinueName tcIx ix
-   in MkNConAlt name DATACON (Just ix) args (toTc exp)
+conAlt : TcGroup -> TcFunction -> (NamedConAlt, Function)
+conAlt (MkTcGroup tcIx funs) (MkTcFunction n ix args exp fc) =
+  let name = tcConstructorName tcIx ix
+      localArgs = (NmLocal emptyFC) <$> args
+      functionApplication = NmApp emptyFC (NmRef emptyFC newName) localArgs
+      tailRecOptimizedFunction = MkFunction newName fc args (toTc exp)
+   in (MkNConAlt name DATACON (Just ix) args functionApplication, tailRecOptimizedFunction)
 
    where
+     tcConstructorName : (groupIndex : Int) -> (functionIndex : Int) -> Name
+     tcConstructorName gi fi = UN (Basic $ "TcConstructor_" ++ show gi ++ "_" ++ show fi)
+
+     newName : Name
+     newName = appendToName ("$tc" ++ show ix) n
+
      mutual
 
        -- this is returned in case we arrived at a result
        -- (an expression not corresponding to a recursive
        -- call in tail position).
        tcDone : NamedCExp -> NamedCExp
-       tcDone x = NmCon EmptyFC (tcDoneName tcIx) DATACON (Just 0) [x]
+       tcDone x = NmCon EmptyFC tcDoneName DATACON (Just 0) [x]
 
-       -- this is returned in case we arrived at a resursive call
+       -- this is returned in case we arrived at a recursive call
        -- in tail position. The index indicates the next "function"
        -- to call, the list of expressions are the function's
        -- arguments.
        tcContinue : (index : Int) -> List NamedCExp -> NamedCExp
-       tcContinue ix = NmCon EmptyFC (tcContinueName tcIx ix) DATACON (Just ix)
+       tcContinue ix values = NmCon EmptyFC (tcContinueName $ length values) DATACON (Just ix) values
 
        -- recursively converts an expression. Only the `NmApp` case is
        -- interesting, the rest is pretty much boiler plate.
        toTc : NamedCExp -> NamedCExp
        toTc (NmLet fc x y z) = NmLet fc x y $ toTc z
+       toTc x@(NmApp _ (NmRef _ (UN (Basic "$idrisTailRec"))) xs) = x
        toTc x@(NmApp _ (NmRef _ n) xs) =
          case lookup n funs of
            Just v  => tcContinue v.index xs
@@ -294,42 +317,44 @@ conAlt (MkTcGroup tcIx funs) (MkTcFunction n ix args exp) =
 convertTcGroup : (tailRecLoopName : Name) -> TcGroup -> List Function
 convertTcGroup loop g@(MkTcGroup gindex fs) =
   let functions = sortBy (comparing index) $ values fs
-      branches  = map (conAlt g) functions
+      branchesAndFunctions  = map (conAlt g) functions
+      branches = map fst branchesAndFunctions
+      tailRecOptimizedFunctions = map snd branchesAndFunctions
       switch    = NmConCase EmptyFC (local tcArgName) branches Nothing
-   in MkFunction tcFun [tcArgName] switch :: map toFun functions
+   in (MkFunction tcFunName emptyFC [tcArgName] switch :: tailRecOptimizedFunctions) ++ map toFun functions
 
-  where tcFun : Name
-        tcFun = tcFunction gindex
+  where tcFunName : Name
+        tcFunName = tcFunction gindex
 
         local : Name -> NamedCExp
         local = NmLocal EmptyFC
 
         toFun : TcFunction -> Function
-        toFun (MkTcFunction n ix args x) =
+        toFun (MkTcFunction n ix args x _) =
           let exps  = map local args
-              tcArg = NmCon EmptyFC (tcContinueName gindex ix)
-                        DATACON (Just ix) exps
-              tcFun = NmRef EmptyFC tcFun
+              tcArg = NmCon EmptyFC (tcContinueName $ length exps) DATACON (Just ix) exps
+              argName = (UN $ Basic "arg")
+              tcFun = NmLam emptyFC argName (NmApp emptyFC (NmRef EmptyFC tcFunName) [NmLocal emptyFC argName])
               body  = NmApp EmptyFC (NmRef EmptyFC loop) [tcFun,tcArg]
-           in MkFunction n args body
+           in MkFunction n emptyFC args body
 
 -- Tail recursion optimizations: Converts all groups of
 -- mutually tail recursive functions to an imperative loop.
 tailRecOptim :  List TcGroup
              -> (tcOptimized : SortedSet Name)
              -> (tcLoopName : Name)
-             -> List (Name,List Name,NamedCExp)
+             -> List (Name, FC, List Name, NamedCExp)
              -> List Function
 tailRecOptim groups names loop ts =
   let regular = mapMaybe toFun ts
       tailOpt = concatMap (convertTcGroup loop) groups
    in tailOpt ++ regular
 
-  where toFun : (Name,List Name,NamedCExp) -> Maybe Function
-        toFun (n,args,exp) =
+  where toFun : (Name, FC, List Name, NamedCExp) -> Maybe Function
+        toFun (n, fc, args, exp) =
           if contains n names
              then Nothing
-             else Just $ MkFunction n args exp
+             else Just $ MkFunction n fc args exp
 
 ||| Converts a list of toplevel definitions (potentially
 ||| several groups of mutually tail-recursive functions)
@@ -345,6 +370,6 @@ functions loop dfs =
       groups = tailCallGroups ts
       names  = SortedSet.fromList $ concatMap (keys . functions) groups
    in tailRecOptim groups names loop ts
-   where def : (Name,FC,NamedDef) -> Maybe (Name,List Name,NamedCExp)
-         def (n,_,MkNmFun args x) = Just (n,args,x)
+   where def : (Name,FC,NamedDef) -> Maybe (Name, FC, List Name, NamedCExp)
+         def (n, fc, MkNmFun args x) = Just (n, fc, args, x)
          def _                    = Nothing

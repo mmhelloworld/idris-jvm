@@ -309,23 +309,6 @@ runtimeClass : String
 runtimeClass = getRuntimeClass "Runtime"
 
 public export
-record TailCallCategory where
-    constructor MkTailCallCategory
-
-    -- Self tail calls are eliminated using JVM's GOTO
-    hasSelfTailCall : Bool
-
-    -- Non self tails calls are trampolined using INVOKEDYNAMIC
-    hasNonSelfTailCall : Bool
-
-export
-Show TailCallCategory where
-    show tailCallCategory = showType "TailCallCategory" [
-        ("hasSelfTailCall", show $ hasSelfTailCall tailCallCategory),
-        ("hasNonSelfTailCall", show $ hasNonSelfTailCall tailCallCategory)
-    ]
-
-public export
 record Scope where
     constructor MkScope
     index : Int
@@ -362,12 +345,12 @@ namespace AsmGlobalState
 
     public export
     %foreign
-        "jvm:<init>(String java/util/Collection io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
-    prim_newAsmGlobalState : String -> List String -> PrimIO AsmGlobalState
+        "jvm:<init>(String io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
+    prim_newAsmGlobalState : String -> PrimIO AsmGlobalState
 
     public export
-    newAsmGlobalState : HasIO io => String -> List String -> io AsmGlobalState
-    newAsmGlobalState programName trampolinePatterns = primIO $ prim_newAsmGlobalState programName trampolinePatterns
+    newAsmGlobalState : HasIO io => String -> io AsmGlobalState
+    newAsmGlobalState programName = primIO $ prim_newAsmGlobalState programName
 
     public export
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getAssembler"
@@ -466,15 +449,6 @@ namespace AsmGlobalState
     classCodeEnd : HasIO io => AsmGlobalState -> String -> String -> String -> io ()
     classCodeEnd state outputDirectory outputFile mainClass =
         primIO $ prim_classCodeEnd state outputDirectory outputFile mainClass
-
-    public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".shouldTrampoline"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "boolean"
-    prim_shouldTrampoline : AsmGlobalState -> String -> PrimIO Bool
-
-    public export
-    shouldTrampoline : HasIO io => AsmGlobalState -> String -> io Bool
-    shouldTrampoline state name = primIO $ prim_shouldTrampoline state name
 
 public export
 record AsmState where
@@ -861,7 +835,7 @@ addUntypedFunction name = LiftIo $ AsmGlobalState.addUntypedFunction !getGlobalS
 
 export
 setCurrentFunction : Function -> Asm ()
-setCurrentFunction function = updateState $ record { currentIdrisFunction = function }
+setCurrentFunction function = updateState $ { currentIdrisFunction := function }
 
 getAndUpdateFunction : (Function -> Function) -> Asm Function
 getAndUpdateFunction f = do
@@ -880,7 +854,7 @@ export
 loadFunction : Jname -> Asm ()
 loadFunction idrisName = do
     function <- getFunction idrisName
-    updateState $ record { currentIdrisFunction = function }
+    updateState $ { currentIdrisFunction := function }
 
 export
 getFunctionType : Jname -> Asm InferredFunctionType
@@ -912,22 +886,22 @@ getCurrentScopeIndex = currentScopeIndex <$> GetState
 
 export
 updateCurrentScopeIndex : Int -> Asm ()
-updateCurrentScopeIndex scopeIndex = updateState $ record {currentScopeIndex = scopeIndex}
+updateCurrentScopeIndex scopeIndex = updateState $ { currentScopeIndex := scopeIndex }
 
 export
 newScopeIndex : Asm Int
-newScopeIndex = scopeCounter <$> (getAndUpdateState $ record {scopeCounter $= (+1)})
+newScopeIndex = scopeCounter <$> (getAndUpdateState $ {scopeCounter $= (+1)})
 
 export
 newDynamicVariableIndex : Asm Int
-newDynamicVariableIndex = dynamicVariableCounter <$> (getAndUpdateFunction $ record {dynamicVariableCounter $= (+1)})
+newDynamicVariableIndex = dynamicVariableCounter <$> (getAndUpdateFunction $ {dynamicVariableCounter $= (+1)})
 
 export
 resetScope : Asm ()
 resetScope = updateState $
-    record {
-        scopeCounter = 0,
-        currentScopeIndex = 0
+    {
+        scopeCounter := 0,
+        currentScopeIndex := 0
     }
 
 fillNull : HasIO io => Int -> JList a -> io ()
@@ -959,7 +933,7 @@ export
 addScopeChild : Int -> Int -> Asm ()
 addScopeChild parentScopeIndex childScopeIndex = do
     scope <- getScope parentScopeIndex
-    saveScope $ record {childIndices $= (childScopeIndex ::)} scope
+    saveScope $ {childIndices $= (childScopeIndex ::)} scope
 
 export
 getRootMethodName : Asm Jname
@@ -970,7 +944,7 @@ newLabel : Asm String
 newLabel = do
     state <- GetState
     let label = "L" ++ show (labelCounter state)
-    updateState $ record { labelCounter $= (+1) }
+    updateState $ { labelCounter $= (+1) }
     Pure label
 
 hasLabelAtLine : Int -> Asm Bool
@@ -1011,23 +985,23 @@ getMethodName = methodName . currentMethodName <$> GetState
 
 export
 freshLambdaIndex : Asm Int
-freshLambdaIndex = lambdaCounter <$> (getAndUpdateState $ record {lambdaCounter $= (+1)})
+freshLambdaIndex = lambdaCounter <$> (getAndUpdateState $ {lambdaCounter $= (+1)})
 
 export
 setScopeCounter : Int -> Asm ()
-setScopeCounter scopeCounter = updateState $ record {scopeCounter = scopeCounter}
+setScopeCounter scopeCounter = updateState $ {scopeCounter := scopeCounter}
 
 export
 updateScopeStartLabel : Int -> String -> Asm ()
 updateScopeStartLabel scopeIndex label = do
     scope <- getScope scopeIndex
-    saveScope $ record {labels $= updateFirst label} scope
+    saveScope $ {labels $= updateFirst label} scope
 
 export
 updateScopeEndLabel : Int -> String -> Asm ()
 updateScopeEndLabel scopeIndex label = do
     scope <- getScope scopeIndex
-    saveScope $ record {labels $= updateSecond label} scope
+    saveScope $ {labels $= updateSecond label} scope
 
 export
 createVariable : String -> Asm ()
@@ -1037,7 +1011,7 @@ createVariable var = do
     let variableIndex = nextVariableIndex scope
     _ <- LiftIo $ Map.put (variableTypes scope) var IUnknown
     _ <- LiftIo $ Map.put (variableIndices scope) var variableIndex
-    saveScope $ record { nextVariableIndex $= (+1) } scope
+    saveScope $ { nextVariableIndex $= (+1) } scope
 
 export
 generateVariable : String -> Asm String
@@ -1197,7 +1171,7 @@ updateScopeVariableTypes arity = go (scopeCounter !GetState - 1) where
             when (scopeIndex == 0) $ LiftIo $ updateArgumentsForUntyped variableTypes arity
             variableIndices <- retrieveVariableIndicesByName scopeIndex
             scope <- getScope scopeIndex
-            saveScope $ record {allVariableTypes = variableTypes, allVariableIndices = variableIndices} scope
+            saveScope $ {allVariableTypes := variableTypes, allVariableIndices := variableIndices} scope
             go (scopeIndex - 1)
 
 getVariableScope : String -> Asm Scope
@@ -1539,26 +1513,6 @@ invokeDynamic implClassName implMethodName interfaceMethodName invokeDynamicDesc
     in InvokeDynamic interfaceMethodName invokeDynamicDesc metafactoryHandle metafactoryArgs
 
 export
-getThunkType : InferredType -> InferredType
-getThunkType IInt = intThunkType
-getThunkType ILong = longThunkType
-getThunkType IDouble = doubleThunkType
-getThunkType _ = thunkType
-
-export
-getThunkValueType : InferredType -> InferredType
-getThunkValueType ty =
-    if ty == intThunkType then IInt
-    else if ty == longThunkType then ILong
-    else if ty == doubleThunkType then IDouble
-    else if ty == thunkType then inferredObjectType
-    else ty
-
-export
-isThunkType : InferredType -> Bool
-isThunkType ty = ty == intThunkType || ty == longThunkType || ty == doubleThunkType || ty == thunkType
-
-export
 shouldDebugAsm : Bool
 shouldDebugAsm =
     let shouldDebugProperty = fromMaybe "" $ unsafePerformIO (getEnv "IDRIS_JVM_DEBUG_ASM")
@@ -1568,11 +1522,11 @@ export
 shouldDebug : Bool
 shouldDebug =
     let shouldDebugProperty = fromMaybe "" $ unsafePerformIO (getEnv "IDRIS_JVM_DEBUG")
-    in shouldDebugProperty == "true"
+    in shouldDebugProperty /= "" && shouldDebugProperty /= "false"
 
 export
-debugFunction : Maybe String
-debugFunction = unsafePerformIO $ getEnv "IDRIS_JVM_DEBUG_FUNCTION"
+debugFunction : String
+debugFunction = fromMaybe " " $ unsafePerformIO $ getEnv "IDRIS_JVM_DEBUG"
 
 namespace LocalDateTime
     data LocalDateTime : Type where [external]
@@ -1683,7 +1637,7 @@ runAsm state (CreateLabel label) = assemble state $
   jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createLabel" [assembler state, label]
 
 runAsm state (CreateMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns) =
-    let newState = record { currentMethodName = Jqualified className methodName } state
+    let newState = { currentMethodName := Jqualified className methodName } state
     in assemble newState $ do
         let jaccs = sum $ accessNum <$> accs
         janns <- sequence $ toJAnnotation <$> anns

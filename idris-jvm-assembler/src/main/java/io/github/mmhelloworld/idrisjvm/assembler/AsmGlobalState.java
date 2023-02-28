@@ -20,8 +20,6 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
@@ -54,15 +52,10 @@ public final class AsmGlobalState {
     private final Set<String> untypedFunctions;
     private final Set<String> constructors;
     private final String programName;
-    private final Collection<Predicate<String>> trampolinePredicates;
     private final Map<String, Assembler> assemblers;
 
     public AsmGlobalState(String programName, Collection<String> trampolinePatterns) {
         this.programName = programName;
-        this.trampolinePredicates = trampolinePatterns.stream()
-            .map(Pattern::compile)
-            .map(Pattern::asPredicate)
-            .collect(toList());
         functions = new ConcurrentHashMap<>();
         untypedFunctions = synchronizedSet(new HashSet<>());
         constructors = synchronizedSet(new HashSet<>());
@@ -162,11 +155,6 @@ public final class AsmGlobalState {
         } catch (Exception exception) {
             exception.printStackTrace();
         }
-    }
-
-    public boolean shouldTrampoline(String name) {
-        return trampolinePredicates.stream()
-            .anyMatch(trampolinePredicate -> trampolinePredicate.test(name));
     }
 
     private static List<String> getJavaOptions() {

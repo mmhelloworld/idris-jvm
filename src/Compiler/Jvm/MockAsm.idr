@@ -91,7 +91,7 @@ mockRunAsm state (CreateField accs sourceFileName className fieldName desc sig f
 mockRunAsm state (CreateLabel label) = assemble state $ pure ()
 
 mockRunAsm state (CreateMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns) =
-    let newState = record { currentMethodName = Jqualified className methodName } state
+    let newState = { currentMethodName := Jqualified className methodName } state
     in assemble newState $ do
         log $ "**************** " ++ methodName ++ " ******************"
         log $ unwords [

@@ -29,6 +29,15 @@ public final class Runtime {
     private Runtime() {
     }
 
+    public static Object tailRec(Object fObj, Object initialValueObj) {
+        Function<IdrisObject, IdrisObject> f = (Function) fObj;
+        IdrisObject obj = (IdrisObject) initialValueObj;
+        while (obj.getConstructorId() != 0) { // until `TcDone` constructor
+            obj = f.apply(obj);
+        }
+        return obj.getProperty(0); // return the result from `TcDone`
+    }
+
     public static IdrisList getProgramArgs() {
         return programArgsList;
     }

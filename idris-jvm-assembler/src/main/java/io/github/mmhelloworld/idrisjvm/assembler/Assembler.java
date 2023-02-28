@@ -29,7 +29,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static io.github.mmhelloworld.idrisjvm.runtime.Conversion.intToBoolean;
-import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
 import static java.lang.System.lineSeparator;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -179,11 +178,10 @@ import static org.objectweb.asm.Opcodes.T_SHORT;
 import static org.objectweb.asm.Opcodes.V1_8;
 
 public final class Assembler {
-    private static final boolean SHOULD_DEBUG = parseBoolean(System.getProperty("IDRIS_JVM_DEBUG",
-        System.getenv("IDRIS_JVM_DEBUG")));
     public static final int CLOSE_CURLY_BRACE = 125;
     public static final int ICONST_MAX = 5;
     public static final int BUFFER_SIZE = 1024;
+    private static final boolean SHOULD_DEBUG;
 
     private final Map<String, ClassWriter> cws;
     private final Deque<ClassMethodVisitor> classMethodVisitorStack = new LinkedList<>();
@@ -194,6 +192,11 @@ public final class Assembler {
     private MethodVisitor classInitMethodVisitor;
     private String className;
     private String methodName;
+
+    static {
+        String shouldDebug = System.getProperty("IDRIS_JVM_DEBUG", System.getenv("IDRIS_JVM_DEBUG"));
+        SHOULD_DEBUG = shouldDebug != null && !shouldDebug.isEmpty() && !shouldDebug.equals("false");
+    }
 
     public Assembler() {
         this.cws = new HashMap<>();
@@ -1032,10 +1035,12 @@ public final class Assembler {
     }
 
     public void maxStackAndLocal(int maxStack, int maxLocal) {
-        if (SHOULD_DEBUG) {
-            System.out.println("maxStackAndLocal for " + methodName);
+        try {
+            mv.visitMaxs(maxStack, maxLocal);
+        } catch (ArrayIndexOutOfBoundsException exception) {
+            System.err.println("Unable to calculate max stack and local for " + methodName);
+            throw exception;
         }
-        mv.visitMaxs(maxStack, maxLocal);
     }
 
     public void methodCodeStart() {

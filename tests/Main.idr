@@ -388,7 +388,7 @@ jvmTests = MkTestPool "JVM backend" [] (Just Jvm)
       "jvm015", "jvm016", "jvm017", "jvm018", "jvm019", "jvm020", "jvm021", "jvm023", "jvm024", "jvm025", "jvm026",
       "jvm027", "jvm028", "jvm029", "jvm032", "jvm033", "jvm034", "jvm035", "forkjoin001",
       "jvmletnontail", "jvmdoublestack", "integers", "memo", "nat2fin", "newints", "perf001",
-      "reg001", "tailrec001", "barrier001", "bitops", "casts", "semaphores001", "semaphores002"
+      "reg001", "tailrec001", "tailrec002", "barrier001", "bitops", "casts", "semaphores001", "semaphores002"
     ]
 
 main : IO ()

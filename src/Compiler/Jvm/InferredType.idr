@@ -162,42 +162,6 @@ getRuntimeClass name = "io/github/mmhelloworld/idrisjvm/runtime/" ++ name
 
 %inline
 public export
-intThunkClass : String
-intThunkClass = getRuntimeClass "IntThunk"
-
-%inline
-public export
-doubleThunkClass : String
-doubleThunkClass = getRuntimeClass "DoubleThunk"
-
-%inline
-public export
-longThunkClass : String
-longThunkClass = getRuntimeClass "LongThunk"
-
-%inline
-public export
-thunkClass : String
-thunkClass = getRuntimeClass "Thunk"
-
-export
-intThunkType : InferredType
-intThunkType = IRef intThunkClass
-
-export
-longThunkType : InferredType
-longThunkType = IRef longThunkClass
-
-export
-doubleThunkType : InferredType
-doubleThunkType = IRef doubleThunkClass
-
-export
-thunkType : InferredType
-thunkType = IRef thunkClass
-
-%inline
-public export
 delayedClass : String
 delayedClass = getRuntimeClass "Delayed"
 

@@ -19,40 +19,40 @@ import static java.util.stream.Collectors.toCollection;
 public final class IdrisName {
 
     public static final String CLASS_NAME_FUNCTION_NAME_SEPARATOR = ",";
-    private static final Map<Character, String> replacements = new HashMap<>();
+    private static final Map<Character, String> REPLACEMENTS = new HashMap<>();
 
     static {
-        replacements.put(' ', "$s");
-        replacements.put('!', "$not");
-        replacements.put('"', "$d");
-        replacements.put('#', "$hash");
-        replacements.put('%', "$mod");
-        replacements.put('&', "$and");
-        replacements.put('\'', "$q");
-        replacements.put('(', "$lpar");
-        replacements.put(')', "$rpar");
-        replacements.put('*', "$mul");
-        replacements.put('+', "$add");
-        replacements.put(',', "$com");
-        replacements.put('-', "$hyp");
-        replacements.put('.', "$dot");
-        replacements.put('/', "$div");
-        replacements.put('\\', "$bsl");
-        replacements.put(':', "$col");
-        replacements.put(';', "$scol");
-        replacements.put('<', "$lt");
-        replacements.put('=', "$eq");
-        replacements.put('>', "$gt");
-        replacements.put('?', "$ques");
-        replacements.put('@', "$at");
-        replacements.put('^', "$caret");
-        replacements.put('`', "$grave");
-        replacements.put('{', "$lbr");
-        replacements.put('|', "$or");
-        replacements.put('}', "$rbr");
-        replacements.put('~', "$tilde");
-        replacements.put('[', "$lsqr");
-        replacements.put(']', "$rsqr");
+        REPLACEMENTS.put(' ', "$s");
+        REPLACEMENTS.put('!', "$not");
+        REPLACEMENTS.put('"', "$d");
+        REPLACEMENTS.put('#', "$hash");
+        REPLACEMENTS.put('%', "$mod");
+        REPLACEMENTS.put('&', "$and");
+        REPLACEMENTS.put('\'', "$q");
+        REPLACEMENTS.put('(', "$lpar");
+        REPLACEMENTS.put(')', "$rpar");
+        REPLACEMENTS.put('*', "$mul");
+        REPLACEMENTS.put('+', "$add");
+        REPLACEMENTS.put(',', "$com");
+        REPLACEMENTS.put('-', "$hyp");
+        REPLACEMENTS.put('.', "$dot");
+        REPLACEMENTS.put('/', "$div");
+        REPLACEMENTS.put('\\', "$bsl");
+        REPLACEMENTS.put(':', "$col");
+        REPLACEMENTS.put(';', "$scol");
+        REPLACEMENTS.put('<', "$lt");
+        REPLACEMENTS.put('=', "$eq");
+        REPLACEMENTS.put('>', "$gt");
+        REPLACEMENTS.put('?', "$ques");
+        REPLACEMENTS.put('@', "$at");
+        REPLACEMENTS.put('^', "$caret");
+        REPLACEMENTS.put('`', "$grave");
+        REPLACEMENTS.put('{', "$lbr");
+        REPLACEMENTS.put('|', "$or");
+        REPLACEMENTS.put('}', "$rbr");
+        REPLACEMENTS.put('~', "$tilde");
+        REPLACEMENTS.put('[', "$lsqr");
+        REPLACEMENTS.put(']', "$rsqr");
     }
 
     private IdrisName() {
@@ -69,13 +69,13 @@ public final class IdrisName {
     public static String transformCharacters(String value) {
         return value
             .chars()
-            .flatMap(c -> replacements.getOrDefault((char) c, String.valueOf((char) c)).chars())
+            .flatMap(c -> REPLACEMENTS.getOrDefault((char) c, String.valueOf((char) c)).chars())
             .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
             .toString();
     }
 
     public static String transformCharacter(char c) {
-        return replacements.getOrDefault(c, String.valueOf(c));
+        return REPLACEMENTS.getOrDefault(c, String.valueOf(c));
     }
 
     private static IdrisList getIdrisName(String programName, String idrisNamespace, String memberName) {
@@ -89,9 +89,18 @@ public final class IdrisName {
 
     private static Entry<String, String> getClassAndMemberName(String programName, String idrisNamespace,
                                                                String memberName) {
-        LinkedList<String> moduleParts = Stream.of(idrisNamespace.split("/")).collect(toCollection(LinkedList::new));
-        String className = String.join("/", addModulePrefix(programName, moduleParts));
+        String className = getClassName(programName, idrisNamespace);
         return new SimpleImmutableEntry<>(className, memberName);
+    }
+
+    private static String getClassName(String programName, String idrisNamespace) {
+        if (idrisNamespace.startsWith("io/github/mmhelloworld/idrisjvm")) {
+            return idrisNamespace;
+        } else {
+            LinkedList<String> moduleParts =
+                Stream.of(idrisNamespace.split("/")).collect(toCollection(LinkedList::new));
+            return String.join("/", addModulePrefix(programName, moduleParts));
+        }
     }
 
     private static List<String> addModulePrefix(String programName, List<String> nameParts) {

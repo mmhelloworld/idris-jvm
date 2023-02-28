@@ -3,7 +3,9 @@ module Compiler.Jvm.Optimizer
 import Compiler.Common
 import Compiler.CompileExpr
 import Compiler.Inline
+import Compiler.TailRec
 
+import Control.Monad.Reader
 import Control.Monad.State
 
 import Core.Context
@@ -25,35 +27,6 @@ import Compiler.Jvm.Jname
 import Compiler.Jvm.ShowUtil
 
 %hide Core.Context.Context.Constructor.arity
-
-mutual
-    hasTailCall : (predicate: Name -> Bool) -> NamedCExp -> Bool
-    hasTailCall predicate (NmLet _ _ _ expr) = hasTailCall predicate expr
-    hasTailCall predicate (NmApp _ (NmRef _ name) _) = predicate name
-    hasTailCall predicate (NmApp _ lambdaVariable _) = predicate (UN $ Basic "")
-    hasTailCall predicate (NmExtPrim fc p args) = predicate (UN $ Basic "")
-    hasTailCall predicate (NmConCase _ _ conAlts def) =
-        maybe False (\defExp => hasTailCall predicate defExp) def || hasTailCallConAlt predicate conAlts
-    hasTailCall predicate (NmConstCase _ _ constAlts def) =
-        maybe False (\defExp => hasTailCall predicate defExp) def || hasTailCallConstAlt predicate constAlts
-    hasTailCall _ _ = False
-
-    hasTailCallConAlt : (predicate: Name -> Bool) -> List NamedConAlt -> Bool
-    hasTailCallConAlt predicate [] = False
-    hasTailCallConAlt predicate ((MkNConAlt _ _ _ _ expr) :: alts) =
-        hasTailCall predicate expr || hasTailCallConAlt predicate alts
-
-    hasTailCallConstAlt : (predicate: Name -> Bool) -> List NamedConstAlt -> Bool
-    hasTailCallConstAlt predicate [] = False
-    hasTailCallConstAlt predicate ((MkNConstAlt _ expr) :: alts) =
-        hasTailCall predicate expr || hasTailCallConstAlt predicate alts
-
-export
-thunkParamName : Name
-thunkParamName = UN $ Basic "$jvm$thunk"
-
-thunkExpr : NamedCExp -> NamedCExp
-thunkExpr expr = NmLam (getFC expr) thunkParamName expr
 
 isBoolTySpec : String -> Name -> Bool
 isBoolTySpec "Prelude" (UN (Basic "Bool")) = True
@@ -180,79 +153,128 @@ getAppliedLambdaType fc =
     else if fc == appliedLambdaLetIndicator then AppliedLambdaLet
     else AppliedLambdaUnknown
 
+export
+extractedFunctionLabel : String
+extractedFunctionLabel = "$idrisjvm$extr"
+
+record SplitFunctionState where
+  constructor MkSplitFunctionState
+  caseCount: Int
+  functionName: Name
+  functionIndex: Int
+  variables : List Name
+  functions: List TailRec.Function
+
 mutual
-    goLiftToLambda : (isTailPosition: Bool) -> NamedCExp -> State Int NamedCExp
-    goLiftToLambda False (NmLet fc var value sc) = do
+    -- This is to extract `switch` cases and `let` expressions in non-tail positions into a separate function
+    -- as they cannot be compiled as expressions with JVM switch or variable assignment.
+    -- The extracted function will have the switch cases `return` values directly.
+    -- This will also extract cases into new function if there are more than 5 cases to avoid JVM's method being too
+    -- large error.
+    goSplitFunction : (isTailPosition: Bool) -> NamedCExp -> State SplitFunctionState NamedCExp
+    goSplitFunction False (NmLet fc var value sc) = do
         let extractedMethodArgumentVarName = extractedMethodArgumentName
         let extractedMethodArgumentVar = NmLocal fc extractedMethodArgumentVarName
-        liftedValue <- goLiftToLambda False value
-        liftedSc <- goLiftToLambda True sc
+        liftedValue <- goSplitFunction False value
+        let vars = variables !get
+        modify {variables $= (var::)}
+        liftedSc <- goSplitFunction True sc
         let body = NmLet fc var extractedMethodArgumentVar liftedSc
+        modify {variables := vars} -- Reset variables as we exit scope
         pure $ NmApp appliedLambdaLetIndicator (NmLam fc extractedMethodArgumentVarName body) [liftedValue]
-    goLiftToLambda True (NmLet fc var value sc) =
-        pure $ NmLet fc var !(goLiftToLambda False value) !(goLiftToLambda True sc)
-    goLiftToLambda False (NmConCase fc sc alts def) = do
-        put $ succ !get
+    goSplitFunction True (NmLet fc var value sc) = do
+      splitValue <- goSplitFunction False value
+      modify {variables $= (var::)}
+      pure $ NmLet fc var splitValue !(goSplitFunction True sc)
+    goSplitFunction False (NmConCase fc sc alts def) = do
+        modify { caseCount $= succ }
         let var = extractedMethodArgumentName
-        liftedSc <- goLiftToLambda False sc
-        liftedAlts <- traverse liftToLambdaCon alts
-        liftedDef <- traverse liftToLambdaDefault def
+        liftedSc <- goSplitFunction False sc
+        liftedAlts <- traverse goSplitFunctionCon alts
+        liftedDef <- traverse goSplitFunctionDefault def
         pure $ NmApp appliedLambdaSwitchIndicator
             (NmLam fc var (NmConCase fc (NmLocal fc var) liftedAlts liftedDef)) [liftedSc]
-    goLiftToLambda True expr@(NmConCase fc sc alts def) = do
-        cases <- get
-        put $ succ cases
+    goSplitFunction True expr@(NmConCase fc sc alts def) = do
+        let cases = caseCount !get
+        modify { caseCount $= succ }
         if cases > maxCasesInMethod
-            then do
-                put $ the Int 0
-                goLiftToLambda False expr
+            then extract fc expr
             else do
-                liftedAlts <- traverse liftToLambdaCon alts
-                liftedDef <- traverse liftToLambdaDefault def
-                pure $ NmConCase fc !(goLiftToLambda False sc) liftedAlts liftedDef
-    goLiftToLambda False (NmConstCase fc sc alts def) = do
-        put $ succ !get
+                liftedAlts <- traverse goSplitFunctionCon alts
+                liftedDef <- traverse goSplitFunctionDefault def
+                pure $ NmConCase fc !(goSplitFunction False sc) liftedAlts liftedDef
+    goSplitFunction False (NmConstCase fc sc alts def) = do
+        modify { caseCount $= succ }
         let var = extractedMethodArgumentName
-        liftedAlts <- traverse liftToLambdaConst alts
-        liftedDef <- traverse liftToLambdaDefault def
-        liftedSc <- goLiftToLambda False sc
+        liftedAlts <- traverse goSplitFunctionConst alts
+        liftedDef <- traverse goSplitFunctionDefault def
+        liftedSc <- goSplitFunction False sc
         pure $ NmApp appliedLambdaSwitchIndicator
             (NmLam fc var $ NmConstCase fc (NmLocal fc var) liftedAlts liftedDef) [liftedSc]
-    goLiftToLambda True expr@(NmConstCase fc sc alts def) = do
-        cases <- get
-        put $ succ cases
+    goSplitFunction True expr@(NmConstCase fc sc alts def) = do
+        let cases = caseCount !get
+        modify { caseCount $= succ }
         if cases > maxCasesInMethod
-            then do
-                put $ the Int 0
-                goLiftToLambda False expr
+            then extract fc expr
             else do
-                liftedSc <- goLiftToLambda False sc
-                liftedAlts <- traverse liftToLambdaConst alts
-                liftedDef <- traverse liftToLambdaDefault def
+                liftedSc <- goSplitFunction False sc
+                liftedAlts <- traverse goSplitFunctionConst alts
+                liftedDef <- traverse goSplitFunctionDefault def
                 pure $ NmConstCase fc liftedSc liftedAlts liftedDef
-    goLiftToLambda _ (NmLam fc param sc) = pure $ NmLam fc param !(goLiftToLambda True sc)
-    goLiftToLambda _ (NmApp fc f args) =
-        pure $ NmApp fc !(goLiftToLambda False f) !(traverse (goLiftToLambda False) args)
-    goLiftToLambda _ expr@(NmCon fc name conInfo tag args) =
-        pure $ NmCon fc name conInfo tag !(traverse (goLiftToLambda False) args)
-    goLiftToLambda _ (NmOp fc f args) = pure $ NmOp fc f !(traverse (goLiftToLambda False) args)
-    goLiftToLambda _ (NmExtPrim fc f args) = pure $ NmExtPrim fc f !(traverse (goLiftToLambda False) args)
-    goLiftToLambda _ (NmForce fc reason t) = pure $ NmForce fc reason !(goLiftToLambda False t)
-    goLiftToLambda _ (NmDelay fc reason t) = pure $ NmDelay fc reason !(goLiftToLambda True t)
-    goLiftToLambda _ expr = pure expr
+    goSplitFunction _ (NmLam fc param sc) = do
+      let vars = variables !get
+      modify {variables $= (param::)}
+      let splitExpr = NmLam fc param !(goSplitFunction True sc)
+      modify {variables := vars}
+      pure splitExpr
+    goSplitFunction _ (NmApp fc f args) =
+        pure $ NmApp fc !(goSplitFunction False f) !(traverse (goSplitFunction False) args)
+    goSplitFunction _ expr@(NmCon fc name conInfo tag args) =
+        pure $ NmCon fc name conInfo tag !(traverse (goSplitFunction False) args)
+    goSplitFunction _ (NmOp fc f args) = pure $ NmOp fc f !(traverse (goSplitFunction False) args)
+    goSplitFunction _ (NmExtPrim fc f args) = pure $ NmExtPrim fc f !(traverse (goSplitFunction False) args)
+    goSplitFunction _ (NmForce fc reason t) = pure $ NmForce fc reason !(goSplitFunction False t)
+    goSplitFunction _ (NmDelay fc reason t) = pure $ NmDelay fc reason !(goSplitFunction True t)
+    goSplitFunction _ expr = pure expr
 
-    liftToLambdaDefault : NamedCExp -> State Int NamedCExp
-    liftToLambdaDefault body = goLiftToLambda True body
+    goSplitFunctionDefault : NamedCExp -> State SplitFunctionState NamedCExp
+    goSplitFunctionDefault body = goSplitFunction True body
 
-    liftToLambdaCon : NamedConAlt -> State Int NamedConAlt
-    liftToLambdaCon (MkNConAlt n conInfo tag args body) =
-      pure $ MkNConAlt n conInfo tag args !(goLiftToLambda True body)
+    goSplitFunctionCon : NamedConAlt -> State SplitFunctionState NamedConAlt
+    goSplitFunctionCon (MkNConAlt n conInfo tag args body) = do
+      let usedVars = filter (flip used body . jvmSimpleName) args
+      let vars = variables !get
+      modify {variables $= (usedVars ++)}
+      let splitExpr = MkNConAlt n conInfo tag args !(goSplitFunction True body)
+      modify {variables := vars} -- Reset variables as we exit scope
+      pure splitExpr
 
-    liftToLambdaConst : NamedConstAlt -> State Int NamedConstAlt
-    liftToLambdaConst (MkNConstAlt constant body) = pure $ MkNConstAlt constant !(goLiftToLambda True body)
+    goSplitFunctionConst : NamedConstAlt -> State SplitFunctionState NamedConstAlt
+    goSplitFunctionConst (MkNConstAlt constant body) = do
+      let vars = variables !get
+      let splitExpr = MkNConstAlt constant !(goSplitFunction True body)
+      modify {variables := vars} -- Reset variables as we exit scope
+      pure splitExpr
 
-liftToLambda : NamedCExp -> NamedCExp
-liftToLambda expr = evalState 0 (goLiftToLambda True expr)
+    extract : FC -> NamedCExp -> State SplitFunctionState NamedCExp
+    extract fc expr = do
+      let extractedFunctionIndex = functionIndex !get
+      modify { functionIndex $= succ }
+      let vars = variables !get
+      let functionName = functionName !get
+      let extractedFunctionName = appendToName (extractedFunctionLabel ++ show extractedFunctionIndex) functionName
+      modify {caseCount := 0}
+      body <- goSplitFunction True expr
+      let usedVars = filter (flip used body . jvmSimpleName) vars
+      let newFunction = MkFunction extractedFunctionName fc usedVars body
+      modify {functions $= (newFunction ::)}
+      pure $ NmApp fc (NmRef fc extractedFunctionName) (NmLocal fc <$> usedVars)
+
+splitFunction : Name -> List Name -> NamedCExp -> (NamedCExp, List TailRec.Function)
+splitFunction functionName args expr =
+  let initialState = MkSplitFunctionState 0 functionName 0 args []
+      (state, expr) = runState initialState (goSplitFunction True expr)
+  in (expr, state.functions)
 
 mutual
     doGetFreeVariables : SortedSet String -> SortedSet String -> NamedCExp -> SortedSet String
@@ -312,67 +334,32 @@ mutual
 getFreeVariables : SortedSet String -> NamedCExp -> SortedSet String
 getFreeVariables boundVariables expr = doGetFreeVariables SortedSet.empty boundVariables expr
 
-jvmTailRecName : Name
-jvmTailRecName = UN $ Basic "$jvmTailRec"
-
 mutual
-    markTailRecursion : NamedCExp -> Asm NamedCExp
+    markTailRecursion : NamedCExp -> Reader (Jname, String) NamedCExp
     markTailRecursion expr@(NmApp fc (NmRef nameFc idrisName) args) =
         let jname = jvmName idrisName
-            functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
-        in if functionName == !getRootMethodName
-               then Pure (NmApp fc (NmRef nameFc jvmTailRecName) args)
-               else Pure expr
+            functionName = getIdrisFunctionName (snd !ask) (className jname) (methodName jname)
+        in if functionName == fst !ask
+               then pure $ NmApp fc (NmRef nameFc idrisTailRecName) args
+               else pure expr
     markTailRecursion expr@(NmLet fc var value body) =
         NmLet fc var value <$> markTailRecursion body
     markTailRecursion expr@(NmConCase fc sc alts def) = do
         tailRecursionMarkedAlts <- traverse markTailRecursionConAlt alts
         tailRecursionMarkedDefault <- traverse markTailRecursion def
-        Pure (NmConCase fc sc tailRecursionMarkedAlts tailRecursionMarkedDefault)
+        pure (NmConCase fc sc tailRecursionMarkedAlts tailRecursionMarkedDefault)
     markTailRecursion (NmConstCase fc sc alts def) = do
         tailRecursionMarkedAlts <- traverse markTailRecursionConstAlt alts
         tailRecursionMarkedDefault <- traverse markTailRecursion def
-        Pure (NmConstCase fc sc tailRecursionMarkedAlts tailRecursionMarkedDefault)
-    markTailRecursion expr = Pure expr
+        pure (NmConstCase fc sc tailRecursionMarkedAlts tailRecursionMarkedDefault)
+    markTailRecursion expr = pure expr
 
-    markTailRecursionConAlt : NamedConAlt -> Asm NamedConAlt
+    markTailRecursionConAlt : NamedConAlt -> Reader (Jname, String) NamedConAlt
     markTailRecursionConAlt (MkNConAlt name conInfo tag args caseBody) =
         MkNConAlt name conInfo tag args <$> markTailRecursion caseBody
 
-    markTailRecursionConstAlt : NamedConstAlt -> Asm NamedConstAlt
+    markTailRecursionConstAlt : NamedConstAlt -> Reader (Jname, String) NamedConstAlt
     markTailRecursionConstAlt (MkNConstAlt constant caseBody) = MkNConstAlt constant <$> markTailRecursion caseBody
-
-optThunkExpr : Bool -> NamedCExp -> NamedCExp
-optThunkExpr True = thunkExpr
-optThunkExpr _ = id
-
-mutual
-    trampolineExpression : (isTailRec: Bool) -> NamedCExp -> NamedCExp
-    -- Do not trampoline as tail recursion will be eliminated
-    trampolineExpression _ (NmApp fc (NmRef nameFc (UN (Basic "$jvmTailRec"))) args) =
-      NmApp fc (NmRef nameFc jvmTailRecName) (trampolineExpression False <$> args)
-    trampolineExpression isTailRec (NmApp fc f args) =
-      optThunkExpr isTailRec $ NmApp fc (trampolineExpression False f) (trampolineExpression False <$> args)
-    trampolineExpression _ (NmLam fc param body) = NmLam fc param $ trampolineExpression False body
-    trampolineExpression isTailRec (NmLet fc var value body) =
-        NmLet fc var (trampolineExpression False value) $ trampolineExpression isTailRec body
-    trampolineExpression _ (NmConCase fc sc alts def) =
-        let trampolinedAlts = trampolineExpressionConAlt <$> alts
-            trampolinedDefault = trampolineExpression True <$> def
-        in NmConCase fc sc trampolinedAlts trampolinedDefault
-    trampolineExpression _ (NmConstCase fc sc alts def) =
-        let trampolinedAlts = trampolineExpressionConstAlt <$> alts
-            trampolinedDefault = trampolineExpression True <$> def
-        in NmConstCase fc sc trampolinedAlts trampolinedDefault
-    trampolineExpression _ expr = expr
-
-    trampolineExpressionConAlt : NamedConAlt -> NamedConAlt
-    trampolineExpressionConAlt (MkNConAlt name conInfo tag args caseBody) =
-        MkNConAlt name conInfo tag args $ trampolineExpression True caseBody
-
-    trampolineExpressionConstAlt : NamedConstAlt -> NamedConstAlt
-    trampolineExpressionConstAlt (MkNConstAlt constant caseBody) =
-      MkNConstAlt constant $ trampolineExpression True caseBody
 
 exitInferenceScope : Int -> Asm ()
 exitInferenceScope scopeIndex = updateCurrentScopeIndex scopeIndex
@@ -452,12 +439,11 @@ withInferenceLambdaScope lineNumberStart lineNumberEnd parameterName expr op = d
     Pure result
 
 public export
-data LambdaType = ThunkLambda | DelayedLambda | FunctionLambda | Function2Lambda | Function3Lambda | Function4Lambda |
+data LambdaType = DelayedLambda | FunctionLambda | Function2Lambda | Function3Lambda | Function4Lambda |
                     Function5Lambda
 
 export
 Eq LambdaType where
-    ThunkLambda == ThunkLambda = True
     DelayedLambda == DelayedLambda = True
     FunctionLambda == FunctionLambda = True
     Function2Lambda == Function2Lambda = True
@@ -468,19 +454,16 @@ Eq LambdaType where
 
 export
 getLambdaTypeByParameter : (parameterName: Maybe Name) -> LambdaType
-getLambdaTypeByParameter (Just (UN (Basic "$jvm$thunk"))) = ThunkLambda
 getLambdaTypeByParameter Nothing = DelayedLambda
 getLambdaTypeByParameter _ = FunctionLambda
 
 export
 getLambdaInterfaceMethodName : LambdaType -> String
-getLambdaInterfaceMethodName ThunkLambda = "evaluate"
 getLambdaInterfaceMethodName DelayedLambda = "evaluate"
 getLambdaInterfaceMethodName _ = "apply"
 
 export
 getSamDesc : LambdaType -> String
-getSamDesc ThunkLambda = "()" ++ getJvmTypeDescriptor thunkType
 getSamDesc DelayedLambda = "()Ljava/lang/Object;"
 getSamDesc FunctionLambda = getMethodDescriptor $ MkInferredFunctionType inferredObjectType [inferredObjectType]
 getSamDesc Function2Lambda =
@@ -494,13 +477,11 @@ getSamDesc Function5Lambda =
 
 export
 getLambdaInterfaceType : LambdaType -> InferredType -> InferredType
-getLambdaInterfaceType ThunkLambda returnType = getThunkType returnType
 getLambdaInterfaceType DelayedLambda returnType = delayedType
 getLambdaInterfaceType _ returnType = inferredLambdaType
 
 export
 getLambdaImplementationMethodReturnType : LambdaType -> InferredType
-getLambdaImplementationMethodReturnType ThunkLambda = thunkType
 getLambdaImplementationMethodReturnType _ = inferredObjectType
 
 export
@@ -576,7 +557,7 @@ mutual
     inferExpr : InferredType -> NamedCExp -> Asm InferredType
     inferExpr exprTy (NmDelay _ _ expr) = inferExprLam AppliedLambdaUnknown Nothing Nothing expr
     inferExpr exprTy expr@(NmLocal _ var) = addVariableType (jvmSimpleName var) exprTy
-    inferExpr exprTy (NmRef _ _) = pure exprTy
+    inferExpr exprTy (NmRef _ name) = pure exprTy
     inferExpr _ (NmApp fc (NmLam _ var body) [expr]) =
         inferExprLam (getAppliedLambdaType fc) (Just expr) (Just var) body
     inferExpr _ (NmLam _ var body) = inferExprLam AppliedLambdaUnknown Nothing (Just var) body
@@ -758,12 +739,11 @@ mutual
         let jvmParameterNameAndType = (\(name, ty) => (jvmSimpleName name, ty)) <$> parameterNameAndType
         let lambdaType = getLambdaTypeByParameter (fst <$> parameterNameAndType)
         lambdaBodyReturnType <- withInferenceLambdaScope lineStart lineEnd (fst <$> parameterNameAndType) expr $ do
-            when (lambdaType /= ThunkLambda) $
-                traverse_ createAndAddVariable jvmParameterNameAndType
+            traverse_ createAndAddVariable jvmParameterNameAndType
             maybe (Pure ()) id parameterValueExpr
             lambdaBodyReturnType <- inferExpr IUnknown expr
             currentScope <- getScope !getCurrentScopeIndex
-            saveScope $ record {returnType = lambdaBodyReturnType} currentScope
+            saveScope $ { returnType := lambdaBodyReturnType } currentScope
             Pure lambdaBodyReturnType
         Pure $ if hasParameterValue
             then lambdaBodyReturnType
@@ -846,7 +826,7 @@ mutual
         createVariable varName
         let (_, lineStart, lineEnd) = getSourceLocation value
         valueTy <- withInferenceScope lineStart lineEnd $ inferExpr IUnknown value
-        ignore $ addVariableType varName (if isThunkType valueTy then inferredObjectType else valueTy)
+        ignore $ addVariableType varName valueTy
         let (_, lineStart, lineEnd) = getSourceLocation expr
         withInferenceScope lineStart lineEnd $ inferExpr exprTy expr
 
@@ -869,7 +849,7 @@ mutual
                 _ => createNewVariable "tailRecArg" ty
 
     inferExprApp : InferredType -> NamedCExp -> Asm InferredType
-    inferExprApp exprTy app@(NmApp _ (NmRef _ (UN (Basic "$jvmTailRec"))) args) =
+    inferExprApp exprTy app@(NmApp _ (NmRef _ (UN (Basic "$idrisTailRec"))) args) =
         case args of
             [] => Pure exprTy
             args@(_ :: argsTail) => do
@@ -973,14 +953,6 @@ mutual
       Pure IUnknown
     inferExprOp op _ = Throw emptyFC ("Unsupported primitive function " ++ show op)
 
-optimize : Jname -> TailCallCategory -> NamedCExp -> Asm NamedCExp
-optimize jname tailCallCategory expr = do
-  inlinedAndTailRecursionMarkedExpr <- markTailRecursion . liftToLambda $ expr
-  shouldTrampoline <- LiftIo $ AsmGlobalState.shouldTrampoline !getGlobalState (show jname)
-  Pure $ if shouldTrampoline && hasNonSelfTailCall tailCallCategory
-    then trampolineExpression True inlinedAndTailRecursionMarkedExpr
-    else inlinedAndTailRecursionMarkedExpr
-
 export
 %inline
 emptyFunction : NamedCExp
@@ -992,18 +964,44 @@ showScopes n = do
     debug $ show scope
     when (n > 0) $ showScopes (n - 1)
 
+tailRecLoopFunctionName : String -> Name
+tailRecLoopFunctionName programName =
+  NS (mkNamespace "io.github.mmhelloworld.idrisjvm.runtime.Runtime") (UN $ Basic "tailRec")
+
+delayNilArityExpr : FC -> (args: List Name) -> NamedCExp -> NamedCExp
+delayNilArityExpr fc [] expr = NmDelay fc LLazy expr
+delayNilArityExpr _ _ expr = expr
+
+toNameFcDef : TailRec.Function -> (Name, FC, NamedDef)
+toNameFcDef (MkFunction name fc args def) = (name, fc, MkNmFun args def)
+
+optimizeTailRecursion : String -> (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
+optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
+  let jname = jvmName name
+      nilArityHandledExpr = delayNilArityExpr fc args body
+      functionName = getIdrisFunctionName programName (className jname) (methodName jname)
+      (splitExpr, extractedFunctions) = splitFunction name args nilArityHandledExpr
+      tailRecOptimizedExpr = runReader (functionName, programName) $ markTailRecursion splitExpr
+      tailRecOptimizedDef = (name, fc, MkNmFun args tailRecOptimizedExpr)
+      extractedFunctionDefs = toNameFcDef <$> extractedFunctions
+  in tailRecOptimizedDef :: extractedFunctionDefs
+optimizeTailRecursion _ nameFcDef = [nameFcDef]
+
+export
+optimize : String -> List (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
+optimize programName allDefs =
+  let tailRecOptimizedDefs = concatMap (optimizeTailRecursion programName) allDefs
+      tailCallOptimizedDefs = TailRec.functions (tailRecLoopFunctionName programName) tailRecOptimizedDefs
+  in toNameFcDef <$> tailCallOptimizedDefs
+
 export
 inferDef : String -> Name -> FC -> NamedDef -> Asm ()
-inferDef programName idrisName fc (MkNmFun args body) = do
+inferDef programName idrisName fc (MkNmFun args expr) = do
     let jname = jvmName idrisName
-    let hasSelfTailCall = hasTailCall (== idrisName) body
-    let hasNonSelfTailCall = hasTailCall (/= idrisName) body
     let jvmClassAndMethodName = getIdrisFunctionName programName (className jname) (methodName jname)
-    let tailCallCategory = MkTailCallCategory hasSelfTailCall hasNonSelfTailCall
+    let argumentNames = jvmSimpleName <$> args
     let arity = length args
     let arityInt = the Int $ cast arity
-    let expr = if arityInt == 0 then NmDelay fc LLazy body else body
-    let argumentNames = jvmSimpleName <$> args
     argIndices <- LiftIo $ getArgumentIndices arityInt argumentNames
     let initialArgumentTypes = replicate arity inferredObjectType
     let inferredFunctionType = MkInferredFunctionType inferredObjectType initialArgumentTypes
@@ -1012,13 +1010,10 @@ inferDef programName idrisName fc (MkNmFun args body) = do
     let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName emptyFunction
     setCurrentFunction function
     LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
-    let shouldDebugExpr = shouldDebug &&
-        fromMaybe True ((\name => name `isInfixOf` (getSimpleName jname)) <$> debugFunction)
-    when shouldDebugExpr $
-      debug $ "Inferring " ++ (className jvmClassAndMethodName) ++ "." ++ (methodName jvmClassAndMethodName) ++
-        ":\n" ++ showNamedCExp 0 expr
-    optimizedExpr <- optimize jname tailCallCategory expr
-    updateCurrentFunction $ record { optimizedBody = optimizedExpr }
+    debug $ "Inferring " ++ (className jvmClassAndMethodName) ++ "." ++ (methodName jvmClassAndMethodName)
+    let shouldDebugExpr = shouldDebug && (debugFunction `isInfixOf` (getSimpleName jname))
+    when shouldDebugExpr $ debug $ showNamedCExp 0 expr
+    updateCurrentFunction $ { optimizedBody := expr }
 
     resetScope
     scopeIndex <- newScopeIndex
@@ -1030,9 +1025,9 @@ inferDef programName idrisName fc (MkNmFun args body) = do
             allVariableIndices IUnknown arityInt (lineStart, lineEnd) ("", "") []
 
     saveScope functionScope
-    retTy <- inferExpr IUnknown optimizedExpr
+    retTy <- inferExpr IUnknown expr
     updateScopeVariableTypes arity
-    updateCurrentFunction $ record { inferredFunctionType = inferredFunctionType }
+    updateCurrentFunction $ { inferredFunctionType := inferredFunctionType }
     when shouldDebugExpr $ showScopes (scopeCounter !GetState - 1)
   where
     getArgumentTypes : List String -> Asm (List InferredType)

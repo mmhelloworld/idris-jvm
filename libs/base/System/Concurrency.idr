@@ -14,10 +14,10 @@ import System.Info
 -- Thread mailboxes
 
 %foreign "scheme:blodwen-set-thread-data"
-         "jvm:setThreadData(java/lang/Object java/lang/Object void),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
+         "jvm:setThreadData(java/lang/Object void),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
 prim__setThreadData : {a : Type} -> a -> PrimIO ()
 %foreign "scheme:blodwen-get-thread-data"
-         "jvm:getThreadData(java/lang/Object java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
+         "jvm:getThreadData(java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
 prim__getThreadData : (a : Type) -> PrimIO a
 %foreign "scheme,chez:get-thread-id"
 prim__getThreadId : PrimIO Int
@@ -207,14 +207,14 @@ data Channel : Type -> Type where [external]
          "jvm:<init>(java/util/concurrent/LinkedBlockingQueue),java/util/concurrent/LinkedBlockingQueue"
 prim__makeChannel : PrimIO (Channel a)
 %foreign "scheme:blodwen-channel-get"
-         "jvm:channelGet(java/lang/Object java/lang/Object java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
+         "jvm:.take(java/util/concurrent/LinkedBlockingQueue java/lang/Object),java/util/concurrent/LinkedBlockingQueue"
 prim__channelGet : Channel a -> PrimIO a
 %foreign "scheme,chez:blodwen-channel-get-non-blocking"
 prim__channelGetNonBlocking : Channel a -> PrimIO (Maybe a)
 %foreign "scheme,chez:blodwen-channel-get-with-timeout"
 prim__channelGetWithTimeout : Channel a -> Int -> PrimIO (Maybe a)
 %foreign "scheme:blodwen-channel-put"
-         "jvm:channelPut(java/lang/Object java/lang/Object java/lang/Object void),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
+         "jvm:.put(java/util/concurrent/LinkedBlockingQueue java/lang/Object void),java/util/concurrent/LinkedBlockingQueue"
 prim__channelPut : Channel a -> a -> PrimIO ()
 
 ||| Creates and returns a new `Channel`.

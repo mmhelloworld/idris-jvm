@@ -24,6 +24,9 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <quietLogs>true</quietLogs>
+                </configuration>
                 <executions>
                     <execution>
                         <id>idris-test-compile</id>
@@ -68,7 +71,7 @@
                         <configuration>
                             <environmentVariables>
                                 <INTERACTIVE />
-                                <JAVA_OPTS>-Xss16m -Xms2g -Xmx3g</JAVA_OPTS>
+                                <JAVA_OPTS>-Xss8m</JAVA_OPTS>
                             </environmentVariables>
                             <skip>${skipTests}</skip>
                             <executable>make</executable>

@@ -11,6 +11,7 @@ import Core.TT
 import Data.List
 import Data.Maybe
 import Libraries.Data.SortedSet
+import Libraries.Data.String.Extra
 import Data.Vect
 
 import Compiler.Jvm.Tuples
@@ -716,10 +717,8 @@ Show Scope where
 
 export
 Show InferredFunctionType where
-    show inferredFunctionType = showType "InferredFunctionType" [
-        ("returnType", show $ returnType inferredFunctionType),
-        ("parameterTypes", show $ parameterTypes inferredFunctionType)
-    ]
+    show inferredFunctionType =
+      join " -> " $ show <$> (parameterTypes inferredFunctionType ++ [returnType inferredFunctionType])
 
 export
 Show Function where

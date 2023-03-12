@@ -55,6 +55,10 @@ jobs:
           VALIDATE_JSCPD: false  # erroneously complains about docs/requirements.txt
           VALIDATE_JAVASCRIPT_STANDARD: false #requires camel-casing
           VALIDATE_GOOGLE_JAVA_FORMAT: false
+          VALIDATE_PYTHON: false
+          VALIDATE_PYTHON_MYPY: false
+          VALIDATE_PYTHON_PYLINT: false
+          VALIDATE_PYTHON_BLACK: false
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IGNORE_GENERATED_FILES: true

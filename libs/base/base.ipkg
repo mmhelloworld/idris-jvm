@@ -104,6 +104,9 @@ modules = Control.App,
           Language.Reflection.TT,
           Language.Reflection.TTImp,
 
+          Java.Lang,
+          Java.Util,
+
           Syntax.PreorderReasoning,
           Syntax.PreorderReasoning.Generic,
 

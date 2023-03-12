@@ -12,7 +12,7 @@
 /lib
 
 idris2docs_venv
-/docs/build
+/docs/_build
 
 /libs/**/build
 /ipkg/build

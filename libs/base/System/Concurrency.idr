@@ -12,10 +12,10 @@ module System.Concurrency
 -- Thread mailboxes
 
 %foreign "scheme:blodwen-set-thread-data"
-         "jvm:setThreadData(java/lang/Object java/lang/Object void),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
+         "jvm:setThreadData(java/lang/Object void),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
 prim__setThreadData : {a : Type} -> a -> PrimIO ()
 %foreign "scheme:blodwen-get-thread-data"
-         "jvm:getThreadData(java/lang/Object java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
+         "jvm:getThreadData(java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
 prim__getThreadData : (a : Type) -> PrimIO a
 
 ||| Set the data stored in a thread's parameter to the given value.
@@ -202,10 +202,10 @@ data Channel : Type -> Type where [external]
          "jvm:<init>(java/util/concurrent/LinkedBlockingQueue),java/util/concurrent/LinkedBlockingQueue"
 prim__makeChannel : PrimIO (Channel a)
 %foreign "scheme:blodwen-channel-get"
-         "jvm:channelGet(java/lang/Object java/lang/Object java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
+         "jvm:.take(java/util/concurrent/LinkedBlockingQueue java/lang/Object),java/util/concurrent/LinkedBlockingQueue"
 prim__channelGet : Channel a -> PrimIO a
 %foreign "scheme:blodwen-channel-put"
-         "jvm:channelPut(java/lang/Object java/lang/Object java/lang/Object void),io/github/mmhelloworld/idrisjvm/runtime/Concurrency"
+         "jvm:.put(java/util/concurrent/LinkedBlockingQueue java/lang/Object void),java/util/concurrent/LinkedBlockingQueue"
 prim__channelPut : Channel a -> a -> PrimIO ()
 
 ||| Creates and returns a new `Channel`.

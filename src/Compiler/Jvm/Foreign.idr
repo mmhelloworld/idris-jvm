@@ -13,6 +13,8 @@ import Data.List
 import Data.List1
 import Data.Vect
 import Data.String
+import Debug.Trace
+import Data.Zippable
 
 import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
@@ -50,7 +52,7 @@ namespace ForeignImplementationType
     export
     getInferredType : FC -> ForeignImplementationType -> Asm InferredType
     getInferredType fc (AtomicForeignImplementationType ty) = Pure ty
-    getInferredType fc _ = Throw fc "Callback functions cannot be higher order"
+    getInferredType fc (FunctionForeignImplementationType ty) = Pure $ getFunctionInterface (length $ parameterTypes ty)
 
     mutual
         parseCallbackType : FC -> List CFType -> CFType -> Asm ForeignImplementationType
@@ -176,25 +178,62 @@ getPrimMethodName "" = "prim__jvmStatic"
 getPrimMethodName name =
     assert_total $ if prim__strHead name == '.' then "prim__jvmInstance" else "prim__jvmStatic"
 
+isValidArgumentType : CFType -> Bool
+isValidArgumentType (CFUser (UN (Basic "Type")) _) = False
+isValidArgumentType _ = True
+
+getIdrisJvmParameters : FC -> List CFType -> Asm (List (Nat, Bool, ForeignImplementationType))
+getIdrisJvmParameters fc idrisTypes = pure $ reverse !(go [] 0 idrisTypes) where
+  go : List (Nat, Bool, ForeignImplementationType) -> Nat -> List CFType ->
+         Asm (List (Nat, Bool, ForeignImplementationType))
+  go acc _ [] = pure acc
+  go acc index (idrisType :: rest) = do
+    jvmType <- parse fc idrisType
+    let isValid = isValidArgumentType idrisType
+    go ((index, isValid, jvmType) :: acc) (index + 1) rest
+
+getJvmType : (Nat, Bool, ForeignImplementationType) -> ForeignImplementationType
+getJvmType (_, _, jvmType) = jvmType
+
+shouldPassToForeign : (CFType, Nat, Bool, ForeignImplementationType) -> Bool
+shouldPassToForeign (_, _, shouldPass, _) = shouldPass
+
+getArgumentNameAndTypes : FC -> List InferredType -> List (Nat, Bool, ForeignImplementationType) ->
+                          Asm (List (String, InferredType))
+getArgumentNameAndTypes fc descriptorTypes params = reverse <$> go [] descriptorTypes params where
+  go : List (String, InferredType) -> List InferredType -> List (Nat, Bool, ForeignImplementationType) ->
+        Asm (List (String, InferredType))
+  go acc [] _ = pure acc -- Ignore any additional arguments from Idris
+  go acc _ [] = Throw fc "Foreign descriptor and Idris types do not match"
+  go acc (descriptorType :: descriptorTypes) ((index, _, _) :: rest) =
+    go (("arg" ++ show index, descriptorType) :: acc) descriptorTypes rest
+
 export
 inferForeign : String -> Name -> FC -> List String -> List CFType -> CFType -> Asm ()
 inferForeign programName idrisName fc foreignDescriptors argumentTypes returnType = do
     resetScope
     let jname = jvmName idrisName
     let jvmClassAndMethodName = getIdrisFunctionName programName (className jname) (methodName jname)
-    jvmArgumentTypes <- traverse (parse fc) argumentTypes
-    let arityNat = length jvmArgumentTypes
+    idrisJvmParameters <- getIdrisJvmParameters fc argumentTypes
+    let validIdrisTypes = map fst $ filter shouldPassToForeign $ zip argumentTypes idrisJvmParameters
+    let idrisArgumentTypes = getJvmType <$> idrisJvmParameters
+    let jvmArguments = filter (fst . snd) idrisJvmParameters
+    let jvmArgumentTypes = getJvmType <$> jvmArguments
+    let arityNat = length argumentTypes
     let isNilArity = arityNat == 0
     jvmDescriptor <- findJvmDescriptor fc idrisName foreignDescriptors
     jvmReturnType <- getInferredType fc !(parse fc returnType)
-    (foreignFunctionClassName, foreignFunctionName, jvmReturnType, jvmArgumentTypes) <-
+    (foreignFunctionClassName, foreignFunctionName, jvmReturnType, jvmArgumentForeignTypesFromDescriptor) <-
         parseForeignFunctionDescriptor fc jvmDescriptor jvmArgumentTypes jvmReturnType
-    let jvmArgumentTypes = getInferredType <$> jvmArgumentTypes -- TODO: Do not discard Java lambda type descriptor
+
+    -- TODO: Do not discard Java lambda type descriptor
+    let jvmArgumentTypesFromDescriptor = getInferredType <$> jvmArgumentForeignTypesFromDescriptor
+
     scopeIndex <- newScopeIndex
     let arity = the Int $ cast arityNat
     let argumentNames =
        if isNilArity then [] else (\argumentIndex => "arg" ++ show argumentIndex) <$> [0 .. arity - 1]
-    let argumentTypesByName = SortedMap.fromList $ zip argumentNames jvmArgumentTypes
+    argumentNameAndTypes <- getArgumentNameAndTypes fc jvmArgumentTypesFromDescriptor jvmArguments
     let methodReturnType = if isNilArity then delayedType else inferredObjectType
     let inferredFunctionType = MkInferredFunctionType methodReturnType (replicate arityNat inferredObjectType)
     scopes <- LiftIo $ JList.new {a=Scope}
@@ -202,7 +241,7 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
         NmExtPrim fc (NS (mkNamespace "") $ UN $ Basic $ getPrimMethodName foreignFunctionName) [
            NmCon fc (UN $ Basic $ createExtPrimTypeSpec jvmReturnType) DATACON Nothing [],
            NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
-           getJvmExtPrimArguments $ zip argumentTypes $ SortedMap.toList argumentTypesByName,
+           getJvmExtPrimArguments $ zip validIdrisTypes argumentNameAndTypes,
            NmPrimVal fc WorldVal]
     let functionBody = if isNilArity then NmDelay fc LLazy externalFunctionBody else externalFunctionBody
     let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName functionBody

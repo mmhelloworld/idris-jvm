@@ -44,7 +44,10 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 
 #### Run
 
-`build/exec/main_app/main`
+```shell
+% build/exec/main_app/main
+["3", "+", "7", "/", "2"]
+```
 
 ## License
 This repository extends [idris-lang/Idris2](https://github.com/idris-lang/Idris2) repository with JVM backend. Files from [idris-lang/Idris2](https://github.com/idris-lang/Idris2) are covered by that repository's [license](https://github.com/idris-lang/Idris2/blob/main/LICENSE).

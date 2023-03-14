@@ -42,3 +42,18 @@ jobs:
 
       - name: Build
         run: mvn -B install -Dinteractive= -Didris.tests=only=jvm
+
+      - name: Copy new version
+        run: |
+          mkdir -p "$HOME/bin/idris2-current"
+          cp -r build/exec "$HOME/bin/idris2-current/exec"
+          cp -r build/env "$HOME/bin/idris2-current/env"
+
+      - name: Use new version
+        run: |
+          echo "::add-path::$HOME/bin/idris2-current/exec"
+          echo IDRIS2_PREFIX="$HOME/bin/idris2-current/env" >> "$GITHUB_ENV"
+          echo PREFIX="$IDRIS2_PREFIX" >> "$GITHUB_ENV"
+
+      - name: Self host
+        run: mvn -B clean install -Dinteractive= -Didris.tests=only=jvm

@@ -10,6 +10,7 @@ import Core.TT
 
 import Data.List
 import Data.Maybe
+import Data.String
 import Libraries.Data.SortedSet
 import Libraries.Data.String.Extra
 import Data.Vect
@@ -1527,6 +1528,10 @@ export
 debugFunction : String
 debugFunction = fromMaybe " " $ unsafePerformIO $ getEnv "IDRIS_JVM_DEBUG"
 
+export
+shouldDebugFunction : Jname -> Bool
+shouldDebugFunction jname = shouldDebug && (debugFunction `isInfixOf` (getSimpleName jname))
+
 namespace LocalDateTime
     data LocalDateTime : Type where [external]
 
@@ -1550,14 +1555,19 @@ getCurrentThreadName : HasIO io => io String
 getCurrentThreadName = primIO prim_getCurrentThreadName
 
 export
-debug : Lazy String -> Asm ()
-debug msg =
-  when shouldDebug $ do
-    context <- LiftIo $ do
-        time <- currentTimeString
-        threadName <- getCurrentThreadName
-        pure $ time ++ " [" ++ threadName ++ "]"
-    Debug $ context ++ ": " ++ msg
+log : Lazy String -> (result : a) -> a
+log message val =
+  if shouldDebug
+    then unsafePerformIO $ do
+      time <- currentTimeString
+      threadName <- getCurrentThreadName
+      putStrLn (time ++ " [" ++ threadName ++ "]: " ++ message)
+      pure val
+    else val
+
+export
+logAsm : Lazy String -> Asm ()
+logAsm message = log message (Pure ())
 
 public export
 data FArgList : Type where

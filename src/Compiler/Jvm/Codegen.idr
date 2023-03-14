@@ -1732,9 +1732,8 @@ assembleDefinition idrisName fc = do
         lineNumberLabels := lineNumberLabels }
     updateCurrentFunction $ { dynamicVariableCounter := 0 }
     let optimizedExpr = optimizedBody function
-    debug $ "Assembling " ++ declaringClassName ++ "." ++ methodName
-    let shouldDebugExpr = shouldDebug && (debugFunction `isInfixOf` (getSimpleName jname))
-    when shouldDebugExpr $ debug $ showNamedCExp 0 optimizedExpr
+    when (shouldDebugFunction jname) $ logAsm $ "Assembling " ++ declaringClassName ++ "." ++ methodName ++ "\n" ++
+      showNamedCExp 0 optimizedExpr
     let fileName = fst $ getSourceLocationFromFc fc
     let descriptor = getMethodDescriptor functionType
     -- Cache only top level nil arity functions. Don't cache extracted function results.

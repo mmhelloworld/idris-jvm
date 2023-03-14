@@ -961,7 +961,7 @@ emptyFunction = NmCrash emptyFC "uninitialized function"
 showScopes : Int -> Asm ()
 showScopes n = do
     scope <- getScope n
-    debug $ show scope
+    logAsm $ show scope
     when (n > 0) $ showScopes (n - 1)
 
 tailRecLoopFunctionName : String -> Name
@@ -975,6 +975,11 @@ delayNilArityExpr _ _ expr = expr
 toNameFcDef : TailRec.Function -> (Name, FC, NamedDef)
 toNameFcDef (MkFunction name fc args def) = (name, fc, MkNmFun args def)
 
+export
+logFunction : String -> Jname -> List Name -> NamedCExp -> (result: a) -> a
+logFunction logPrefix name args expr result =
+  if shouldDebugFunction name then log (logPrefix ++ " " ++ showNamedCExp 0 expr) result else result
+
 optimizeTailRecursion : String -> (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
 optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
   let jname = jvmName name
@@ -984,7 +989,8 @@ optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
       tailRecOptimizedExpr = runReader (functionName, programName) $ markTailRecursion splitExpr
       tailRecOptimizedDef = (name, fc, MkNmFun args tailRecOptimizedExpr)
       extractedFunctionDefs = toNameFcDef <$> extractedFunctions
-  in tailRecOptimizedDef :: extractedFunctionDefs
+      optimizedDefs = tailRecOptimizedDef :: extractedFunctionDefs
+  in logFunction "Unoptimized" jname args body optimizedDefs
 optimizeTailRecursion _ nameFcDef = [nameFcDef]
 
 export
@@ -1010,9 +1016,6 @@ inferDef programName idrisName fc (MkNmFun args expr) = do
     let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName emptyFunction
     setCurrentFunction function
     LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
-    debug $ "Inferring " ++ (className jvmClassAndMethodName) ++ "." ++ (methodName jvmClassAndMethodName)
-    let shouldDebugExpr = shouldDebug && (debugFunction `isInfixOf` (getSimpleName jname))
-    when shouldDebugExpr $ debug $ showNamedCExp 0 expr
     updateCurrentFunction $ { optimizedBody := expr }
 
     resetScope
@@ -1028,7 +1031,7 @@ inferDef programName idrisName fc (MkNmFun args expr) = do
     retTy <- inferExpr IUnknown expr
     updateScopeVariableTypes arity
     updateCurrentFunction $ { inferredFunctionType := inferredFunctionType }
-    when shouldDebugExpr $ showScopes (scopeCounter !GetState - 1)
+    when (shouldDebugFunction jname) $ showScopes (scopeCounter !GetState - 1)
   where
     getArgumentTypes : List String -> Asm (List InferredType)
     getArgumentTypes argumentNames = do

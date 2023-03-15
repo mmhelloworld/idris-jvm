@@ -26,6 +26,7 @@ assemblerClass name = "io/github/mmhelloworld/idrisjvm/assembler/" ++ name
 export
 cleanupIdentifier : String -> String
 
+export
 %foreign "jvm:.replace,java/lang/String"
 replace : String -> Char -> Char -> String
 

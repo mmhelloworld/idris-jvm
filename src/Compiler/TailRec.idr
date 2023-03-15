@@ -309,6 +309,31 @@ conAlt (MkTcGroup tcIx funs) (MkTcFunction n ix args exp fc) =
        const : NamedConstAlt -> NamedConstAlt
        const (MkNConstAlt x y) = MkNConstAlt x (toTc y)
 
+maxCasesInTcFunction : Nat
+maxCasesInTcFunction = 10
+
+splitTcFun : Int -> List NamedConAlt -> List Function
+splitTcFun groupIndex branches = go [] 0 branches where
+
+  getSplitTcFunName : Int -> Name
+  getSplitTcFunName 0 = tcFunction groupIndex
+  getSplitTcFunName index = MN ("$tcOpt$" ++ show groupIndex) index
+
+  createFunction : Int -> Bool -> List NamedConAlt -> Function
+  createFunction index hasNext branches =
+    let tcArg = NmLocal emptyFC tcArgName
+        defaultBranch =
+          if hasNext then Just (NmApp emptyFC (NmRef emptyFC $ getSplitTcFunName (index + 1)) [tcArg]) else Nothing
+        switch = NmConCase EmptyFC tcArg branches defaultBranch
+        splitTcFunName = getSplitTcFunName index
+    in MkFunction splitTcFunName emptyFC [tcArgName] switch
+
+  go : List Function -> Int -> List NamedConAlt -> List Function
+  go acc _ [] = acc
+  go acc index branches =
+    let (currentCases, nextCases) = splitAt maxCasesInTcFunction branches
+    in go (createFunction index (isCons nextCases) currentCases :: acc) (index + 1) nextCases
+
 -- Converts a group of mutually tail recursive functions
 -- to a list of toplevel function declarations. `tailRecLoopName`
 -- is the name of the toplevel function that does the
@@ -320,8 +345,7 @@ convertTcGroup loop g@(MkTcGroup gindex fs) =
       branchesAndFunctions  = map (conAlt g) functions
       branches = map fst branchesAndFunctions
       tailRecOptimizedFunctions = map snd branchesAndFunctions
-      switch    = NmConCase EmptyFC (local tcArgName) branches Nothing
-   in (MkFunction tcFunName emptyFC [tcArgName] switch :: tailRecOptimizedFunctions) ++ map toFun functions
+   in (splitTcFun gindex branches ++ tailRecOptimizedFunctions) ++ map toFun functions
 
   where tcFunName : Name
         tcFunName = tcFunction gindex

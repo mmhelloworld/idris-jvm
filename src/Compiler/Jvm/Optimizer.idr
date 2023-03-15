@@ -154,13 +154,19 @@ getAppliedLambdaType fc =
     else AppliedLambdaUnknown
 
 export
+appendToJvmName : String -> Jname -> Name
+appendToJvmName suffix jname =
+  let className = replace (className jname) '/' '.'
+  in NS (mkNamespace className) (UN $ Basic (show (methodName jname) ++ suffix))
+
+export
 extractedFunctionLabel : String
 extractedFunctionLabel = "$idrisjvm$extr"
 
 record SplitFunctionState where
   constructor MkSplitFunctionState
   caseCount: Int
-  functionName: Name
+  functionName: Jname
   functionIndex: Int
   variables : List Name
   functions: List TailRec.Function
@@ -200,9 +206,10 @@ mutual
         if cases > maxCasesInMethod
             then extract fc expr
             else do
+                liftedSc <- goSplitFunction False sc
                 liftedAlts <- traverse goSplitFunctionCon alts
                 liftedDef <- traverse goSplitFunctionDefault def
-                pure $ NmConCase fc !(goSplitFunction False sc) liftedAlts liftedDef
+                pure $ NmConCase fc liftedSc liftedAlts liftedDef
     goSplitFunction False (NmConstCase fc sc alts def) = do
         modify { caseCount $= succ }
         let var = extractedMethodArgumentName
@@ -223,9 +230,10 @@ mutual
                 pure $ NmConstCase fc liftedSc liftedAlts liftedDef
     goSplitFunction _ (NmLam fc param sc) = do
       let vars = variables !get
-      modify {variables $= (param::)}
+      let oldCaseCount = caseCount !get
+      modify {variables $= (param::), caseCount := 0}
       let splitExpr = NmLam fc param !(goSplitFunction True sc)
-      modify {variables := vars}
+      modify {variables := vars, caseCount := oldCaseCount}
       pure splitExpr
     goSplitFunction _ (NmApp fc f args) =
         pure $ NmApp fc !(goSplitFunction False f) !(traverse (goSplitFunction False) args)
@@ -259,18 +267,19 @@ mutual
     extract : FC -> NamedCExp -> State SplitFunctionState NamedCExp
     extract fc expr = do
       let extractedFunctionIndex = functionIndex !get
-      modify { functionIndex $= succ }
+      let oldCaseCount = caseCount !get
+      modify { functionIndex $= succ, caseCount := 0 }
       let vars = variables !get
       let functionName = functionName !get
-      let extractedFunctionName = appendToName (extractedFunctionLabel ++ show extractedFunctionIndex) functionName
-      modify {caseCount := 0}
+      let extractedFunctionName = appendToJvmName (extractedFunctionLabel ++ show extractedFunctionIndex) functionName
       body <- goSplitFunction True expr
+      modify { caseCount := oldCaseCount }
       let usedVars = filter (flip used body . jvmSimpleName) vars
       let newFunction = MkFunction extractedFunctionName fc usedVars body
       modify {functions $= (newFunction ::)}
       pure $ NmApp fc (NmRef fc extractedFunctionName) (NmLocal fc <$> usedVars)
 
-splitFunction : Name -> List Name -> NamedCExp -> (NamedCExp, List TailRec.Function)
+splitFunction : Jname -> List Name -> NamedCExp -> (NamedCExp, List TailRec.Function)
 splitFunction functionName args expr =
   let initialState = MkSplitFunctionState 0 functionName 0 args []
       (state, expr) = runState initialState (goSplitFunction True expr)
@@ -975,17 +984,18 @@ delayNilArityExpr _ _ expr = expr
 toNameFcDef : TailRec.Function -> (Name, FC, NamedDef)
 toNameFcDef (MkFunction name fc args def) = (name, fc, MkNmFun args def)
 
-export
 logFunction : String -> Jname -> List Name -> NamedCExp -> (result: a) -> a
 logFunction logPrefix name args expr result =
-  if shouldDebugFunction name then log (logPrefix ++ " " ++ showNamedCExp 0 expr) result else result
+  if shouldDebugFunction name
+    then log (logPrefix ++ " " ++ show name ++ ": " ++ show args ++ "\n" ++ showNamedCExp 0 expr) result
+    else result
 
 optimizeTailRecursion : String -> (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
 optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
   let jname = jvmName name
       nilArityHandledExpr = delayNilArityExpr fc args body
       functionName = getIdrisFunctionName programName (className jname) (methodName jname)
-      (splitExpr, extractedFunctions) = splitFunction name args nilArityHandledExpr
+      (splitExpr, extractedFunctions) = splitFunction jname args nilArityHandledExpr
       tailRecOptimizedExpr = runReader (functionName, programName) $ markTailRecursion splitExpr
       tailRecOptimizedDef = (name, fc, MkNmFun args tailRecOptimizedExpr)
       extractedFunctionDefs = toNameFcDef <$> extractedFunctions

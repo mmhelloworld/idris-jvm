@@ -66,10 +66,10 @@ constructor returning `java/util/ArrayList`.
 Inheritance
 ===========
 
-Idris JVM allows calling methods from interfaces or parent classes through `Inherits` interface. `Inherits` interface
-doesn't have any functions to implement but is just a marker for foreign types. We already saw an example above that
-calls `toString` from `Object` class on an `ArrayList` instance. Here is a detailed example showing the hierarchy
-between Java's `Collection`, `List` and `ArrayList`:
+Idris JVM allows calling methods from interfaces or parent classes through ``Inherits`` interface.
+``Inherits`` interface doesn't have any functions to implement but is just a marker interface for foreign types.
+We already saw an example of inheritance above that calls ``toString`` from ``Object`` class on an `ArrayList` instance.
+Here is a detailed example showing the hierarchy between Java's ``Collection``, ``List`` and ``ArrayList``:
 
 .. code-block:: idris
 

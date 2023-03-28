@@ -46,7 +46,7 @@ Overview
 
 .. code-block:: shell
 
-  % build/exec/main_app/main
+  % build/exec/main
   ["3", "+", "7", "/", "2"]
 
 * Idris basic types are mapped to Java types. Idris modules and functions are compiled into Java classes and

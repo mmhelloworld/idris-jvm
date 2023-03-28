@@ -45,7 +45,7 @@ with first class types. This repository provides Idris 2 compiler targeting JVM 
 #### Run
 
 ```shell
-% build/exec/main_app/main
+% build/exec/main
 ["3", "+", "7", "/", "2"]
 ```
 

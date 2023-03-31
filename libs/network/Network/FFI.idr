@@ -25,7 +25,7 @@ prim__idrnet_close : (sockdes : SocketDescriptor) -> PrimIO Int
 
 %foreign "C:idrnet_bind, libidris2_support, idris_net.h"
          jvm' idrisSocketClass ".bind"
-             "io/github/mmhelloworld/idris2/runtime/IdrisSocket int int java/lang/String int" "int"
+             "io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket int int java/lang/String int" "int"
 export
 prim__idrnet_bind : (sockfd : SocketDescriptor) -> (family, socket_type : Int) ->
                     (host : String) -> (port : Port) -> PrimIO Int
@@ -39,12 +39,13 @@ prim__idrnet_connect : (sockfd : SocketDescriptor) -> (family, socket_type : Int
                        (host : String) -> (port : Port) -> PrimIO Int
 
 %foreign "C:idrnet_listen, libidris2_support, idris_net.h"
-         jvm' idrisSocketClass ".listen" "io/github/mmhelloworld/idris2/runtime/IdrisSocket int" "int"
+         jvm' idrisSocketClass ".listen" "io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket int" "int"
 export
 prim__idrnet_listen : (sockfd : SocketDescriptor) -> (backlog : Int) -> PrimIO Int
 
 %foreign "C:idrnet_fdopen, libidris2_support, idris_net.h"
-         jvm idrisSocketClass "toFile"
+         jvm' idrisSocketClass ".toFile"
+              "io/github/mmhelloworld/idrisjvm/runtime/IdrisSocket java/lang/String" "java/lang/Object"
 export
 prim__idrnet_fdopen : SocketDescriptor -> String -> PrimIO AnyPtr
 

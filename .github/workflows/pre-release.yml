@@ -8,7 +8,7 @@ on:
 env:
   IDRIS2_TESTS_CG: jvm
   ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-  PREVIOUS_VERSION: 0.6.0
+  PREVIOUS_VERSION: 0.6.0.4
 
 jobs:
   pre-release:

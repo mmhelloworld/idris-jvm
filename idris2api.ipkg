@@ -48,6 +48,7 @@ modules =
     Compiler.Jvm.Math,
     Compiler.Jvm.Asm,
     Compiler.Jvm.Codegen,
+    Compiler.Jvm.Export,
     Compiler.Jvm.ExtPrim,
     Compiler.Jvm.FunctionTree,
     Compiler.Jvm.Optimizer,

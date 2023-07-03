@@ -1297,15 +1297,18 @@ public final class Assembler {
         for (int index = 0; index < parametersAnnotations.size(); index++) {
             int parameterIndex = index;
             List<Annotation> parameterAnnotations = parametersAnnotations.get(parameterIndex);
-            parameterAnnotations.forEach(paramAnnotation -> {
-                final AnnotationVisitor av =
-                    targetMethodVisitor.visitParameterAnnotation(parameterIndex, paramAnnotation.getName(), true);
-                paramAnnotation.getProperties().forEach(prop -> visitAnnotationProperty(av, prop.getName(),
-                    prop.getValue()));
-                av.visitEnd();
-            });
+            parameterAnnotations.forEach(paramAnnotation ->
+                addParameterAnnotation(targetMethodVisitor, parameterIndex, paramAnnotation));
         }
+    }
 
+    private void addParameterAnnotation(MethodVisitor targetMethodVisitor, int parameterIndex,
+                                        Annotation paramAnnotation) {
+        AnnotationVisitor av =
+            targetMethodVisitor.visitParameterAnnotation(parameterIndex, paramAnnotation.getName(), true);
+        paramAnnotation.getProperties().forEach(prop -> visitAnnotationProperty(av, prop.getName(),
+            prop.getValue()));
+        av.visitEnd();
     }
 
     private Object toOpcode(String s) {

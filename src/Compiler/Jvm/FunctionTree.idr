@@ -14,6 +14,9 @@ import Compiler.Jvm.Tree
 import Libraries.Data.SortedSet
 import Data.Vect
 
+import Java.Lang
+import Java.Util
+
 parameters (defs: Map String NamedDef)
     mutual
         buildFunctionTreeConAlt : List (Tree Name) -> SortedSet Name -> List NamedConAlt -> (SortedSet Name, List (Tree Name))
@@ -83,7 +86,7 @@ parameters (defs: Map String NamedDef)
         findDef : Name -> Maybe NamedDef
         findDef name =
             let nameStr = jvmSimpleName name
-            in unsafePerformIO $ Map.get defs nameStr
+            in nullableToMaybe $ unsafePerformIO $ Map.get defs nameStr
 
         buildFunctionTree : SortedSet Name -> Name -> (SortedSet Name, Tree Name)
         buildFunctionTree visitedSoFar name =

@@ -246,9 +246,8 @@ initDef fc n env ty (ForeignExport cs :: opts)
   where
     getConvention : String -> Core (String, String)
     getConvention c
-        = do let (lang ::: fname :: []) = split (== ':') c
-                 | _ => throw (GenericMsg fc "Invalid calling convention")
-             pure (trim lang, trim fname)
+        = do let (lang ::: fname) = split (== ':') c
+             pure (trim lang, fastConcat $ intersperse ":" fname)
 initDef fc n env ty (_ :: opts) = initDef fc n env ty opts
 
 -- Find the inferrable argument positions in a type. This is useful for

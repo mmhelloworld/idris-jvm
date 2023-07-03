@@ -18,6 +18,8 @@ import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
 import Compiler.Jvm.ShowUtil
 
+import Java.Lang
+
 %foreign "jvm:toString(java/lang/Object java/lang/String),java/util/Objects"
 prim_objectToString : AnyPtr -> PrimIO String
 
@@ -70,7 +72,7 @@ mockRunAsm state (ClassCodeStart version access className sig parent intf anns) 
   log $ unwords [
     "classCodeStart",
     show version,
-    show (accessNum access),
+    show (show access),
     className,
     (fromMaybe "" sig),
     parent]

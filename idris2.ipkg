@@ -1,6 +1,6 @@
 package idris2app
 
-depends = network
+depends = network, contrib
 
 sourcedir = "src"
 

@@ -3,42 +3,47 @@ module Compiler.Jvm.Codegen
 import Compiler.Common
 import Compiler.CompileExpr
 import Compiler.Inline
+import Compiler.NoMangle
 
 import Core.Context
 import Core.Directory
 import Core.Name
+import Core.Options
 import Core.TT
 
 import Data.List
+import Data.List1
 import Data.Maybe
-import Libraries.Data.SortedMap
 import Data.String
 import Data.Vect
 
-import Core.Directory
-import Core.Options
-import Libraries.Utils.Path
+import Debug.Trace
 
 import Libraries.Data.NameMap
+import Libraries.Data.SortedMap
+import Libraries.Utils.Path
 
 import System.File
 import System.FFI
 import System.Info
 
 import Compiler.Jvm.Asm
-import Compiler.Jvm.Math
-import Compiler.Jvm.MockAsm
-import Compiler.Jvm.Optimizer
+import Compiler.Jvm.Export
+import Compiler.Jvm.ExtPrim
+import Compiler.Jvm.FunctionTree
 import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
-import Compiler.Jvm.Variable
-import Compiler.Jvm.Tree
-import Compiler.Jvm.FunctionTree
-import Compiler.Jvm.ExtPrim
+import Compiler.Jvm.Math
+import Compiler.Jvm.Optimizer
 import Compiler.Jvm.ShowUtil
+import Compiler.Jvm.Tree
 import Compiler.Jvm.Tuples
+import Compiler.Jvm.Variable
 
 import Idris.Syntax
+
+import Java.Lang
+import Java.Util
 
 %default covering
 
@@ -51,7 +56,7 @@ addScopeLocalVariables scope = do
     let scopeIndex = index scope
     let (lineNumberStart, lineNumberEnd) = lineNumbers scope
     let (labelStart, labelEnd) = labels scope
-    nameAndIndices <- LiftIo $ Map.toList $ variableIndices scope
+    nameAndIndices <- LiftIo $ Map1.toList $ variableIndices scope
     go labelStart labelEnd nameAndIndices
   where
     go : String -> String -> List (String, Int) -> Asm ()
@@ -128,10 +133,10 @@ int64HashCode : Int64 -> Int
 bits64HashCode : Bits64 -> Int
 
 hashCode : TT.Constant -> Maybe Int
-hashCode (BI value) = Just $ Object.hashCode value
+hashCode (BI value) = Just $ Object1.hashCode value
 hashCode (I64 value) = Just $ int64HashCode value
 hashCode (B64 value) = Just $ bits64HashCode value
-hashCode (Str value) = Just $ Object.hashCode value
+hashCode (Str value) = Just $ Object1.hashCode value
 hashCode x = Nothing
 
 getHashCodeSwitchClass : FC -> InferredType -> Asm String
@@ -1211,7 +1216,7 @@ mutual
                 Dup
             let lambdaInterfaceType = getLambdaInterfaceType lambdaType lambdaBodyReturnType
             parameterType <- the (Asm (Maybe InferredType)) $ traverse getVariableType (jvmSimpleName <$> parameterName)
-            variableTypes <- LiftIo $ Map.values {key=Int} !(loadClosures declaringScope scope)
+            variableTypes <- LiftIo $ Map1.values {key=Int} !(loadClosures declaringScope scope)
             maybe (Pure ()) id parameterValueExpr
             let invokeDynamicDescriptor = getMethodDescriptor $ MkInferredFunctionType lambdaInterfaceType variableTypes
             let isExtracted = isJust parameterValueExpr
@@ -1239,7 +1244,7 @@ mutual
             maybe indy (const staticCall) parameterValueExpr
             when isTailCall $ if isExtracted then asmReturn lambdaReturnType else asmReturn lambdaInterfaceType
             let oldLineNumberLabels = lineNumberLabels !GetState
-            newLineNumberLabels <- LiftIo $ Map.newTreeMap {key=Int} {value=String}
+            newLineNumberLabels <- LiftIo $ Map1.newTreeMap {key=Int} {value=String}
             updateState $ { lineNumberLabels := newLineNumberLabels }
             className <- getClassName
             let accessModifiers = if isExtracted then [Public, Static] else [Public, Static, Synthetic]
@@ -1284,7 +1289,7 @@ mutual
             loadVariables _ _ [] = Pure ()
             loadVariables declaringScopeVariableTypes types (var :: vars) = do
                 sourceTargetTypeEntry <- LiftIo $ Map.get types var
-                (sourceType, targetType) <- LiftIo $ readSourceTargetType sourceTargetTypeEntry
+                (sourceType, targetType) <- LiftIo $ readSourceTargetType $ nullableToMaybe sourceTargetTypeEntry
                 loadVar declaringScopeVariableTypes sourceType targetType var
                 loadVariables declaringScopeVariableTypes types vars
 
@@ -1292,14 +1297,14 @@ mutual
             loadClosures declaringScope currentScope = case parentIndex currentScope of
                     Just parentScopeIndex => do
                         parentScope <- getScope parentScopeIndex
-                        variableNames <- LiftIo $ Map.keys {value=Int} $ variableIndices parentScope
+                        variableNames <- LiftIo $ Map1.keys {value=Int} $ variableIndices parentScope
                         variableNameAndIndex <- traverse getVariableNameAndIndex variableNames
                         typesByIndex <- getIndexAndType variableNameAndIndex
                         declaringScopeVariableTypes <- getVariableTypesAtScope (index declaringScope)
-                        indices <- LiftIo $ Map.keys {value=Entry InferredType InferredType} typesByIndex
+                        indices <- LiftIo $ Map1.keys {value=Entry InferredType InferredType} typesByIndex
                         loadVariables declaringScopeVariableTypes typesByIndex indices
-                        LiftIo $ Map.getValue2 {k=Int} {v1=InferredType} {v2=InferredType} typesByIndex
-                    Nothing => LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+                        LiftIo $ Map1.getValue2 {k=Int} {v1=InferredType} {v2=InferredType} typesByIndex
+                    Nothing => LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
                 where
                     getVariableNameAndIndex : String -> Asm (String, Int)
                     getVariableNameAndIndex name = do
@@ -1308,7 +1313,7 @@ mutual
 
                     getIndexAndType : List (String, Int) -> Asm (Map Int (Entry InferredType InferredType))
                     getIndexAndType nameAndIndices = do
-                        typesByIndexMap <- LiftIo $ Map.newTreeMap {key=Int} {value=Entry InferredType InferredType}
+                        typesByIndexMap <- LiftIo $ Map1.newTreeMap {key=Int} {value=Entry InferredType InferredType}
                         go typesByIndexMap
                         Pure typesByIndexMap
                       where
@@ -1471,7 +1476,7 @@ mutual
         let constructorType = if hasTypeCase then "Ljava/lang/String;" else "I"
         variableTypes <- getVariableTypes
         optTy <- LiftIo $ Map.get variableTypes idrisObjectVariableIndex
-        let idrisObjectVariableType = fromMaybe IUnknown optTy
+        let idrisObjectVariableType = fromMaybe IUnknown $ nullableToMaybe optTy
         loadVar variableTypes idrisObjectVariableType idrisObjectType idrisObjectVariableIndex
         when (idrisObjectVariableType /= idrisObjectType) $ do
             storeVar idrisObjectType idrisObjectType idrisObjectVariableIndex
@@ -1486,7 +1491,7 @@ mutual
     assembleConCaseExpr returnType idrisObjectVariableIndex args expr = do
             variableTypes <- getVariableTypes
             optTy <- LiftIo $ Map.get variableTypes idrisObjectVariableIndex
-            let idrisObjectVariableType = fromMaybe IUnknown optTy
+            let idrisObjectVariableType = fromMaybe IUnknown $ nullableToMaybe optTy
             bindArg idrisObjectVariableType variableTypes 0 args
             assembleExpr True returnType expr
         where
@@ -1723,7 +1728,7 @@ assembleDefinition idrisName fc = do
     let declaringClassName = className jvmClassAndMethodName
     let methodName = methodName jvmClassAndMethodName
     let methodReturnType = returnType functionType
-    lineNumberLabels <- LiftIo $ Map.newTreeMap {key=Int} {value=String}
+    lineNumberLabels <- LiftIo $ Map1.newTreeMap {key=Int} {value=String}
     updateState $ {
         scopeCounter := 0,
         currentScopeIndex := 0,
@@ -1784,25 +1789,11 @@ createMainMethod programName mainFunctionName = do
     MaxStackAndLocal (-1) (-1)
     MethodCodeEnd
 
-asm : AsmState -> Asm a -> IO (a, AsmState)
-asm = if shouldDebugAsm then mockRunAsm else runAsm
-
-getJvmClassMethodName : String -> Name -> Jname
-getJvmClassMethodName programName name =
-    let jname = jvmName name
-    in getIdrisFunctionName programName (className jname) (methodName jname)
-
-%foreign jvm' "io/github/mmhelloworld/idrisjvm/runtime/Runtime" "waitForFuturesToComplete" "java/util/List" "void"
-prim_waitForFuturesToComplete : List ThreadID -> PrimIO ()
-
-waitForFuturesToComplete : List ThreadID -> IO ()
-waitForFuturesToComplete futures = primIO $ prim_waitForFuturesToComplete futures
-
 groupByClassName : String -> List Name -> List (List Name)
 groupByClassName programName names = unsafePerformIO $ do
-    namesByClassName <- Map.newTreeMap {key=String} {value=List Name}
+    namesByClassName <- Map1.newTreeMap {key=String} {value=List Name}
     go1 namesByClassName names
-    Map.values {key=String} namesByClassName
+    Map1.values {key=String} namesByClassName
   where
     go1 : Map String (List Name) -> List Name -> IO ()
     go1 namesByClassName values = go2 values where
@@ -1811,29 +1802,22 @@ groupByClassName programName names = unsafePerformIO $ do
         go2 (name :: names) = do
             let jvmClassName = className $ getJvmClassMethodName programName name
             existingNamesOpt <- Map.get namesByClassName jvmClassName
-            let newNames = maybe [name] ((::) name) existingNamesOpt
+            let newNames = maybe [name] ((::) name) $ nullableToMaybe existingNamesOpt
             _ <- Map.put {key=String} {value=List Name} namesByClassName jvmClassName newNames
             go2 names
-
-createAsmState : AsmGlobalState -> Name -> IO AsmState
-createAsmState globalState name = do
-    programName <- AsmGlobalState.getProgramName globalState
-    let jvmClassMethodName = getJvmClassMethodName programName name
-    assembler <- getAssembler globalState (className jvmClassMethodName)
-    newAsmState globalState assembler
 
 assemble : AsmGlobalState -> Map String (FC, NamedDef) -> Name -> IO ()
 assemble globalState fcAndDefinitionsByName name = do
     fcDef <- Map.get {value=(FC, NamedDef)} fcAndDefinitionsByName (jvmSimpleName name)
-    case fcDef of
+    case nullableToMaybe fcDef of
         Just (fc, def) => do
             programName <- AsmGlobalState.getProgramName globalState
             asmState <- createAsmState globalState name
             ignore $ asm asmState $ do
                 inferDef programName name fc def
                 assembleDefinition name fc
-                scopes <- LiftIo $ JList.new {a=Scope}
-                updateCurrentFunction $ { scopes := scopes, optimizedBody := emptyFunction }
+                scopes <- LiftIo $ ArrayList.new {elemTy=Scope}
+                updateCurrentFunction $ { scopes := (subtyping scopes), optimizedBody := emptyFunction }
         Nothing => pure ()
 
 assembleAsync : AsmGlobalState -> Map String (FC, NamedDef) -> List (List Name) -> IO ()
@@ -1859,7 +1843,9 @@ isForeignDef _ = False
 ||| Compile a TT expression to JVM bytecode
 compileToJvmBytecode : Ref Ctxt Defs -> String -> String -> ClosedTerm -> Core ()
 compileToJvmBytecode c outputDirectory outputFile term = do
-    cdata <- getCompileData False Cases term
+    noMangleMapRef <- initNoMangle ["jvm"] (const True)
+    noMangleMap <- get NoMangleMap
+    cdata <- getCompileDataWith ["jvm"] False Cases term
     directives <- getDirectives Jvm
     let ndefs = namedDefs cdata
     let idrisMainBody = forget (mainExpr cdata)
@@ -1868,17 +1854,18 @@ compileToJvmBytecode c outputDirectory outputFile term = do
     let allDefs = (mainFunctionName, emptyFC, MkNmFun [] idrisMainBody) :: ndefs
     let nameFcDefs = optimize programName allDefs ++ filter isForeignDef allDefs
     let nameStrFcDefs = getNameStrFcDef <$> nameFcDefs
-    fcAndDefinitionsByName <- coreLift $ Map.fromList nameStrFcDefs
+    fcAndDefinitionsByName <- coreLift $ Map1.fromList nameStrFcDefs
     let nameStrDefs = getNameStrDef <$> nameStrFcDefs
-    definitionsByName <- coreLift $ Map.fromList nameStrDefs
+    definitionsByName <- coreLift $ Map1.fromList nameStrDefs
     globalState <- coreLift $ newAsmGlobalState programName
-    let names = groupByClassName programName . traverseDepthFirst $
-      buildFunctionTreeMain mainFunctionName definitionsByName
+    let names = fst <$> nameFcDefs
+    let namesByClassName = groupByClassName programName names
     coreLift $ do
-        assembleAsync globalState fcAndDefinitionsByName (transpose names)
-        asmState <- createAsmState globalState mainFunctionName
+        assembleAsync globalState fcAndDefinitionsByName (transpose namesByClassName)
+        exportDefs globalState $ mapMaybe (getExport noMangleMap) names
+        mainAsmState <- createAsmState globalState mainFunctionName
         let mainFunctionJname = jvmName mainFunctionName
-        _ <- runAsm asmState $ createMainMethod programName mainFunctionJname
+        _ <- runAsm mainAsmState $ createMainMethod programName mainFunctionJname
         classCodeEnd globalState outputDirectory outputFile (className mainFunctionJname)
 
 ||| JVM bytecode implementation of the `compileExpr` interface.

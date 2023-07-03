@@ -71,9 +71,6 @@ jvmSimpleName = getSimpleName . jvmName
 jvmIdrisMainMethodName : String
 jvmIdrisMainMethodName = "jvm$idrisMain"
 
-jvmIdrisMainClass : String -> String
-jvmIdrisMainClass rootPackage = rootPackage ++ "/Main"
-
 export
 idrisMainFunctionName : String -> Name
 idrisMainFunctionName rootPackage = NS (mkNamespace $ rootPackage ++ ".Main") (UN $ Basic jvmIdrisMainMethodName)

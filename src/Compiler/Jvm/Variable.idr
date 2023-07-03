@@ -9,10 +9,13 @@ import Compiler.Jvm.InferredType
 import Data.Maybe
 import Data.List
 
+import Java.Lang
+import Java.Util
+
 getLocTy : Map Int InferredType -> Int -> IO InferredType
 getLocTy typesByIndex varIndex = do
     optTy <- Map.get typesByIndex varIndex
-    pure $ fromMaybe IUnknown optTy
+    pure $ fromMaybe IUnknown $ nullableToMaybe optTy
 
 getVarIndex : Map Int InferredType -> Int -> IO Int
 getVarIndex types index = go 0 0 where
@@ -184,6 +187,7 @@ asmCast IDouble ty = boxDouble
 
 asmCast (IRef _) arr@(IArray _) = Checkcast $ getJvmTypeDescriptor arr
 
+asmCast _ IVoid = Pure ()
 asmCast IVoid IVoid = Pure ()
 asmCast IVoid (IRef _) = Aconstnull
 asmCast IVoid IUnknown = Aconstnull

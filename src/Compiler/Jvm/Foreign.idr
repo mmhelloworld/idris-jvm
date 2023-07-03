@@ -22,6 +22,9 @@ import Compiler.Jvm.Asm
 import Compiler.Jvm.ExtPrim
 import Compiler.Jvm.ShowUtil
 
+import Java.Lang
+import Java.Util
+
 namespace ForeignType
     public export
     data ForeignType
@@ -170,8 +173,8 @@ findJvmDescriptor fc name descriptors = case parseCC ["jvm"] descriptors of
 
 export
 getArgumentIndices : (arity: Int) -> List String -> IO (Map String Int)
-getArgumentIndices 0 _ = Map.newTreeMap {key=String} {value=Int}
-getArgumentIndices argIndex args = Map.fromList $ zip args [0 .. argIndex - 1]
+getArgumentIndices 0 _ = Map1.newTreeMap {key=String} {value=Int}
+getArgumentIndices argIndex args = Map1.fromList $ zip args [0 .. argIndex - 1]
 
 getPrimMethodName : String -> String
 getPrimMethodName "" = "prim__jvmStatic"
@@ -236,7 +239,7 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     argumentNameAndTypes <- getArgumentNameAndTypes fc jvmArgumentTypesFromDescriptor jvmArguments
     let methodReturnType = if isNilArity then delayedType else inferredObjectType
     let inferredFunctionType = MkInferredFunctionType methodReturnType (replicate arityNat inferredObjectType)
-    scopes <- LiftIo $ JList.new {a=Scope}
+    scopes <- LiftIo $ ArrayList.new {elemTy=Scope}
     let externalFunctionBody =
         NmExtPrim fc (NS (mkNamespace "") $ UN $ Basic $ getPrimMethodName foreignFunctionName) [
            NmCon fc (UN $ Basic $ createExtPrimTypeSpec jvmReturnType) DATACON Nothing [],
@@ -244,15 +247,15 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
            getJvmExtPrimArguments $ zip validIdrisTypes argumentNameAndTypes,
            NmPrimVal fc WorldVal]
     let functionBody = if isNilArity then NmDelay fc LLazy externalFunctionBody else externalFunctionBody
-    let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName functionBody
+    let function = MkFunction jname inferredFunctionType (subtyping scopes) 0 jvmClassAndMethodName functionBody
     setCurrentFunction function
     LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
     let parameterTypes = parameterTypes inferredFunctionType
     argumentTypesByIndex <- LiftIo $
         if isNilArity
-            then Map.newTreeMap {key=Int} {value=InferredType}
-            else Map.fromList $ zip [0 .. arity - 1] parameterTypes
-    argumentTypesByName <- LiftIo $ Map.fromList $ zip argumentNames parameterTypes
+            then Map1.newTreeMap {key=Int} {value=InferredType}
+            else Map1.fromList $ zip [0 .. arity - 1] parameterTypes
+    argumentTypesByName <- LiftIo $ Map1.fromList $ zip argumentNames parameterTypes
     argIndices <- LiftIo $ getArgumentIndices arity argumentNames
     let functionScope = MkScope scopeIndex Nothing argumentTypesByName argumentTypesByIndex argIndices argIndices
                             methodReturnType arity (0, 0) ("", "") []
@@ -260,10 +263,10 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     when isNilArity $ do
         let parentScopeIndex = scopeIndex
         scopeIndex <- newScopeIndex
-        variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
-        allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
-        variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
-        allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+        variableTypes <- LiftIo $ Map1.newTreeMap {key=String} {value=InferredType}
+        allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
+        variableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+        allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
         let delayLambdaScope =
             MkScope scopeIndex (Just parentScopeIndex) variableTypes allVariableTypes
                 variableIndices allVariableIndices IUnknown 0 (0, 0) ("", "") []

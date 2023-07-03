@@ -23,6 +23,9 @@ import Compiler.Jvm.ShowUtil
 import System
 import System.FFI
 
+import Java.Lang
+import Java.Util
+
 public export
 data Assembler : Type where [external]
 
@@ -51,17 +54,7 @@ data JInteger : Type where [external]
 data JDouble : Type where [external]
 data JLong : Type where [external]
 
-namespace Collection
-    export
-    data CollectionNative : Type where [external]
-
-    export
-    Collection : Type -> Type
-    Collection a = CollectionNative
-
-namespace Object
-    export
-    data Object : Type where [external]
+namespace Object1
 
     %foreign jvm' "java/lang/Object" ".toString" "java/lang/Object" "String"
     prim_toString : Object -> PrimIO String
@@ -79,7 +72,7 @@ namespace Object
 
 public export
 %foreign "jvm:nullValue(java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
-nullValue : Object
+nullValue : a
 
 public export
 %foreign jvm' "java/util/Objects" "isNull" "java/lang/Object" "boolean"
@@ -88,111 +81,89 @@ isNull : Object -> Bool
 public export
 maybeToNullable : Maybe t -> t
 maybeToNullable (Just t) = t
-maybeToNullable Nothing = believe_me nullValue
+maybeToNullable Nothing = nullValue
 
 public export
-nullableToMaybe : Object -> Maybe Object
-nullableToMaybe value = if isNull value then Nothing else Just value
+nullableToMaybe : a -> Maybe a
+nullableToMaybe value = if isNull (believe_me value) then Nothing else Just value
 
 namespace Iterable
     export
-    data JIterable : Type where [external]
+    data Iterable : Type -> Type where [external]
 
-    export
-    Iterable : Type -> Type
-    Iterable a = JIterable
+public export
+Inherits (Collection a) (Iterable a) where
 
-namespace JList
-    export
-    data JListNative : Type where [external]
+public export
+Inherits (JList a) (Iterable a) where
 
-    export
-    JList : Type -> Type
-    JList a = JListNative
+public export
+Inherits (List a) (JList a) where
+
+namespace JList1
 
     %foreign "jvm:<init>(java/lang/Object java/util/ArrayList),java/util/ArrayList"
-    prim_newArrayList : PrimIO JListNative
+    prim_newArrayList : PrimIO (JList a)
 
     %foreign jvm' "java/util/List" ".add" "i:java/util/List int java/lang/Object" "void"
-    prim_add : JListNative -> Int -> Object -> PrimIO ()
+    prim_add : JList a -> Int -> a -> PrimIO ()
 
     %foreign jvm' "java/util/List" ".addAll" "i:java/util/List java/util/Collection" "boolean"
-    prim_addAll : JListNative -> CollectionNative -> PrimIO Bool
+    prim_addAll : JList a -> Collection a -> PrimIO Bool
 
     %foreign jvm' "java/util/List" ".set" "i:java/util/List int java/lang/Object" "java/lang/Object"
-    prim_set : JListNative -> Int -> Object -> PrimIO Object
-
-    %foreign jvm' "java/util/List" ".get" "i:java/util/List int" "java/lang/Object"
-    prim_get : JListNative -> Int -> PrimIO Object
-
-    %foreign jvm' "java/util/List" ".size" "i:java/util/List" "int"
-    prim_size : JListNative -> PrimIO Int
-
-    export
-    new : HasIO io => io (JList a)
-    new = believe_me <$> primIO prim_newArrayList
+    prim_set : JList a -> Int -> a -> PrimIO a
 
     export
     add : HasIO io => JList a -> Int -> a -> io ()
-    add list index value = primIO $ prim_add (believe_me list) index (believe_me value)
+    add list index value = primIO $ prim_add list index value
 
     export
-    addAll : HasIO io => JList a -> Collection a -> io Bool
-    addAll list collection = primIO $ prim_addAll (believe_me list) (believe_me collection)
+    addAll : (HasIO io, Inherits obj (Collection a)) => JList a -> obj -> io Bool
+    addAll list collection = primIO $ prim_addAll list (subtyping collection)
 
     export
     set : HasIO io => JList a -> Int -> a -> io a
-    set list index value = believe_me <$> (primIO $ prim_set (believe_me list) index (believe_me value))
-
-    export
-    get : HasIO io => JList a -> Int -> io a
-    get list index = believe_me <$> (primIO $ prim_get (believe_me list) index)
-
-    export
-    size : HasIO io => JList a -> io Int
-    size list = believe_me <$> (primIO $ prim_size (believe_me list))
+    set list index value = primIO $ prim_set list index value
 
     %foreign jvm' "java/util/Collections" "nCopies" "int java/lang/Object" "java/util/List"
-    prim_nCopies : Int -> Object -> PrimIO JListNative
+    prim_nCopies : Int -> a -> PrimIO (JList a)
 
     export
     nCopies : HasIO io => Int -> a -> io (JList a)
-    nCopies n value = believe_me <$> (primIO $ prim_nCopies n (believe_me value))
+    nCopies n value =primIO $ prim_nCopies n value
 
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/runtime/IdrisList" "fromIterable" "java/lang/Iterable" "io/github/mmhelloworld/idrisjvm/runtime/IdrisList"
-    prim_fromIterable : JIterable -> PrimIO JListNative
+    prim_fromIterable : Iterable a -> PrimIO (List a)
 
     export
-    fromIterable : HasIO io => Iterable a -> io (List a)
-    fromIterable iterable = believe_me <$> (primIO $ prim_fromIterable (believe_me iterable))
+    fromIterable : (HasIO io, Inherits obj (Iterable a)) => obj -> io (List a)
+    fromIterable iterable = primIO $ prim_fromIterable (subtyping iterable)
 
 namespace Entry
-    data JEntry : Type where [external]
-
     export
-    Entry : Type -> Type -> Type
-    Entry k v = JEntry
+    data Entry : Type -> Type -> Type where [external]
 
     %foreign "jvm:<init>(java/lang/Object java/lang/Object java/util/AbstractMap$SimpleImmutableEntry),java/util/AbstractMap$SimpleImmutableEntry"
-    prim_new : Object -> Object -> PrimIO JEntry
+    prim_new : key -> value -> PrimIO (Entry key value)
 
     export
     new : HasIO io => k -> v -> io (Entry k v)
-    new key value = believe_me <$> primIO (prim_new (believe_me key) (believe_me value))
+    new key value = primIO (prim_new key value)
 
     %foreign jvm' "java/util/Map$Entry" ".getKey" "i:java/util/Map$Entry" "java/lang/Object"
-    prim_getKey : JEntry -> PrimIO Object
+    prim_getKey : Entry key value -> PrimIO key
 
     export
     getKey : HasIO io => Entry k v -> io k
-    getKey entry = believe_me <$> primIO (prim_getKey (believe_me entry))
+    getKey entry = primIO (prim_getKey entry)
 
     %foreign jvm' "java/util/Map$Entry" ".getValue" "i:java/util/Map$Entry" "java/lang/Object"
-    prim_getValue : JEntry -> PrimIO Object
+    prim_getValue : Entry key value -> PrimIO value
 
     export
     getValue : HasIO io => Entry k v -> io v
-    getValue entry = believe_me <$> primIO (prim_getValue (believe_me entry))
+    getValue entry = primIO (prim_getValue entry)
 
     export
     toTuple : HasIO io => Entry k v -> io (k, v)
@@ -201,35 +172,14 @@ namespace Entry
         value <- getValue {k=k} {v=v} entry
         pure (key, value)
 
-namespace Map
-  export
-  data JMap : Type where [external]
-
-  export
-  Map : Type -> Type -> Type
-  Map k v = JMap
+namespace Map1
 
   %foreign "jvm:<init>(java/lang/Object java/util/TreeMap),java/util/TreeMap"
-  prim_newTreeMap : PrimIO JMap
+  prim_newTreeMap : PrimIO (Map key value)
 
   export
   newTreeMap : HasIO io => io (Map key value)
-  newTreeMap = believe_me <$> primIO prim_newTreeMap
-
-  %foreign jvm' "java/util/Map" ".get" "i:java/util/Map java/lang/Object" "java/lang/Object"
-  prim_get : JMap -> Object -> PrimIO Object
-
-  export
-  get : HasIO io => Map key value -> key -> io (Maybe value)
-  get map key = (believe_me . nullableToMaybe) <$> (primIO $ prim_get (believe_me map) (believe_me key))
-
-  %foreign jvm' "java/util/Map" ".put" "i:java/util/Map java/lang/Object java/lang/Object" "java/lang/Object"
-  prim_put : JMap -> Object -> Object -> PrimIO Object
-
-  export
-  put : HasIO io => Map key value -> key -> value -> io (Maybe value)
-  put this key value = (believe_me . nullableToMaybe) <$> (primIO $ prim_put (believe_me this) (believe_me key)
-                        (believe_me value))
+  newTreeMap = primIO prim_newTreeMap
 
   goFromList : HasIO io => Map key value -> List (key, value) -> io ()
   goFromList _ [] = pure ()
@@ -240,32 +190,32 @@ namespace Map
   export
   fromList : HasIO io => List (key, value) -> io (Map key value)
   fromList keyValues = do
-      m <- Map.newTreeMap {key=key} {value=value}
+      m <- Map1.newTreeMap {key=key} {value=value}
       goFromList m keyValues
       pure m
 
   %foreign jvm' "java/util/Map" ".containsKey" "i:java/util/Map java/lang/Object" "boolean"
-  prim_containsKey : JMap -> Object -> PrimIO Bool
+  prim_containsKey : Map key value -> key -> PrimIO Bool
 
   export
   containsKey : HasIO io => Map key value -> key -> io Bool
-  containsKey this key = primIO $ prim_containsKey (believe_me this) (believe_me key)
+  containsKey this key = primIO $ prim_containsKey this key
 
   %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "transpose" "java/util/Map" "java/util/Map"
-  prim_transpose : JMap -> PrimIO JMap
+  prim_transpose : Map key value -> PrimIO (Map value key)
 
   export
   transpose : HasIO io => Map k v -> io (Map v k)
-  transpose m = believe_me <$> primIO (prim_transpose $ believe_me m)
+  transpose m = primIO (prim_transpose m)
 
   %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "toList" "java/util/Map" "java/util/List"
-  prim_toEntries : JMap -> PrimIO JListNative
+  prim_toEntries : Map key value -> PrimIO (JList (Entry key value))
 
   export
   toEntries : HasIO io => Map key value -> io (List (Entry key value))
   toEntries m = do
-    entries <- primIO (prim_toEntries $ believe_me m)
-    JList.fromIterable (believe_me entries)
+    entries <- primIO (prim_toEntries m)
+    JList1.fromIterable entries
 
   export
   toList : HasIO io => Map k v -> io (List (k, v))
@@ -274,36 +224,34 @@ namespace Map
     traverse toTuple entries
 
   %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "keys" "java/util/Map" "java/util/List"
-  prim_keys : JMap -> PrimIO JListNative
+  prim_keys : Map key value -> PrimIO (JList key)
 
   export
   keys : HasIO io => Map key value -> io (List key)
   keys m = do
-    jkeys <- primIO (prim_keys $ believe_me m)
-    JList.fromIterable (believe_me jkeys)
+    jkeys <- primIO (prim_keys m)
+    JList1.fromIterable jkeys
 
   %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "values" "java/util/Map" "java/util/List"
-  prim_values : JMap -> PrimIO JListNative
+  prim_values : Map key value -> PrimIO (JList value)
 
   export
   values : HasIO io => Map key value -> io (List value)
   values m = do
-    jvalues <- primIO (prim_values $ believe_me m)
-    JList.fromIterable (believe_me jvalues)
+    jvalues <- primIO (prim_values m)
+    JList1.fromIterable jvalues
 
   %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "getValue2" "java/util/Map" "java/util/Map"
-  prim_getValue2 : JMap -> PrimIO JMap
+  prim_getValue2 : Map key (Entry value1 value2) -> PrimIO (Map key value2)
 
   export
   getValue2 : HasIO io => Map k (Entry v1 v2) -> io (Map k v2)
-  getValue2 m = believe_me <$> primIO (prim_getValue2 (believe_me m))
+  getValue2 m = primIO (prim_getValue2 m)
 
 namespace EnumInt
     export
     succ : Int -> Int
     succ n = n + 1
-
-data Collection : Type where [external]
 
 %inline
 public export
@@ -466,15 +414,30 @@ record AsmState where
     assembler : Assembler
 
 public export
-data Access = Private | Public | Static | Synthetic | Final
+data Access = Private | Public | Protected | Static | Synthetic | Final | Interface | Abstract
+
+export
+Eq Access where
+  Private == Private = True
+  Public == Public = True
+  Protected == Protected = True
+  Static == Static = True
+  Synthetic == Synthetic = True
+  Final == Final = True
+  Interface == Interface = True
+  Abstract == Abstract = True
+  _ == _ = False
 
 export
 Show Access where
     show Private = "Private"
     show Public = "Public"
+    show Protected = "Protected"
     show Static = "Static"
     show Synthetic = "Synthetic"
     show Final = "Final"
+    show Interface = "Interface"
+    show Abstract = "Abstract"
 
 public export
 data FieldInstructionType = GetStatic | PutStatic | GetField | PutField
@@ -498,7 +461,7 @@ Show InvocationType where
     show InvokeStatic = "InvokeStatic"
     show InvokeVirtual = "InvokeVirtual"
 
-export
+public export
 data ClassOpts = ComputeMaxs | ComputeFrames
 
 export
@@ -531,6 +494,7 @@ data BsmArg = BsmArgGetType String | BsmArgHandle Handle
 data FieldInitialValue = IntField Int | StringField String | DoubleField Double
 
 mutual
+    public export
     data AnnotationValue = AnnInt Int
                          | AnnBoolean Bool
                          | AnnChar Char
@@ -541,9 +505,11 @@ mutual
                          | AnnArray (List AnnotationValue)
                          | AnnAnnotation Annotation
 
+    public export
     AnnotationProperty : Type
     AnnotationProperty = (String, Asm.AnnotationValue)
 
+    public export
     data Annotation = MkAnnotation String (List AnnotationProperty)
 
 public export
@@ -571,9 +537,9 @@ data Asm : Type -> Type where
     Caload : Asm ()
     Castore : Asm ()
     Checkcast : (descriptor: String) -> Asm ()
-    ClassCodeStart : Int -> Access -> (className: String) -> (signature: Maybe String) -> (parentClassName: String) ->
+    ClassCodeStart : Int -> List Access -> (className: String) -> (signature: Maybe String) -> (parentClassName: String) ->
                         (interfaces: List String) -> List Asm.Annotation -> Asm ()
-    CreateClass : ClassOpts -> Asm ()
+    CreateClass : List ClassOpts -> Asm ()
     CreateField : List Access -> (sourceFileName: String) -> (className: String) -> (fieldName: String) -> (descriptor: String) ->
                     (signature: Maybe String) -> Maybe FieldInitialValue -> Asm ()
     CreateLabel : String -> Asm ()
@@ -770,9 +736,9 @@ public export
 newAsmState : HasIO io => AsmGlobalState -> Assembler -> io AsmState
 newAsmState globalState assembler = do
     let defaultName = Jqualified "" ""
-    scopes <- JList.new {a=Scope}
-    lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
-    let function = MkFunction defaultName (MkInferredFunctionType IUnknown []) scopes
+    scopes <- ArrayList.new {elemTy=Scope}
+    lineNumberLabels <- Map1.newTreeMap {key=Int} {value=String}
+    let function = MkFunction defaultName (MkInferredFunctionType IUnknown []) (believe_me scopes)
                     0 defaultName (NmCrash emptyFC "uninitialized function")
     pure $ MkAsmState globalState function defaultName 0 0 0 0 lineNumberLabels assembler
 
@@ -904,24 +870,25 @@ resetScope = updateState $
         currentScopeIndex := 0
     }
 
-fillNull : HasIO io => Int -> JList a -> io ()
-fillNull index list = do
-    size <- JList.size list
-    nulls <- JList.nCopies (index - size) nullValue
-    ignore $ JList.addAll list (believe_me nulls)
+fillNull : (HasIO io, Inherits list (JList a)) => Int -> list -> io ()
+fillNull index aList = do
+    let list = the (JList a) $ believe_me aList
+    size <- Collection.size {elemTy=a,obj=Collection a} $ believe_me list
+    nulls <- JList1.nCopies {a=a} (index - size) nullValue
+    ignore $ JList1.addAll {a=a, obj=Collection a} list $ believe_me nulls
 
 export
 saveScope : Scope -> Asm ()
 saveScope scope = do
     scopes <- scopes <$> getCurrentFunction
-    size <- LiftIo $ JList.size {a=Scope} scopes
+    size <- LiftIo $ Collection.size {elemTy=Scope, obj=Collection Scope} $ believe_me scopes
     let scopeIndex = index scope
     LiftIo $
       if scopeIndex < size
-          then ignore $ JList.set scopes scopeIndex scope
+          then ignore $ JList1.set scopes scopeIndex scope
           else do
-              fillNull scopeIndex scopes
-              JList.add scopes scopeIndex scope
+              fillNull {a=Scope} scopeIndex scopes
+              JList1.add scopes scopeIndex scope
 
 export
 getScope : Int -> Asm Scope
@@ -950,7 +917,7 @@ newLabel = do
 hasLabelAtLine : Int -> Asm Bool
 hasLabelAtLine lineNumber = do
     state <- GetState
-    LiftIo $ Map.containsKey {value=String} (lineNumberLabels state) lineNumber
+    LiftIo $ Map1.containsKey {value=String} (lineNumberLabels state) lineNumber
 
 export
 addLineNumber : Int -> String -> Asm ()
@@ -968,7 +935,7 @@ getLineNumberLabel lineNumber = do
     state <- GetState
     let currentLineNumberLabels = lineNumberLabels state
     optLabel <- LiftIo $ Map.get {value=String} currentLineNumberLabels lineNumber
-    case optLabel of
+    case nullableToMaybe optLabel of
         Just label => Pure label
         Nothing => do
             label <- newLabel
@@ -1023,25 +990,25 @@ generateVariable namePrefix = do
 
 namespace JAsmState
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "updateVariableIndices" "java/util/Map java/util/Map" "void"
-    prim_updateVariableIndices : JMap -> JMap -> PrimIO ()
+    prim_updateVariableIndices : Map key value -> Map key value -> PrimIO ()
 
     export
     updateVariableIndices : HasIO io => Map String Int -> Map String Int -> io ()
     updateVariableIndices resultIndicesByName indicesByName =
-        primIO $ prim_updateVariableIndices (believe_me resultIndicesByName) (believe_me indicesByName)
+        primIO $ prim_updateVariableIndices resultIndicesByName indicesByName
 
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "getVariableNames" "java/util/Map" "java/util/List"
-    prim_getVariableNames : JMap -> PrimIO JListNative
+    prim_getVariableNames : Map key value -> PrimIO (JList key)
 
     export
     getVariableNames : HasIO io => Map String Int -> io (List String)
     getVariableNames indicesByName = do
-        jlist <- primIO $ prim_getVariableNames (believe_me indicesByName)
-        JList.fromIterable (believe_me jlist)
+        jlist <- primIO $ prim_getVariableNames indicesByName
+        JList1.fromIterable jlist
 
 retrieveVariableIndicesByName : Int -> Asm (Map String Int)
 retrieveVariableIndicesByName scopeIndex = do
-    variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+    variableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
     go variableIndices scopeIndex
     Pure variableIndices
   where
@@ -1065,7 +1032,7 @@ retrieveVariableIndexAtScope currentScopeIndex name = go currentScopeIndex where
     go scopeIndex = do
         scope <- getScope scopeIndex
         optIndex <- LiftIo $ Map.get {value=Int} (variableIndices scope) name
-        case optIndex of
+        case nullableToMaybe optIndex of
             Just index => Pure index
             Nothing => case parentIndex scope of
                 Just parentScopeIndex => go parentScopeIndex
@@ -1083,7 +1050,7 @@ retrieveVariableTypeAtScope : Int -> String -> Asm InferredType
 retrieveVariableTypeAtScope scopeIndex name = do
     scope <- getScope scopeIndex
     optTy <- LiftIo $ Map.get (variableTypes scope) name
-    case optTy of
+    case nullableToMaybe optTy of
         Just ty => Pure ty
         Nothing => case parentIndex scope of
             Just parentScope => retrieveVariableTypeAtScope parentScope name
@@ -1092,7 +1059,7 @@ retrieveVariableTypeAtScope scopeIndex name = do
 export
 retrieveVariableTypesAtScope : Int -> Asm (Map Int InferredType)
 retrieveVariableTypesAtScope scopeIndex = do
-    typesByIndex <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+    typesByIndex <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
     go typesByIndex !(retrieveVariables scopeIndex)
     Pure typesByIndex
   where
@@ -1118,7 +1085,7 @@ getVariableIndexAtScope : Int -> String -> Asm Int
 getVariableIndexAtScope currentScopeIndex name = do
     variableIndicesByName <- getVariableIndicesByName currentScopeIndex
     optIndex <- LiftIo $ Map.get {value=Int} variableIndicesByName name
-    case optIndex of
+    case nullableToMaybe optIndex of
         Just index => Pure index
         Nothing => do
           rootMethodName <- getRootMethodName
@@ -1143,11 +1110,11 @@ getVariableTypeAtScope scopeIndex name = do
     scope <- getScope scopeIndex
     variableIndicesByName <- getVariableIndicesByName scopeIndex
     optIndex <- LiftIo $ Map.get {value=Int} variableIndicesByName name
-    case optIndex of
+    case nullableToMaybe optIndex of
         Just index => do
             variableTypes <- getVariableTypesAtScope scopeIndex
             optTy <- LiftIo $ Map.get {value=InferredType} variableTypes index
-            Pure $ fromMaybe IUnknown optTy
+            Pure $ fromMaybe IUnknown $ nullableToMaybe optTy
         Nothing => Pure IUnknown
 
 export
@@ -1157,7 +1124,7 @@ getVariableType name = getVariableTypeAtScope !getCurrentScopeIndex name
 updateArgumentsForUntyped : Map Int InferredType -> Nat -> IO ()
 updateArgumentsForUntyped _ Z = pure ()
 updateArgumentsForUntyped types (S n) = do
-  ignore $ Map.put types (cast n) inferredObjectType
+  ignore $ Map.put types (cast {to=Int} n) inferredObjectType
   updateArgumentsForUntyped types n
 
 export
@@ -1180,7 +1147,7 @@ getVariableScope name = go !getCurrentScopeIndex where
     go scopeIndex = do
         scope <- getScope scopeIndex
         optTy <- LiftIo $ Map.get {value=InferredType} (variableTypes scope) name
-        case optTy of
+        case nullableToMaybe optTy of
             Just _ => Pure scope
             Nothing => case parentIndex scope of
                 Just parentScopeIndex => go parentScopeIndex
@@ -1248,12 +1215,16 @@ asmReturn IDouble  = Dreturn
 asmReturn _        = Areturn
 
 export
+-- constant values from org.objectweb.asm.Opcodes
 accessNum : Access -> Int
-accessNum Final     = 16
-accessNum Private   = 2
-accessNum Public    = 1
-accessNum Static    = 8
-accessNum Synthetic = 4096
+accessNum Public    = 0x0001
+accessNum Private   = 0x0002
+accessNum Protected   = 0x0004
+accessNum Static    = 0x0008
+accessNum Final     = 0x0010
+accessNum Interface = 0x0200
+accessNum Abstract  = 0x0400
+accessNum Synthetic = 0x1000
 
 export
 fieldInsTypeNum : FieldInstructionType -> Int
@@ -1393,19 +1364,19 @@ prim_newJAnnAnnotation : JAnnotation -> PrimIO JAnnAnnotation
     jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnArray" "<init>"
         "java/util/List"
         "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnArray"
-prim_newJAnnArray : JListNative -> PrimIO JAnnArray
+prim_newJAnnArray : JList JAnnotationValue -> PrimIO JAnnArray
 
 %foreign
-    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnotationProperty" "<init>"
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/AnnotationProperty" "<init>"
         "String io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue"
-        "io/github/mmhelloworld/idrisjvm/assembler/AnnotationValue$AnnotationProperty"
+        "io/github/mmhelloworld/idrisjvm/assembler/AnnotationProperty"
 prim_newJAnnotationProperty : String -> JAnnotationValue -> PrimIO JAnnotationProperty
 
 %foreign
     jvm' "io/github/mmhelloworld/idrisjvm/assembler/Annotation" "<init>"
         "String java/util/List"
         "io/github/mmhelloworld/idrisjvm/assembler/Annotation"
-prim_newJAnnotation : String -> JListNative -> PrimIO JAnnotation
+prim_newJAnnotation : String -> JList JAnnotationProperty -> PrimIO JAnnotation
 
 export
 toJHandle : HasIO io => Handle -> io JHandle
@@ -1433,7 +1404,7 @@ mutual
         jAnn <- toJAnnotation n
         believe_me <$> primIO (prim_newJAnnAnnotation jAnn)
     toJAnnotationValue (AnnArray values) =
-        believe_me <$> primIO (prim_newJAnnArray (believe_me values))
+        believe_me <$> primIO (prim_newJAnnArray $ subtyping !(traverse toJAnnotationValue values))
 
     toJAnnotationProperty : HasIO io => Asm.AnnotationProperty -> io JAnnotationProperty
     toJAnnotationProperty (name, annValue) = do
@@ -1441,7 +1412,9 @@ mutual
       primIO $ prim_newJAnnotationProperty name jAnnotationValue
 
     toJAnnotation : HasIO io => Asm.Annotation -> io JAnnotation
-    toJAnnotation (MkAnnotation name props) = primIO $ prim_newJAnnotation name (believe_me props)
+    toJAnnotation (MkAnnotation name props) = do
+      properties <- traverse toJAnnotationProperty props
+      primIO $ prim_newJAnnotation name $ believe_me properties
 
 export
 toJFieldInitialValue : FieldInitialValue -> Object
@@ -1555,6 +1528,27 @@ getCurrentThreadName : HasIO io => io String
 getCurrentThreadName = primIO prim_getCurrentThreadName
 
 export
+getJvmClassMethodName : String -> Name -> Jname
+getJvmClassMethodName programName name =
+    let jname = jvmName name
+    in getIdrisFunctionName programName (className jname) (methodName jname)
+
+export
+createAsmState : AsmGlobalState -> Name -> IO AsmState
+createAsmState globalState name = do
+    programName <- AsmGlobalState.getProgramName globalState
+    let jvmClassMethodName = getJvmClassMethodName programName name
+    assembler <- getAssembler globalState (className jvmClassMethodName)
+    newAsmState globalState assembler
+
+%foreign jvm' "io/github/mmhelloworld/idrisjvm/runtime/Runtime" "waitForFuturesToComplete" "java/util/List" "void"
+prim_waitForFuturesToComplete : List ThreadID -> PrimIO ()
+
+export
+waitForFuturesToComplete : List ThreadID -> IO ()
+waitForFuturesToComplete futures = primIO $ prim_waitForFuturesToComplete futures
+
+export
 log : Lazy String -> (result : a) -> a
 log message val =
   if shouldDebug
@@ -1630,12 +1624,12 @@ runAsm state (Checkcast desc) = assemble state $
 runAsm state (ClassCodeStart version access className sig parent intf anns) = assemble state $ do
   janns <- sequence $ toJAnnotation <$> anns
   jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.classCodeStart"
-    [assembler state, version, accessNum access, className, maybeToNullable sig, parent,
+    [assembler state, version, sum $ accessNum <$> access, className, maybeToNullable sig, parent,
         the (JList String) $ believe_me intf, the (JList JAnnotation) $ believe_me janns]
 
 runAsm state (CreateClass opts) =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createClass"
-      [assembler state, toJClassOpts opts]
+      [assembler state, sum $ toJClassOpts <$> opts]
 runAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue) = assemble state $ do
   let jaccs = sum $ accessNum <$> accs
   jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createField"

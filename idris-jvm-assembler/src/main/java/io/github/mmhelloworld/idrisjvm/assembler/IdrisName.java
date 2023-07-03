@@ -96,6 +96,8 @@ public final class IdrisName {
     private static String getClassName(String programName, String idrisNamespace) {
         if (idrisNamespace.startsWith("io/github/mmhelloworld/idrisjvm")) {
             return idrisNamespace;
+        } else if (idrisNamespace.startsWith("nomangle:")) {
+            return idrisNamespace.substring("nomangle:".length());
         } else {
             LinkedList<String> moduleParts =
                 Stream.of(idrisNamespace.split("/")).collect(toCollection(LinkedList::new));

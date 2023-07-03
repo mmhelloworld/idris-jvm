@@ -24,7 +24,11 @@ import Compiler.Jvm.ExtPrim
 import Compiler.Jvm.Foreign
 import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
+import Compiler.Jvm.MockAsm
 import Compiler.Jvm.ShowUtil
+
+import Java.Lang
+import Java.Util
 
 %hide Core.Context.Context.Constructor.arity
 
@@ -378,10 +382,10 @@ enterInferenceScope lineNumberStart lineNumberEnd = do
     parentScopeIndex <- getCurrentScopeIndex
     scopeIndex <- newScopeIndex
     parentScope <- getScope parentScopeIndex
-    variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
-    allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
-    variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
-    allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+    variableTypes <- LiftIo $ Map1.newTreeMap {key=String} {value=InferredType}
+    allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
+    variableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+    allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
     let newScope =
         MkScope scopeIndex (Just parentScopeIndex) variableTypes allVariableTypes variableIndices
             allVariableIndices IUnknown (nextVariableIndex parentScope) (lineNumberStart, lineNumberEnd) ("", "") []
@@ -391,10 +395,10 @@ enterInferenceScope lineNumberStart lineNumberEnd = do
 
 createLambdaClosureScope : Int -> Int -> List String -> Scope -> Asm Scope
 createLambdaClosureScope scopeIndex childScopeIndex closureVariables parentScope = do
-    lambdaClosureVariableIndices <- LiftIo $ Map.fromList $ getLambdaClosureVariableIndices [] 0 closureVariables
-    variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
-    allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
-    allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+    lambdaClosureVariableIndices <- LiftIo $ Map1.fromList $ getLambdaClosureVariableIndices [] 0 closureVariables
+    variableTypes <- LiftIo $ Map1.newTreeMap {key=String} {value=InferredType}
+    allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
+    allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
     Pure $ MkScope scopeIndex (Just $ index parentScope) variableTypes allVariableTypes
         lambdaClosureVariableIndices allVariableIndices IUnknown (cast $ length closureVariables)
         (lineNumbers parentScope) ("", "") [childScopeIndex]
@@ -411,10 +415,10 @@ enterInferenceLambdaScope lineNumberStart lineNumberEnd parameterName expr = do
         let boundVariables = maybe SortedSet.empty (flip SortedSet.insert SortedSet.empty . jvmSimpleName) parameterName
         let freeVariables = getFreeVariables boundVariables expr
         let usedVariables = filter (flip SortedSet.contains freeVariables) !(retrieveVariables parentScopeIndex)
-        variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
-        allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
-        variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
-        allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+        variableTypes <- LiftIo $ Map1.newTreeMap {key=String} {value=InferredType}
+        allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
+        variableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+        allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
         newScope <- case usedVariables  of
             nonEmptyUsedVariables@(_ :: _) => do
                 parentScope <- getScope parentScopeIndex
@@ -842,10 +846,10 @@ mutual
     inferSelfTailCallParameter : Map Int InferredType -> Map Int String -> (NamedCExp, Int) -> Asm ()
     inferSelfTailCallParameter types argumentNameByIndices (arg, index) = do
         optTy <- LiftIo $ Map.get types index
-        let variableType = fromMaybe IUnknown optTy
+        let variableType = fromMaybe IUnknown $ nullableToMaybe optTy
         ty <- inferExpr variableType arg
         optName <- LiftIo $ Map.get {value=String} argumentNameByIndices index
-        maybe (Pure ()) (doAddVariableType ty) optName
+        maybe (Pure ()) (doAddVariableType ty) $ nullableToMaybe optName
       where
         doAddVariableType : InferredType -> String -> Asm ()
         doAddVariableType ty name = do
@@ -863,7 +867,7 @@ mutual
             [] => Pure exprTy
             args@(_ :: argsTail) => do
                 types <- retrieveVariableTypesAtScope !getCurrentScopeIndex
-                argumentNameByIndices <- LiftIo $ Map.transpose $ variableIndices !(getScope 0)
+                argumentNameByIndices <- LiftIo $ Map1.transpose $ variableIndices !(getScope 0)
                 traverse_ (inferSelfTailCallParameter types argumentNameByIndices) $
                     zip args [0 .. the Int $ cast $ length argsTail]
                 Pure exprTy
@@ -973,8 +977,8 @@ showScopes n = do
     logAsm $ show scope
     when (n > 0) $ showScopes (n - 1)
 
-tailRecLoopFunctionName : String -> Name
-tailRecLoopFunctionName programName =
+tailRecLoopFunctionName : Name
+tailRecLoopFunctionName =
   NS (mkNamespace "io.github.mmhelloworld.idrisjvm.runtime.Runtime") (UN $ Basic "tailRec")
 
 delayNilArityExpr : FC -> (args: List Name) -> NamedCExp -> NamedCExp
@@ -1007,7 +1011,7 @@ export
 optimize : String -> List (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
 optimize programName allDefs =
   let tailRecOptimizedDefs = concatMap (optimizeTailRecursion programName) allDefs
-      tailCallOptimizedDefs = TailRec.functions (tailRecLoopFunctionName programName) tailRecOptimizedDefs
+      tailCallOptimizedDefs = TailRec.functions tailRecLoopFunctionName tailRecOptimizedDefs
   in toNameFcDef <$> tailCallOptimizedDefs
 
 export
@@ -1021,9 +1025,9 @@ inferDef programName idrisName fc (MkNmFun args expr) = do
     argIndices <- LiftIo $ getArgumentIndices arityInt argumentNames
     let initialArgumentTypes = replicate arity inferredObjectType
     let inferredFunctionType = MkInferredFunctionType inferredObjectType initialArgumentTypes
-    argumentTypesByName <- LiftIo $ Map.fromList $ zip argumentNames initialArgumentTypes
-    scopes <- LiftIo $ JList.new {a=Scope}
-    let function = MkFunction jname inferredFunctionType scopes 0 jvmClassAndMethodName emptyFunction
+    argumentTypesByName <- LiftIo $ Map1.fromList $ zip argumentNames initialArgumentTypes
+    scopes <- LiftIo $ ArrayList.new {elemTy=Scope}
+    let function = MkFunction jname inferredFunctionType (subtyping scopes) 0 jvmClassAndMethodName emptyFunction
     setCurrentFunction function
     LiftIo $ AsmGlobalState.addFunction !getGlobalState jname function
     updateCurrentFunction $ { optimizedBody := expr }
@@ -1031,8 +1035,8 @@ inferDef programName idrisName fc (MkNmFun args expr) = do
     resetScope
     scopeIndex <- newScopeIndex
     let (_, lineStart, lineEnd) = getSourceLocation expr
-    allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
-    allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+    allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
+    allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
     let functionScope =
         MkScope scopeIndex Nothing argumentTypesByName allVariableTypes argIndices
             allVariableIndices IUnknown arityInt (lineStart, lineEnd) ("", "") []
@@ -1058,10 +1062,10 @@ inferDef programName idrisName fc (MkNmFun args expr) = do
             go1 acc [] = pure acc
             go1 acc (arg :: args) = do
                 optIndex <- Map.get {value=Int} argumentIndicesByName arg
-                ty <- case optIndex of
+                ty <- case nullableToMaybe optIndex of
                     Just index => do
                         optTy <- Map.get argumentTypesByIndex index
-                        pure $ fromMaybe IUnknown optTy
+                        pure $ fromMaybe IUnknown $ nullableToMaybe optTy
                     Nothing => pure IUnknown
                 go1 (ty :: acc) args
 
@@ -1071,3 +1075,7 @@ inferDef programName idrisName fc def@(MkNmForeign foreignDescriptors argumentTy
     inferForeign programName idrisName fc foreignDescriptors argumentTypes returnType
 
 inferDef _ _ _ _ = Pure ()
+
+export
+asm : AsmState -> Asm a -> IO (a, AsmState)
+asm = if shouldDebugAsm then mockRunAsm else runAsm

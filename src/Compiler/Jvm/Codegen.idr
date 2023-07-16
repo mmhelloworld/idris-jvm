@@ -216,9 +216,6 @@ isInterfaceInvocation : InferredType -> Bool
 isInterfaceInvocation (IRef className) = "i:" `isPrefixOf` className
 isInterfaceInvocation _ = False
 
-%foreign "jvm:.startsWith(java/lang/String java/lang/String boolean),java/lang/String"
-startsWith : String -> String -> Bool
-
 assembleNil : (isTailCall: Bool) -> InferredType -> Asm ()
 assembleNil isTailCall returnType = do
     Field GetStatic idrisNilClass "INSTANCE" "Lio/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil;"
@@ -268,6 +265,18 @@ getLambdaTypeByArity 3 = Function3Lambda
 getLambdaTypeByArity 4 = Function4Lambda
 getLambdaTypeByArity 5 = Function5Lambda
 getLambdaTypeByArity _ = FunctionLambda
+
+assembleClassLiteral : InferredType -> Asm ()
+assembleClassLiteral IByte   = Field GetStatic "java/lang/Byte" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral IChar   = Field GetStatic "java/lang/Character" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral IShort  = Field GetStatic "java/lang/Short" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral IBool   = Field GetStatic "java/lang/Boolean" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral IDouble = Field GetStatic "java/lang/Double" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral IFloat  = Field GetStatic "java/lang/Float" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral IInt    = Field GetStatic "java/lang/Integer" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral ILong   = Field GetStatic "java/lang/Long" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral IVoid   = Field GetStatic "java/lang/Void" "TYPE"  "Ljava/lang/Class;"
+assembleClassLiteral type    = Ldc $ TypeConst $ getJvmTypeDescriptor type
 
 intToBigInteger : Asm ()
 intToBigInteger = do
@@ -1641,11 +1650,11 @@ mutual
         methodReturnType <- tySpec ret
         let (cname, mnameWithDot) = break (== '.') fn
         traverse_ assembleParameter $ zip (snd obj :: map snd instanceMethodArgs) (IRef cname :: argTypes)
-        let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType argTypes
         let (_, mname) = break (/= '.') mnameWithDot
         instanceType <- tySpec $ fst obj
         let isInterfaceInvocation = isInterfaceInvocation instanceType
         let invocationType = if isInterfaceInvocation then InvokeInterface else InvokeVirtual
+        let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType argTypes
         InvokeMethod invocationType cname mname methodDescriptor isInterfaceInvocation
         asmCast methodReturnType returnType
     jvmExtPrim fc returnType JvmStaticMethodCall [ret, NmApp _ _ [functionNamePrimVal], fargs, world] =
@@ -1666,6 +1675,42 @@ mutual
         let invocationType = if isConstructor then InvokeSpecial else InvokeStatic
         InvokeMethod invocationType cname mname methodDescriptor False
         asmCast methodReturnType returnType
+    jvmExtPrim _ returnType SetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
+        (obj :: value :: []) <- getFArgs fargs
+            | _ => asmCrash ("Setting an instance field should have two arguments for " ++ fn)
+        fieldType <- tySpec $ (fst value)
+        let (cname, fnameWithDot) = break (== '.') fn
+        assembleExpr False (IRef cname) (snd obj)
+        assembleExpr False fieldType (snd value)
+        let (_, fieldName) = break (\c => c /= '.' && c /= '#' && c /= '=') fnameWithDot
+        Field PutField cname fieldName (getJvmTypeDescriptor fieldType)
+        Aconstnull
+        asmCast inferredObjectType returnType
+    jvmExtPrim _ returnType SetStaticField [ret, NmPrimVal fc (Str fn), fargs, world] = do
+        (value :: []) <- getFArgs fargs
+            | _ => asmCrash ("Setting a static field should have one argument for " ++ fn)
+        fieldType <- tySpec $ (fst value)
+        let (cname, fnameWithDot) = break (== '.') fn
+        assembleExpr False fieldType (snd value)
+        let (_, fieldName) = break (\c => c /= '.' && c /= '#' && c /= '=') fnameWithDot
+        Field PutStatic cname fieldName (getJvmTypeDescriptor fieldType)
+        Aconstnull
+        asmCast inferredObjectType returnType
+    jvmExtPrim _ returnType GetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
+        (obj :: []) <- getFArgs fargs
+            | _ => asmCrash ("Getting an instance field should have one argument for " ++ fn)
+        fieldType <- tySpec ret
+        let (cname, fnameWithDot) = break (== '.') fn
+        assembleExpr False (IRef cname) (snd obj)
+        let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
+        Field GetField cname fieldName (getJvmTypeDescriptor fieldType)
+        asmCast fieldType returnType
+    jvmExtPrim _ returnType GetStaticField [ret, NmPrimVal fc (Str fn), fargs, world] = do
+        fieldType <- tySpec ret
+        let (cname, fnameWithDot) = break (== '.') fn
+        let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
+        Field GetStatic cname fieldName (getJvmTypeDescriptor fieldType)
+        asmCast fieldType returnType
     jvmExtPrim _ returnType NewArray [_, size, val, world] = do
         assembleExpr False IInt size
         assembleExpr False IUnknown val
@@ -1708,6 +1753,9 @@ mutual
         Ldc $ StringConst "Error: Executed 'void'"
         InvokeMethod InvokeStatic runtimeClass "crash" "(Ljava/lang/String;)Ljava/lang/Object;" False
         asmCast inferredObjectType returnType
+    jvmExtPrim _ returnType JvmClassLiteral [_, NmPrimVal fc (Str typeName)] = do
+        assembleClassLiteral (parse typeName)
+        asmCast (IRef "java/lang/Class") returnType
     jvmExtPrim _ returnType MakeFuture [_, action] = do
         assembleExpr False delayedType action
         InvokeMethod InvokeStatic runtimeClass "fork" "(Lio/github/mmhelloworld/idrisjvm/runtime/Delayed;)Ljava/util/concurrent/ForkJoinTask;" False

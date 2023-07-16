@@ -183,6 +183,11 @@ public final class Assembler {
     public static final int BUFFER_SIZE = 1024;
     private static final boolean SHOULD_DEBUG;
 
+    static {
+        String shouldDebug = System.getProperty("IDRIS_JVM_DEBUG", System.getenv("IDRIS_JVM_DEBUG"));
+        SHOULD_DEBUG = shouldDebug != null && !shouldDebug.isEmpty() && !shouldDebug.equals("false");
+    }
+
     private final Map<String, ClassWriter> cws;
     private final Deque<ClassMethodVisitor> classMethodVisitorStack = new LinkedList<>();
     private Map<String, Object> env;
@@ -192,11 +197,6 @@ public final class Assembler {
     private MethodVisitor classInitMethodVisitor;
     private String className;
     private String methodName;
-
-    static {
-        String shouldDebug = System.getProperty("IDRIS_JVM_DEBUG", System.getenv("IDRIS_JVM_DEBUG"));
-        SHOULD_DEBUG = shouldDebug != null && !shouldDebug.isEmpty() && !shouldDebug.equals("false");
-    }
 
     public Assembler() {
         this.cws = new HashMap<>();

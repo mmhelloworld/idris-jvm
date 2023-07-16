@@ -8,7 +8,9 @@ public export
 data ExtPrim = JvmStaticMethodCall | JvmInstanceMethodCall
              | NewIORef | ReadIORef | WriteIORef
              | NewArray | ArrayGet | ArraySet
-             | GetField | SetField
+             | GetStaticField | SetStaticField
+             | GetInstanceField | SetInstanceField
+             | JvmClassLiteral
              | VoidElim
              | SysOS | SysCodegen
              | MakeFuture
@@ -18,14 +20,17 @@ export
 Show ExtPrim where
   show JvmStaticMethodCall = "JvmStaticMethodCall"
   show JvmInstanceMethodCall = "JvmInstanceMethodCall"
+  show JvmClassLiteral = "JvmClassLiteral"
   show NewIORef = "NewIORef"
   show ReadIORef = "ReadIORef"
   show WriteIORef = "WriteIORef"
   show NewArray = "NewArray"
   show ArrayGet = "ArrayGet"
   show ArraySet = "ArraySet"
-  show GetField = "GetField"
-  show SetField = "SetField"
+  show GetStaticField = "GetStaticField"
+  show SetStaticField = "SetStaticField"
+  show GetInstanceField = "GetInstanceField"
+  show SetInstanceField = "SetInstanceField"
   show VoidElim = "VoidElim"
   show SysOS = "SysOS"
   show SysCodegen = "SysCodegen"
@@ -38,14 +43,17 @@ toPrim : Name -> ExtPrim
 toPrim pn@(NS _ n)
     = cond [(n == UN (Basic "prim__jvmStatic"), JvmStaticMethodCall),
             (n == UN (Basic "prim__jvmInstance"), JvmInstanceMethodCall),
+            (n == UN (Basic "prim__jvmClassLiteral"), JvmClassLiteral),
             (n == UN (Basic "prim__newIORef"), NewIORef),
             (n == UN (Basic "prim__readIORef"), ReadIORef),
             (n == UN (Basic "prim__writeIORef"), WriteIORef),
             (n == UN (Basic "prim__newArray"), NewArray),
             (n == UN (Basic "prim__arrayGet"), ArrayGet),
             (n == UN (Basic "prim__arraySet"), ArraySet),
-            (n == UN (Basic "prim__getField"), GetField),
-            (n == UN (Basic "prim__setField"), SetField),
+            (n == UN (Basic "prim__getStaticField"), GetStaticField),
+            (n == UN (Basic "prim__setStaticField"), SetStaticField),
+            (n == UN (Basic "prim__getInstanceField"), GetInstanceField),
+            (n == UN (Basic "prim__setInstanceField"), SetInstanceField),
             (n == UN (Basic "void"), VoidElim),
             (n == UN (Basic "prim__void"), VoidElim),
             (n == UN (Basic "prim__os"), SysOS),

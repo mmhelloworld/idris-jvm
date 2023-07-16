@@ -701,8 +701,12 @@ mutual
     inferExtPrimArg (arg, ty) = inferExpr ty arg
 
     inferExtPrim : FC -> InferredType -> ExtPrim -> List NamedCExp -> Asm InferredType
+    inferExtPrim fc returnType GetStaticField descriptors = inferExtPrim fc returnType JvmStaticMethodCall descriptors
+    inferExtPrim fc returnType SetStaticField descriptors = inferExtPrim fc returnType JvmStaticMethodCall descriptors
+    inferExtPrim fc returnType GetInstanceField descriptors = inferExtPrim fc returnType JvmStaticMethodCall descriptors
+    inferExtPrim fc returnType SetInstanceField descriptors = inferExtPrim fc returnType JvmStaticMethodCall descriptors
     inferExtPrim fc returnType JvmInstanceMethodCall descriptors =
-        inferExtPrim fc returnType JvmStaticMethodCall descriptors
+      inferExtPrim fc returnType JvmStaticMethodCall descriptors
     inferExtPrim fc returnType JvmStaticMethodCall [ret, NmApp _ _ [functionNamePrimVal], fargs, world] =
       inferExtPrim fc returnType JvmStaticMethodCall [ret, functionNamePrimVal, fargs, world]
     inferExtPrim _ returnType JvmStaticMethodCall [ret, NmPrimVal fc (Str fn), fargs, world]
@@ -738,6 +742,7 @@ mutual
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
     inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
     inferExtPrim _ returnType (Unknown name) _ = asmCrash $ "Can't compile unknown external directive " ++ show name
+    inferExtPrim _ returnType JvmClassLiteral [_, NmPrimVal fc (Str _)] = pure $ IRef "java/lang/Class"
     inferExtPrim _ returnType MakeFuture [_, action] = do
         ignore $ inferExpr delayedType action
         pure inferredForkJoinTaskType

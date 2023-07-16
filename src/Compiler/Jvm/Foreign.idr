@@ -176,10 +176,15 @@ getArgumentIndices : (arity: Int) -> List String -> IO (Map String Int)
 getArgumentIndices 0 _ = Map1.newTreeMap {key=String} {value=Int}
 getArgumentIndices argIndex args = Map1.fromList $ zip args [0 .. argIndex - 1]
 
-getPrimMethodName : String -> String
-getPrimMethodName "" = "prim__jvmStatic"
-getPrimMethodName name =
-    assert_total $ if prim__strHead name == '.' then "prim__jvmInstance" else "prim__jvmStatic"
+getPrimMethodName : (arity : Nat) -> String -> String
+getPrimMethodName arity name =
+  cond
+    [
+      (startsWith name ".", "prim__jvmInstance"),
+      (startsWith name "#=", if arity == 2 then "prim__setInstanceField" else "prim__setStaticField"),
+      (startsWith name "#", if arity == 1 then "prim__getInstanceField" else "prim__getStaticField")
+    ]
+    "prim__jvmStatic"
 
 isValidArgumentType : CFType -> Bool
 isValidArgumentType (CFUser (UN (Basic "Type")) _) = False
@@ -240,8 +245,10 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     let methodReturnType = if isNilArity then delayedType else inferredObjectType
     let inferredFunctionType = MkInferredFunctionType methodReturnType (replicate arityNat inferredObjectType)
     scopes <- LiftIo $ ArrayList.new {elemTy=Scope}
+    let extPrimName = NS (mkNamespace "") $ UN $ Basic $
+      getPrimMethodName (length argumentNameAndTypes) foreignFunctionName
     let externalFunctionBody =
-        NmExtPrim fc (NS (mkNamespace "") $ UN $ Basic $ getPrimMethodName foreignFunctionName) [
+        NmExtPrim fc extPrimName [
            NmCon fc (UN $ Basic $ createExtPrimTypeSpec jvmReturnType) DATACON Nothing [],
            NmPrimVal fc (Str $ foreignFunctionClassName ++ "." ++ foreignFunctionName),
            getJvmExtPrimArguments $ zip validIdrisTypes argumentNameAndTypes,

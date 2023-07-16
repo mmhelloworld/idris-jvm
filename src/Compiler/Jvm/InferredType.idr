@@ -214,6 +214,10 @@ stripInterfacePrefix (IRef className) =
     IRef $ if "i:" `isPrefixOf` className then substr 2 (length className) className else className
 stripInterfacePrefix ty = ty
 
+public export
+%foreign "jvm:.startsWith(java/lang/String java/lang/String boolean),java/lang/String"
+startsWith : String -> String -> Bool
+
 export
 parse : String -> InferredType
 parse "boolean" = IBool
@@ -227,7 +231,8 @@ parse "double" = IDouble
 parse "String" = inferredStringType
 parse "BigInteger" = inferredBigIntegerType
 parse "void" = IVoid
-parse className = IRef className
+parse "[" = assert_total $ idris_crash "Invalid type descriptor: ["
+parse desc = if startsWith desc "[" then IArray (parse (assert_total (strTail desc))) else IRef desc
 
 export
 createExtPrimTypeSpec : InferredType -> String

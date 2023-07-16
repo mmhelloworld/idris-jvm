@@ -24,3 +24,12 @@ namespace Object
 
 public export
 Inherits a Object where
+
+export
+data Class : Type -> Type where [external]
+
+%extern prim__jvmClassLiteral : String -> Class a
+
+export %inline
+classLiteral : String -> Class a
+classLiteral typeName = prim__jvmClassLiteral typeName

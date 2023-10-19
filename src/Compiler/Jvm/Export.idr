@@ -12,6 +12,7 @@ import Compiler.Jvm.Variable
 import Core.Context
 import Core.Directory
 import Core.Name
+import Core.Name.Namespace
 import Core.Options
 import Core.TT
 import Data.List
@@ -194,7 +195,7 @@ parseClassExport name parts descriptor annotations = do
   Pure $ MkClassExport (last parts) name extends implements (mapMaybe parseModifier parts) annotations
 
 getReferenceTypeName : String -> InferredType -> Asm String
-getReferenceTypeName _ (IRef name) = Pure name
+getReferenceTypeName _ (IRef name _) = Pure name
 getReferenceTypeName functionName _ = asmCrash ("Expected a reference type to export function " ++ functionName)
 
 makePublicByDefault : List Access -> List Access
@@ -392,13 +393,13 @@ exportClass (MkClassExport name idrisName extends implements modifiers annotatio
 
 exportMemberIo : AsmGlobalState -> ExportDescriptor -> IO ()
 exportMemberIo globalState (MkMethodExportDescriptor desc) = do
-  asmState <- createAsmState globalState desc.idrisName
+  asmState <- createAsmStateJavaName globalState desc.encloser.name
   ignore $ asm asmState $ exportFunction desc
 exportMemberIo globalState (MkFieldExportDescriptor desc) = do
-  asmState <- createAsmState globalState desc.idrisName
+  asmState <- createAsmStateJavaName globalState desc.encloser.name
   ignore $ asm asmState $ exportField desc
 exportMemberIo globalState (MkClassExportDescriptor desc) = do
-  asmState <- createAsmState globalState desc.idrisName
+  asmState <- createAsmStateJavaName globalState desc.name
   ignore $ asm asmState $ exportClass desc
 exportMemberIo _ _ = pure ()
 
@@ -406,8 +407,9 @@ substituteTypeName : SortedMap String String -> String -> String
 substituteTypeName imports type = fromMaybe type $ SortedMap.lookup type imports
 
 substituteType : SortedMap String String -> InferredType -> InferredType
-substituteType imports ref@(IRef type) = maybe ref IRef $ SortedMap.lookup type imports
-substituteType imports ref@(IArray (IRef type)) = maybe ref (IArray . IRef) $ SortedMap.lookup type imports
+substituteType imports ref@(IRef type refType) = maybe ref (flip IRef refType) $ SortedMap.lookup type imports
+substituteType imports ref@(IArray (IRef type refType)) =
+  maybe ref (IArray . (flip IRef refType)) $ SortedMap.lookup type imports
 substituteType imports ref@(IArray (IArray type)) = IArray (IArray $ substituteType imports type)
 substituteType imports type = type
 
@@ -432,8 +434,21 @@ mutual
   substituteAnnotation imports (MkAnnotation name props) =
     MkAnnotation (substituteTypeName imports name) (substituteAnnotationProperty imports <$> props)
 
+findImports : SortedMap Namespace (SortedMap String String) -> Name -> Maybe (SortedMap String String)
+findImports functionImports name = go (sortBy comparingNamespaceLength parents) where
+
+    parents : List Namespace
+    parents = allParents $ getNamespace name
+
+    comparingNamespaceLength : Namespace -> Namespace -> Ordering
+    comparingNamespaceLength = comparing (negate . cast {to=Int} . String.length . show)
+
+    go : List Namespace -> Maybe (SortedMap String String)
+    go [] = Nothing
+    go (ns :: rest) = maybe (go rest) Just $ SortedMap.lookup ns functionImports
+
 substituteClassExport : SortedMap Namespace (SortedMap String String) -> ClassExport -> ClassExport
-substituteClassExport functionImports desc = case SortedMap.lookup (getNamespace desc.idrisName) functionImports of
+substituteClassExport functionImports desc = case findImports functionImports desc.idrisName of
   Nothing => desc
   Just imports =>
     let
@@ -445,7 +460,7 @@ substituteClassExport functionImports desc = case SortedMap.lookup (getNamespace
 
 substituteImport : SortedMap Namespace (SortedMap String String) -> ExportDescriptor -> ExportDescriptor
 substituteImport functionImports exportDesc@(MkMethodExportDescriptor desc) =
-  case SortedMap.lookup (getNamespace desc.idrisName) functionImports of
+  case findImports functionImports desc.idrisName of
     Nothing => exportDesc
     Just imports =>
       let
@@ -456,7 +471,7 @@ substituteImport functionImports exportDesc@(MkMethodExportDescriptor desc) =
       in MkMethodExportDescriptor $ MkMethodExport desc.name desc.idrisName updatedType updatedEncloser desc.modifiers
            updatedAnnotations updatedParameterAnnotations
 substituteImport functionImports exportDesc@(MkFieldExportDescriptor desc) =
-  case SortedMap.lookup (getNamespace desc.idrisName) functionImports of
+  case findImports functionImports desc.idrisName of
     Nothing => exportDesc
     Just imports =>
       let

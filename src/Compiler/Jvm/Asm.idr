@@ -274,12 +274,6 @@ record Scope where
     childIndices : List Int
 
 public export
-record InferredFunctionType where
-    constructor MkInferredFunctionType
-    returnType : InferredType
-    parameterTypes : List InferredType
-
-public export
 record Function where
     constructor MkFunction
     idrisName : Jname
@@ -295,12 +289,13 @@ namespace AsmGlobalState
 
     public export
     %foreign
-        "jvm:<init>(String io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
-    prim_newAsmGlobalState : String -> PrimIO AsmGlobalState
+        "jvm:<init>(String java/util/Map io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
+    prim_newAsmGlobalState : String -> Map String (FC, NamedDef) -> PrimIO AsmGlobalState
 
     public export
-    newAsmGlobalState : HasIO io => String -> io AsmGlobalState
-    newAsmGlobalState programName = primIO $ prim_newAsmGlobalState programName
+    newAsmGlobalState : HasIO io => String -> Map String (FC, NamedDef) -> io AsmGlobalState
+    newAsmGlobalState programName fcAndDefinitionsByName =
+      primIO $ prim_newAsmGlobalState programName fcAndDefinitionsByName
 
     public export
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getAssembler"
@@ -318,8 +313,17 @@ namespace AsmGlobalState
     prim_getProgramName : AsmGlobalState -> PrimIO String
 
     public export
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getFcAndDefinition"
+                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "java/lang/Object"
+    prim_getFcAndDefinition : AsmGlobalState -> String -> PrimIO (FC, NamedDef)
+
+    public export
     getProgramName : HasIO io => AsmGlobalState -> io String
     getProgramName = primIO . prim_getProgramName
+
+    public export
+    getFcAndDefinition : HasIO io => AsmGlobalState -> String -> io (FC, NamedDef)
+    getFcAndDefinition state name = primIO $ prim_getFcAndDefinition state name
 
     public export
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".addConstructor"
@@ -683,11 +687,6 @@ Show Scope where
     ]
 
 export
-Show InferredFunctionType where
-    show inferredFunctionType =
-      join " -> " $ show <$> (parameterTypes inferredFunctionType ++ [returnType inferredFunctionType])
-
-export
 Show Function where
     show function =
         showType "Function" [
@@ -790,6 +789,10 @@ getCurrentFunction = currentIdrisFunction <$> GetState
 export
 getProgramName : Asm String
 getProgramName = LiftIo $ AsmGlobalState.getProgramName !getGlobalState
+
+export
+getFcAndDefinition : String -> Asm (FC, NamedDef)
+getFcAndDefinition name = LiftIo $ AsmGlobalState.getFcAndDefinition !getGlobalState name
 
 export
 isUntypedFunction : Jname -> Asm Bool
@@ -1197,9 +1200,10 @@ getJvmTypeDescriptor IFloat       = "F"
 getJvmTypeDescriptor IInt         = "I"
 getJvmTypeDescriptor ILong        = "J"
 getJvmTypeDescriptor IVoid        = "V"
-getJvmTypeDescriptor IUnknown     = getJvmTypeDescriptor inferredObjectType
-getJvmTypeDescriptor (IRef ty)    = "L" ++ ty ++ ";"
+getJvmTypeDescriptor (IRef ty _)    = "L" ++ ty ++ ";"
 getJvmTypeDescriptor (IArray ty)  = "[" ++ getJvmTypeDescriptor ty
+getJvmTypeDescriptor (IFunction lambdaType) = getJvmTypeDescriptor (lambdaType.javaInterface)
+getJvmTypeDescriptor IUnknown            = getJvmTypeDescriptor inferredObjectType
 
 export
 asmReturn : InferredType -> Asm ()
@@ -1534,12 +1538,17 @@ getJvmClassMethodName programName name =
     in getIdrisFunctionName programName (className jname) (methodName jname)
 
 export
+createAsmStateJavaName : AsmGlobalState -> String -> IO AsmState
+createAsmStateJavaName globalState name = do
+  assembler <- getAssembler globalState name
+  newAsmState globalState assembler
+
+export
 createAsmState : AsmGlobalState -> Name -> IO AsmState
 createAsmState globalState name = do
     programName <- AsmGlobalState.getProgramName globalState
     let jvmClassMethodName = getJvmClassMethodName programName name
-    assembler <- getAssembler globalState (className jvmClassMethodName)
-    newAsmState globalState assembler
+    createAsmStateJavaName globalState (className jvmClassMethodName)
 
 %foreign jvm' "io/github/mmhelloworld/idrisjvm/runtime/Runtime" "waitForFuturesToComplete" "java/util/List" "void"
 prim_waitForFuturesToComplete : List ThreadID -> PrimIO ()

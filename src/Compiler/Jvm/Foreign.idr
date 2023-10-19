@@ -37,7 +37,7 @@ namespace ForeignType
 
     public export
     getInferredType : ForeignType -> InferredType
-    getInferredType (FunctionForeignType interfaceName _ _ _) = IRef interfaceName
+    getInferredType (FunctionForeignType interfaceName _ _ _) = IRef interfaceName Interface
     getInferredType (AtomicForeignType ty) = ty
 
 export
@@ -91,7 +91,12 @@ namespace ForeignImplementationType
         parse _ CFChar = Pure $ AtomicForeignImplementationType IChar
         parse _ CFWorld = Pure $ AtomicForeignImplementationType IInt
         parse fc (CFIORes returnType) = parse fc returnType
+        parse fc (CFStruct name fields) = Pure $ AtomicForeignImplementationType $ iref name
         parse fc (CFFun argument returnType) = parseCallbackType fc [argument] returnType
+        parse fc (CFUser _ (CFStruct name _ :: _)) = case words name of
+          [] => asmCrash ("Invalid Java lambda type at " ++ show fc)
+          (javaInterfaceName :: _) =>
+            Pure $ AtomicForeignImplementationType $ IRef javaInterfaceName Interface
         parse _ _ = Pure $ AtomicForeignImplementationType inferredObjectType
 
 export
@@ -144,19 +149,56 @@ parseForeignType fc descriptor implementationType = case toList $ String.split (
 export
 parseForeignFunctionDescriptor : FC -> List String -> List ForeignImplementationType ->
     InferredType -> Asm (String, String, InferredType, List ForeignType)
-parseForeignFunctionDescriptor fc (functionDescriptor :: className :: _) argumentTypes returnType =
+parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argumentTypes returnType =
     case String.break (== '(') functionDescriptor of
         (fn, "") => do
             argumentDeclarationTypes <- traverse (getForeignCallbackDeclarationType fc) argumentTypes
+            className <- getClassName fn descriptorParts returnType argumentDeclarationTypes
             Pure (className, fn, returnType, argumentDeclarationTypes)
         (fn, signature) => do
             let descriptorsWithIdrisTypes =
                 zip
                     (toList $ String.split (== ' ') (assert_total $ strTail . fst $ break (== ')') signature))
                     (argumentTypes ++ [AtomicForeignImplementationType returnType])
-            (argumentTypesReversed, returnType) <- go [] descriptorsWithIdrisTypes
-            Pure (className, fn, returnType, List.reverse argumentTypesReversed)
+            (argumentDeclarationTypesReversed, returnType) <- go [] descriptorsWithIdrisTypes
+            let argumentDeclarationTypes = List.reverse argumentDeclarationTypesReversed
+            className <- getClassName fn descriptorParts returnType argumentDeclarationTypes
+            Pure (className, fn, returnType, argumentDeclarationTypes)
   where
+
+    getInstanceMemberClass : (errorMessage: Lazy String) -> List ForeignType -> Asm String
+    getInstanceMemberClass errorMessage (AtomicForeignType (IRef className _) :: _) = Pure className
+    getInstanceMemberClass errorMessage _ = Throw fc errorMessage
+
+    getClassName : String -> List String -> InferredType -> List ForeignType -> Asm String
+    getClassName memberName descriptorParts returnType argumentTypes =
+      let arity = length argumentTypes
+      in
+        if startsWith memberName "." then
+            getInstanceMemberClass
+              ("Instance method " ++ memberName ++ " must have first argument to be of reference type")
+              argumentTypes
+        else if startsWith memberName "#=" && arity == 2 then
+          getInstanceMemberClass
+            ("Setter for instance field " ++ memberName ++ " must have first argument to be of reference type")
+            argumentTypes
+        else if startsWith memberName "#" && arity == 1 then
+          getInstanceMemberClass
+            ("Getter for instance field " ++ memberName ++ " must have first argument to be of reference type")
+            argumentTypes
+        else
+          if memberName == "<init>"
+            then
+              case returnType of
+                IRef className _ => Pure className
+                _ => Throw fc ("Constructor must return a reference type")
+            else
+              case descriptorParts of
+                (className :: _) => Pure className
+                _ => Throw fc
+                       ("Static member " ++ memberName ++ " must have an explicit class name in foreign descriptor")
+
+
     go : List ForeignType -> List (String, ForeignImplementationType) -> Asm (List ForeignType, InferredType)
     go acc [] = Pure (acc, IUnknown)
     go acc ((returnTypeDesc, _) :: []) = Pure (acc, parse returnTypeDesc)

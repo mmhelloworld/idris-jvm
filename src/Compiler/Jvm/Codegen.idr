@@ -140,8 +140,8 @@ hashCode (Str value) = Just $ Object1.hashCode value
 hashCode x = Nothing
 
 getHashCodeSwitchClass : FC -> InferredType -> Asm String
-getHashCodeSwitchClass fc (IRef "java/lang/String") = Pure stringClass
-getHashCodeSwitchClass fc (IRef "java/math/BigInteger") = Pure bigIntegerClass
+getHashCodeSwitchClass fc (IRef "java/lang/String" _) = Pure stringClass
+getHashCodeSwitchClass fc (IRef "java/math/BigInteger" _) = Pure bigIntegerClass
 getHashCodeSwitchClass fc ILong = Pure "java/lang/Long"
 getHashCodeSwitchClass fc constantType = asmCrash ("Constant type " ++ show constantType ++ " cannot be compiled to 'Switch'.")
 
@@ -213,7 +213,7 @@ assembleBits64 isTailCall returnType value = do
     when isTailCall $ asmReturn returnType
 
 isInterfaceInvocation : InferredType -> Bool
-isInterfaceInvocation (IRef className) = "i:" `isPrefixOf` className
+isInterfaceInvocation (IRef _ Interface) = True
 isInterfaceInvocation _ = False
 
 assembleNil : (isTailCall: Bool) -> InferredType -> Asm ()
@@ -575,7 +575,7 @@ mutual
     assembleExprComparableBinaryBoolOp : InferredType -> String -> (String -> Asm ()) ->
         NamedCExp -> NamedCExp -> Asm ()
     assembleExprComparableBinaryBoolOp returnType className operator expr1 expr2 = do
-        let exprType = IRef className
+        let exprType = IRef className Class
         assembleExpr False exprType expr1
         assembleExpr False exprType expr2
         ifLabel <- newLabel
@@ -1223,7 +1223,7 @@ mutual
             when (lambdaType == DelayedLambda) $ do
                 New "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed"
                 Dup
-            let lambdaInterfaceType = getLambdaInterfaceType lambdaType lambdaBodyReturnType
+            let lambdaInterfaceType = getLambdaInterfaceType lambdaType
             parameterType <- the (Asm (Maybe InferredType)) $ traverse getVariableType (jvmSimpleName <$> parameterName)
             variableTypes <- LiftIo $ Map1.values {key=Int} !(loadClosures declaringScope scope)
             maybe (Pure ()) id parameterValueExpr
@@ -1255,7 +1255,6 @@ mutual
             let oldLineNumberLabels = lineNumberLabels !GetState
             newLineNumberLabels <- LiftIo $ Map1.newTreeMap {key=Int} {value=String}
             updateState $ { lineNumberLabels := newLineNumberLabels }
-            className <- getClassName
             let accessModifiers = if isExtracted then [Public, Static] else [Public, Static, Synthetic]
             CreateMethod accessModifiers "" lambdaClassName lambdaMethodName implementationMethodDescriptor
                 Nothing Nothing [] []
@@ -1598,7 +1597,7 @@ mutual
         assembleExpr False IInt (NmLocal fc $ UN $ Basic hashCodePositionVariableName)
         assembleConstructorSwitch returnType fc idrisObjectVariableIndex
             (hashPositionSwitchAlts hashPositionAndAlts) def
-    where
+      where
         conAltHashCodeExpr : FC -> (Int, NamedConAlt) -> Asm (Int, Int, NamedConAlt)
         conAltHashCodeExpr fc positionAndAlt@(position, MkNConAlt name _ _ _ _) =
             case hashCode (Str $ getIdrisConstructorClassName (jvmSimpleName name)) of
@@ -1640,18 +1639,91 @@ mutual
                     switchBody label nextLabel position alt
                     go nextLabel positionAndAlts
 
+    asmJavaLambda : FC -> InferredType -> NamedCExp -> NamedCExp -> NamedCExp -> Asm ()
+    asmJavaLambda fc returnType functionType javaInterfaceType lambda = do
+        assembleExpr False inferredLambdaType lambda
+        lambdaType <- getJavaLambdaType fc [functionType, javaInterfaceType, lambda]
+        let samType =
+          if isIoAction then {parameterTypes $= dropWorldType} lambdaType.methodType else lambdaType.methodType
+        let lambdaImplementationType = lambdaType.implementationType
+        let lambdaImplementationType = updateImplementationType samType.returnType lambdaImplementationType
+        let invokeDynamicType = MkInferredFunctionType lambdaType.javaInterface [inferredLambdaType]
+        let invokeDynamicDescriptor = getMethodDescriptor invokeDynamicType
+        let implementationParameterTypes = lambdaImplementationType.parameterTypes
+        let implementationMethodType = MkInferredFunctionType lambdaImplementationType.returnType
+              (inferredLambdaType :: implementationParameterTypes)
+        let implementationMethodDescriptor = getMethodDescriptor implementationMethodType
+        let instantiatedMethodDescriptor = getMethodDescriptor lambdaImplementationType
+        lambdaClassMethodName <- getLambdaImplementationMethodName "lambda"
+        let lambdaMethodName = methodName lambdaClassMethodName
+        let lambdaClassName = className lambdaClassMethodName
+        invokeDynamic lambdaClassName lambdaMethodName lambdaType.methodName invokeDynamicDescriptor
+            (getMethodDescriptor samType) implementationMethodDescriptor instantiatedMethodDescriptor
+        asmCast lambdaType.javaInterface returnType
+        let accessModifiers = [Public, Static, Synthetic]
+        CreateMethod accessModifiers "" lambdaClassName lambdaMethodName implementationMethodDescriptor
+          Nothing Nothing [] []
+        MethodCodeStart
+        Aload 0
+        let arity = (cast {to=Int} $ length implementationParameterTypes) + 1
+        typesByIndex <- LiftIo $ Map1.fromList $ zip [0 .. arity - 1]
+          (inferredLambdaType :: implementationParameterTypes)
+        applyParameters typesByIndex 1 lambdaImplementationType.returnType implementationParameterTypes
+        MaxStackAndLocal (-1) (-1)
+        MethodCodeEnd
+      where
+        isIoAction : Bool
+        isIoAction = Optimizer.isIoAction functionType
+
+        dropWorldType : List InferredType -> List InferredType
+        dropWorldType [] = []
+        dropWorldType parameterTypes@(_ :: _) = init parameterTypes
+
+        updateImplementationType : InferredType -> InferredFunctionType -> InferredFunctionType
+        updateImplementationType IVoid functionType =
+          if isIoAction
+            then {returnType := IVoid, parameterTypes $= dropWorldType} functionType
+            else {returnType := IVoid} functionType
+        updateImplementationType _ functionType =
+          if isIoAction then {parameterTypes $= dropWorldType} functionType else functionType
+
+        applyParameter : Map Int InferredType -> (isIoApplication: Bool) -> Int -> InferredType -> Asm ()
+        applyParameter typesByIndex isIoApplication index parameterType = do
+          loadArgument
+          InvokeMethod InvokeInterface "java/util/function/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" True
+          InvokeMethod InvokeStatic runtimeClass "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+         where
+          loadArgument : Asm ()
+          loadArgument =
+            if isIoApplication
+              then do
+                Iconst 0
+                InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
+              else loadVar typesByIndex parameterType inferredObjectType index
+
+        applyParameters : Map Int InferredType -> Int -> InferredType -> List InferredType -> Asm ()
+        applyParameters typesByIndex index returnType [] = do
+          when isIoAction $ applyParameter typesByIndex True index inferredObjectType
+          asmCast inferredObjectType returnType
+          when (returnType == IVoid) Pop
+          asmReturn returnType
+        applyParameters typesByIndex index returnType (ty :: rest) = do
+          applyParameter typesByIndex False index ty
+          when (rest /= [] || isIoAction) $ asmCast inferredObjectType inferredLambdaType
+          applyParameters typesByIndex (index + 1) returnType rest
+
     jvmExtPrim : FC -> InferredType -> ExtPrim -> List NamedCExp -> Asm ()
     jvmExtPrim fc returnType JvmInstanceMethodCall [ret, NmApp _ _ [functionNamePrimVal], fargs, world] =
       jvmExtPrim fc returnType JvmInstanceMethodCall [ret, functionNamePrimVal, fargs, world]
     jvmExtPrim _ returnType JvmInstanceMethodCall [ret, NmPrimVal fc (Str fn), fargs, world] = do
         (obj :: instanceMethodArgs) <- getFArgs fargs
             | [] => asmCrash ("JVM instance method must have at least one argument " ++ fn)
-        argTypes <- traverse tySpec (map fst instanceMethodArgs)
-        methodReturnType <- tySpec ret
+        let argTypes = tySpec <$> (map fst instanceMethodArgs)
+        let methodReturnType = tySpec ret
         let (cname, mnameWithDot) = break (== '.') fn
-        traverse_ assembleParameter $ zip (snd obj :: map snd instanceMethodArgs) (IRef cname :: argTypes)
+        traverse_ assembleParameter $ zip (snd obj :: map snd instanceMethodArgs) (iref cname :: argTypes)
         let (_, mname) = break (/= '.') mnameWithDot
-        instanceType <- tySpec $ fst obj
+        let instanceType = tySpec $ fst obj
         let isInterfaceInvocation = isInterfaceInvocation instanceType
         let invocationType = if isInterfaceInvocation then InvokeInterface else InvokeVirtual
         let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType argTypes
@@ -1661,8 +1733,8 @@ mutual
       jvmExtPrim fc returnType JvmStaticMethodCall [ret, functionNamePrimVal, fargs, world]
     jvmExtPrim _ returnType JvmStaticMethodCall [ret, NmPrimVal fc (Str fn), fargs, world] = do
         args <- getFArgs fargs
-        argTypes <- traverse tySpec (map fst args)
-        methodReturnType <- tySpec ret
+        let argTypes = tySpec <$> (map fst args)
+        let methodReturnType = tySpec ret
         let (cname, mnameWithDot) = break (== '.') fn
         let (_, mname) = break (/= '.') mnameWithDot
         let isConstructor = mname == "<init>"
@@ -1678,9 +1750,9 @@ mutual
     jvmExtPrim _ returnType SetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
         (obj :: value :: []) <- getFArgs fargs
             | _ => asmCrash ("Setting an instance field should have two arguments for " ++ fn)
-        fieldType <- tySpec $ (fst value)
+        let fieldType = tySpec $ (fst value)
         let (cname, fnameWithDot) = break (== '.') fn
-        assembleExpr False (IRef cname) (snd obj)
+        assembleExpr False (iref cname) (snd obj)
         assembleExpr False fieldType (snd value)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#' && c /= '=') fnameWithDot
         Field PutField cname fieldName (getJvmTypeDescriptor fieldType)
@@ -1689,7 +1761,7 @@ mutual
     jvmExtPrim _ returnType SetStaticField [ret, NmPrimVal fc (Str fn), fargs, world] = do
         (value :: []) <- getFArgs fargs
             | _ => asmCrash ("Setting a static field should have one argument for " ++ fn)
-        fieldType <- tySpec $ (fst value)
+        let fieldType = tySpec $ (fst value)
         let (cname, fnameWithDot) = break (== '.') fn
         assembleExpr False fieldType (snd value)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#' && c /= '=') fnameWithDot
@@ -1699,14 +1771,14 @@ mutual
     jvmExtPrim _ returnType GetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
         (obj :: []) <- getFArgs fargs
             | _ => asmCrash ("Getting an instance field should have one argument for " ++ fn)
-        fieldType <- tySpec ret
+        let fieldType = tySpec ret
         let (cname, fnameWithDot) = break (== '.') fn
-        assembleExpr False (IRef cname) (snd obj)
+        assembleExpr False (iref cname) (snd obj)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
         Field GetField cname fieldName (getJvmTypeDescriptor fieldType)
         asmCast fieldType returnType
     jvmExtPrim _ returnType GetStaticField [ret, NmPrimVal fc (Str fn), fargs, world] = do
-        fieldType <- tySpec ret
+        let fieldType = tySpec ret
         let (cname, fnameWithDot) = break (== '.') fn
         let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
         Field GetStatic cname fieldName (getJvmTypeDescriptor fieldType)
@@ -1755,7 +1827,9 @@ mutual
         asmCast inferredObjectType returnType
     jvmExtPrim _ returnType JvmClassLiteral [_, NmPrimVal fc (Str typeName)] = do
         assembleClassLiteral (parse typeName)
-        asmCast (IRef "java/lang/Class") returnType
+        asmCast (IRef "java/lang/Class" Class) returnType
+    jvmExtPrim fc returnType JavaLambda [_, functionType, javaInterfaceType, lambda] =
+      asmJavaLambda fc returnType functionType javaInterfaceType lambda
     jvmExtPrim _ returnType MakeFuture [_, action] = do
         assembleExpr False delayedType action
         InvokeMethod InvokeStatic runtimeClass "fork" "(Lio/github/mmhelloworld/idrisjvm/runtime/Delayed;)Ljava/util/concurrent/ForkJoinTask;" False
@@ -1905,7 +1979,7 @@ compileToJvmBytecode c outputDirectory outputFile term = do
     fcAndDefinitionsByName <- coreLift $ Map1.fromList nameStrFcDefs
     let nameStrDefs = getNameStrDef <$> nameStrFcDefs
     definitionsByName <- coreLift $ Map1.fromList nameStrDefs
-    globalState <- coreLift $ newAsmGlobalState programName
+    globalState <- coreLift $ newAsmGlobalState programName fcAndDefinitionsByName
     let names = fst <$> nameFcDefs
     let namesByClassName = groupByClassName programName names
     coreLift $ do

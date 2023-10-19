@@ -10,14 +10,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -28,8 +22,7 @@ import static java.nio.file.Files.createTempDirectory;
 import static java.nio.file.Files.newInputStream;
 import static java.nio.file.Files.newOutputStream;
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyList;
-import static java.util.Collections.synchronizedSet;
+import static java.util.Collections.*;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 
@@ -51,32 +44,69 @@ public final class AsmGlobalState {
     private final Set<String> untypedFunctions;
     private final Set<String> constructors;
     private final String programName;
+    private final Map<String, Object> fcAndDefinitionsByName;
     private final Map<String, Assembler> assemblers;
 
-    public AsmGlobalState(String programName, Collection<String> trampolinePatterns) {
+    public <T> AsmGlobalState(String programName,
+                              Collection<String> trampolinePatterns,
+                              Map<String, Object> fcAndDefinitionsByName) {
         this.programName = programName;
         functions = new ConcurrentHashMap<>();
         untypedFunctions = synchronizedSet(new HashSet<>());
         constructors = synchronizedSet(new HashSet<>());
         assemblers = new ConcurrentHashMap<>();
+        this.fcAndDefinitionsByName = fcAndDefinitionsByName;
+    }
+
+    public AsmGlobalState(String programName, Collection<String> trampolinePatterns) {
+        this(programName, trampolinePatterns, emptyMap());
     }
 
     public AsmGlobalState(String programName) {
         this(programName, emptyList());
     }
 
+    public AsmGlobalState(String programName, Map<String, Object> fcAndDefinitionsByName) {
+        this(programName, emptyList(), fcAndDefinitionsByName);
+    }
+
     public static void copyRuntimeJar(String directory) throws IOException {
         String runtimeJarFile = Arrays.stream(System.getProperty("java.class.path").split(pathSeparator))
-            .filter(name -> name.contains(RUNTIME_JAR_NAME))
-            .findAny()
-            .orElseThrow(() -> new RuntimeException("Unable to find idris runtime jar"));
+                .filter(name -> name.contains(RUNTIME_JAR_NAME))
+                .findAny()
+                .orElseThrow(() -> new RuntimeException("Unable to find idris runtime jar"));
         try (
-            InputStream jarInputStream = newInputStream(Paths.get(runtimeJarFile));
-            InputStream jarBufferedInputStream = new BufferedInputStream(jarInputStream);
-            OutputStream outputStream = new BufferedOutputStream(
-                newOutputStream(Paths.get(directory, RUNTIME_JAR_NAME)))) {
+                InputStream jarInputStream = newInputStream(Paths.get(runtimeJarFile));
+                InputStream jarBufferedInputStream = new BufferedInputStream(jarInputStream);
+                OutputStream outputStream = new BufferedOutputStream(
+                        newOutputStream(Paths.get(directory, RUNTIME_JAR_NAME)))) {
             copy(jarBufferedInputStream, outputStream);
         }
+    }
+
+    private static List<String> getJavaOptions() {
+        String javaOpts = getProperty("JAVA_OPTS", "-Xss8m");
+        return asList(javaOpts.split("\\s+"));
+    }
+
+    private static String getProperty(String propertyName, String defaultValue) {
+        String value = System.getProperty(propertyName, System.getenv(propertyName));
+        return value == null ? defaultValue : value;
+    }
+
+    private static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
+        byte[] buffer = new byte[BUFFER_SIZE];
+        while (inputStream.read(buffer) > 0) {
+            outputStream.write(buffer);
+        }
+        outputStream.flush();
+    }
+
+    private static String getRuntimeJarName() throws IOException {
+        ClassLoader classLoader = currentThread().getContextClassLoader();
+        Properties properties = new Properties();
+        properties.load(classLoader.getResourceAsStream("project.properties"));
+        return format("idris-jvm-runtime-%s.jar", properties.getProperty("project.version"));
     }
 
     public synchronized void addFunction(String name, Object value) {
@@ -112,14 +142,14 @@ public final class AsmGlobalState {
     }
 
     public void classCodeEnd(String outputDirectory, String outputFile, String mainClass)
-        throws IOException, InterruptedException {
+            throws IOException, InterruptedException {
         String normalizedOutputDirectory = outputDirectory.isEmpty()
-            ? createTempDirectory("idris-jvm-repl").toString() : outputDirectory;
+                ? createTempDirectory("idris-jvm-repl").toString() : outputDirectory;
         String classDirectory = outputDirectory.isEmpty()
-            ? normalizedOutputDirectory : normalizedOutputDirectory + File.separator + outputFile + "_app";
+                ? normalizedOutputDirectory : normalizedOutputDirectory + File.separator + outputFile + "_app";
         getClassNameAndClassWriters()
-            .forEach(classNameAndClassWriter ->
-                writeClass(classNameAndClassWriter.getKey(), classNameAndClassWriter.getValue(), classDirectory));
+                .forEach(classNameAndClassWriter ->
+                        writeClass(classNameAndClassWriter.getKey(), classNameAndClassWriter.getValue(), classDirectory));
         String mainClassNoSlash = mainClass.replace('/', '.');
         if (outputDirectory.isEmpty()) {
             copyRuntimeJar(normalizedOutputDirectory);
@@ -134,16 +164,16 @@ public final class AsmGlobalState {
 
     public void interpret(String mainClass, String outputDirectory) throws IOException, InterruptedException {
         String classpath = String.join(pathSeparator, outputDirectory,
-            outputDirectory + File.separator + RUNTIME_JAR_NAME, System.getProperty("java.class.path"));
+                outputDirectory + File.separator + RUNTIME_JAR_NAME, System.getProperty("java.class.path"));
         List<String> command = Stream.concat(
-                Stream.concat(Stream.of("java"), JAVA_OPTIONS.stream()),
-                Stream.of("-cp", classpath, mainClass))
-            .collect(toList());
+                        Stream.concat(Stream.of("java"), JAVA_OPTIONS.stream()),
+                        Stream.of("-cp", classpath, mainClass))
+                .collect(toList());
         new ProcessBuilder(command)
-            .directory(new File((String) Directories.getWorkingDirectory()))
-            .inheritIO()
-            .start()
-            .waitFor(IDRIS_REPL_TIMEOUT, SECONDS);
+                .directory(new File((String) Directories.getWorkingDirectory()))
+                .inheritIO()
+                .start()
+                .waitFor(IDRIS_REPL_TIMEOUT, SECONDS);
     }
 
     public void writeClass(String className, ClassWriter classWriter, String outputClassFileDir) {
@@ -156,34 +186,14 @@ public final class AsmGlobalState {
         }
     }
 
-    private static List<String> getJavaOptions() {
-        String javaOpts = getProperty("JAVA_OPTS", "-Xss8m");
-        return asList(javaOpts.split("\\s+"));
-    }
-
-    private static String getProperty(String propertyName, String defaultValue) {
-        String value = System.getProperty(propertyName, System.getenv(propertyName));
-        return value == null ? defaultValue : value;
-    }
-
-    private static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
-        byte[] buffer = new byte[BUFFER_SIZE];
-        while (inputStream.read(buffer) > 0) {
-            outputStream.write(buffer);
-        }
-        outputStream.flush();
-    }
-
-    private static String getRuntimeJarName() throws IOException {
-        ClassLoader classLoader = currentThread().getContextClassLoader();
-        Properties properties = new Properties();
-        properties.load(classLoader.getResourceAsStream("project.properties"));
-        return format("idris-jvm-runtime-%s.jar", properties.getProperty("project.version"));
-    }
-
     private Stream<Entry<String, ClassWriter>> getClassNameAndClassWriters() {
         return assemblers.values().parallelStream()
-            .map(Assembler::classInitEnd)
-            .flatMap(assembler -> assembler.getClassWriters().entrySet().stream());
+                .map(Assembler::classInitEnd)
+                .flatMap(assembler -> assembler.getClassWriters().entrySet().stream());
+    }
+
+    public Object getFcAndDefinition(String name) {
+        return Optional.ofNullable(fcAndDefinitionsByName.get(name))
+                .orElseThrow(() -> new IdrisJvmException("Unable to find function " + name));
     }
 }

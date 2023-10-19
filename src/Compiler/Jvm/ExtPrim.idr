@@ -6,6 +6,7 @@ import Core.Name
 ||| Extended primitives for the scheme backend, outside the standard set of primFn
 public export
 data ExtPrim = JvmStaticMethodCall | JvmInstanceMethodCall
+             | JavaLambda
              | NewIORef | ReadIORef | WriteIORef
              | NewArray | ArrayGet | ArraySet
              | GetStaticField | SetStaticField
@@ -20,6 +21,7 @@ export
 Show ExtPrim where
   show JvmStaticMethodCall = "JvmStaticMethodCall"
   show JvmInstanceMethodCall = "JvmInstanceMethodCall"
+  show JavaLambda = "JavaLambda"
   show JvmClassLiteral = "JvmClassLiteral"
   show NewIORef = "NewIORef"
   show ReadIORef = "ReadIORef"
@@ -43,6 +45,7 @@ toPrim : Name -> ExtPrim
 toPrim pn@(NS _ n)
     = cond [(n == UN (Basic "prim__jvmStatic"), JvmStaticMethodCall),
             (n == UN (Basic "prim__jvmInstance"), JvmInstanceMethodCall),
+            (n == UN (Basic "prim__javaLambda"), JavaLambda),
             (n == UN (Basic "prim__jvmClassLiteral"), JvmClassLiteral),
             (n == UN (Basic "prim__newIORef"), NewIORef),
             (n == UN (Basic "prim__readIORef"), ReadIORef),

@@ -128,9 +128,9 @@ checkcast cname              = Checkcast cname
 export
 asmCast : (sourceType: InferredType) -> (targetType: InferredType) -> Asm ()
 
-asmCast ty1@(IRef class1) ty2@(IRef class2) = when (class1 /= class2) (checkcast class2)
+asmCast ty1@(IRef class1 _) ty2@(IRef class2 _) = when (class1 /= class2) (checkcast class2)
 
-asmCast IUnknown ty@(IRef clazz) = checkcast clazz
+asmCast IUnknown ty@(IRef clazz _) = checkcast clazz
 
 asmCast IBool IBool     = Pure ()
 asmCast IByte IByte     = Pure ()
@@ -185,11 +185,11 @@ asmCast IFloat ty = boxFloat
 
 asmCast IDouble ty = boxDouble
 
-asmCast (IRef _) arr@(IArray _) = Checkcast $ getJvmTypeDescriptor arr
+asmCast (IRef _ _) arr@(IArray _) = Checkcast $ getJvmTypeDescriptor arr
 
 asmCast _ IVoid = Pure ()
 asmCast IVoid IVoid = Pure ()
-asmCast IVoid (IRef _) = Aconstnull
+asmCast IVoid (IRef _ _) = Aconstnull
 asmCast IVoid IUnknown = Aconstnull
 asmCast ty IUnknown = Pure ()
 
@@ -309,14 +309,14 @@ loadVar sourceLocTys IUnknown arr@(IArray _) var =
     let loadInstr = \index => do Aload index; checkcast $ getJvmTypeDescriptor arr
     in opWithWordSize sourceLocTys loadInstr var
 
-loadVar sourceLocTys IUnknown ty2@(IRef _) var =
+loadVar sourceLocTys IUnknown ty2@(IRef _ _) var =
     let loadInstr = \index => do Aload index; asmCast IUnknown ty2
     in opWithWordSize sourceLocTys loadInstr var
 
-loadVar sourceLocTys (IRef _) IUnknown var = opWithWordSize sourceLocTys Aload var
+loadVar sourceLocTys (IRef _ _) IUnknown var = opWithWordSize sourceLocTys Aload var
 loadVar sourceLocTys IUnknown IUnknown var = opWithWordSize sourceLocTys Aload var
 
-loadVar sourceLocTys ty1@(IRef _) ty2@(IRef _) var =
+loadVar sourceLocTys ty1@(IRef _ _) ty2@(IRef _ _) var =
     let loadInstr = \index => do Aload index; asmCast ty1 ty2
     in opWithWordSize sourceLocTys loadInstr var
 
@@ -368,7 +368,7 @@ storeVar ty IDouble var = storeVarWithWordSize (\index => do asmCast ty IDouble;
 storeVar ty arr@(IArray elemTy) var =
     storeVarWithWordSize (\index => do checkcast $ getJvmTypeDescriptor arr; Astore index) var
 
-storeVar ty targetTy@(IRef _) var = do
+storeVar ty targetTy@(IRef _ _) var = do
     types <- getVariableTypes
     asmCast ty targetTy
     opWithWordSize types Astore var

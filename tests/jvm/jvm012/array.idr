@@ -4,7 +4,7 @@ import System
 
 main : IO ()
 main
-    = do x <- newArray 20
+    = do x <- newArray {elem=String} 20
          True <- writeArray x 10 "Hello"
            | False => do putStrLn "should success 1"
                          exitFailure

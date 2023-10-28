@@ -9,9 +9,6 @@ import Compiler.Jvm.InferredType
 import Data.Maybe
 import Data.List
 
-import Java.Lang
-import Java.Util
-
 getLocTy : Map Int InferredType -> Int -> IO InferredType
 getLocTy typesByIndex varIndex = do
     optTy <- Map.get typesByIndex varIndex

@@ -42,9 +42,6 @@ import Compiler.Jvm.Variable
 
 import Idris.Syntax
 
-import Java.Lang
-import Java.Util
-
 %default covering
 
 %hide System.FFI.runtimeClass
@@ -56,7 +53,7 @@ addScopeLocalVariables scope = do
     let scopeIndex = index scope
     let (lineNumberStart, lineNumberEnd) = lineNumbers scope
     let (labelStart, labelEnd) = labels scope
-    nameAndIndices <- LiftIo $ Map1.toList $ variableIndices scope
+    nameAndIndices <- LiftIo $ Map.toList $ variableIndices scope
     go labelStart labelEnd nameAndIndices
   where
     go : String -> String -> List (String, Int) -> Asm ()
@@ -133,10 +130,10 @@ int64HashCode : Int64 -> Int
 bits64HashCode : Bits64 -> Int
 
 hashCode : TT.Constant -> Maybe Int
-hashCode (BI value) = Just $ Object1.hashCode value
+hashCode (BI value) = Just $ Object.hashCode value
 hashCode (I64 value) = Just $ int64HashCode value
 hashCode (B64 value) = Just $ bits64HashCode value
-hashCode (Str value) = Just $ Object1.hashCode value
+hashCode (Str value) = Just $ Object.hashCode value
 hashCode x = Nothing
 
 getHashCodeSwitchClass : FC -> InferredType -> Asm String
@@ -1225,7 +1222,7 @@ mutual
                 Dup
             let lambdaInterfaceType = getLambdaInterfaceType lambdaType
             parameterType <- the (Asm (Maybe InferredType)) $ traverse getVariableType (jvmSimpleName <$> parameterName)
-            variableTypes <- LiftIo $ Map1.values {key=Int} !(loadClosures declaringScope scope)
+            variableTypes <- LiftIo $ Map.values {key=Int} !(loadClosures declaringScope scope)
             maybe (Pure ()) id parameterValueExpr
             let invokeDynamicDescriptor = getMethodDescriptor $ MkInferredFunctionType lambdaInterfaceType variableTypes
             let isExtracted = isJust parameterValueExpr
@@ -1253,7 +1250,7 @@ mutual
             maybe indy (const staticCall) parameterValueExpr
             when isTailCall $ if isExtracted then asmReturn lambdaReturnType else asmReturn lambdaInterfaceType
             let oldLineNumberLabels = lineNumberLabels !GetState
-            newLineNumberLabels <- LiftIo $ Map1.newTreeMap {key=Int} {value=String}
+            newLineNumberLabels <- LiftIo $ Map.newTreeMap {key=Int} {value=String}
             updateState $ { lineNumberLabels := newLineNumberLabels }
             let accessModifiers = if isExtracted then [Public, Static] else [Public, Static, Synthetic]
             CreateMethod accessModifiers "" lambdaClassName lambdaMethodName implementationMethodDescriptor
@@ -1305,14 +1302,14 @@ mutual
             loadClosures declaringScope currentScope = case parentIndex currentScope of
                     Just parentScopeIndex => do
                         parentScope <- getScope parentScopeIndex
-                        variableNames <- LiftIo $ Map1.keys {value=Int} $ variableIndices parentScope
+                        variableNames <- LiftIo $ Map.keys {value=Int} $ variableIndices parentScope
                         variableNameAndIndex <- traverse getVariableNameAndIndex variableNames
                         typesByIndex <- getIndexAndType variableNameAndIndex
                         declaringScopeVariableTypes <- getVariableTypesAtScope (index declaringScope)
-                        indices <- LiftIo $ Map1.keys {value=Entry InferredType InferredType} typesByIndex
+                        indices <- LiftIo $ Map.keys {value=Entry InferredType InferredType} typesByIndex
                         loadVariables declaringScopeVariableTypes typesByIndex indices
-                        LiftIo $ Map1.getValue2 {k=Int} {v1=InferredType} {v2=InferredType} typesByIndex
-                    Nothing => LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
+                        LiftIo $ Map.getValue2 {k=Int} {v1=InferredType} {v2=InferredType} typesByIndex
+                    Nothing => LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
                 where
                     getVariableNameAndIndex : String -> Asm (String, Int)
                     getVariableNameAndIndex name = do
@@ -1321,7 +1318,7 @@ mutual
 
                     getIndexAndType : List (String, Int) -> Asm (Map Int (Entry InferredType InferredType))
                     getIndexAndType nameAndIndices = do
-                        typesByIndexMap <- LiftIo $ Map1.newTreeMap {key=Int} {value=Entry InferredType InferredType}
+                        typesByIndexMap <- LiftIo $ Map.newTreeMap {key=Int} {value=Entry InferredType InferredType}
                         go typesByIndexMap
                         Pure typesByIndexMap
                       where
@@ -1666,7 +1663,7 @@ mutual
         MethodCodeStart
         Aload 0
         let arity = (cast {to=Int} $ length implementationParameterTypes) + 1
-        typesByIndex <- LiftIo $ Map1.fromList $ zip [0 .. arity - 1]
+        typesByIndex <- LiftIo $ Map.fromList $ zip [0 .. arity - 1]
           (inferredLambdaType :: implementationParameterTypes)
         applyParameters typesByIndex 1 lambdaImplementationType.returnType implementationParameterTypes
         MaxStackAndLocal (-1) (-1)
@@ -1718,12 +1715,12 @@ mutual
     jvmExtPrim _ returnType JvmInstanceMethodCall [ret, NmPrimVal fc (Str fn), fargs, world] = do
         (obj :: instanceMethodArgs) <- getFArgs fargs
             | [] => asmCrash ("JVM instance method must have at least one argument " ++ fn)
-        let argTypes = tySpec <$> (map fst instanceMethodArgs)
-        let methodReturnType = tySpec ret
+        argTypes <- traverse tySpec (map fst instanceMethodArgs)
+        methodReturnType <- tySpec ret
         let (cname, mnameWithDot) = break (== '.') fn
         traverse_ assembleParameter $ zip (snd obj :: map snd instanceMethodArgs) (iref cname :: argTypes)
         let (_, mname) = break (/= '.') mnameWithDot
-        let instanceType = tySpec $ fst obj
+        instanceType <- tySpec $ fst obj
         let isInterfaceInvocation = isInterfaceInvocation instanceType
         let invocationType = if isInterfaceInvocation then InvokeInterface else InvokeVirtual
         let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType argTypes
@@ -1733,8 +1730,8 @@ mutual
       jvmExtPrim fc returnType JvmStaticMethodCall [ret, functionNamePrimVal, fargs, world]
     jvmExtPrim _ returnType JvmStaticMethodCall [ret, NmPrimVal fc (Str fn), fargs, world] = do
         args <- getFArgs fargs
-        let argTypes = tySpec <$> (map fst args)
-        let methodReturnType = tySpec ret
+        argTypes <- traverse tySpec (map fst args)
+        methodReturnType <- tySpec ret
         let (cname, mnameWithDot) = break (== '.') fn
         let (_, mname) = break (/= '.') mnameWithDot
         let isConstructor = mname == "<init>"
@@ -1750,7 +1747,7 @@ mutual
     jvmExtPrim _ returnType SetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
         (obj :: value :: []) <- getFArgs fargs
             | _ => asmCrash ("Setting an instance field should have two arguments for " ++ fn)
-        let fieldType = tySpec $ (fst value)
+        fieldType <- tySpec (fst value)
         let (cname, fnameWithDot) = break (== '.') fn
         assembleExpr False (iref cname) (snd obj)
         assembleExpr False fieldType (snd value)
@@ -1761,7 +1758,7 @@ mutual
     jvmExtPrim _ returnType SetStaticField [ret, NmPrimVal fc (Str fn), fargs, world] = do
         (value :: []) <- getFArgs fargs
             | _ => asmCrash ("Setting a static field should have one argument for " ++ fn)
-        let fieldType = tySpec $ (fst value)
+        fieldType <- tySpec (fst value)
         let (cname, fnameWithDot) = break (== '.') fn
         assembleExpr False fieldType (snd value)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#' && c /= '=') fnameWithDot
@@ -1771,14 +1768,14 @@ mutual
     jvmExtPrim _ returnType GetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
         (obj :: []) <- getFArgs fargs
             | _ => asmCrash ("Getting an instance field should have one argument for " ++ fn)
-        let fieldType = tySpec ret
+        fieldType <- tySpec ret
         let (cname, fnameWithDot) = break (== '.') fn
         assembleExpr False (iref cname) (snd obj)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
         Field GetField cname fieldName (getJvmTypeDescriptor fieldType)
         asmCast fieldType returnType
     jvmExtPrim _ returnType GetStaticField [ret, NmPrimVal fc (Str fn), fargs, world] = do
-        let fieldType = tySpec ret
+        fieldType <- tySpec ret
         let (cname, fnameWithDot) = break (== '.') fn
         let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
         Field GetStatic cname fieldName (getJvmTypeDescriptor fieldType)
@@ -1825,8 +1822,8 @@ mutual
         Ldc $ StringConst "Error: Executed 'void'"
         InvokeMethod InvokeStatic runtimeClass "crash" "(Ljava/lang/String;)Ljava/lang/Object;" False
         asmCast inferredObjectType returnType
-    jvmExtPrim _ returnType JvmClassLiteral [_, NmPrimVal fc (Str typeName)] = do
-        assembleClassLiteral (parse typeName)
+    jvmExtPrim _ returnType JvmClassLiteral [ty] = do
+        assembleClassLiteral !(tySpec ty)
         asmCast (IRef "java/lang/Class" Class) returnType
     jvmExtPrim fc returnType JavaLambda [_, functionType, javaInterfaceType, lambda] =
       asmJavaLambda fc returnType functionType javaInterfaceType lambda
@@ -1850,7 +1847,7 @@ assembleDefinition idrisName fc = do
     let declaringClassName = className jvmClassAndMethodName
     let methodName = methodName jvmClassAndMethodName
     let methodReturnType = returnType functionType
-    lineNumberLabels <- LiftIo $ Map1.newTreeMap {key=Int} {value=String}
+    lineNumberLabels <- LiftIo $ Map.newTreeMap {key=Int} {value=String}
     updateState $ {
         scopeCounter := 0,
         currentScopeIndex := 0,
@@ -1913,9 +1910,9 @@ createMainMethod programName mainFunctionName = do
 
 groupByClassName : String -> List Name -> List (List Name)
 groupByClassName programName names = unsafePerformIO $ do
-    namesByClassName <- Map1.newTreeMap {key=String} {value=List Name}
+    namesByClassName <- Map.newTreeMap {key=String} {value=List Name}
     go1 namesByClassName names
-    Map1.values {key=String} namesByClassName
+    Map.values {key=String} namesByClassName
   where
     go1 : Map String (List Name) -> List Name -> IO ()
     go1 namesByClassName values = go2 values where
@@ -1976,9 +1973,9 @@ compileToJvmBytecode c outputDirectory outputFile term = do
     let allDefs = (mainFunctionName, emptyFC, MkNmFun [] idrisMainBody) :: ndefs
     let nameFcDefs = optimize programName allDefs ++ filter isForeignDef allDefs
     let nameStrFcDefs = getNameStrFcDef <$> nameFcDefs
-    fcAndDefinitionsByName <- coreLift $ Map1.fromList nameStrFcDefs
+    fcAndDefinitionsByName <- coreLift $ Map.fromList nameStrFcDefs
     let nameStrDefs = getNameStrDef <$> nameStrFcDefs
-    definitionsByName <- coreLift $ Map1.fromList nameStrDefs
+    definitionsByName <- coreLift $ Map.fromList nameStrDefs
     globalState <- coreLift $ newAsmGlobalState programName fcAndDefinitionsByName
     let names = fst <$> nameFcDefs
     let namesByClassName = groupByClassName programName names

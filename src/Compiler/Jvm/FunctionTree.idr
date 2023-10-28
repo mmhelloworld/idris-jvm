@@ -14,9 +14,6 @@ import Compiler.Jvm.Tree
 import Libraries.Data.SortedSet
 import Data.Vect
 
-import Java.Lang
-import Java.Util
-
 parameters (defs: Map String NamedDef)
     mutual
         buildFunctionTreeConAlt : List (Tree Name) -> SortedSet Name -> List NamedConAlt -> (SortedSet Name, List (Tree Name))

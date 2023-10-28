@@ -19,8 +19,6 @@ import Data.List
 import Data.List1
 import Data.Maybe
 import Data.String
-import Java.Lang
-import Java.Util
 import Language.JSON
 import Libraries.Data.SortedMap
 import Libraries.Utils.Path
@@ -361,7 +359,7 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers
     let MkInferredFunctionType jvmReturnType jvmArgumentTypes = type
     let arity = length jvmArgumentTypes
     let arityInt = the Int $ cast $ length jvmArgumentTypes
-    jvmArgumentTypesByIndex <- LiftIo $ Map1.fromList $ zip [0 .. (arityInt - 1)] jvmArgumentTypes
+    jvmArgumentTypesByIndex <- LiftIo $ Map.fromList $ zip [0 .. (arityInt - 1)] jvmArgumentTypes
     let isInstance = not $ elem Static modifiers
     jvmArgumentTypesForSignature <- adjustArgumentsForInstanceMember idrisName isInstance jvmArgumentTypes
     let functionType = getMethodDescriptor (MkInferredFunctionType jvmReturnType jvmArgumentTypesForSignature)

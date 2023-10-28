@@ -22,9 +22,6 @@ import Compiler.Jvm.Asm
 import Compiler.Jvm.ExtPrim
 import Compiler.Jvm.ShowUtil
 
-import Java.Lang
-import Java.Util
-
 namespace ForeignType
     public export
     data ForeignType
@@ -215,8 +212,8 @@ findJvmDescriptor fc name descriptors = case parseCC ["jvm"] descriptors of
 
 export
 getArgumentIndices : (arity: Int) -> List String -> IO (Map String Int)
-getArgumentIndices 0 _ = Map1.newTreeMap {key=String} {value=Int}
-getArgumentIndices argIndex args = Map1.fromList $ zip args [0 .. argIndex - 1]
+getArgumentIndices 0 _ = Map.newTreeMap {key=String} {value=Int}
+getArgumentIndices argIndex args = Map.fromList $ zip args [0 .. argIndex - 1]
 
 getPrimMethodName : (arity : Nat) -> String -> String
 getPrimMethodName arity name =
@@ -302,9 +299,9 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     let parameterTypes = parameterTypes inferredFunctionType
     argumentTypesByIndex <- LiftIo $
         if isNilArity
-            then Map1.newTreeMap {key=Int} {value=InferredType}
-            else Map1.fromList $ zip [0 .. arity - 1] parameterTypes
-    argumentTypesByName <- LiftIo $ Map1.fromList $ zip argumentNames parameterTypes
+            then Map.newTreeMap {key=Int} {value=InferredType}
+            else Map.fromList $ zip [0 .. arity - 1] parameterTypes
+    argumentTypesByName <- LiftIo $ Map.fromList $ zip argumentNames parameterTypes
     argIndices <- LiftIo $ getArgumentIndices arity argumentNames
     let functionScope = MkScope scopeIndex Nothing argumentTypesByName argumentTypesByIndex argIndices argIndices
                             methodReturnType arity (0, 0) ("", "") []
@@ -312,10 +309,10 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
     when isNilArity $ do
         let parentScopeIndex = scopeIndex
         scopeIndex <- newScopeIndex
-        variableTypes <- LiftIo $ Map1.newTreeMap {key=String} {value=InferredType}
-        allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
-        variableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
-        allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+        variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
+        allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+        variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+        allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
         let delayLambdaScope =
             MkScope scopeIndex (Just parentScopeIndex) variableTypes allVariableTypes
                 variableIndices allVariableIndices IUnknown 0 (0, 0) ("", "") []

@@ -7,13 +7,16 @@ import Compiler.Inline
 import Core.Context
 import Core.Name
 import Core.TT
+import Core.Reflect
 
 import Data.List
+import Data.List1
 import Data.Maybe
 import Data.String
 import Libraries.Data.SortedSet
 import Libraries.Data.String.Extra
 import Data.Vect
+import Debug.Trace
 
 import Compiler.Jvm.Tuples
 import Compiler.Jvm.InferredType
@@ -23,8 +26,7 @@ import Compiler.Jvm.ShowUtil
 import System
 import System.FFI
 
-import Java.Lang
-import Java.Util
+%hide Debug.Trace.toString
 
 public export
 data Assembler : Type where [external]
@@ -54,7 +56,21 @@ data JInteger : Type where [external]
 data JDouble : Type where [external]
 data JLong : Type where [external]
 
-namespace Object1
+public export
+interface Inherits child parent where
+    constructor MkInherits
+
+    export %inline
+    subtyping : child -> parent
+    subtyping = believe_me
+
+public export
+Inherits a a where
+
+namespace Object
+
+    export
+    data Object : Type where [external]
 
     %foreign jvm' "java/lang/Object" ".toString" "java/lang/Object" "String"
     prim_toString : Object -> PrimIO String
@@ -69,6 +85,9 @@ namespace Object1
     export
     hashCode : a -> Int
     hashCode obj = unsafePerformIO $ primIO $ prim_hashCode (believe_me obj)
+
+public export
+Inherits a Object where
 
 public export
 %foreign "jvm:nullValue(java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
@@ -91,19 +110,31 @@ namespace Iterable
     export
     data Iterable : Type -> Type where [external]
 
+namespace Collection
+    export
+    data Collection : Type -> Type where [external]
+
+    %foreign "jvm:.add(i:java/util/Collection java/lang/Object Bool),java/util/Collection"
+    prim_add : Collection a -> a -> PrimIO Bool
+
+    %foreign "jvm:.size(i:java/util/Collection int),java/util/Collection"
+    prim_size : Collection a -> PrimIO Int
+
+    export %inline
+    add : HasIO io => obj -> elemTy -> (Inherits obj (Collection elemTy)) => io Bool
+    add collection elem = primIO $ prim_add (subtyping collection) elem
+
+    export %inline
+    size : (HasIO io, Inherits obj (Collection elemTy)) => obj -> io Int
+    size {elemTy} collection = primIO $ prim_size {a=elemTy} (subtyping collection)
+
 public export
 Inherits (Collection a) (Iterable a) where
 
-public export
-Inherits (JList a) (Iterable a) where
+namespace JList
 
-public export
-Inherits (List a) (JList a) where
-
-namespace JList1
-
-    %foreign "jvm:<init>(java/lang/Object java/util/ArrayList),java/util/ArrayList"
-    prim_newArrayList : PrimIO (JList a)
+    export
+    data JList : Type -> Type where [external]
 
     %foreign jvm' "java/util/List" ".add" "i:java/util/List int java/lang/Object" "void"
     prim_add : JList a -> Int -> a -> PrimIO ()
@@ -122,6 +153,13 @@ namespace JList1
     addAll : (HasIO io, Inherits obj (Collection a)) => JList a -> obj -> io Bool
     addAll list collection = primIO $ prim_addAll list (subtyping collection)
 
+    %foreign "jvm:.get(i:java/util/List int java/lang/Object),java/util/List"
+    prim_get : JList a -> Int -> PrimIO a
+
+    export %inline
+    get : (HasIO io, Inherits list (JList elemTy)) => list -> Int -> io elemTy
+    get list index = primIO $ prim_get (subtyping list) index
+
     export
     set : HasIO io => JList a -> Int -> a -> io a
     set list index value = primIO $ prim_set list index value
@@ -139,6 +177,26 @@ namespace JList1
     export
     fromIterable : (HasIO io, Inherits obj (Iterable a)) => obj -> io (List a)
     fromIterable iterable = primIO $ prim_fromIterable (subtyping iterable)
+
+public export
+Inherits (JList a) (Iterable a) where
+
+public export
+Inherits (List a) (JList a) where
+
+namespace ArrayList
+    export
+    data ArrayList : Type -> Type where [external]
+
+    %foreign "jvm:<init>(java/util/ArrayList),java/util/ArrayList"
+    prim_new : PrimIO (ArrayList a)
+
+    export %inline
+    new : HasIO io => io (ArrayList elemTy)
+    new = primIO prim_new
+
+public export
+Inherits (ArrayList a) (JList a) where
 
 namespace Entry
     export
@@ -172,7 +230,24 @@ namespace Entry
         value <- getValue {k=k} {v=v} entry
         pure (key, value)
 
-namespace Map1
+namespace Map
+
+  export
+  data Map : (key: Type) -> (value: Type) -> Type where [external]
+
+  %foreign "jvm:.put(i:java/util/Map java/lang/Object java/lang/Object java/lang/Object),java/util/Map"
+  prim_put : Map key value -> key -> value -> PrimIO value
+
+  %foreign "jvm:.get(i:java/util/Map java/lang/Object java/lang/Object),java/util/Map"
+  prim_get : Map key value -> key -> PrimIO value
+
+  export %inline
+  put : (HasIO io, Inherits obj (Map key value)) => obj -> key -> value -> io value
+  put map key value = primIO $ prim_put (subtyping map) key value
+
+  export %inline
+  get : (HasIO io, Inherits obj (Map key value)) => obj -> key -> io value
+  get map key = primIO (prim_get (subtyping map) key)
 
   %foreign "jvm:<init>(java/lang/Object java/util/TreeMap),java/util/TreeMap"
   prim_newTreeMap : PrimIO (Map key value)
@@ -190,7 +265,7 @@ namespace Map1
   export
   fromList : HasIO io => List (key, value) -> io (Map key value)
   fromList keyValues = do
-      m <- Map1.newTreeMap {key=key} {value=value}
+      m <- Map.newTreeMap {key=key} {value=value}
       goFromList m keyValues
       pure m
 
@@ -215,7 +290,7 @@ namespace Map1
   toEntries : HasIO io => Map key value -> io (List (Entry key value))
   toEntries m = do
     entries <- primIO (prim_toEntries m)
-    JList1.fromIterable entries
+    JList.fromIterable entries
 
   export
   toList : HasIO io => Map k v -> io (List (k, v))
@@ -230,7 +305,7 @@ namespace Map1
   keys : HasIO io => Map key value -> io (List key)
   keys m = do
     jkeys <- primIO (prim_keys m)
-    JList1.fromIterable jkeys
+    JList.fromIterable jkeys
 
   %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "values" "java/util/Map" "java/util/List"
   prim_values : Map key value -> PrimIO (JList value)
@@ -239,7 +314,7 @@ namespace Map1
   values : HasIO io => Map key value -> io (List value)
   values m = do
     jvalues <- primIO (prim_values m)
-    JList1.fromIterable jvalues
+    JList.fromIterable jvalues
 
   %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/Maps" "getValue2" "java/util/Map" "java/util/Map"
   prim_getValue2 : Map key (Entry value1 value2) -> PrimIO (Map key value2)
@@ -736,7 +811,7 @@ newAsmState : HasIO io => AsmGlobalState -> Assembler -> io AsmState
 newAsmState globalState assembler = do
     let defaultName = Jqualified "" ""
     scopes <- ArrayList.new {elemTy=Scope}
-    lineNumberLabels <- Map1.newTreeMap {key=Int} {value=String}
+    lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
     let function = MkFunction defaultName (MkInferredFunctionType IUnknown []) (believe_me scopes)
                     0 defaultName (NmCrash emptyFC "uninitialized function")
     pure $ MkAsmState globalState function defaultName 0 0 0 0 lineNumberLabels assembler
@@ -877,8 +952,8 @@ fillNull : (HasIO io, Inherits list (JList a)) => Int -> list -> io ()
 fillNull index aList = do
     let list = the (JList a) $ believe_me aList
     size <- Collection.size {elemTy=a,obj=Collection a} $ believe_me list
-    nulls <- JList1.nCopies {a=a} (index - size) nullValue
-    ignore $ JList1.addAll {a=a, obj=Collection a} list $ believe_me nulls
+    nulls <- JList.nCopies {a=a} (index - size) nullValue
+    ignore $ JList.addAll {a=a, obj=Collection a} list $ believe_me nulls
 
 export
 saveScope : Scope -> Asm ()
@@ -888,10 +963,10 @@ saveScope scope = do
     let scopeIndex = index scope
     LiftIo $
       if scopeIndex < size
-          then ignore $ JList1.set scopes scopeIndex scope
+          then ignore $ JList.set scopes scopeIndex scope
           else do
               fillNull {a=Scope} scopeIndex scopes
-              JList1.add scopes scopeIndex scope
+              JList.add scopes scopeIndex scope
 
 export
 getScope : Int -> Asm Scope
@@ -920,7 +995,7 @@ newLabel = do
 hasLabelAtLine : Int -> Asm Bool
 hasLabelAtLine lineNumber = do
     state <- GetState
-    LiftIo $ Map1.containsKey {value=String} (lineNumberLabels state) lineNumber
+    LiftIo $ Map.containsKey {value=String} (lineNumberLabels state) lineNumber
 
 export
 addLineNumber : Int -> String -> Asm ()
@@ -1007,11 +1082,11 @@ namespace JAsmState
     getVariableNames : HasIO io => Map String Int -> io (List String)
     getVariableNames indicesByName = do
         jlist <- primIO $ prim_getVariableNames indicesByName
-        JList1.fromIterable jlist
+        JList.fromIterable jlist
 
 retrieveVariableIndicesByName : Int -> Asm (Map String Int)
 retrieveVariableIndicesByName scopeIndex = do
-    variableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+    variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
     go variableIndices scopeIndex
     Pure variableIndices
   where
@@ -1062,7 +1137,7 @@ retrieveVariableTypeAtScope scopeIndex name = do
 export
 retrieveVariableTypesAtScope : Int -> Asm (Map Int InferredType)
 retrieveVariableTypesAtScope scopeIndex = do
-    typesByIndex <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
+    typesByIndex <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
     go typesByIndex !(retrieveVariables scopeIndex)
     Pure typesByIndex
   where
@@ -1188,6 +1263,117 @@ getLambdaImplementationMethodName namePrefix = do
             then namePrefix ++ "$" ++ show lambdaIndex
             else namePrefix ++ "$" ++ declaringMethodName ++ "$" ++ show lambdaIndex
     Pure $ Jqualified lambdaClassName lambdaMethodName
+
+isBoolTySpec : Name -> Bool
+isBoolTySpec name = name == basics "Bool" || name == (NS preludeNS (UN $ Basic "Bool"))
+
+mutual
+  tySpecFn : String -> InferredFunctionType
+  tySpecFn desc = case reverse $ toList $ String.split (== '⟶') desc of
+    [] => assert_total $ idris_crash ("Invalid function type descriptor: " ++ desc)
+    (returnTypeStr :: argsReversed) =>
+      MkInferredFunctionType (tySpecStr returnTypeStr) (reverse $ (tySpecStr <$> argsReversed))
+
+  tySpecLambda : String -> JavaLambdaType
+  tySpecLambda desc = case toList $ String.split (== ',') desc of
+    [intfStr, method, methodTypeStr, implementationTypeStr] =>
+      MkJavaLambdaType (tySpecStr intfStr) method (tySpecFn methodTypeStr) (tySpecFn implementationTypeStr)
+    _ => assert_total $ idris_crash ("Invalid lambda type descriptor: " ++ desc)
+
+  tySpecStr : String -> InferredType
+  tySpecStr "Int"      = IInt
+  tySpecStr "Int8"     = IByte
+  tySpecStr "Int16"    = IShort
+  tySpecStr "Int32"    = IInt
+  tySpecStr "Int64"    = ILong
+  tySpecStr "Integer"  = inferredBigIntegerType
+  tySpecStr "String"   = inferredStringType
+  tySpecStr "Double"   = IDouble
+  tySpecStr "Char"     = IChar
+  tySpecStr "Bool"     = IBool
+  tySpecStr "long"     = ILong
+  tySpecStr "void"     = IVoid
+  tySpecStr "%World"   = IInt
+  tySpecStr "[" = assert_total $ idris_crash "Invalid type descriptor: ["
+  tySpecStr "λ" = assert_total $ idris_crash "Invalid type descriptor: λ"
+  tySpecStr desc         =
+    cond [(startsWith desc "[", IArray (tySpecStr (assert_total (strTail desc)))),
+          (startsWith desc "λ", IFunction (tySpecLambda (assert_total (strTail desc))))
+         ]
+         (iref desc)
+
+export
+structName : Name
+structName = NS (mkNamespace "System.FFI") (UN $ Basic "Struct")
+
+export
+arrayName : Name
+arrayName = NS (mkNamespace "Java.Lang") (UN $ Basic "Array")
+
+getIdrisConstructorType : Name -> InferredType
+getIdrisConstructorType name =
+  if isBoolTySpec name then IBool
+  else if name == basics "List" then idrisListType
+  else if name == preludetypes "Maybe" then idrisMaybeType
+  else IRef (getIdrisConstructorClassName (jvmSimpleName name)) Class
+
+parseName : String -> Maybe InferredType
+parseName name =
+  case words name of
+    (interfaceName :: methodName :: _) => Just $ IRef interfaceName Interface
+    (className :: []) => Just $ iref className
+    _ => Nothing
+
+mutual
+  parseArrayType : NamedCExp -> Asm (Maybe InferredType)
+  parseArrayType (NmCon _ name _ _ [elemTy]) =
+    if name == arrayName then Pure . Just $ IArray !(tySpec elemTy)
+    else Pure Nothing
+  parseArrayType _ = Pure Nothing
+
+  parseLambdaType : NamedCExp -> Asm (Maybe InferredType)
+  parseLambdaType (NmCon _ name _ _ [interfaceType, _]) =
+    if name == builtin "Pair" then parseJvmReferenceType interfaceType
+    else Pure Nothing
+  parseLambdaType _ = Pure Nothing
+
+  parseJvmReferenceType : NamedCExp -> Asm (Maybe InferredType)
+  parseJvmReferenceType (NmCon _ name _ _ (NmPrimVal _ (Str namePartsStr) :: _)) =
+    if name == structName
+      then Pure $ parseName namePartsStr
+      else Pure Nothing
+  parseJvmReferenceType (NmCon _ name _ _ _) = Pure . Just $ getIdrisConstructorType name
+  parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do
+    (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
+      | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++
+               show fc)
+    ty <- tySpec def
+    Pure $ Just ty
+  parseJvmReferenceType (NmDelay _ _ expr) = Pure $ Just !(tySpec expr)
+  parseJvmReferenceType _ = Pure Nothing
+
+  tryParse : NamedCExp -> Asm (Maybe InferredType)
+  tryParse expr = do
+    arrayTypeMaybe <- parseArrayType expr
+    case arrayTypeMaybe of
+      Nothing => do
+        lambdaTypeMaybe <- parseLambdaType expr
+        case lambdaTypeMaybe of
+          Nothing => parseJvmReferenceType expr
+          Just lambdaType => Pure $ Just lambdaType
+      Just arrayType => Pure $ Just arrayType
+
+  export
+  tySpec : NamedCExp -> Asm InferredType
+  tySpec (NmCon _ (UN (Basic ty)) _ _ []) = Pure $ tySpecStr ty
+  tySpec (NmCon _ _ NOTHING _ []) = Pure idrisMaybeType
+  tySpec (NmCon _ _ JUST _ [_]) = Pure idrisMaybeType
+  tySpec (NmCon _ _ NIL _ []) = Pure idrisListType
+  tySpec (NmCon _ _ CONS _ [_, _]) = Pure idrisListType
+  tySpec expr@(NmCon _ (NS _ (UN (Basic "Unit"))) _ _ []) = Pure IVoid
+  tySpec expr = trace (">>: " ++ show expr) $ do
+    ty <- tryParse expr
+    Pure $ fromMaybe inferredObjectType ty
 
 export
 getJvmTypeDescriptor : InferredType -> String
@@ -1462,12 +1648,6 @@ getIdrisFunctionName programName moduleName idrisFunctionName =
     case jgetIdrisFunctionName programName moduleName idrisFunctionName of
         (className :: functionName :: _) => Jqualified className functionName
         _ => Jqualified moduleName idrisFunctionName
-
-export
-%foreign
-    jvm' "io/github/mmhelloworld/idrisjvm/assembler/IdrisName" "getIdrisConstructorClassName"
-        "String" "String"
-getIdrisConstructorClassName : String -> String
 
 %inline
 metafactoryDesc : String

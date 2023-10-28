@@ -1,10 +1,12 @@
 module Compiler.Jvm.InferredType
 
+import Compiler.Jvm.Jname
 import Core.CompileExpr
 import Core.Core
 import Core.Name
 import Data.List1
 import Data.String
+import System.FFI
 
 mutual
   public export
@@ -189,6 +191,10 @@ export
 idrisJustType : InferredType
 idrisJustType = IRef idrisJustClass Class
 
+export
+idrisMaybeType : InferredType
+idrisMaybeType = IRef "io/github/mmhelloworld/idrisjvm/runtime/Maybe" Class
+
 %inline
 public export
 functionsClass : String
@@ -276,6 +282,12 @@ public export
 startsWith : String -> String -> Bool
 
 export
+%foreign
+    jvm' "io/github/mmhelloworld/idrisjvm/assembler/IdrisName" "getIdrisConstructorClassName"
+        "String" "String"
+getIdrisConstructorClassName : String -> String
+
+export
 parse : String -> InferredType
 parse "boolean" = IBool
 parse "byte" = IByte
@@ -293,52 +305,6 @@ parse desc =
   if startsWith desc "["
     then IArray (parse (assert_total (strTail desc)))
     else iref desc
-
-isBoolTySpec : String -> Name -> Bool
-isBoolTySpec "Prelude" (UN (Basic "Bool")) = True
-isBoolTySpec "Prelude.Basics" (UN (Basic "Bool")) = True
-isBoolTySpec _ _ = False
-
-mutual
-  tySpecFn : String -> InferredFunctionType
-  tySpecFn desc = case reverse $ toList $ String.split (== '⟶') desc of
-    [] => assert_total $ idris_crash ("Invalid function type descriptor: " ++ desc)
-    (returnTypeStr :: argsReversed) =>
-      MkInferredFunctionType (tySpecStr returnTypeStr) (reverse $ (tySpecStr <$> argsReversed))
-
-  tySpecLambda : String -> JavaLambdaType
-  tySpecLambda desc = case toList $ String.split (== ',') desc of
-    [intfStr, method, methodTypeStr, implementationTypeStr] =>
-      MkJavaLambdaType (tySpecStr intfStr) method (tySpecFn methodTypeStr) (tySpecFn implementationTypeStr)
-    _ => assert_total $ idris_crash ("Invalid lambda type descriptor: " ++ desc)
-
-  tySpecStr : String -> InferredType
-  tySpecStr "Int"      = IInt
-  tySpecStr "Integer"  = inferredBigIntegerType
-  tySpecStr "String"   = inferredStringType
-  tySpecStr "Double"   = IDouble
-  tySpecStr "Char"     = IChar
-  tySpecStr "Bool"     = IBool
-  tySpecStr "long"     = ILong
-  tySpecStr "void"     = IVoid
-  tySpecStr "%World"   = IInt
-  tySpecStr "[" = assert_total $ idris_crash "Invalid type descriptor: ["
-  tySpecStr "λ" = assert_total $ idris_crash "Invalid type descriptor: λ"
-  tySpecStr desc         =
-    cond [(startsWith desc "[", IArray (tySpecStr (assert_total (strTail desc)))),
-          (startsWith desc "λ", IFunction (tySpecLambda (assert_total (strTail desc))))
-         ]
-         (iref desc)
-
-export
-tySpec : NamedCExp -> InferredType
-tySpec (NmCon fc (UN (Basic ty)) _ _ []) = tySpecStr ty
-tySpec (NmCon fc (NS namespaces n) _ _ []) = cond
-    [(n == UN (Basic "Unit"), IVoid),
-     (isBoolTySpec (show namespaces) n, IBool)
-    ]
-    inferredObjectType
-tySpec ty = inferredObjectType
 
 mutual
   createExtPrimTypeSpecFn : InferredFunctionType -> String

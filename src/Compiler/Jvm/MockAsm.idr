@@ -18,8 +18,6 @@ import Compiler.Jvm.InferredType
 import Compiler.Jvm.Jname
 import Compiler.Jvm.ShowUtil
 
-import Java.Lang
-
 %foreign "jvm:toString(java/lang/Object java/lang/String),java/util/Objects"
 prim_objectToString : AnyPtr -> PrimIO String
 
@@ -301,7 +299,7 @@ mockRunAsm state MethodCodeStart = assemble state $
     log "methodCodeStart"
 mockRunAsm state MethodCodeEnd = assemble state $ do
     log "methodCodeEnd"
-    log $ "***********************************"
+    log $ "**********************************"
 mockRunAsm state (Multianewarray desc dims) = assemble state $
     log $ unwords ["multiANewArray", desc, show dims]
 mockRunAsm state (New cname) = assemble state $

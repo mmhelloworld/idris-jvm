@@ -1,5 +1,6 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.stream.Stream;
 
@@ -14,4 +15,14 @@ public final class Arrays {
             .limit(size)
             .collect(toCollection(() -> new ArrayList<>(size)));
     }
+
+    public static int[] toIntArray(ArrayList<Integer> arrayList) {
+        return arrayList.stream().mapToInt(i -> i).toArray();
+    }
+
+    public static <T> T[] toArray(ArrayList<T> arrayList, Class<T> clazz) {
+        return arrayList.toArray((T[]) Array.newInstance(clazz, arrayList.size()));
+    }
+
+
 }

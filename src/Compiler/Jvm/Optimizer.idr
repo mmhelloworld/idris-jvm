@@ -29,9 +29,6 @@ import Compiler.Jvm.Jname
 import Compiler.Jvm.MockAsm
 import Compiler.Jvm.ShowUtil
 
-import Java.Lang
-import Java.Util
-
 %hide Core.Context.Context.Constructor.arity
 %hide Compiler.TailRec.Function.fc
 %hide Compiler.TailRec.TcFunction.fc
@@ -365,10 +362,10 @@ enterInferenceScope lineNumberStart lineNumberEnd = do
     parentScopeIndex <- getCurrentScopeIndex
     scopeIndex <- newScopeIndex
     parentScope <- getScope parentScopeIndex
-    variableTypes <- LiftIo $ Map1.newTreeMap {key=String} {value=InferredType}
-    allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
-    variableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
-    allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+    variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
+    allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+    variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+    allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
     let newScope =
         MkScope scopeIndex (Just parentScopeIndex) variableTypes allVariableTypes variableIndices
             allVariableIndices IUnknown (nextVariableIndex parentScope) (lineNumberStart, lineNumberEnd) ("", "") []
@@ -378,10 +375,10 @@ enterInferenceScope lineNumberStart lineNumberEnd = do
 
 createLambdaClosureScope : Int -> Int -> List String -> Scope -> Asm Scope
 createLambdaClosureScope scopeIndex childScopeIndex closureVariables parentScope = do
-    lambdaClosureVariableIndices <- LiftIo $ Map1.fromList $ getLambdaClosureVariableIndices [] 0 closureVariables
-    variableTypes <- LiftIo $ Map1.newTreeMap {key=String} {value=InferredType}
-    allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
-    allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+    lambdaClosureVariableIndices <- LiftIo $ Map.fromList $ getLambdaClosureVariableIndices [] 0 closureVariables
+    variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
+    allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+    allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
     Pure $ MkScope scopeIndex (Just $ index parentScope) variableTypes allVariableTypes
         lambdaClosureVariableIndices allVariableIndices IUnknown (cast $ length closureVariables)
         (lineNumbers parentScope) ("", "") [childScopeIndex]
@@ -398,10 +395,10 @@ enterInferenceLambdaScope lineNumberStart lineNumberEnd parameterName expr = do
         let boundVariables = maybe SortedSet.empty (flip SortedSet.insert SortedSet.empty . jvmSimpleName) parameterName
         let freeVariables = getFreeVariables boundVariables expr
         let usedVariables = filter (flip SortedSet.contains freeVariables) !(retrieveVariables parentScopeIndex)
-        variableTypes <- LiftIo $ Map1.newTreeMap {key=String} {value=InferredType}
-        allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
-        variableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
-        allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+        variableTypes <- LiftIo $ Map.newTreeMap {key=String} {value=InferredType}
+        allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+        variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
+        allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
         newScope <- case usedVariables  of
             nonEmptyUsedVariables@(_ :: _) => do
                 parentScope <- getScope parentScopeIndex
@@ -549,9 +546,6 @@ createNewVariable variablePrefix ty = do
     variable <- generateVariable variablePrefix
     ignore $ addVariableType variable ty
 
-structName : Name
-structName = NS (mkNamespace "System.FFI") (UN $ Basic "Struct")
-
 export
 isIoAction : NamedCExp -> Bool
 isIoAction (NmCon _ (UN (Basic "->")) _ _ [argumentType, returnType]) = isIoAction returnType
@@ -577,12 +571,12 @@ getJavaLambdaType fc [functionType, javaInterfaceType, _] =
       where
         go : List InferredType -> NamedCExp -> Asm (List InferredType)
         go acc (NmCon _ (UN (Basic "->")) _ _ [argTy, lambdaTy]) = do
-          let argInferredTy = tySpec argTy
+          argInferredTy <- tySpec argTy
           restInferredTypes <- go acc lambdaTy
           Pure (restInferredTypes ++ (argInferredTy :: acc))
         go acc (NmLam fc arg expr) = go acc expr
         go acc expr@(NmApp _ (NmRef _ name) [arg]) = go (IInt :: acc) (if name == primio "PrimIO" then arg else expr)
-        go acc expr = Pure ((tySpec expr) :: acc)
+        go acc expr = Pure (!(tySpec expr) :: acc)
 
     throwExpectedStructAtPos : Asm a
     throwExpectedStructAtPos =
@@ -763,8 +757,8 @@ mutual
       inferExtPrim fc returnType JvmStaticMethodCall [ret, functionNamePrimVal, fargs, world]
     inferExtPrim _ returnType JvmStaticMethodCall [ret, NmPrimVal fc (Str fn), fargs, world]
       = do args <- getFArgs fargs
-           let argTypes = tySpec <$> (map fst args)
-           let methodReturnType = tySpec ret
+           argTypes <- traverse tySpec (map fst args)
+           methodReturnType <- tySpec ret
            traverse_ inferExtPrimArg $ zip (map snd args) argTypes
            pure $ if methodReturnType == IVoid then inferredObjectType else methodReturnType
     inferExtPrim _ returnType NewArray [_, size, val, world] = do
@@ -793,7 +787,7 @@ mutual
     inferExtPrim _ returnType SysOS [] = pure inferredStringType
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
     inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
-    inferExtPrim _ returnType JvmClassLiteral [_, NmPrimVal fc (Str _)] = pure $ IRef "java/lang/Class" Class
+    inferExtPrim _ returnType JvmClassLiteral [_] = pure $ IRef "java/lang/Class" Class
     inferExtPrim fc returnType JavaLambda exprs@[_, functionType, javaInterfaceType, lambda] = do
       ignore $ inferExpr IUnknown lambda
       IFunction <$> getJavaLambdaType fc [functionType, javaInterfaceType, lambda]
@@ -929,7 +923,7 @@ mutual
             [] => Pure exprTy
             args@(_ :: argsTail) => do
                 types <- retrieveVariableTypesAtScope !getCurrentScopeIndex
-                argumentNameByIndices <- LiftIo $ Map1.transpose $ variableIndices !(getScope 0)
+                argumentNameByIndices <- LiftIo $ Map.transpose $ variableIndices !(getScope 0)
                 traverse_ (inferSelfTailCallParameter types argumentNameByIndices) $
                     zip args [0 .. the Int $ cast $ length argsTail]
                 Pure exprTy
@@ -1087,7 +1081,7 @@ inferDef programName idrisName fc (MkNmFun args expr) = do
     argIndices <- LiftIo $ getArgumentIndices arityInt argumentNames
     let initialArgumentTypes = replicate arity inferredObjectType
     let inferredFunctionType = MkInferredFunctionType inferredObjectType initialArgumentTypes
-    argumentTypesByName <- LiftIo $ Map1.fromList $ zip argumentNames initialArgumentTypes
+    argumentTypesByName <- LiftIo $ Map.fromList $ zip argumentNames initialArgumentTypes
     scopes <- LiftIo $ ArrayList.new {elemTy=Scope}
     let function = MkFunction jname inferredFunctionType (subtyping scopes) 0 jvmClassAndMethodName emptyFunction
     setCurrentFunction function
@@ -1097,8 +1091,8 @@ inferDef programName idrisName fc (MkNmFun args expr) = do
     resetScope
     scopeIndex <- newScopeIndex
     let (_, lineStart, lineEnd) = getSourceLocation expr
-    allVariableTypes <- LiftIo $ Map1.newTreeMap {key=Int} {value=InferredType}
-    allVariableIndices <- LiftIo $ Map1.newTreeMap {key=String} {value=Int}
+    allVariableTypes <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
+    allVariableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
     let functionScope =
         MkScope scopeIndex Nothing argumentTypesByName allVariableTypes argIndices
             allVariableIndices IUnknown arityInt (lineStart, lineEnd) ("", "") []

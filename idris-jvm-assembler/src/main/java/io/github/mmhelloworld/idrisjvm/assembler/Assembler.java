@@ -221,6 +221,166 @@ public final class Assembler {
         createWindowsExecutable(directoryName, fileName, mainClass, javaOpts);
     }
 
+    private static void createWindowsExecutable(String directoryName, String fileName, String mainClass,
+                                                String javaOpts) throws IOException {
+        File batExe = new File(directoryName, fileName + ".bat");
+        String batHeader = "@echo off";
+        String classpath = "%~dp0\\" + fileName + "_app\\*";
+        String javaCommand = Stream.of("java", "%JAVA_OPTS%", javaOpts, "-cp", classpath, mainClass, "%*")
+            .filter(Assembler::isNotNullOrEmpty)
+            .collect(joining(" "));
+        Files.write(batExe.toPath(), createExecutableFileContent(batHeader, javaCommand));
+    }
+
+    private static void createPosixExecutable(String directoryName, String fileName, String mainClass,
+                                              String javaOpts) throws IOException {
+        File shExe = new File(directoryName, fileName);
+        String shHeader = "#!/bin/sh";
+        String classpath = "\"`dirname $0`/" + fileName + "_app/*\"";
+        String javaCommand = Stream.of("java", "$JAVA_OPTS", javaOpts, "-cp", classpath, mainClass, "\"$@\"")
+            .filter(Assembler::isNotNullOrEmpty)
+            .collect(joining(" "));
+        Files.write(shExe.toPath(), createExecutableFileContent(shHeader, javaCommand));
+        setPosixFilePermissions(shExe.toPath(), PosixFilePermissions.fromString("rwxr-xr-x"));
+    }
+
+    private static boolean isNotNullOrEmpty(String value) {
+        return value != null && !value.isEmpty();
+    }
+
+    private static byte[] createExecutableFileContent(String... lines) {
+        return String.join(lineSeparator(), lines).getBytes(UTF_8);
+    }
+
+    private static Manifest createManifest(String mainClass) {
+        Manifest manifest = new Manifest();
+        Attributes manifestAttributes = manifest.getMainAttributes();
+        manifestAttributes.put(MANIFEST_VERSION, "1.0");
+        manifestAttributes.put(MAIN_CLASS, mainClass);
+        return manifest;
+    }
+
+    private static void add(File source, JarOutputStream target, File jarFile, File rootDirectory) throws IOException {
+        if (source.isDirectory()) {
+            addDirectory(source, target, jarFile, rootDirectory);
+        } else {
+            addFile(source, target, jarFile, rootDirectory);
+        }
+        if (source.isDirectory() || !source.getName().endsWith(".jar")) {
+            source.delete();
+        }
+    }
+
+    private static void addFile(File source, JarOutputStream jarOutputStream, File jarFile, File rootDirectory)
+        throws IOException {
+        if (source.equals(jarFile)) {
+            return;
+        }
+        JarEntry entry = new JarEntry(getJarEntryName(source, rootDirectory));
+        entry.setTime(source.lastModified());
+        jarOutputStream.putNextEntry(entry);
+        try (BufferedInputStream in = new BufferedInputStream(newInputStream(source.toPath()))) {
+            byte[] buffer = new byte[BUFFER_SIZE];
+            while (true) {
+                int count = in.read(buffer);
+                if (count == -1) {
+                    break;
+                }
+                jarOutputStream.write(buffer, 0, count);
+            }
+            jarOutputStream.closeEntry();
+        }
+    }
+
+    private static void addDirectory(File source, JarOutputStream jarOutputStream, File jarFile, File rootDirectory)
+        throws IOException {
+        String name = getJarEntryName(source, rootDirectory);
+        if (!name.isEmpty()) {
+            createDirectory(name, source.lastModified(), jarOutputStream);
+        }
+        File[] files = requireNonNull(source.listFiles(), "Unable to get files from directory " + source);
+        for (File file : files) {
+            add(file, jarOutputStream, jarFile, rootDirectory);
+        }
+    }
+
+    private static String getJarEntryName(File source, File rootDirectory) {
+        String name = source.getPath().replace(rootDirectory.getPath(), "").replace("\\", "/");
+        return !name.startsWith("/") ? name : name.substring(1);
+    }
+
+    private static void createDirectory(String name, long lastModified, JarOutputStream jarOutputStream)
+        throws IOException {
+        if (!name.endsWith("/")) {
+            name += "/";
+        }
+        JarEntry entry = new JarEntry(name);
+        entry.setTime(lastModified);
+        jarOutputStream.putNextEntry(entry);
+        jarOutputStream.closeEntry();
+    }
+
+    private static Type getType(String typeDescriptor) {
+        switch (typeDescriptor) {
+            case "boolean":
+                return Type.BOOLEAN_TYPE;
+            case "byte":
+                return Type.BYTE_TYPE;
+            case "char":
+                return Type.CHAR_TYPE;
+            case "short":
+                return Type.SHORT_TYPE;
+            case "int":
+                return Type.INT_TYPE;
+            case "long":
+                return Type.LONG_TYPE;
+            case "float":
+                return Type.FLOAT_TYPE;
+            case "double":
+                return Type.DOUBLE_TYPE;
+            case "void":
+                return Type.VOID_TYPE;
+            default:
+                if (typeDescriptor.endsWith("[]")) {
+                    return Type.getObjectType(getArrayDescriptor(typeDescriptor));
+                } else {
+                    return Type.getObjectType(typeDescriptor);
+                }
+        }
+
+    }
+
+    private static String getArrayDescriptor(String str) {
+        int stack = 0;
+        int dimension = 0;
+        for (int i = str.length() - 1; i >= 0; i--) {
+            char ch = str.charAt(i);
+            int delta = ch == ']' ? 1 : (ch == '[' ? -1 : 0);
+            if (delta == 0) {
+                if (stack != 0) {
+                    throw new IllegalArgumentException("Invalid array descriptor " + str);
+                }
+                return createArrayDescriptor(str.substring(0, i + 1), dimension);
+            }
+            stack = stack + delta;
+            if (stack == 0) {
+                dimension++;
+            } else if (stack != 1) {
+                throw new IllegalArgumentException("Invalid array descriptor " + str);
+            }
+        }
+        throw new IllegalArgumentException("Invalid array descriptor " + str);
+    }
+
+    private static String createArrayDescriptor(String elementTypeName, int dimension) {
+        String elementTypeDesc = getType(elementTypeName).getDescriptor();
+        StringBuilder arrayDesc = new StringBuilder();
+        for (int i = 0; i < dimension; i++) {
+            arrayDesc.append('[');
+        }
+        return arrayDesc + elementTypeDesc;
+    }
+
     public void endMethod() {
         mv.visitEnd();
     }
@@ -353,9 +513,21 @@ public final class Assembler {
     }
 
     public void createField(int acc, String sourceFile, String newClassName, String fieldName, String desc, String sig,
-                            Object value) {
+                            Object value, Object annotations) {
+        createField(acc, sourceFile, newClassName, fieldName, desc, sig, value, (List) annotations);
+    }
+
+    public void createField(int acc, String sourceFile, String newClassName, String fieldName, String desc, String sig,
+                            Object value, List<Annotation> annotations) {
         cw = cws.computeIfAbsent(newClassName, cname -> createClassWriter(sourceFile, cname));
         fv = cw.visitField(acc, fieldName, desc, sig, value);
+
+        annotations.forEach(annotation -> {
+            AnnotationVisitor av = fv.visitAnnotation(annotation.getName(), true);
+            annotation.getProperties().forEach(prop -> visitAnnotationProperty(av, prop.getName(), prop.getValue()));
+            av.visitEnd();
+        });
+
     }
 
     public void createLabel(String labelName) {
@@ -1107,166 +1279,6 @@ public final class Assembler {
             format("Line number end label '%s' for variable %s at index %d must not be null for method %s/%s",
                 lineNumberEndLabel, name, index, className, methodName));
         mv.visitLocalVariable(name, typeDescriptor, signature, start, end, index);
-    }
-
-    private static void createWindowsExecutable(String directoryName, String fileName, String mainClass,
-                                                String javaOpts) throws IOException {
-        File batExe = new File(directoryName, fileName + ".bat");
-        String batHeader = "@echo off";
-        String classpath = "%~dp0\\" + fileName + "_app\\*";
-        String javaCommand = Stream.of("java", "%JAVA_OPTS%", javaOpts, "-cp", classpath, mainClass, "%*")
-            .filter(Assembler::isNotNullOrEmpty)
-            .collect(joining(" "));
-        Files.write(batExe.toPath(), createExecutableFileContent(batHeader, javaCommand));
-    }
-
-    private static void createPosixExecutable(String directoryName, String fileName, String mainClass,
-                                              String javaOpts) throws IOException {
-        File shExe = new File(directoryName, fileName);
-        String shHeader = "#!/bin/sh";
-        String classpath = "\"`dirname $0`/" + fileName + "_app/*\"";
-        String javaCommand = Stream.of("java", "$JAVA_OPTS", javaOpts, "-cp", classpath, mainClass, "\"$@\"")
-            .filter(Assembler::isNotNullOrEmpty)
-            .collect(joining(" "));
-        Files.write(shExe.toPath(), createExecutableFileContent(shHeader, javaCommand));
-        setPosixFilePermissions(shExe.toPath(), PosixFilePermissions.fromString("rwxr-xr-x"));
-    }
-
-    private static boolean isNotNullOrEmpty(String value) {
-        return value != null && !value.isEmpty();
-    }
-
-    private static byte[] createExecutableFileContent(String... lines) {
-        return String.join(lineSeparator(), lines).getBytes(UTF_8);
-    }
-
-    private static Manifest createManifest(String mainClass) {
-        Manifest manifest = new Manifest();
-        Attributes manifestAttributes = manifest.getMainAttributes();
-        manifestAttributes.put(MANIFEST_VERSION, "1.0");
-        manifestAttributes.put(MAIN_CLASS, mainClass);
-        return manifest;
-    }
-
-    private static void add(File source, JarOutputStream target, File jarFile, File rootDirectory) throws IOException {
-        if (source.isDirectory()) {
-            addDirectory(source, target, jarFile, rootDirectory);
-        } else {
-            addFile(source, target, jarFile, rootDirectory);
-        }
-        if (source.isDirectory() || !source.getName().endsWith(".jar")) {
-            source.delete();
-        }
-    }
-
-    private static void addFile(File source, JarOutputStream jarOutputStream, File jarFile, File rootDirectory)
-        throws IOException {
-        if (source.equals(jarFile)) {
-            return;
-        }
-        JarEntry entry = new JarEntry(getJarEntryName(source, rootDirectory));
-        entry.setTime(source.lastModified());
-        jarOutputStream.putNextEntry(entry);
-        try (BufferedInputStream in = new BufferedInputStream(newInputStream(source.toPath()))) {
-            byte[] buffer = new byte[BUFFER_SIZE];
-            while (true) {
-                int count = in.read(buffer);
-                if (count == -1) {
-                    break;
-                }
-                jarOutputStream.write(buffer, 0, count);
-            }
-            jarOutputStream.closeEntry();
-        }
-    }
-
-    private static void addDirectory(File source, JarOutputStream jarOutputStream, File jarFile, File rootDirectory)
-        throws IOException {
-        String name = getJarEntryName(source, rootDirectory);
-        if (!name.isEmpty()) {
-            createDirectory(name, source.lastModified(), jarOutputStream);
-        }
-        File[] files = requireNonNull(source.listFiles(), "Unable to get files from directory " + source);
-        for (File file : files) {
-            add(file, jarOutputStream, jarFile, rootDirectory);
-        }
-    }
-
-    private static String getJarEntryName(File source, File rootDirectory) {
-        String name = source.getPath().replace(rootDirectory.getPath(), "").replace("\\", "/");
-        return !name.startsWith("/") ? name : name.substring(1);
-    }
-
-    private static void createDirectory(String name, long lastModified, JarOutputStream jarOutputStream)
-        throws IOException {
-        if (!name.endsWith("/")) {
-            name += "/";
-        }
-        JarEntry entry = new JarEntry(name);
-        entry.setTime(lastModified);
-        jarOutputStream.putNextEntry(entry);
-        jarOutputStream.closeEntry();
-    }
-
-    private static Type getType(String typeDescriptor) {
-        switch (typeDescriptor) {
-            case "boolean":
-                return Type.BOOLEAN_TYPE;
-            case "byte":
-                return Type.BYTE_TYPE;
-            case "char":
-                return Type.CHAR_TYPE;
-            case "short":
-                return Type.SHORT_TYPE;
-            case "int":
-                return Type.INT_TYPE;
-            case "long":
-                return Type.LONG_TYPE;
-            case "float":
-                return Type.FLOAT_TYPE;
-            case "double":
-                return Type.DOUBLE_TYPE;
-            case "void":
-                return Type.VOID_TYPE;
-            default:
-                if (typeDescriptor.endsWith("[]")) {
-                    return Type.getObjectType(getArrayDescriptor(typeDescriptor));
-                } else {
-                    return Type.getObjectType(typeDescriptor);
-                }
-        }
-
-    }
-
-    private static String getArrayDescriptor(String str) {
-        int stack = 0;
-        int dimension = 0;
-        for (int i = str.length() - 1; i >= 0; i--) {
-            char ch = str.charAt(i);
-            int delta = ch == ']' ? 1 : (ch == '[' ? -1 : 0);
-            if (delta == 0) {
-                if (stack != 0) {
-                    throw new IllegalArgumentException("Invalid array descriptor " + str);
-                }
-                return createArrayDescriptor(str.substring(0, i + 1), dimension);
-            }
-            stack = stack + delta;
-            if (stack == 0) {
-                dimension++;
-            } else if (stack != 1) {
-                throw new IllegalArgumentException("Invalid array descriptor " + str);
-            }
-        }
-        throw new IllegalArgumentException("Invalid array descriptor " + str);
-    }
-
-    private static String createArrayDescriptor(String elementTypeName, int dimension) {
-        String elementTypeDesc = getType(elementTypeName).getDescriptor();
-        StringBuilder arrayDesc = new StringBuilder();
-        for (int i = 0; i < dimension; i++) {
-            arrayDesc.append('[');
-        }
-        return arrayDesc + elementTypeDesc;
     }
 
     private ClassWriter createClassWriter(String sourceFile, String cname) {

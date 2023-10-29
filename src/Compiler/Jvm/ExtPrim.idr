@@ -9,6 +9,7 @@ data ExtPrim = JvmStaticMethodCall | JvmInstanceMethodCall
              | JavaLambda
              | NewIORef | ReadIORef | WriteIORef
              | NewArray | ArrayGet | ArraySet
+             | JvmNewArray | JvmSetArray | JvmGetArray | JvmArrayLength
              | GetStaticField | SetStaticField
              | GetInstanceField | SetInstanceField
              | JvmClassLiteral
@@ -29,6 +30,10 @@ Show ExtPrim where
   show NewArray = "NewArray"
   show ArrayGet = "ArrayGet"
   show ArraySet = "ArraySet"
+  show JvmNewArray = "JvmNewArray"
+  show JvmSetArray = "JvmSetArray"
+  show JvmGetArray = "JvmGetArray"
+  show JvmArrayLength = "JvmArrayLength"
   show GetStaticField = "GetStaticField"
   show SetStaticField = "SetStaticField"
   show GetInstanceField = "GetInstanceField"
@@ -53,6 +58,10 @@ toPrim pn@(NS _ n)
             (n == UN (Basic "prim__newArray"), NewArray),
             (n == UN (Basic "prim__arrayGet"), ArrayGet),
             (n == UN (Basic "prim__arraySet"), ArraySet),
+            (n == UN (Basic "prim__jvmNewArray"), JvmNewArray),
+            (n == UN (Basic "prim__jvmSetArray"), JvmSetArray),
+            (n == UN (Basic "prim__jvmGetArray"), JvmGetArray),
+            (n == UN (Basic "prim__jvmArrayLength"), JvmArrayLength),
             (n == UN (Basic "prim__getStaticField"), GetStaticField),
             (n == UN (Basic "prim__setStaticField"), SetStaticField),
             (n == UN (Basic "prim__getInstanceField"), GetInstanceField),

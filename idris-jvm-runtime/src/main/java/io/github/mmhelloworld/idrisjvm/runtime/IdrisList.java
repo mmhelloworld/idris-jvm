@@ -200,6 +200,29 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
                 this.node = createNode(index, idrisList);
             }
 
+            private static Node createNode(int index, IdrisList idrisList) {
+                if (idrisList == Nil.INSTANCE) {
+                    return null;
+                }
+                Cons cons = (Cons) idrisList;
+                Node currNode = new Node(cons.head);
+                int startIndex = -1;
+                Node start = new Node(null, EMPTY_ELEMENT, currNode);
+                for (IdrisList currList = (IdrisList) cons.tail; currList != Nil.INSTANCE; currList =
+                    (IdrisList) ((Cons) currList).tail) {
+                    Cons newCons = (Cons) currList;
+                    Node newNode = new Node(newCons.head);
+                    currNode.next = newNode;
+                    newNode.previous = currNode;
+                    currNode = currNode.next;
+                    if (startIndex + 1 < index) {
+                        start = newNode.previous;
+                        startIndex++;
+                    }
+                }
+                return startIndex + 1 != index ? null : start;
+            }
+
             @Override
             public boolean hasNext() {
                 return node != null && node.next != null;
@@ -255,29 +278,6 @@ public abstract class IdrisList extends AbstractSequentialList<Object> implement
             @Override
             public void add(Object o) {
                 throw new UnsupportedOperationException("immutable list");
-            }
-
-            private static Node createNode(int index, IdrisList idrisList) {
-                if (idrisList == Nil.INSTANCE) {
-                    return null;
-                }
-                Cons cons = (Cons) idrisList;
-                Node currNode = new Node(cons.head);
-                int startIndex = -1;
-                Node start = new Node(null, EMPTY_ELEMENT, currNode);
-                for (IdrisList currList = (IdrisList) cons.tail; currList != Nil.INSTANCE; currList =
-                    (IdrisList) ((Cons) currList).tail) {
-                    Cons newCons = (Cons) currList;
-                    Node newNode = new Node(newCons.head);
-                    currNode.next = newNode;
-                    newNode.previous = currNode;
-                    currNode = currNode.next;
-                    if (startIndex + 1 < index) {
-                        start = newNode.previous;
-                        startIndex++;
-                    }
-                }
-                return startIndex + 1 != index ? null : start;
             }
         }
     }

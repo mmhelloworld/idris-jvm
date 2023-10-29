@@ -265,12 +265,19 @@ public export
 Monoid InferredType where
   neutral = IUnknown
 
+public export
+%foreign "jvm:.indexOf(java/lang/String int int),java/lang/String"
+indexOf : String -> Int -> Int
+
 export
 iref : String -> InferredType
 iref className =
   let isInterface = "i:" `isPrefixOf` className
       referenceType = if isInterface then Interface else Class
-  in IRef (if isInterface then substr 2 (length className) className else className) referenceType
+      hashIndex = indexOf className (cast '#') -- old way of explicitly giving Java lambda descriptor
+      startIndex = if isInterface then 2 else 0
+      endIndex = if hashIndex == -1 then length className else cast hashIndex
+  in IRef (substr startIndex endIndex className) referenceType
 
 export
 stripInterfacePrefix : InferredType -> InferredType

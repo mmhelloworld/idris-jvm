@@ -22,6 +22,41 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 @Disabled
 class ChannelIoTest {
 
+    static Stream<Arguments> readFile() throws IOException {
+        return Stream.of(
+            createArguments("file1.txt"),
+            createArguments("file2.txt"));
+    }
+
+    private static Arguments createArguments(String fileName) throws IOException {
+        String path = getPath(fileName);
+        List<String> content = readFile(path);
+        return arguments(path, content);
+    }
+
+    private static List<String> readFile(String path) throws IOException {
+        BufferedReader bufferedReader = Files.newBufferedReader(Paths.get(path));
+        int currentChar;
+        List<String> content = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        while ((currentChar = bufferedReader.read()) != -1) {
+            line.append((char) currentChar);
+            if (currentChar == '\n') {
+                content.add(line.toString());
+                line = new StringBuilder();
+            }
+        }
+        String lineStr = line.toString();
+        if (!lineStr.isEmpty()) {
+            content.add(lineStr);
+        }
+        return content;
+    }
+
+    private static String getPath(String name) {
+        return new File(requireNonNull(currentThread().getContextClassLoader().getResource(name)).getFile()).getPath();
+    }
+
     @ParameterizedTest
     @MethodSource("readFile")
     void readFile1(String fileName, List<String> expectedContent) {
@@ -63,40 +98,5 @@ class ChannelIoTest {
             content.add(line);
         }
         return content;
-    }
-
-    static Stream<Arguments> readFile() throws IOException {
-        return Stream.of(
-            createArguments("file1.txt"),
-            createArguments("file2.txt"));
-    }
-
-    private static Arguments createArguments(String fileName) throws IOException {
-        String path = getPath(fileName);
-        List<String> content = readFile(path);
-        return arguments(path, content);
-    }
-
-    private static List<String> readFile(String path) throws IOException {
-        BufferedReader bufferedReader = Files.newBufferedReader(Paths.get(path));
-        int currentChar;
-        List<String> content = new ArrayList<>();
-        StringBuilder line = new StringBuilder();
-        while ((currentChar = bufferedReader.read()) != -1) {
-            line.append((char) currentChar);
-            if (currentChar == '\n') {
-                content.add(line.toString());
-                line = new StringBuilder();
-            }
-        }
-        String lineStr = line.toString();
-        if (!lineStr.isEmpty()) {
-            content.add(lineStr);
-        }
-        return content;
-    }
-
-    private static String getPath(String name) {
-        return new File(requireNonNull(currentThread().getContextClassLoader().getResource(name)).getFile()).getPath();
     }
 }

@@ -214,6 +214,7 @@
                             <goal>run</goal>
                         </goals>
                         <configuration>
+                            <failOnError>false</failOnError>
                             <target>
                                 <copy file="../build/exec/idris2_app/idris2.jar" tofile="./target/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
                             </target>

@@ -1,6 +1,48 @@
 module Java.Util
 
 import Java.Lang
+import System.FFI
+
+namespace Arrays
+    public export
+    Arrays : Type
+    Arrays = Struct "java/util/Arrays" []
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_boolArrayToString : Array Bool -> PrimIO String
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_charArrayToString : Array Char -> PrimIO String
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_byteArrayToString : Array Int8 -> PrimIO String
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_shortArrayToString : Array Int16 -> PrimIO String
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_int32ArrayToString : Array Int32 -> PrimIO String
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_intArrayToString : Array Int -> PrimIO String
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_int64ArrayToString : Array Int64 -> PrimIO String
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_doubleArrayToString : Array Double -> PrimIO String
+
+    export
+    %foreign "jvm:toString,java/util/Arrays"
+    prim_arrayToString : Array Object -> PrimIO String
 
 namespace Collection
     export

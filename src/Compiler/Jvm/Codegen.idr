@@ -103,6 +103,42 @@ defaultValue IFloat = Fconst 0
 defaultValue IDouble = Dconst 0
 defaultValue _ = Aconstnull
 
+assembleArray : (elemTy: InferredType) -> Asm ()
+assembleArray IBool = Anewbooleanarray
+assembleArray IByte = Anewbytearray
+assembleArray IChar = Anewchararray
+assembleArray IShort = Anewshortarray
+assembleArray IInt = Anewintarray
+assembleArray ILong = Anewlongarray
+assembleArray IFloat = Anewfloatarray
+assembleArray IDouble = Anewdoublearray
+assembleArray (IRef ty _) = Anewarray ty
+assembleArray (IArray ty) = Anewarray (getJvmTypeDescriptor ty)
+assembleArray (IFunction (MkJavaLambdaType (IRef ty _) _ _ _)) = Anewarray ty
+assembleArray _ = Anewarray "java/lang/Object"
+
+storeArray : (elemTy: InferredType) -> Asm ()
+storeArray IBool = Bastore
+storeArray IByte = Bastore
+storeArray IChar = Castore
+storeArray IShort = Sastore
+storeArray IInt = Iastore
+storeArray ILong = Lastore
+storeArray IFloat = Fastore
+storeArray IDouble = Dastore
+storeArray _ = Aastore
+
+loadArray : (elemTy: InferredType) -> Asm ()
+loadArray IBool = Baload
+loadArray IByte = Baload
+loadArray IChar = Caload
+loadArray IShort = Saload
+loadArray IInt = Iaload
+loadArray ILong = Laload
+loadArray IFloat = Faload
+loadArray IDouble = Daload
+loadArray _ = Aaload
+
 jIntKind : PrimType -> IntKind
 jIntKind ty = fromMaybe (Signed (P 32)) (intKind ty)
 
@@ -1796,6 +1832,30 @@ mutual
         assembleExpr False IUnknown val
         InvokeMethod InvokeVirtual arrayListClass "set" "(ILjava/lang/Object;)Ljava/lang/Object;" False
         asmCast inferredObjectType returnType
+    jvmExtPrim _ returnType JvmNewArray [tyExpr, size, world] = do
+        assembleExpr False IInt size
+        elemTy <- tySpec tyExpr
+        assembleArray elemTy
+        asmCast (IArray elemTy) returnType
+    jvmExtPrim _ returnType JvmSetArray [tyExpr, index, val, arr, world] = do
+        elemTy <- tySpec tyExpr
+        assembleExpr False (IArray elemTy) arr
+        assembleExpr False IInt index
+        assembleExpr False elemTy val
+        storeArray elemTy
+        Aconstnull
+        asmCast inferredObjectType returnType
+    jvmExtPrim _ returnType JvmGetArray [tyExpr, index, arr, world] = do
+        elemTy <- tySpec tyExpr
+        assembleExpr False (IArray elemTy) arr
+        assembleExpr False IInt index
+        loadArray elemTy
+        asmCast elemTy returnType
+    jvmExtPrim _ returnType JvmArrayLength [tyExpr, arr] = do
+        elemTy <- tySpec tyExpr
+        assembleExpr False (IArray elemTy) arr
+        Arraylength
+        asmCast IInt returnType
     jvmExtPrim _ returnType NewIORef [_, val, world] = do
         New refClass
         Dup
@@ -1825,7 +1885,7 @@ mutual
     jvmExtPrim _ returnType JvmClassLiteral [ty] = do
         assembleClassLiteral !(tySpec ty)
         asmCast (IRef "java/lang/Class" Class) returnType
-    jvmExtPrim fc returnType JavaLambda [_, functionType, javaInterfaceType, lambda] =
+    jvmExtPrim fc returnType JavaLambda [functionType, javaInterfaceType, lambda] =
       asmJavaLambda fc returnType functionType javaInterfaceType lambda
     jvmExtPrim _ returnType MakeFuture [_, action] = do
         assembleExpr False delayedType action
@@ -1865,7 +1925,7 @@ assembleDefinition idrisName fc = do
     let classInitOrMethodName = if isField then "<clinit>" else methodName
     when isField $ do
         CreateField [Public, Static, Final] fileName declaringClassName methodName
-            "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;" Nothing Nothing
+            "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;" Nothing Nothing []
         FieldEnd
     CreateMethod [Public, Static] fileName declaringClassName classInitOrMethodName descriptor Nothing Nothing [] []
     if (not isField)
@@ -1981,7 +2041,7 @@ compileToJvmBytecode c outputDirectory outputFile term = do
     let namesByClassName = groupByClassName programName names
     coreLift $ do
         assembleAsync globalState fcAndDefinitionsByName (transpose namesByClassName)
-        exportDefs globalState $ mapMaybe (getExport noMangleMap) names
+        exportDefs globalState $ mapMaybe (getExport noMangleMap) (fst <$> allDefs)
         mainAsmState <- createAsmState globalState mainFunctionName
         let mainFunctionJname = jvmName mainFunctionName
         _ <- runAsm mainAsmState $ createMainMethod programName mainFunctionJname

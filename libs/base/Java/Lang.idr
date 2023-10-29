@@ -41,27 +41,63 @@ classLiteral {ty} = prim__jvmClassLiteral ty
 
 public export
 data Array : (elemTy: Type) -> Type where
-  BoolArray : Array Bool
-  ByteArray : Array Int8
-  CharArray : Array Char
-  ShortArray : Array Int16
-  IntArray : Array Int
-  LongArray : Array Int64
-  DoubleArray : Array Double
-  RefArray: (ty: Type) -> Array ty
 
-%extern prim__jvmNewPrimitiveArray : (ty: Type) -> Array ty
+%extern prim__jvmNewArray : (ty: Type) -> Int -> PrimIO (Array ty)
 
-%extern prim__jvmNewReferenceArray : (ty: Type) -> Array ty
+%extern prim__jvmSetArray : (a: Type) -> Int -> a -> Array a -> PrimIO ()
 
-{-
-%foreign "jvm:toIntArray(java/util/ArrayList [int),io/github/mmhelloworld/idrisjvm/runtime/Arrays"
-prim_toIntArray: a -> JvmArray
+%extern prim__jvmGetArray : (a: Type) -> Int -> Array a -> PrimIO a
 
-%foreign "jvm:toArray(java/util/ArrayList java/lang/Class [java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Arrays"
-prim_toArray: Class elemTy -> array -> JvmArray
+%extern prim__jvmArrayLength : (a: Type) -> Array a -> Int
 
-toArray : (elemTy: Type) -> ArrayData elemTy -> JvmArray elemTy
-toArray Int array = prim_toIntArray array
-toArray String array = prim_toArray (classLiteral "java/lang/String") array
-toArray _ array = prim_toArray (classLiteral "java/lang/Object") array-}
+isPrimitive : Type -> Bool
+isPrimitive Bool = True
+isPrimitive Char = True
+isPrimitive Int8 = True
+isPrimitive Int16 = True
+isPrimitive Int32 = True
+isPrimitive Int = True
+isPrimitive Int64 = True
+isPrimitive Bits8 = True
+isPrimitive Bits16 = True
+isPrimitive Bits32 = True
+isPrimitive Bits64 = True
+isPrimitive Double = True
+isPrimitive _ = False
+
+public export
+%foreign jvm' "java/util/Objects" "isNull" "java/lang/Object" "boolean"
+isNull : Object -> Bool
+
+namespace Array
+    %inline
+    public export
+    new : HasIO io => {elem: Type} -> Int -> io (Array elem)
+    new {elem} size = primIO $ prim__jvmNewArray elem size
+
+    %inline
+    public export
+    set : HasIO io => {elem: Type} -> Array elem -> Int -> elem -> io Bool
+    set {elem} array index value = do
+        let len = prim__jvmArrayLength elem array
+        if index >= 0 && index < len
+            then do
+                    primIO $ prim__jvmSetArray elem index value array
+                    pure True
+            else pure False
+
+    %inline
+    public export
+    get : HasIO io => {elem: Type} -> Array elem -> Int -> io (Maybe elem)
+    get {elem} array index = do
+     let len = prim__jvmArrayLength elem array
+     if index >= 0 && index < len
+        then do
+            value <- primIO $ prim__jvmGetArray elem index array
+            if isPrimitive elem
+                then pure (Just value)
+                else
+                    if isNull (believe_me value)
+                        then pure Nothing
+                        else pure (Just value)
+        else pure Nothing

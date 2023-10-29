@@ -19,6 +19,7 @@ import Data.List
 import Data.List1
 import Data.Maybe
 import Data.String
+import Debug.Trace
 import Language.JSON
 import Libraries.Data.SortedMap
 import Libraries.Utils.Path
@@ -210,9 +211,9 @@ parseMethodExport idrisName javaName parts descriptor annotations = do
     arguments <- parseArgumentsJson idrisName argumentsJson
     let (jvmArgumentTypes, parameterAnnotations) =
           unzip $ (\(MkExportArgument type annotations) => (type, annotations)) <$> arguments
-    Just jvmReturnTypeString <-
-        traverse (parseString ("Invalid return type for function " ++ javaName)) $ lookup "returnType" descriptor
-      | Nothing => asmCrash ("Missing return type for " ++ javaName)
+    jvmReturnTypeString <-
+        parseString ("Invalid return type for function " ++ javaName) $
+          fromMaybe (JString "java/lang/Object") $ lookup "returnType" descriptor
     let jvmReturnType = parse jvmReturnTypeString
     let functionType = MkInferredFunctionType jvmReturnType jvmArgumentTypes
     let modifiers = mapMaybe parseModifier parts
@@ -259,7 +260,7 @@ parseObjectExportDescriptor idrisName javaName descriptorKeyAndValues = do
     parts@(_ :: _) =>
       cond
         [
-          (isJust $ lookup "returnType" descriptor,
+          (isJust (lookup "enclosingType" descriptor) || isJust (lookup "arguments" descriptor),
             MkMethodExportDescriptor <$> parseMethodExport idrisName javaName parts descriptor annotations),
           (isJust $ lookup "type" descriptor,
             MkFieldExportDescriptor <$> parseFieldExport idrisName parts descriptor annotations)
@@ -372,17 +373,32 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers
     loadArguments jvmArgumentTypesByIndex idrisName arityInt (parameterTypes idrisFunctionType)
     let idrisMethodDescriptor = getMethodDescriptor idrisFunctionType
     let qualifiedJvmIdrisName = getIdrisFunctionName !getProgramName (className jvmIdrisName) (methodName jvmIdrisName)
-    InvokeMethod InvokeStatic
-      (className qualifiedJvmIdrisName) (methodName qualifiedJvmIdrisName) idrisMethodDescriptor False
-    when (jvmReturnType == IVoid) $
-      InvokeMethod InvokeStatic "main/PrimIO" "unsafePerformIO" "(Ljava/lang/Object;)Ljava/lang/Object;" False
-    asmCast (returnType idrisFunctionType) jvmReturnType
-    asmReturn jvmReturnType
-    MaxStackAndLocal (-1) (-1)
-    MethodCodeEnd
+    let isField = arity == 0
+    if not isField
+      then do
+        InvokeMethod InvokeStatic
+          (className qualifiedJvmIdrisName) (methodName qualifiedJvmIdrisName) idrisMethodDescriptor False
+        when (jvmReturnType == IVoid) $
+          InvokeMethod InvokeStatic "main/PrimIO" "unsafePerformIO" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+        asmCast (returnType idrisFunctionType) jvmReturnType
+        asmReturn jvmReturnType
+        MaxStackAndLocal (-1) (-1)
+        MethodCodeEnd
+      else do
+        Field GetStatic (className qualifiedJvmIdrisName) (methodName qualifiedJvmIdrisName)
+            "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
+        InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
+            "()Ljava/lang/Object;" False
+        asmCast inferredObjectType jvmReturnType
+        asmReturn jvmReturnType
+        MaxStackAndLocal (-1) (-1)
+        MethodCodeEnd
 
 exportField : FieldExport -> Asm ()
-exportField _ = Pure ()
+exportField (MkFieldExport fieldName idrisName type encloser modifiers annotations) = do
+  let jvmClassName = encloser.name
+  CreateField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing annotations
+  FieldEnd
 
 exportClass : ClassExport -> Asm ()
 exportClass (MkClassExport name idrisName extends implements modifiers annotations) = do

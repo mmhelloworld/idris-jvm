@@ -76,17 +76,18 @@ mockRunAsm state (ClassCodeStart version access className sig parent intf anns) 
     parent]
 
 mockRunAsm state (CreateClass opts) = assemble state $ log $ "createClass " ++ show opts
-mockRunAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue) = assemble state $ do
-  let jaccs = sum $ accessNum <$> accs
-  log $ unwords [
-    "createField",
-    show jaccs,
-    sourceFileName,
-    className,
-    fieldName,
-    desc,
-    fromMaybe "" sig,
-    (objectToString $ maybeToNullable (toJFieldInitialValue <$> fieldInitialValue))]
+mockRunAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue annotations) =
+  assemble state $ do
+    let jaccs = sum $ accessNum <$> accs
+    log $ unwords [
+      "createField",
+      show jaccs,
+      sourceFileName,
+      className,
+      fieldName,
+      desc,
+      fromMaybe "" sig,
+      (objectToString $ maybeToNullable (toJFieldInitialValue <$> fieldInitialValue))]
 
 mockRunAsm state (CreateLabel label) = assemble state $ pure ()
 

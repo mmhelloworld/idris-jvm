@@ -198,6 +198,65 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
         }
     }
 
+    private static ChannelIo open(Path path, OpenOption... openOptions) throws IOException {
+        ensureParentDirectory(path);
+        return new ChannelIo(path, FileChannel.open(path, openOptions));
+    }
+
+    private static void ensureParentDirectory(Path path) throws IOException {
+        Path parent = path.getParent();
+        if (parent != null) {
+            createDirectories(parent);
+        }
+    }
+
+    private static boolean isReadOnlyMode(String mode) {
+        return "r".equalsIgnoreCase(mode);
+    }
+
+    private static Collection<OpenOption> getOpenOptions(String mode) {
+        switch (mode.toLowerCase()) {
+            case "r":
+                return singletonList(StandardOpenOption.READ);
+            case "w":
+                return asList(StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING);
+            case "a":
+                return asList(StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            case "r+":
+                return asList(StandardOpenOption.READ, StandardOpenOption.WRITE);
+            case "w+":
+                return asList(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
+            case "a+":
+                return asList(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.APPEND);
+            default:
+                throw new IllegalArgumentException("Unknown file mode " + mode);
+        }
+    }
+
+    private static Set<PosixFilePermission> createPosixFilePermissions(int mode) {
+        return MODE_TO_PERMISSIONS.entrySet().stream()
+            .filter(modeAndPermission -> (mode & modeAndPermission.getKey()) == modeAndPermission.getKey())
+            .map(Map.Entry::getValue)
+            .collect(toSet());
+    }
+
+    static int getErrorNumber(Exception currentException) {
+        if (currentException == null) {
+            return 0;
+        } else if (currentException instanceof FileNotFoundException
+            || currentException instanceof NoSuchFileException) {
+            return MISSING_FILE_ERROR_CODE; // To return error codes to conform to Idris functions with C FFIs
+        } else if (currentException instanceof AccessDeniedException
+            || currentException instanceof SecurityException) {
+            return SECURITY_ERROR_CODE;
+        } else if (currentException instanceof FileAlreadyExistsException) {
+            return EXISTING_FILE_ERROR_CODE;
+        } else {
+            return GENERAL_ERROR_CODE;
+        }
+    }
+
     @Override
     public char readChar() {
         return (char) withExceptionHandling(() -> {
@@ -392,49 +451,6 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
         return ((WritableByteChannel) channel).write(src);
     }
 
-    private static ChannelIo open(Path path, OpenOption... openOptions) throws IOException {
-        ensureParentDirectory(path);
-        return new ChannelIo(path, FileChannel.open(path, openOptions));
-    }
-
-    private static void ensureParentDirectory(Path path) throws IOException {
-        Path parent = path.getParent();
-        if (parent != null) {
-            createDirectories(parent);
-        }
-    }
-
-    private static boolean isReadOnlyMode(String mode) {
-        return "r".equalsIgnoreCase(mode);
-    }
-
-    private static Collection<OpenOption> getOpenOptions(String mode) {
-        switch (mode.toLowerCase()) {
-            case "r":
-                return singletonList(StandardOpenOption.READ);
-            case "w":
-                return asList(StandardOpenOption.CREATE, StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-            case "a":
-                return asList(StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            case "r+":
-                return asList(StandardOpenOption.READ, StandardOpenOption.WRITE);
-            case "w+":
-                return asList(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
-            case "a+":
-                return asList(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.APPEND);
-            default:
-                throw new IllegalArgumentException("Unknown file mode " + mode);
-        }
-    }
-
-    private static Set<PosixFilePermission> createPosixFilePermissions(int mode) {
-        return MODE_TO_PERMISSIONS.entrySet().stream()
-            .filter(modeAndPermission -> (mode & modeAndPermission.getKey()) == modeAndPermission.getKey())
-            .map(Map.Entry::getValue)
-            .collect(toSet());
-    }
-
     private <T> T withExceptionHandling(SupplierE<T, ? extends Exception> action) {
         exception = null;
         Runtime.setErrorNumber(0);
@@ -480,22 +496,6 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
         } catch (Exception currentException) {
             handleException(currentException);
             return fallback;
-        }
-    }
-
-    static int getErrorNumber(Exception currentException) {
-        if (currentException == null) {
-            return 0;
-        } else if (currentException instanceof FileNotFoundException
-            || currentException instanceof NoSuchFileException) {
-            return MISSING_FILE_ERROR_CODE; // To return error codes to conform to Idris functions with C FFIs
-        } else if (currentException instanceof AccessDeniedException
-            || currentException instanceof SecurityException) {
-            return SECURITY_ERROR_CODE;
-        } else if (currentException instanceof FileAlreadyExistsException) {
-            return EXISTING_FILE_ERROR_CODE;
-        } else {
-            return GENERAL_ERROR_CODE;
         }
     }
 }

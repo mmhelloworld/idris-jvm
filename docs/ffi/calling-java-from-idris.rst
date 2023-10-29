@@ -173,8 +173,10 @@ Class literals
 
 .. code-block:: console
 
+    Main> :module Java.Lang
+    Imported module Java.Lang
     Main> :t classLiteral
-    Java.Lang.classLiteral : String -> Class a
+    Java.Lang.classLiteral : Class ty
 
 .. code-block:: idris
 
@@ -182,9 +184,9 @@ Class literals
 
     main : IO ()
     main = do
-      printLn !(Object.toString $ classLiteral {a=Int} "int") -- returns Java's int.class
-      printLn !(Object.toString $ classLiteral {a=Integer} "java/math/BigInteger")
-      printLn !(Object.toString $ classLiteral {a=String} "String")
+      printLn !(Object.toString $ classLiteral {ty=Int})
+      printLn !(Object.toString $ classLiteral {ty=Integer})
+      printLn !(Object.toString $ classLiteral {ty=String})
 
 The above example prints:
 

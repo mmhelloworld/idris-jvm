@@ -774,6 +774,25 @@ mutual
         ignore $ inferExpr IInt pos
         ignore $ inferExpr IUnknown val
         pure inferredObjectType
+    inferExtPrim _ returnType JvmNewArray [tyExpr, size, world] = do
+        ignore $ inferExpr IInt size
+        elemTy <- tySpec tyExpr
+        pure $ IArray elemTy
+    inferExtPrim _ returnType JvmSetArray [tyExpr, index, val, arr, world] = do
+        elemTy <- tySpec tyExpr
+        ignore $ inferExpr (IArray elemTy) arr
+        ignore $ inferExpr IInt index
+        ignore $ inferExpr elemTy val
+        pure inferredObjectType
+    inferExtPrim _ returnType JvmGetArray [tyExpr, index, arr, world] = do
+        elemTy <- tySpec tyExpr
+        ignore $ inferExpr (IArray elemTy) arr
+        ignore $ inferExpr IInt index
+        pure elemTy
+    inferExtPrim _ returnType JvmArrayLength [tyExpr, arr] = do
+        elemTy <- tySpec tyExpr
+        ignore $ inferExpr (IArray elemTy) arr
+        pure IInt
     inferExtPrim _ returnType NewIORef [_, val, world] = do
         ignore $ inferExpr IUnknown val
         pure refType
@@ -788,11 +807,9 @@ mutual
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
     inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
     inferExtPrim _ returnType JvmClassLiteral [_] = pure $ IRef "java/lang/Class" Class
-    inferExtPrim fc returnType JavaLambda exprs@[_, functionType, javaInterfaceType, lambda] = do
+    inferExtPrim fc returnType JavaLambda [functionType, javaInterfaceType, lambda] = do
       ignore $ inferExpr IUnknown lambda
       IFunction <$> getJavaLambdaType fc [functionType, javaInterfaceType, lambda]
-    inferExtPrim fc returnType JavaLambda args = asmCrash $ "Expected JavaLambda with 4 arguments but found " ++
-      show (length args)
     inferExtPrim _ returnType MakeFuture [_, action] = do
         ignore $ inferExpr delayedType action
         pure inferredForkJoinTaskType

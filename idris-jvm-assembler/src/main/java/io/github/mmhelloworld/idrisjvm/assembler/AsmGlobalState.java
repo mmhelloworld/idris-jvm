@@ -10,8 +10,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -22,7 +29,9 @@ import static java.nio.file.Files.createTempDirectory;
 import static java.nio.file.Files.newInputStream;
 import static java.nio.file.Files.newOutputStream;
 import static java.util.Arrays.asList;
-import static java.util.Collections.*;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.synchronizedSet;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 
@@ -72,14 +81,14 @@ public final class AsmGlobalState {
 
     public static void copyRuntimeJar(String directory) throws IOException {
         String runtimeJarFile = Arrays.stream(System.getProperty("java.class.path").split(pathSeparator))
-                .filter(name -> name.contains(RUNTIME_JAR_NAME))
-                .findAny()
-                .orElseThrow(() -> new RuntimeException("Unable to find idris runtime jar"));
+            .filter(name -> name.contains(RUNTIME_JAR_NAME))
+            .findAny()
+            .orElseThrow(() -> new RuntimeException("Unable to find idris runtime jar"));
         try (
-                InputStream jarInputStream = newInputStream(Paths.get(runtimeJarFile));
-                InputStream jarBufferedInputStream = new BufferedInputStream(jarInputStream);
-                OutputStream outputStream = new BufferedOutputStream(
-                        newOutputStream(Paths.get(directory, RUNTIME_JAR_NAME)))) {
+            InputStream jarInputStream = newInputStream(Paths.get(runtimeJarFile));
+            InputStream jarBufferedInputStream = new BufferedInputStream(jarInputStream);
+            OutputStream outputStream = new BufferedOutputStream(
+                newOutputStream(Paths.get(directory, RUNTIME_JAR_NAME)))) {
             copy(jarBufferedInputStream, outputStream);
         }
     }
@@ -142,14 +151,14 @@ public final class AsmGlobalState {
     }
 
     public void classCodeEnd(String outputDirectory, String outputFile, String mainClass)
-            throws IOException, InterruptedException {
+        throws IOException, InterruptedException {
         String normalizedOutputDirectory = outputDirectory.isEmpty()
-                ? createTempDirectory("idris-jvm-repl").toString() : outputDirectory;
+            ? createTempDirectory("idris-jvm-repl").toString() : outputDirectory;
         String classDirectory = outputDirectory.isEmpty()
-                ? normalizedOutputDirectory : normalizedOutputDirectory + File.separator + outputFile + "_app";
+            ? normalizedOutputDirectory : normalizedOutputDirectory + File.separator + outputFile + "_app";
         getClassNameAndClassWriters()
-                .forEach(classNameAndClassWriter ->
-                        writeClass(classNameAndClassWriter.getKey(), classNameAndClassWriter.getValue(), classDirectory));
+            .forEach(classNameAndClassWriter ->
+                writeClass(classNameAndClassWriter.getKey(), classNameAndClassWriter.getValue(), classDirectory));
         String mainClassNoSlash = mainClass.replace('/', '.');
         if (outputDirectory.isEmpty()) {
             copyRuntimeJar(normalizedOutputDirectory);
@@ -164,16 +173,16 @@ public final class AsmGlobalState {
 
     public void interpret(String mainClass, String outputDirectory) throws IOException, InterruptedException {
         String classpath = String.join(pathSeparator, outputDirectory,
-                outputDirectory + File.separator + RUNTIME_JAR_NAME, System.getProperty("java.class.path"));
+            outputDirectory + File.separator + RUNTIME_JAR_NAME, System.getProperty("java.class.path"));
         List<String> command = Stream.concat(
-                        Stream.concat(Stream.of("java"), JAVA_OPTIONS.stream()),
-                        Stream.of("-cp", classpath, mainClass))
-                .collect(toList());
+                Stream.concat(Stream.of("java"), JAVA_OPTIONS.stream()),
+                Stream.of("-cp", classpath, mainClass))
+            .collect(toList());
         new ProcessBuilder(command)
-                .directory(new File((String) Directories.getWorkingDirectory()))
-                .inheritIO()
-                .start()
-                .waitFor(IDRIS_REPL_TIMEOUT, SECONDS);
+            .directory(new File((String) Directories.getWorkingDirectory()))
+            .inheritIO()
+            .start()
+            .waitFor(IDRIS_REPL_TIMEOUT, SECONDS);
     }
 
     public void writeClass(String className, ClassWriter classWriter, String outputClassFileDir) {
@@ -188,12 +197,12 @@ public final class AsmGlobalState {
 
     private Stream<Entry<String, ClassWriter>> getClassNameAndClassWriters() {
         return assemblers.values().parallelStream()
-                .map(Assembler::classInitEnd)
-                .flatMap(assembler -> assembler.getClassWriters().entrySet().stream());
+            .map(Assembler::classInitEnd)
+            .flatMap(assembler -> assembler.getClassWriters().entrySet().stream());
     }
 
     public Object getFcAndDefinition(String name) {
         return Optional.ofNullable(fcAndDefinitionsByName.get(name))
-                .orElseThrow(() -> new IdrisJvmException("Unable to find function " + name));
+            .orElseThrow(() -> new IdrisJvmException("Unable to find function " + name));
     }
 }

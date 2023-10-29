@@ -14,20 +14,6 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 public final class IdrisNameTest {
 
-    @ParameterizedTest
-    @MethodSource
-    void getFunctionName(String moduleName, String functionName, IdrisList idrisClassFunctionName) {
-        assertThat(IdrisName.getIdrisFunctionName("main", moduleName, functionName))
-            .isEqualTo(idrisClassFunctionName);
-    }
-
-    @ParameterizedTest
-    @MethodSource
-    void getConstructorClassName(String idrisConstructorName, String transformedConstructorName) {
-        assertThat(IdrisName.getIdrisConstructorClassName(idrisConstructorName))
-            .isEqualTo(transformedConstructorName);
-    }
-
     static Stream<Arguments> getFunctionName() {
         return Stream.of(
             arguments("Data/List", "take", IdrisList.fromIterable(asList("M_Data/List", "take"))),
@@ -43,5 +29,19 @@ public final class IdrisNameTest {
             arguments("Prelude/Foo", "M_Prelude/Foo"),
             arguments("Prelude", "main/Prelude")
         );
+    }
+
+    @ParameterizedTest
+    @MethodSource
+    void getFunctionName(String moduleName, String functionName, IdrisList idrisClassFunctionName) {
+        assertThat(IdrisName.getIdrisFunctionName("main", moduleName, functionName))
+            .isEqualTo(idrisClassFunctionName);
+    }
+
+    @ParameterizedTest
+    @MethodSource
+    void getConstructorClassName(String idrisConstructorName, String transformedConstructorName) {
+        assertThat(IdrisName.getIdrisConstructorClassName(idrisConstructorName))
+            .isEqualTo(transformedConstructorName);
     }
 }

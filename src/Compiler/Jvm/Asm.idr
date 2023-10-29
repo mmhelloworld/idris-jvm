@@ -6,8 +6,8 @@ import Compiler.Inline
 
 import Core.Context
 import Core.Name
-import Core.TT
 import Core.Reflect
+import Core.TT
 
 import Data.List
 import Data.List1
@@ -620,7 +620,7 @@ data Asm : Type -> Type where
                         (interfaces: List String) -> List Asm.Annotation -> Asm ()
     CreateClass : List ClassOpts -> Asm ()
     CreateField : List Access -> (sourceFileName: String) -> (className: String) -> (fieldName: String) -> (descriptor: String) ->
-                    (signature: Maybe String) -> Maybe FieldInitialValue -> Asm ()
+                    (signature: Maybe String) -> Maybe FieldInitialValue -> (annotations: List Asm.Annotation) -> Asm ()
     CreateLabel : String -> Asm ()
     CreateMethod : List Access -> (sourceFileName: String) -> (className: String) ->
                     (methodName: String) -> (descriptor: String) ->
@@ -1310,12 +1310,13 @@ export
 arrayName : Name
 arrayName = NS (mkNamespace "Java.Lang") (UN $ Basic "Array")
 
-getIdrisConstructorType : Name -> InferredType
-getIdrisConstructorType name =
+getIdrisConstructorType : ConInfo -> (tag: Maybe Int) -> Nat -> Name -> InferredType
+getIdrisConstructorType conInfo tag arity name =
   if isBoolTySpec name then IBool
   else if name == basics "List" then idrisListType
   else if name == preludetypes "Maybe" then idrisMaybeType
-  else IRef (getIdrisConstructorClassName (jvmSimpleName name)) Class
+  else if name == preludetypes "Nat" then inferredBigIntegerType
+  else inferredObjectType
 
 parseName : String -> Maybe InferredType
 parseName name =
@@ -1326,7 +1327,7 @@ parseName name =
 
 mutual
   parseArrayType : NamedCExp -> Asm (Maybe InferredType)
-  parseArrayType (NmCon _ name _ _ [elemTy]) =
+  parseArrayType expr@(NmCon _ name _ _ [elemTy]) =
     if name == arrayName then Pure . Just $ IArray !(tySpec elemTy)
     else Pure Nothing
   parseArrayType _ = Pure Nothing
@@ -1342,7 +1343,10 @@ mutual
     if name == structName
       then Pure $ parseName namePartsStr
       else Pure Nothing
-  parseJvmReferenceType (NmCon _ name _ _ _) = Pure . Just $ getIdrisConstructorType name
+  parseJvmReferenceType (NmCon _ name conInfo tag args) =
+    if name == primio "IORes" then
+      maybe (asmCrash "Expected an argument for IORes") (\res => Pure $ Just !(tySpec res)) (head' args)
+    else Pure $ Just $ getIdrisConstructorType conInfo tag (length args) name
   parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do
     (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
       | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++
@@ -1350,7 +1354,7 @@ mutual
     ty <- tySpec def
     Pure $ Just ty
   parseJvmReferenceType (NmDelay _ _ expr) = Pure $ Just !(tySpec expr)
-  parseJvmReferenceType _ = Pure Nothing
+  parseJvmReferenceType expr = Pure Nothing
 
   tryParse : NamedCExp -> Asm (Maybe InferredType)
   tryParse expr = do
@@ -1371,7 +1375,7 @@ mutual
   tySpec (NmCon _ _ NIL _ []) = Pure idrisListType
   tySpec (NmCon _ _ CONS _ [_, _]) = Pure idrisListType
   tySpec expr@(NmCon _ (NS _ (UN (Basic "Unit"))) _ _ []) = Pure IVoid
-  tySpec expr = trace (">>: " ++ show expr) $ do
+  tySpec expr = do
     ty <- tryParse expr
     Pure $ fromMaybe inferredObjectType ty
 
@@ -1819,11 +1823,12 @@ runAsm state (ClassCodeStart version access className sig parent intf anns) = as
 runAsm state (CreateClass opts) =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createClass"
       [assembler state, sum $ toJClassOpts <$> opts]
-runAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue) = assemble state $ do
+runAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue anns) = assemble state $ do
   let jaccs = sum $ accessNum <$> accs
+  janns <- sequence $ toJAnnotation <$> anns
   jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createField"
     [assembler state, jaccs, sourceFileName, className, fieldName, desc, maybeToNullable sig,
-        maybeToNullable (toJFieldInitialValue <$> fieldInitialValue)]
+        maybeToNullable (toJFieldInitialValue <$> fieldInitialValue), the (JList JAnnotation) $ believe_me janns]
 
 runAsm state (CreateLabel label) = assemble state $
   jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createLabel" [assembler state, label]

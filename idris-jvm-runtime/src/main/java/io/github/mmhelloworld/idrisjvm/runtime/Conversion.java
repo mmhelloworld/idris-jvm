@@ -155,6 +155,19 @@ public final class Conversion {
         }
     }
 
+    public static BigInteger toInteger(Object value) {
+        if (value instanceof BigInteger) {
+            return (BigInteger) value;
+        } else if (value instanceof Integer) {
+            return BigInteger.valueOf((Integer) value);
+        } else if (value instanceof Long) {
+            return BigInteger.valueOf((Long) value);
+        } else {
+            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to BigInteger",
+                value, value.getClass()));
+        }
+    }
+
     public static int toInt(String value) {
         try {
             return new BigDecimal(value)

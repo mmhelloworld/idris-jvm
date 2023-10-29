@@ -18,7 +18,7 @@ class IdrisListTest {
 
     @Test
     void fromArray_char() {
-        assertThat(IdrisList.fromArray(new String[] {})).isEmpty();
+        assertThat(IdrisList.fromArray(new String[]{})).isEmpty();
         assertThat(IdrisList.fromArray("helloworld".toCharArray()))
             .containsExactlyElementsOf(asList("helloworld".toCharArray()));
     }

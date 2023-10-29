@@ -126,6 +126,36 @@ public final class IdrisSocket implements Closeable {
         return EAGAIN;
     }
 
+    private static void handleException(Exception e) {
+        Runtime.setException(e);
+        Runtime.setErrorNumber(getErrorNumber(e));
+    }
+
+    static int getErrorNumber(Exception exception) {
+        if (exception != null) {
+            exception.printStackTrace();
+        }
+        // To return error codes to conform to Idris functions with C FFIs
+        if (exception == null) {
+            return 0;
+        } else if (exception instanceof FileNotFoundException || exception instanceof NoSuchFileException) {
+            return ErrorCodes.NO_SUCH_FILE;
+        } else if (exception instanceof InterruptedIOException || exception instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+            return ErrorCodes.INTERRUPTED;
+        } else if (exception instanceof AccessDeniedException || exception instanceof SecurityException) {
+            return ErrorCodes.SOCKET_ACCESS_DENIED;
+        } else if (exception instanceof BindException) {
+            return ErrorCodes.CANNOT_ASSIGN_REQUESTED_ADDRESS;
+        } else if (exception instanceof ProtocolException) {
+            return ErrorCodes.PROTOCOL_ERROR;
+        } else if (exception instanceof NoRouteToHostException || exception instanceof UnknownHostException) {
+            return ErrorCodes.NO_ROUTE_TO_HOST;
+        } else {
+            return ErrorCodes.IO_ERROR;
+        }
+    }
+
     public int bind(int socketFamily, int newSocketType, String hostName, int port) {
         return withExceptionHandling(() -> {
             InetSocketAddress socketAddress = new InetSocketAddress(hostName, port);
@@ -292,11 +322,6 @@ public final class IdrisSocket implements Closeable {
         });
     }
 
-    private static void handleException(Exception e) {
-        Runtime.setException(e);
-        Runtime.setErrorNumber(getErrorNumber(e));
-    }
-
     private void initialize(AbstractSelectableChannel newChannel) throws IOException {
         this.channel = newChannel;
         newChannel.configureBlocking(false);
@@ -374,31 +399,6 @@ public final class IdrisSocket implements Closeable {
 
         public SocketAddress getRemoteAddress() {
             return remoteAddress;
-        }
-    }
-
-    static int getErrorNumber(Exception exception) {
-        if (exception != null) {
-            exception.printStackTrace();
-        }
-        // To return error codes to conform to Idris functions with C FFIs
-        if (exception == null) {
-            return 0;
-        } else if (exception instanceof FileNotFoundException || exception instanceof NoSuchFileException) {
-            return ErrorCodes.NO_SUCH_FILE;
-        } else if (exception instanceof InterruptedIOException || exception instanceof InterruptedException) {
-            Thread.currentThread().interrupt();
-            return ErrorCodes.INTERRUPTED;
-        } else if (exception instanceof AccessDeniedException || exception instanceof SecurityException) {
-            return ErrorCodes.SOCKET_ACCESS_DENIED;
-        } else if (exception instanceof BindException) {
-            return ErrorCodes.CANNOT_ASSIGN_REQUESTED_ADDRESS;
-        } else if (exception instanceof ProtocolException) {
-            return ErrorCodes.PROTOCOL_ERROR;
-        } else if (exception instanceof NoRouteToHostException || exception instanceof UnknownHostException) {
-            return ErrorCodes.NO_ROUTE_TO_HOST;
-        } else {
-            return ErrorCodes.IO_ERROR;
         }
     }
 }

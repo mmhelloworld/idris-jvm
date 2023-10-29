@@ -6,11 +6,11 @@ public final class Concurrency {
     private Concurrency() {
     }
 
-    public static void setThreadData(Object value) {
-        THREAD_LOCAL.set(value);
-    }
-
     public static Object getThreadData() {
         return THREAD_LOCAL.get();
+    }
+
+    public static void setThreadData(Object value) {
+        THREAD_LOCAL.set(value);
     }
 }

@@ -319,7 +319,9 @@ loadVar sourceLocTys IUnknown ty2@(IRef _ _) var =
     let loadInstr = \index => do Aload index; asmCast IUnknown ty2
     in opWithWordSize sourceLocTys loadInstr var
 
+loadVar sourceLocTys (IArray _) (IRef _ _) var = opWithWordSize sourceLocTys Aload var
 loadVar sourceLocTys (IArray _) IUnknown var = opWithWordSize sourceLocTys Aload var
+
 loadVar sourceLocTys (IRef _ _) IUnknown var = opWithWordSize sourceLocTys Aload var
 loadVar sourceLocTys IUnknown IUnknown var = opWithWordSize sourceLocTys Aload var
 

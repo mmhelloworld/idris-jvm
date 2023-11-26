@@ -39,6 +39,14 @@ public export %inline
 classLiteral : {ty: Type} -> Class ty
 classLiteral {ty} = prim__jvmClassLiteral ty
 
+export
+%extern prim__javaLambda : (lambdaTy : Type) -> (intfTy : Type) -> (f: lambdaTy) -> intfTy
+
+public export
+%inline
+jlambda : {fTy: Type} -> (f: fTy) -> {intfTy: Type} -> intfTy
+jlambda {fTy} f {intfTy} = prim__javaLambda fTy intfTy f
+
 public export
 data Array : (elemTy: Type) -> Type where
 
@@ -66,8 +74,22 @@ isPrimitive Double = True
 isPrimitive _ = False
 
 public export
+%foreign "jvm:nullValue(java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
+nullValue : a
+
+public export
 %foreign jvm' "java/util/Objects" "isNull" "java/lang/Object" "boolean"
 isNull : Object -> Bool
+
+namespace Long
+
+  public export
+  Long : Type
+  Long = Struct "java/lang/Long" []
+
+  %foreign "jvm:valueOf,java/lang/Long"
+  export
+  valueOf : Int64 -> Long
 
 namespace Array
     %inline

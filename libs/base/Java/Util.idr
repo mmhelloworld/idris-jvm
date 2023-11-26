@@ -45,8 +45,9 @@ namespace Arrays
     prim_arrayToString : Array Object -> PrimIO String
 
 namespace Collection
-    export
-    data Collection : Type -> Type where [external]
+    public export
+    Collection : Type -> Type
+    Collection elem = Struct "i:java/util/Collection" [("<>", elem)]
 
     %foreign "jvm:.add(i:java/util/Collection java/lang/Object Bool),java/util/Collection"
     prim_add : Collection a -> a -> PrimIO Bool
@@ -64,8 +65,9 @@ namespace Collection
 
 namespace JList
 
-    export
-    data JList : Type -> Type where [external]
+    public export
+    JList : Type -> Type
+    JList elem = Struct "i:java/util/List" [("<>", elem)]
 
     %foreign "jvm:.get(i:java/util/List int java/lang/Object),java/util/List"
     prim_get : JList a -> Int -> PrimIO a
@@ -95,8 +97,9 @@ public export
 Inherits (ArrayList a) (JList a) where
 
 namespace Map
-    export
-    data Map : (key: Type) -> (value: Type) -> Type where [external]
+    public export
+    Map : (key: Type) -> (value: Type) -> Type
+    Map key value = Struct "i:java/util/Map" [("<>", key), ("<>", value)]
 
     %foreign "jvm:.put(i:java/util/Map java/lang/Object java/lang/Object java/lang/Object),java/util/Map"
     prim_put : Map key value -> key -> value -> PrimIO value
@@ -113,8 +116,9 @@ namespace Map
     get map key = primIO (prim_get (subtyping map) key)
 
 namespace HashMap
-    export
-    data HashMap : (key: Type) -> (value: Type) -> Type where [external]
+    public export
+    HashMap : (key: Type) -> (value: Type) -> Type
+    HashMap key value = Struct "java/util/HashMap" [("<>", key), ("<>", value)]
 
     %foreign "jvm:<init>(java/util/HashMap),java/util/HashMap"
     prim_new : PrimIO (HashMap key value)

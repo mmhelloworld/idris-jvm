@@ -26,11 +26,6 @@ import Libraries.Utils.Path
 
 import System.FFI
 
-record ExportArgument where
-  constructor MkExportArgument
-  type: InferredType
-  annotations: List Annotation
-
 mutual
   parseAnnotationTypeValue : Name -> String -> String -> JSON -> Asm AnnotationValue
   parseAnnotationTypeValue functionName annotationName "int" (JNumber value) = Pure $ AnnInt $ cast value
@@ -91,6 +86,11 @@ parseAnnotations : Name -> JSON -> Asm (List Annotation)
 parseAnnotations functionName (JArray annotations) = traverse (parseAnnotation functionName) annotations
 parseAnnotations functionName _ = asmCrash ("Expected an array for parameter annotations in " ++ show functionName)
 
+record ExportArgument where
+  constructor MkExportArgument
+  type: InferredType
+  annotations: List Annotation
+
 parseArgument : Name -> List (String, JSON) -> Asm ExportArgument
 parseArgument functionName keyAndValues = do
   let valuesByKey = SortedMap.fromList keyAndValues
@@ -122,7 +122,9 @@ loadArguments typesByIndex functionName arity idrisTypes = go 0 idrisTypes
         else asmCrash ("JVM and Idris types do not match in foreign export for " ++ show functionName)
     go varIndex (idrisType :: rest) = do
       Just jvmType <- nullableToMaybe <$> Map.get typesByIndex varIndex
-        | Nothing => asmCrash ("Missing JVM type in foreign export for " ++ show functionName)
+        | Nothing => do -- World type only exists for Idris functions
+           Iconst 0 -- Load "world" for PrimIO functions
+           InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
       loadVar typesByIndex jvmType idrisType varIndex
       go (varIndex + 1) rest
 
@@ -175,7 +177,7 @@ parseString _ (JString value) = Pure value
 parseString errorMessage _ = asmCrash errorMessage
 
 parseClassExport : Name -> (nameParts : List String) -> {auto 0 nonEmpty : NonEmpty nameParts} ->
-                    SortedMap String JSON -> List Annotation -> Asm ClassExport
+                    SortedMap String JSON -> List Annotation -> Asm (List ExportDescriptor)
 parseClassExport name parts descriptor annotations = do
   let isInterface = "interface" `elem` parts
   extends <- if isInterface
@@ -190,8 +192,10 @@ parseClassExport name parts descriptor annotations = do
                   Just (JArray implementsJson) =>
                     traverse (parseString ("Expected a string value for '" ++ implementsKey ++ "' for " ++ show name))
                       implementsJson
-                  _ => asmCrash ("Invalid '" ++ implementsKey ++ "' for " ++ show name)
-  Pure $ MkClassExport (last parts) name extends implements (mapMaybe parseModifier parts) annotations
+                  _ => asmCrash ("Invalid '" ++ implementsKey ++ "' for " ++ show name ++
+                        ". Expected an array of type names.")
+  Pure $ [MkClassExportDescriptor $
+    MkClassExport (last parts) name extends implements (mapMaybe parseModifier parts) annotations]
 
 getReferenceTypeName : String -> InferredType -> Asm String
 getReferenceTypeName _ (IRef name _) = Pure name
@@ -204,6 +208,12 @@ makePublicByDefault modifiers =
       then modifiers
       else (Public :: modifiers)
 
+parseJvmReturnType : String -> SortedMap String JSON -> Asm InferredType
+parseJvmReturnType functionName descriptor = do
+  typeString <- parseString ("Invalid return type for function " ++ functionName) $
+    fromMaybe (JString "java/lang/Object") $ lookup "returnType" descriptor
+  Pure $ parse typeString
+
 parseMethodExport : Name -> (javaName: String) -> (nameParts: List String) -> {auto 0 nonEmpty : NonEmpty nameParts} ->
                       SortedMap String JSON -> List Annotation -> Asm MethodExport
 parseMethodExport idrisName javaName parts descriptor annotations = do
@@ -211,10 +221,8 @@ parseMethodExport idrisName javaName parts descriptor annotations = do
     arguments <- parseArgumentsJson idrisName argumentsJson
     let (jvmArgumentTypes, parameterAnnotations) =
           unzip $ (\(MkExportArgument type annotations) => (type, annotations)) <$> arguments
-    jvmReturnTypeString <-
-        parseString ("Invalid return type for function " ++ javaName) $
-          fromMaybe (JString "java/lang/Object") $ lookup "returnType" descriptor
-    let jvmReturnType = parse jvmReturnTypeString
+    let methodName = last parts
+    jvmReturnType <- if methodName == "<init>" then Pure IVoid else parseJvmReturnType javaName descriptor
     let functionType = MkInferredFunctionType jvmReturnType jvmArgumentTypes
     let modifiers = mapMaybe parseModifier parts
     let adjustedModifiers = makePublicByDefault modifiers
@@ -227,30 +235,57 @@ parseMethodExport idrisName javaName parts descriptor annotations = do
       else case lookup "enclosingType" descriptor of
         Nothing => asmCrash ("Missing 'enclosingType' for " ++ javaName)
         Just enclosingTypeJson => parseString ("Invalid enclosing type for function " ++ javaName) enclosingTypeJson
-    encloser <- case words enclosingTypeName of
-      [] => asmCrash ("Unable to determine enclosing type for " ++ javaName)
-      enclosingTypeParts@(_ :: _) =>
-        parseClassExport idrisName enclosingTypeParts SortedMap.empty []
-    Pure $ MkMethodExport (last parts) idrisName functionType encloser adjustedModifiers annotations
+    [MkClassExportDescriptor encloser] <- case words enclosingTypeName of
+        [] => asmCrash ("Unable to determine enclosing type for " ++ javaName)
+        enclosingTypeParts@(_ :: _) =>
+          parseClassExport idrisName enclosingTypeParts SortedMap.empty []
+      | _ => asmCrash ("Unexpected 'enclosingType' for " ++ show javaName)
+    Pure $ MkMethodExport methodName idrisName functionType encloser adjustedModifiers annotations
       adjustedParameterAnnotations
 
+generatedGetterName : Name
+generatedGetterName = MN "$idrisjvm$getter" 0
+
+generatedSetterName : Name
+generatedSetterName = MN "$idrisjvm$setter" 0
+
+createGetterExport : Name -> ClassExport -> List String -> InferredType -> String -> Maybe ExportDescriptor
+createGetterExport name encloser modifiers fieldType fieldName =
+  if "get" `elem` modifiers then
+      let functionType = MkInferredFunctionType fieldType [IRef (encloser.name) Class]
+      in Just $ MkMethodExportDescriptor $
+          MkMethodExport fieldName (NS (fst $ splitNS name) generatedGetterName) functionType encloser [Public] [] []
+  else Nothing
+
+createSetterExport : Name -> ClassExport -> List String -> InferredType -> String -> Maybe ExportDescriptor
+createSetterExport name encloser modifiers fieldType fieldName =
+  if "set" `elem` modifiers then
+      let functionType = MkInferredFunctionType IVoid [IRef (encloser.name) Class, fieldType]
+      in Just $ MkMethodExportDescriptor $
+           MkMethodExport fieldName (NS (fst $ splitNS name) generatedSetterName) functionType encloser [Public] [] []
+  else Nothing
+
 parseFieldExport : Name -> (nameParts: List String) -> {auto 0 nonEmpty : NonEmpty nameParts} ->
-                     SortedMap String JSON -> List Annotation -> Asm FieldExport
+                     SortedMap String JSON -> List Annotation -> Asm (List ExportDescriptor)
 parseFieldExport name parts descriptor annotations = do
   let modifiers = mapMaybe parseModifier parts
   Just enclosingTypeName <-
       traverse (parseString ("Invalid 'enclosingType' for " ++ show name)) $ lookup "enclosingType" descriptor
     | Nothing => asmCrash ("Missing 'enclosingType' for " ++ show name)
-  encloser <- case words enclosingTypeName of
-     [] => asmCrash ("Missing enclosing type for " ++ show name)
-     enclosingTypeParts@(_ :: _) =>
-       parseClassExport name enclosingTypeParts SortedMap.empty []
-  Just typeString <-
-        traverse (parseString ("Invalid type for field " ++ show name)) $ lookup "type" descriptor
+  [MkClassExportDescriptor encloser] <- case words enclosingTypeName of
+       [] => asmCrash ("Missing enclosing type for " ++ show name)
+       enclosingTypeParts@(_ :: _) => parseClassExport name enclosingTypeParts SortedMap.empty []
+     | _ => asmCrash ("Unexpected 'enclosingType' for " ++ show name)
+  Just typeString <- traverse (parseString ("Invalid type for field " ++ show name)) $ lookup "type" descriptor
       | Nothing => asmCrash ("Missing type for " ++ show name)
-  Pure $ MkFieldExport (last parts) name (parse typeString) encloser modifiers annotations
+  let fieldName = last parts
+  let type = parse typeString
+  let getter = createGetterExport name encloser parts type fieldName
+  let setter = createSetterExport name encloser parts type fieldName
+  let fieldExport = MkFieldExportDescriptor $ MkFieldExport fieldName name type encloser modifiers annotations
+  Pure $ mapMaybe id [Just fieldExport, getter, setter]
 
-parseObjectExportDescriptor : Name -> String -> List (String, JSON) -> Asm ExportDescriptor
+parseObjectExportDescriptor : Name -> String -> List (String, JSON) -> Asm (List ExportDescriptor)
 parseObjectExportDescriptor idrisName javaName descriptorKeyAndValues = do
   let descriptor = SortedMap.fromList descriptorKeyAndValues
   let annotationsJson = fromMaybe (JArray []) $ lookup "annotations" descriptor
@@ -260,14 +295,15 @@ parseObjectExportDescriptor idrisName javaName descriptorKeyAndValues = do
     parts@(_ :: _) =>
       cond
         [
-          (isJust (lookup "enclosingType" descriptor) || isJust (lookup "arguments" descriptor),
-            MkMethodExportDescriptor <$> parseMethodExport idrisName javaName parts descriptor annotations),
-          (isJust $ lookup "type" descriptor,
-            MkFieldExportDescriptor <$> parseFieldExport idrisName parts descriptor annotations)
+          ((isJust (lookup "returnType" descriptor) || elem "<init>" parts),
+            do
+              methodExport <- parseMethodExport idrisName javaName parts descriptor annotations
+              Pure [MkMethodExportDescriptor methodExport]),
+          (isJust $ lookup "type" descriptor, parseFieldExport idrisName parts descriptor annotations)
         ]
-        (MkClassExportDescriptor <$> parseClassExport idrisName parts descriptor annotations)
+        (parseClassExport idrisName parts descriptor annotations)
 
-parseJsonExport : Name -> String -> Asm ExportDescriptor
+parseJsonExport : Name -> String -> Asm (List ExportDescriptor)
 parseJsonExport functionName descriptor = case String.break (\c => c == '{') descriptor of
   ("", _) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
   (_, "") => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
@@ -338,20 +374,49 @@ parseImports functionName descriptor =
     (_, importsDescriptor) =>
       Pure $ MkImportDescriptor functionName $ SortedMap.fromList $ catMaybes $ parseImport <$> lines importsDescriptor
 
-parseExportDescriptor : Name -> String -> Asm ExportDescriptor
+parseExportDescriptor : Name -> String -> Asm (List ExportDescriptor)
 parseExportDescriptor functionName descriptor = cond
   [
     ("{" `isInfixOf` descriptor, parseJsonExport functionName descriptor),
-    ("." `isInfixOf` descriptor, MkMethodExportDescriptor <$> parseMethodSimpleExport functionName descriptor),
-    ("#" `isInfixOf` descriptor, MkFieldExportDescriptor <$> parseFieldSimpleExport functionName descriptor)
+    ("." `isInfixOf` descriptor, do
+      methodExport <- parseMethodSimpleExport functionName descriptor
+      Pure [MkMethodExportDescriptor methodExport]),
+    ("#" `isInfixOf` descriptor, do
+      fieldExport <- parseFieldSimpleExport functionName descriptor
+      Pure $ [MkFieldExportDescriptor fieldExport])
   ]
-  (parseImports functionName descriptor)
+  (Pure [!(parseImports functionName descriptor)])
 
 adjustArgumentsForInstanceMember : Name -> (isInstance: Bool) -> List InferredType -> Asm (List InferredType)
 adjustArgumentsForInstanceMember _ False argumentTypes = Pure argumentTypes
 adjustArgumentsForInstanceMember _ _ (_ :: jvmArgumentTypes) = Pure jvmArgumentTypes
 adjustArgumentsForInstanceMember idrisName _ _ =
   asmCrash ("Expected first argument to be a reference type for instance member in " ++ show idrisName)
+
+createAccessorName : String -> String -> Asm String
+createAccessorName pfix fieldName = case strM fieldName of
+   StrNil => asmCrash "Field name cannot be empty"
+   StrCons firstLetter rest => Pure (pfix ++ strCons (toUpper firstLetter) rest)
+
+createGetter : String -> InferredType -> String -> Asm ()
+createGetter className fieldType fieldName = do
+  Aload 0
+  Field GetField className fieldName (getJvmTypeDescriptor fieldType)
+  asmReturn fieldType
+  MaxStackAndLocal (-1) (-1)
+  MethodCodeEnd
+
+createSetter : String -> Map Int InferredType -> String -> Asm ()
+createSetter className jvmArgumentTypesByIndex fieldName = do
+  Aload 0
+  optFieldType <- LiftIo $ Map.get {value=InferredType} jvmArgumentTypesByIndex $ the Int 1
+  let Just fieldType = nullableToMaybe optFieldType
+        | Nothing => asmCrash ("Unable to determine field type for setter for " ++ show fieldName)
+  loadVar jvmArgumentTypesByIndex fieldType fieldType 1
+  Field PutField className fieldName (getJvmTypeDescriptor fieldType)
+  Return
+  MaxStackAndLocal (-1) (-1)
+  MethodCodeEnd
 
 exportFunction : MethodExport -> Asm ()
 exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers annotations parameterAnnotations) = do
@@ -364,35 +429,48 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers
     let isInstance = not $ elem Static modifiers
     jvmArgumentTypesForSignature <- adjustArgumentsForInstanceMember idrisName isInstance jvmArgumentTypes
     let functionType = getMethodDescriptor (MkInferredFunctionType jvmReturnType jvmArgumentTypesForSignature)
+    let exportedFieldName = jvmFunctionName
+    let simpleIdrisName = dropAllNS idrisName
+    jvmFunctionName <-
+        if simpleIdrisName == generatedGetterName then createAccessorName "get" jvmFunctionName
+        else if simpleIdrisName == generatedSetterName then createAccessorName "set" jvmFunctionName
+        else Pure jvmFunctionName
     CreateMethod modifiers fileName jvmClassName jvmFunctionName functionType Nothing Nothing annotations
       parameterAnnotations
     MethodCodeStart
-    let jvmIdrisName = jvmName idrisName
-    let idrisArgumentTypes = replicate arity inferredObjectType
-    let idrisFunctionType = MkInferredFunctionType inferredObjectType idrisArgumentTypes
-    loadArguments jvmArgumentTypesByIndex idrisName arityInt (parameterTypes idrisFunctionType)
-    let idrisMethodDescriptor = getMethodDescriptor idrisFunctionType
-    let qualifiedJvmIdrisName = getIdrisFunctionName !getProgramName (className jvmIdrisName) (methodName jvmIdrisName)
-    let isField = arity == 0
-    if not isField
-      then do
-        InvokeMethod InvokeStatic
-          (className qualifiedJvmIdrisName) (methodName qualifiedJvmIdrisName) idrisMethodDescriptor False
-        when (jvmReturnType == IVoid) $
-          InvokeMethod InvokeStatic "main/PrimIO" "unsafePerformIO" "(Ljava/lang/Object;)Ljava/lang/Object;" False
-        asmCast (returnType idrisFunctionType) jvmReturnType
-        asmReturn jvmReturnType
-        MaxStackAndLocal (-1) (-1)
-        MethodCodeEnd
+    if simpleIdrisName == generatedGetterName then createGetter jvmClassName jvmReturnType exportedFieldName
+      else if simpleIdrisName == generatedSetterName then
+        createSetter jvmClassName jvmArgumentTypesByIndex exportedFieldName
       else do
-        Field GetStatic (className qualifiedJvmIdrisName) (methodName qualifiedJvmIdrisName)
-            "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
-        InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
-            "()Ljava/lang/Object;" False
-        asmCast inferredObjectType jvmReturnType
-        asmReturn jvmReturnType
-        MaxStackAndLocal (-1) (-1)
-        MethodCodeEnd
+        (_, MkNmFun idrisFunctionArgs _) <- getFcAndDefinition (jvmSimpleName idrisName)
+          | _ => asmCrash ("Unknown idris function " ++ show idrisName)
+        let idrisFunctionArity = length idrisFunctionArgs
+        let idrisArgumentTypes = replicate idrisFunctionArity inferredObjectType
+        let idrisFunctionType = MkInferredFunctionType inferredObjectType idrisArgumentTypes
+        loadArguments jvmArgumentTypesByIndex idrisName arityInt (parameterTypes idrisFunctionType)
+        let jvmIdrisName = jvmName idrisName
+        let qualifiedJvmIdrisName = getIdrisFunctionName !getProgramName (className jvmIdrisName) (methodName jvmIdrisName)
+        let isField = idrisFunctionArity == 0
+        if not isField
+          then do
+            let idrisMethodDescriptor = getMethodDescriptor idrisFunctionType
+            InvokeMethod InvokeStatic
+              (className qualifiedJvmIdrisName) (methodName qualifiedJvmIdrisName) idrisMethodDescriptor False
+            when (jvmReturnType == IVoid) $
+              InvokeMethod InvokeStatic "main/PrimIO" "unsafePerformIO" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+            asmCast (returnType idrisFunctionType) jvmReturnType
+            asmReturn jvmReturnType
+            MaxStackAndLocal (-1) (-1)
+            MethodCodeEnd
+          else do
+            Field GetStatic (className qualifiedJvmIdrisName) (methodName qualifiedJvmIdrisName)
+                "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
+            InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
+                "()Ljava/lang/Object;" False
+            asmCast inferredObjectType jvmReturnType
+            asmReturn jvmReturnType
+            MaxStackAndLocal (-1) (-1)
+            MethodCodeEnd
 
 exportField : FieldExport -> Asm ()
 exportField (MkFieldExport fieldName idrisName type encloser modifiers annotations) = do
@@ -517,12 +595,12 @@ parseExportDescriptors globalState descriptors = do
     go acc [] = pure acc
     go (imports, descriptors) ((idrisName, descriptor) :: rest) = do
       asmState <- createAsmState globalState idrisName
-      (exportDescriptor, _) <- asm asmState (parseExportDescriptor idrisName descriptor)
-      case exportDescriptor of
-        MkImportDescriptor name currentImports =>
+      (exportDescriptors, _) <- asm asmState (parseExportDescriptor idrisName descriptor)
+      case exportDescriptors of
+        [MkImportDescriptor name currentImports] =>
           let newImports = SortedMap.merge imports (SortedMap.singleton (getNamespace name) currentImports)
           in go (newImports, descriptors) rest
-        _ => go (imports, exportDescriptor :: descriptors) rest
+        _ => go (imports, exportDescriptors ++ descriptors) rest
 
 export
 exportDefs : AsmGlobalState -> List (Name, String) -> IO ()

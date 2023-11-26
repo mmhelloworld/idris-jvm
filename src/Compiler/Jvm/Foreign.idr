@@ -88,11 +88,11 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argume
             getInstanceMemberClass
               ("Instance method " ++ memberName ++ " must have first argument to be of reference type")
               argumentTypes
-        else if startsWith memberName "#=" && arity == 2 then
+        else if startsWith memberName "#=" && arity >= 2 then
           getInstanceMemberClass
             ("Setter for instance field " ++ memberName ++ " must have first argument to be of reference type")
             argumentTypes
-        else if startsWith memberName "#" && arity == 1 then
+        else if startsWith memberName "#" && arity >= 1 then
           getInstanceMemberClass
             ("Getter for instance field " ++ memberName ++ " must have first argument to be of reference type")
             argumentTypes
@@ -133,8 +133,8 @@ getPrimMethodName arity name =
   cond
     [
       (startsWith name ".", "prim__jvmInstance"),
-      (startsWith name "#=", if arity == 2 then "prim__setInstanceField" else "prim__setStaticField"),
-      (startsWith name "#", if arity == 1 then "prim__getInstanceField" else "prim__getStaticField")
+      (startsWith name "#=", if arity >= 2 then "prim__setInstanceField" else "prim__setStaticField"),
+      (startsWith name "#", if arity >= 1 then "prim__getInstanceField" else "prim__getStaticField")
     ]
     "prim__jvmStatic"
 

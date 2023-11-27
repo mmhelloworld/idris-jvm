@@ -1885,6 +1885,13 @@ mutual
     jvmExtPrim _ returnType JvmClassLiteral [ty] = do
         assembleClassLiteral !(tySpec ty)
         asmCast (IRef "java/lang/Class" Class) returnType
+    jvmExtPrim _ returnType JvmInstanceOf [_, obj, ty] = do
+        assembleExpr False IUnknown obj
+        typeName <- getJvmReferenceTypeName !(tySpec ty)
+        InstanceOf typeName
+        asmCast IBool returnType
+    jvmExtPrim _ returnType JvmRefEq [_, _, firstObj, secondObj] =
+      assembleExprBinaryBoolOp returnType IUnknown Ifacmpne firstObj secondObj
     jvmExtPrim fc returnType JavaLambda [functionType, javaInterfaceType, lambda] =
       asmJavaLambda fc returnType functionType javaInterfaceType lambda
     jvmExtPrim _ returnType MakeFuture [_, action] = do

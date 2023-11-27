@@ -12,7 +12,7 @@ data ExtPrim = JvmStaticMethodCall | JvmInstanceMethodCall
              | JvmNewArray | JvmSetArray | JvmGetArray | JvmArrayLength
              | GetStaticField | SetStaticField
              | GetInstanceField | SetInstanceField
-             | JvmClassLiteral
+             | JvmClassLiteral | JvmInstanceOf | JvmRefEq
              | VoidElim
              | SysOS | SysCodegen
              | MakeFuture
@@ -24,6 +24,8 @@ Show ExtPrim where
   show JvmInstanceMethodCall = "JvmInstanceMethodCall"
   show JavaLambda = "JavaLambda"
   show JvmClassLiteral = "JvmClassLiteral"
+  show JvmInstanceOf = "JvmInstanceOf"
+  show JvmRefEq = "JvmRefEq"
   show NewIORef = "NewIORef"
   show ReadIORef = "ReadIORef"
   show WriteIORef = "WriteIORef"
@@ -52,6 +54,8 @@ toPrim pn@(NS _ n)
             (n == UN (Basic "prim__jvmInstance"), JvmInstanceMethodCall),
             (n == UN (Basic "prim__javaLambda"), JavaLambda),
             (n == UN (Basic "prim__jvmClassLiteral"), JvmClassLiteral),
+            (n == UN (Basic "prim__jvmInstanceOf"), JvmInstanceOf),
+            (n == UN (Basic "prim__jvmRefEq"), JvmRefEq),
             (n == UN (Basic "prim__newIORef"), NewIORef),
             (n == UN (Basic "prim__readIORef"), ReadIORef),
             (n == UN (Basic "prim__writeIORef"), WriteIORef),

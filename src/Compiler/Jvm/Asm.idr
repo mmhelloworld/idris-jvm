@@ -681,6 +681,7 @@ data Asm : Type -> Type where
     Ificmple : (label: String) -> Asm ()
     Ificmplt : (label: String) -> Asm ()
     Ificmpeq : (label: String) -> Asm ()
+    Ifacmpne : (label: String) -> Asm ()
     Ificmpne : (label: String) -> Asm ()
     Ifle : (label: String) -> Asm ()
     Iflt : (label: String) -> Asm ()
@@ -1396,6 +1397,14 @@ getJvmTypeDescriptor (IFunction lambdaType) = getJvmTypeDescriptor (lambdaType.j
 getJvmTypeDescriptor IUnknown            = getJvmTypeDescriptor inferredObjectType
 
 export
+getJvmReferenceTypeName : InferredType -> Asm String
+getJvmReferenceTypeName (IRef ty _) = Pure ty
+getJvmReferenceTypeName (IArray (IRef ty _)) = Pure ("[L" ++ ty ++ ";")
+getJvmReferenceTypeName (IArray ty) = Pure ("[" ++ !(getJvmReferenceTypeName ty))
+getJvmReferenceTypeName (IFunction lambdaType) = getJvmReferenceTypeName (lambdaType.javaInterface)
+getJvmReferenceTypeName ty = asmCrash ("Expected a reference type but found " ++ show ty)
+
+export
 asmReturn : InferredType -> Asm ()
 asmReturn IVoid    = Return
 asmReturn IBool    = Ireturn
@@ -1967,6 +1976,8 @@ runAsm state (Ificmplt label) =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmplt" [assembler state, label]
 runAsm state (Ificmpeq label) =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpeq" [assembler state, label]
+runAsm state (Ifacmpne label) =
+    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifacmpne" [assembler state, label]
 runAsm state (Ificmpne label) =
     assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpne" [assembler state, label]
 runAsm state (Ifle label) =

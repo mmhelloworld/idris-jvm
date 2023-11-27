@@ -449,7 +449,8 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers
         let idrisFunctionType = MkInferredFunctionType inferredObjectType idrisArgumentTypes
         loadArguments jvmArgumentTypesByIndex idrisName arityInt (parameterTypes idrisFunctionType)
         let jvmIdrisName = jvmName idrisName
-        let qualifiedJvmIdrisName = getIdrisFunctionName !getProgramName (className jvmIdrisName) (methodName jvmIdrisName)
+        programName <- getProgramName
+        let qualifiedJvmIdrisName = getIdrisFunctionName programName (className jvmIdrisName) (methodName jvmIdrisName)
         let isField = idrisFunctionArity == 0
         if not isField
           then do
@@ -457,7 +458,8 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers
             InvokeMethod InvokeStatic
               (className qualifiedJvmIdrisName) (methodName qualifiedJvmIdrisName) idrisMethodDescriptor False
             when (jvmReturnType == IVoid) $
-              InvokeMethod InvokeStatic "main/PrimIO" "unsafePerformIO" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+              InvokeMethod InvokeStatic (programName ++ "/PrimIO") "unsafePerformIO"
+                "(Ljava/lang/Object;)Ljava/lang/Object;" False
             asmCast (returnType idrisFunctionType) jvmReturnType
             asmReturn jvmReturnType
             MaxStackAndLocal (-1) (-1)

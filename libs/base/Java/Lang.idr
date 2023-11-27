@@ -35,9 +35,21 @@ namespace Class
 
 %extern prim__jvmClassLiteral : (ty: Type) -> Class ty
 
+%extern prim__jvmInstanceOf : a -> (ty: Type) -> Bool
+
+%extern prim__jvmRefEq : a -> b -> Bool
+
 public export %inline
 classLiteral : {ty: Type} -> Class ty
 classLiteral {ty} = prim__jvmClassLiteral ty
+
+public export
+jvmInstanceOf : a -> (ty: Type) -> Bool
+jvmInstanceOf = prim__jvmInstanceOf
+
+public export
+jvmRefEq : a -> b -> Bool
+jvmRefEq = prim__jvmRefEq
 
 export
 %extern prim__javaLambda : (lambdaTy : Type) -> (intfTy : Type) -> (f: lambdaTy) -> intfTy
@@ -50,12 +62,16 @@ jlambda {fTy} f {intfTy} = prim__javaLambda fTy intfTy f
 public export
 data Array : (elemTy: Type) -> Type where
 
+export
 %extern prim__jvmNewArray : (ty: Type) -> Int -> PrimIO (Array ty)
 
+export
 %extern prim__jvmSetArray : (a: Type) -> Int -> a -> Array a -> PrimIO ()
 
+export
 %extern prim__jvmGetArray : (a: Type) -> Int -> Array a -> PrimIO a
 
+export
 %extern prim__jvmArrayLength : (a: Type) -> Array a -> Int
 
 isPrimitive : Type -> Bool

@@ -195,6 +195,8 @@ mockRunAsm state (Ificmple label) =
     assemble state $ log $ "ificmple " ++ label
 mockRunAsm state (Ificmplt label) =
     assemble state $ log $ "ificmplt " ++ label
+mockRunAsm state (Ifacmpne label) =
+    assemble state $ log $ "ifacmpne " ++ label
 mockRunAsm state (Ificmpne label) =
     assemble state $ log $ "ificmpne " ++ label
 mockRunAsm state (Ifle label) =

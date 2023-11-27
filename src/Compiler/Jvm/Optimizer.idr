@@ -807,6 +807,10 @@ mutual
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
     inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
     inferExtPrim _ returnType JvmClassLiteral [_] = pure $ IRef "java/lang/Class" Class
+    inferExtPrim _ returnType JvmInstanceOf [_, obj, _] = do
+      ignore $ inferExpr IUnknown obj
+      pure IBool
+    inferExtPrim _ returnType JvmRefEq [_, _, x, y] = inferBoolOp IUnknown x y
     inferExtPrim fc returnType JavaLambda [functionType, javaInterfaceType, lambda] = do
       ignore $ inferExpr IUnknown lambda
       IFunction <$> getJavaLambdaType fc [functionType, javaInterfaceType, lambda]

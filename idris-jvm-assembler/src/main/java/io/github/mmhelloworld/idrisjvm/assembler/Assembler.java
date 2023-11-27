@@ -116,6 +116,7 @@ import static org.objectweb.asm.Opcodes.IFLT;
 import static org.objectweb.asm.Opcodes.IFNE;
 import static org.objectweb.asm.Opcodes.IFNONNULL;
 import static org.objectweb.asm.Opcodes.IFNULL;
+import static org.objectweb.asm.Opcodes.IF_ACMPNE;
 import static org.objectweb.asm.Opcodes.IF_ICMPEQ;
 import static org.objectweb.asm.Opcodes.IF_ICMPGE;
 import static org.objectweb.asm.Opcodes.IF_ICMPGT;
@@ -949,6 +950,10 @@ public final class Assembler {
 
     public void ificmplt(String label) {
         mv.visitJumpInsn(IF_ICMPLT, (Label) env.get(label));
+    }
+
+    public void ifacmpne(String label) {
+        mv.visitJumpInsn(IF_ACMPNE, (Label) env.get(label));
     }
 
     public void ificmpne(String label) {

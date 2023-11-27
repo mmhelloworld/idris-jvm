@@ -44,6 +44,29 @@ namespace Arrays
     %foreign "jvm:toString,java/util/Arrays"
     prim_arrayToString : Array Object -> PrimIO String
 
+    public export %inline
+    fromList : HasIO io => (a: Type) -> List a -> io (Array a)
+    fromList a xs = do
+        let len = length xs
+        arr <- primIO $ prim__jvmNewArray a (cast len)
+        let setter = \index: Int, value: a => prim__jvmSetArray a index value arr
+        go setter 0 xs
+        pure arr
+      where
+        go : (Int -> a -> PrimIO ()) -> Int -> List a -> io ()
+        go _ _ [] = pure ()
+        go setter index (x :: xs) = do
+          primIO $ setter index x
+          go setter (index + 1) xs
+
+namespace Objects
+  %foreign "jvm:hash,java/util/Objects"
+  prim_hash : Array Object -> PrimIO Int
+
+  export %inline
+  hash : (HasIO io) => Array Object -> io Int
+  hash array = primIO $ prim_hash array
+
 namespace Collection
     public export
     Collection : Type -> Type

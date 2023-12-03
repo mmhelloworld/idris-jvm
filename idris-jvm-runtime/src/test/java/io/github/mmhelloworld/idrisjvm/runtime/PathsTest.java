@@ -1,12 +1,8 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
-import io.github.mmhelloworld.idrisjvm.runtime.Paths;
-
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
-import java.nio.file.Path;
 
 public class PathsTest {
 
@@ -22,7 +18,7 @@ public class PathsTest {
 
     assertThat(Paths.createPath("a").toString()).isEqualTo(
       cwd + sep + "a");
-    assertThat(Paths.createPath("a" + sep +"b").toString()).isEqualTo(
+    assertThat(Paths.createPath("a" + sep + "b").toString()).isEqualTo(
       cwd + sep + "a" + sep + "b");
 
     assertThat(Paths.createPath(".." + sep + "a").toString()).isEqualTo(

@@ -57,7 +57,6 @@ public final class AsmGlobalState {
     private final Map<String, Assembler> assemblers;
 
     public <T> AsmGlobalState(String programName,
-                              Collection<String> trampolinePatterns,
                               Map<String, Object> fcAndDefinitionsByName) {
         this.programName = programName;
         functions = new ConcurrentHashMap<>();
@@ -65,18 +64,6 @@ public final class AsmGlobalState {
         constructors = synchronizedSet(new HashSet<>());
         assemblers = new ConcurrentHashMap<>();
         this.fcAndDefinitionsByName = fcAndDefinitionsByName;
-    }
-
-    public AsmGlobalState(String programName, Collection<String> trampolinePatterns) {
-        this(programName, trampolinePatterns, emptyMap());
-    }
-
-    public AsmGlobalState(String programName) {
-        this(programName, emptyList());
-    }
-
-    public AsmGlobalState(String programName, Map<String, Object> fcAndDefinitionsByName) {
-        this(programName, emptyList(), fcAndDefinitionsByName);
     }
 
     public static void copyRuntimeJar(String directory) throws IOException {
@@ -166,7 +153,6 @@ public final class AsmGlobalState {
         } else {
             new File(classDirectory).mkdirs();
             copyRuntimeJar(classDirectory);
-            Assembler.createJar(classDirectory, outputFile, mainClassNoSlash);
             Assembler.createExecutable(normalizedOutputDirectory, outputFile, mainClassNoSlash);
         }
     }

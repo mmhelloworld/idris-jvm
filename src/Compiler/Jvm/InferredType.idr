@@ -7,13 +7,15 @@ import Core.Name
 import Data.List1
 import Data.String
 import System.FFI
+import Data.Maybe
 
 mutual
   public export
   data JavaReferenceType = Class | Interface
 
   public export
-  data InferredType = IBool | IByte | IChar | IShort | IInt | ILong | IFloat | IDouble | IRef String JavaReferenceType
+  data InferredType = IBool | IByte | IChar | IShort | IInt | ILong | IFloat | IDouble
+                    | IRef String JavaReferenceType (List InferredType)
                     | IArray InferredType | IVoid
                     | IFunction JavaLambdaType
                     | IUnknown
@@ -56,7 +58,7 @@ mutual
     ILong == ILong = True
     IFloat == IFloat = True
     IDouble == IDouble = True
-    (IRef ty1 _) == (IRef ty2 _) = ty1 == ty2
+    (IRef ty1 _ params1) == (IRef ty2 _ params2) = assert_total (ty1 == ty2 && params1 == params2)
     (IArray elemTy1) == (IArray elemTy2) = elemTy1 == elemTy2
     (IFunction javaLambdaType1) == (IFunction javaLambdaType2) = assert_total $ javaLambdaType1 == javaLambdaType2
     IUnknown == IUnknown = True
@@ -84,7 +86,8 @@ mutual
       show ILong = "long"
       show IFloat = "float"
       show IDouble = "double"
-      show (IRef clsName _) = clsName
+      show (IRef clsName _ []) = clsName
+      show (IRef clsName _ typeParams) = assert_total (clsName ++ "<" ++ showSep ", " (show <$> typeParams) ++ ">")
       show (IArray elemTy) = "Array " ++ show elemTy
       show (IFunction lambdaTy) = assert_total $ "Function " ++ show lambdaTy
       show IUnknown = "unknown"
@@ -92,7 +95,7 @@ mutual
 
 export
 inferredObjectType : InferredType
-inferredObjectType = IRef "java/lang/Object" Class
+inferredObjectType = IRef "java/lang/Object" Class []
 
 %inline
 public export
@@ -101,7 +104,7 @@ bigIntegerClass = "java/math/BigInteger"
 
 export
 inferredBigIntegerType : InferredType
-inferredBigIntegerType = IRef bigIntegerClass Class
+inferredBigIntegerType = IRef bigIntegerClass Class []
 
 %inline
 public export
@@ -110,26 +113,26 @@ stringClass = "java/lang/String"
 
 export
 inferredStringType : InferredType
-inferredStringType = IRef stringClass Class
+inferredStringType = IRef stringClass Class []
 
 export
 inferredLambdaType : InferredType
-inferredLambdaType = IRef "java/util/function/Function" Interface
+inferredLambdaType = IRef "java/util/function/Function" Interface []
 
 export
 function2Type : InferredType
-function2Type = IRef "java/util/function/BiFunction" Interface
+function2Type = IRef "java/util/function/BiFunction" Interface []
 
 export
 getFunctionInterface : (arity: Nat) -> InferredType
 getFunctionInterface 1 = inferredLambdaType
 getFunctionInterface 2 = function2Type
-getFunctionInterface arity = IRef ("io/github/mmhelloworld/idrisjvm/runtime/Function" ++ show arity) Interface
+getFunctionInterface arity = IRef ("io/github/mmhelloworld/idrisjvm/runtime/Function" ++ show arity) Interface []
 
 %inline
 public export
 inferredForkJoinTaskType : InferredType
-inferredForkJoinTaskType = IRef "java/util/concurrent/ForkJoinTask" Class
+inferredForkJoinTaskType = IRef "java/util/concurrent/ForkJoinTask" Class []
 
 %inline
 public export
@@ -139,7 +142,7 @@ arrayListClass = "java/util/ArrayList"
 %inline
 public export
 arrayListType : InferredType
-arrayListType = IRef arrayListClass Class
+arrayListType = IRef arrayListClass Class []
 
 %inline
 public export
@@ -153,7 +156,7 @@ idrisListClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList"
 
 export
 idrisListType : InferredType
-idrisListType = IRef idrisListClass Class
+idrisListType = IRef idrisListClass Class []
 
 %inline
 public export
@@ -162,7 +165,7 @@ idrisNilClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil"
 
 export
 idrisNilType : InferredType
-idrisNilType = IRef idrisNilClass Class
+idrisNilType = IRef idrisNilClass Class []
 
 %inline
 public export
@@ -171,7 +174,7 @@ idrisConsClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList$Cons"
 
 export
 idrisConsType : InferredType
-idrisConsType = IRef idrisConsClass Class
+idrisConsType = IRef idrisConsClass Class []
 
 %inline
 public export
@@ -180,7 +183,7 @@ idrisNothingClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Nothing"
 
 export
 idrisNothingType : InferredType
-idrisNothingType = IRef idrisNothingClass Class
+idrisNothingType = IRef idrisNothingClass Class []
 
 %inline
 public export
@@ -189,11 +192,11 @@ idrisJustClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Just"
 
 export
 idrisJustType : InferredType
-idrisJustType = IRef idrisJustClass Class
+idrisJustType = IRef idrisJustClass Class []
 
 export
 idrisMaybeType : InferredType
-idrisMaybeType = IRef "io/github/mmhelloworld/idrisjvm/runtime/Maybe" Class
+idrisMaybeType = IRef "io/github/mmhelloworld/idrisjvm/runtime/Maybe" Class []
 
 %inline
 public export
@@ -224,7 +227,7 @@ delayedClass = getRuntimeClass "Delayed"
 
 export
 delayedType : InferredType
-delayedType = IRef delayedClass Interface
+delayedType = IRef delayedClass Interface []
 
 %inline
 public export
@@ -243,15 +246,15 @@ refClass = getRuntimeClass "Ref"
 
 export
 refType : InferredType
-refType = IRef refClass Class
+refType = IRef refClass Class []
 
 export
 idrisObjectType : InferredType
-idrisObjectType = IRef idrisObjectClass Interface
+idrisObjectType = IRef idrisObjectClass Interface []
 
 public export
 isRefType : InferredType -> Bool
-isRefType (IRef _ _) = True
+isRefType (IRef _ _ _) = True
 isRefType _ = False
 
 public export
@@ -270,18 +273,18 @@ public export
 indexOf : String -> Int -> Int
 
 export
-iref : String -> InferredType
-iref className =
+iref : String -> List InferredType -> InferredType
+iref className typeParams =
   let isInterface = "i:" `isPrefixOf` className
       referenceType = if isInterface then Interface else Class
       hashIndex = indexOf className (cast '#') -- old way of explicitly giving Java lambda descriptor
       startIndex = if isInterface then 2 else 0
       endIndex = if hashIndex == -1 then length className else cast hashIndex
-  in IRef (substr startIndex endIndex className) referenceType
+  in IRef (substr startIndex endIndex className) referenceType typeParams
 
 export
 stripInterfacePrefix : InferredType -> InferredType
-stripInterfacePrefix (IRef className _) = iref className
+stripInterfacePrefix (IRef className _ params) = iref className params
 stripInterfacePrefix ty = ty
 
 public export
@@ -293,6 +296,52 @@ export
     jvm' "io/github/mmhelloworld/idrisjvm/assembler/IdrisName" "getIdrisConstructorClassName"
         "String" "String"
 getIdrisConstructorClassName : String -> String
+
+data GenericTypeToken = Ident String | TypeParamStart | TypeParamEnd
+
+export
+Show GenericTypeToken where
+    show (Ident ident) = ident
+    show TypeParamStart = "<"
+    show TypeParamEnd = ">"
+
+mutual
+    tokenize : String -> List GenericTypeToken
+    tokenize str = reverse $ go [] str where
+        go : List GenericTypeToken -> String -> List GenericTypeToken
+        go acc "" = acc
+        go acc descriptor = case String.break (\c => c == '<' || c == ',' || c == '>' || c == ' ') descriptor of
+            ("", "") => acc
+            (typeName, "") => Ident typeName :: acc
+            (typeName, rest) =>
+               let first = assert_total (prim__strHead rest)
+                   newRest = assert_total $ strTail rest
+               in if first == '<' || first == '>' then
+                    let delim = if first == '<' then TypeParamStart else TypeParamEnd
+                        newAcc = if typeName == "" then delim :: acc else delim :: Ident typeName :: acc
+                    in go newAcc newRest
+                  else if typeName == "" then go acc newRest else go (Ident typeName :: acc) newRest
+
+    goParseGenericType : List GenericTypeToken -> (Maybe InferredType, List GenericTypeToken)
+    goParseGenericType (Ident typeName :: TypeParamStart :: rest) =
+        let (typeParams, newRest) = parseTypeParams [] rest
+        in (Just $ iref typeName $ reverse typeParams, newRest)
+    goParseGenericType (Ident typeName :: rest) = (Just $ iref typeName [], rest)
+    goParseGenericType rest = (Nothing, rest)
+
+    parseTypeParams : List InferredType -> List GenericTypeToken -> (List InferredType, List GenericTypeToken)
+    parseTypeParams acc [] = (acc, [])
+    parseTypeParams acc (TypeParamEnd :: rest) = (acc, rest)
+    parseTypeParams acc tokens =
+        let (typeParam, newRest) = goParseGenericType tokens
+        in parseTypeParams (maybe acc (flip (::) acc) typeParam) newRest
+
+    export
+    parseGenericType : String -> Maybe InferredType
+    parseGenericType descriptor = fst $ goParseGenericType $ tokenize descriptor
+
+throwInvalidDescriptor : String -> a
+throwInvalidDescriptor desc = assert_total $ idris_crash ("Invalid type descriptor: " ++ desc)
 
 export
 parse : String -> InferredType
@@ -307,16 +356,20 @@ parse "double" = IDouble
 parse "String" = inferredStringType
 parse "BigInteger" = inferredBigIntegerType
 parse "void" = IVoid
-parse "[" = assert_total $ idris_crash "Invalid type descriptor: ["
+parse "[" = throwInvalidDescriptor "["
 parse desc =
   if startsWith desc "["
     then IArray (parse (assert_total (strTail desc)))
-    else iref desc
+    else fromMaybe (throwInvalidDescriptor desc) $ parseGenericType desc
 
 mutual
   createExtPrimTypeSpecFn : InferredFunctionType -> String
   createExtPrimTypeSpecFn (MkInferredFunctionType returnType parameterTypes) =
     showSep "⟶" (createExtPrimTypeSpec <$> parameterTypes) ++ "⟶" ++ createExtPrimTypeSpec returnType
+
+  createTypeParamsSpec : List InferredType -> String
+  createTypeParamsSpec [] = ""
+  createTypeParamsSpec typeParams = "<" ++ showSep ", " (createExtPrimTypeSpec <$> typeParams) ++ ">"
 
   export
   createExtPrimTypeSpec : InferredType -> String
@@ -329,8 +382,8 @@ mutual
   createExtPrimTypeSpec IFloat = "float"
   createExtPrimTypeSpec IDouble = "Double"
   createExtPrimTypeSpec IVoid = "void"
-  createExtPrimTypeSpec (IRef ty Interface) = "i:" ++ ty
-  createExtPrimTypeSpec (IRef ty _) = ty
+  createExtPrimTypeSpec (IRef ty Interface params) = "i:" ++ ty ++ createTypeParamsSpec params
+  createExtPrimTypeSpec (IRef ty _ params) = ty ++ createTypeParamsSpec params
   createExtPrimTypeSpec (IFunction (MkJavaLambdaType intf method methodType implementationType)) =
     "λ" ++ showSep "," [createExtPrimTypeSpec intf, method, createExtPrimTypeSpecFn methodType,
       createExtPrimTypeSpecFn implementationType]
@@ -340,5 +393,6 @@ mutual
 export
 isObjectType : InferredType -> Bool
 isObjectType IUnknown = True
-isObjectType (IRef "java/lang/Object" _) = True
+isObjectType (IRef "java/lang/Object" _ _) = True
 isObjectType _ = False
+

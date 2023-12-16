@@ -45,7 +45,7 @@ parse _ CFInteger = Pure inferredBigIntegerType
 parse _ CFChar = Pure IChar
 parse _ CFWorld = Pure IInt
 parse fc (CFIORes returnType) = parse fc returnType
-parse fc (CFStruct name fields) = Pure $ iref name
+parse fc (CFStruct name fields) = Pure $ iref name []
 parse fc (CFFun argument _) = Pure $ getFunctionInterface (getArity 1 argument)
 parse fc (CFUser name (ty :: _)) =
   if name == builtin "Pair" then
@@ -53,7 +53,7 @@ parse fc (CFUser name (ty :: _)) =
       CFStruct name _ =>
         case words name of
           [] => asmCrash ("Invalid Java lambda type at " ++ show fc)
-          (javaInterfaceName :: _) => Pure $ IRef javaInterfaceName Interface
+          (javaInterfaceName :: _) => Pure $ IRef javaInterfaceName Interface []
       _ => Pure inferredObjectType
   else if name == arrayName then Pure $ IArray !(parse fc ty)
   else Pure inferredObjectType
@@ -77,7 +77,7 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argume
   where
 
     getInstanceMemberClass : (errorMessage: Lazy String) -> List InferredType -> Asm String
-    getInstanceMemberClass errorMessage ((IRef className _) :: _) = Pure className
+    getInstanceMemberClass errorMessage ((IRef className _ _) :: _) = Pure className
     getInstanceMemberClass errorMessage _ = Throw fc errorMessage
 
     getClassName : String -> List String -> InferredType -> List InferredType -> Asm String
@@ -100,7 +100,7 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argume
           if memberName == "<init>"
             then
               case returnType of
-                IRef className _ => Pure className
+                IRef className _ _ => Pure className
                 _ => Throw fc ("Constructor must return a reference type")
             else
               case descriptorParts of

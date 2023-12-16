@@ -132,8 +132,8 @@ record ClassExport where
   constructor MkClassExport
   name: String
   idrisName: Name
-  extends: String
-  implements: List String
+  extends: InferredType
+  implements: List InferredType
   modifiers: List Access
   annotations: List Annotation
 
@@ -195,10 +195,10 @@ parseClassExport name parts descriptor annotations = do
                   _ => asmCrash ("Invalid '" ++ implementsKey ++ "' for " ++ show name ++
                         ". Expected an array of type names.")
   Pure $ [MkClassExportDescriptor $
-    MkClassExport (last parts) name extends implements (mapMaybe parseModifier parts) annotations]
+    MkClassExport (last parts) name (parse extends) (parse <$> implements) (mapMaybe parseModifier parts) annotations]
 
 getReferenceTypeName : String -> InferredType -> Asm String
-getReferenceTypeName _ (IRef name _) = Pure name
+getReferenceTypeName _ (IRef name _ _) = Pure name
 getReferenceTypeName functionName _ = asmCrash ("Expected a reference type to export function " ++ functionName)
 
 makePublicByDefault : List Access -> List Access
@@ -252,7 +252,7 @@ generatedSetterName = MN "$idrisjvm$setter" 0
 createGetterExport : Name -> ClassExport -> List String -> InferredType -> String -> Maybe ExportDescriptor
 createGetterExport name encloser modifiers fieldType fieldName =
   if "get" `elem` modifiers then
-      let functionType = MkInferredFunctionType fieldType [IRef (encloser.name) Class]
+      let functionType = MkInferredFunctionType fieldType [IRef (encloser.name) Class []]
       in Just $ MkMethodExportDescriptor $
           MkMethodExport fieldName (NS (fst $ splitNS name) generatedGetterName) functionType encloser [Public] [] []
   else Nothing
@@ -260,7 +260,7 @@ createGetterExport name encloser modifiers fieldType fieldName =
 createSetterExport : Name -> ClassExport -> List String -> InferredType -> String -> Maybe ExportDescriptor
 createSetterExport name encloser modifiers fieldType fieldName =
   if "set" `elem` modifiers then
-      let functionType = MkInferredFunctionType IVoid [IRef (encloser.name) Class, fieldType]
+      let functionType = MkInferredFunctionType IVoid [IRef (encloser.name) Class [], fieldType]
       in Just $ MkMethodExportDescriptor $
            MkMethodExport fieldName (NS (fst $ splitNS name) generatedSetterName) functionType encloser [Public] [] []
   else Nothing
@@ -323,14 +323,14 @@ parseMethodSimpleExport functionName descriptor = case String.break (\c => c == 
       let instanceType = parse instanceTypeString
       let functionType = MkInferredFunctionType (parse (last types)) (instanceType :: (parse <$> (init types)))
       className <- getReferenceTypeName ("Invalid instance type in export for " ++ show functionName) instanceType
-      let encloser = MkClassExport className functionName "java/lang/Object" [] [Public] []
+      let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
       Pure $ MkMethodExport javaName functionName functionType encloser [Public] [] []
   (className, staticMethodNameAndArgs) => case words staticMethodNameAndArgs of
     [] => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (_ :: []) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (javaName :: types@(_ :: _)) => do
       let functionType = MkInferredFunctionType (parse (last types)) (parse <$> (init types))
-      let encloser = MkClassExport className functionName "java/lang/Object" [] [Public] []
+      let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
       Pure $ MkMethodExport javaName functionName functionType encloser [Public, Static] [] []
 
 parseFieldSimpleExport : Name -> String -> Asm FieldExport
@@ -342,13 +342,13 @@ parseFieldSimpleExport functionName descriptor = case String.break (\c => c == '
     (javaName :: instanceType :: type :: _) => do
       className <- getReferenceTypeName ("Invalid instance type in export for " ++ show functionName)
                      (parse instanceType)
-      let encloser = MkClassExport className functionName "java/lang/Object" [] [Public] []
+      let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
       Pure $ MkFieldExport javaName functionName (parse type) encloser [Public] []
   (className, staticFieldNameAndType) => case words staticFieldNameAndType of
     [] => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (_ :: []) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (javaName :: type :: _) => do
-      let encloser = MkClassExport className functionName "java/lang/Object" [] [Public] []
+      let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
       Pure $ MkFieldExport javaName functionName (parse type) encloser [Public, Static] []
 
 %foreign jvm' "java/lang/Character" "isWhitespace" "char" "boolean"
@@ -418,6 +418,19 @@ createSetter className jvmArgumentTypesByIndex fieldName = do
   MaxStackAndLocal (-1) (-1)
   MethodCodeEnd
 
+mutual
+  asmAnnotationValue : AnnotationValue -> AnnotationValue
+  asmAnnotationValue (AnnArray values) = AnnArray (asmAnnotationValue <$> values)
+  asmAnnotationValue (AnnAnnotation annotation) = AnnAnnotation (asmAnnotation annotation)
+  asmAnnotationValue value = value
+
+  asmAnnotationProperty : (String, AnnotationValue) -> (String, AnnotationValue)
+  asmAnnotationProperty (name, value) = (name, asmAnnotationValue value)
+
+  asmAnnotation : Annotation -> Annotation
+  asmAnnotation (MkAnnotation name properties) =
+    MkAnnotation ("L" ++ name ++ ";") (asmAnnotationProperty <$> properties)
+
 exportFunction : MethodExport -> Asm ()
 exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers annotations parameterAnnotations) = do
     let jvmClassName = encloser.name
@@ -435,8 +448,10 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers
         if simpleIdrisName == generatedGetterName then createAccessorName "get" jvmFunctionName
         else if simpleIdrisName == generatedSetterName then createAccessorName "set" jvmFunctionName
         else Pure jvmFunctionName
-    CreateMethod modifiers fileName jvmClassName jvmFunctionName functionType Nothing Nothing annotations
-      parameterAnnotations
+    let asmAnnotations = asmAnnotation <$> annotations
+    let asmParameterAnnotations = (\annotations => asmAnnotation <$> annotations) <$> parameterAnnotations
+    CreateMethod modifiers fileName jvmClassName jvmFunctionName functionType Nothing Nothing asmAnnotations
+      asmParameterAnnotations
     MethodCodeStart
     if simpleIdrisName == generatedGetterName then createGetter jvmClassName jvmReturnType exportedFieldName
       else if simpleIdrisName == generatedSetterName then
@@ -477,13 +492,18 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type encloser modifiers
 exportField : FieldExport -> Asm ()
 exportField (MkFieldExport fieldName idrisName type encloser modifiers annotations) = do
   let jvmClassName = encloser.name
-  CreateField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing annotations
+  let asmAnnotations = asmAnnotation <$> annotations
+  CreateField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing asmAnnotations
   FieldEnd
 
 exportClass : ClassExport -> Asm ()
 exportClass (MkClassExport name idrisName extends implements modifiers annotations) = do
   CreateClass [ComputeMaxs, ComputeFrames]
-  ClassCodeStart 52 modifiers name Nothing extends implements annotations
+  let signature = getSignature extends ++ concat (getSignature <$> implements)
+  extendsTypeName <- getJvmReferenceTypeName extends
+  implementsTypeNames <- traverse getJvmReferenceTypeName implements
+  let asmAnnotations = asmAnnotation <$> annotations
+  ClassCodeStart 52 modifiers name (Just signature) extendsTypeName implementsTypeNames asmAnnotations
 
 exportMemberIo : AsmGlobalState -> ExportDescriptor -> IO ()
 exportMemberIo globalState (MkMethodExportDescriptor desc) = do
@@ -501,9 +521,12 @@ substituteTypeName : SortedMap String String -> String -> String
 substituteTypeName imports type = fromMaybe type $ SortedMap.lookup type imports
 
 substituteType : SortedMap String String -> InferredType -> InferredType
-substituteType imports ref@(IRef type refType) = maybe ref (flip IRef refType) $ SortedMap.lookup type imports
-substituteType imports ref@(IArray (IRef type refType)) =
-  maybe ref (IArray . (flip IRef refType)) $ SortedMap.lookup type imports
+substituteType imports ref@(IRef type refType typeParams) =
+  let substitutedType = substituteTypeName imports type
+      substitutedTypeParams = substituteType imports <$> typeParams
+  in IRef substitutedType refType substitutedTypeParams
+substituteType imports ref@(IArray (IRef type refType typeParams)) =
+  maybe ref (\type => IArray $ IRef type refType typeParams) $ SortedMap.lookup type imports
 substituteType imports ref@(IArray (IArray type)) = IArray (IArray $ substituteType imports type)
 substituteType imports type = type
 
@@ -547,8 +570,8 @@ substituteClassExport functionImports desc = case findImports functionImports de
   Just imports =>
     let
       updatedName = substituteTypeName imports desc.name
-      updatedExtends = substituteTypeName imports desc.extends
-      updatedImplements = substituteTypeName imports <$> desc.implements
+      updatedExtends = substituteType imports desc.extends
+      updatedImplements = substituteType imports <$> desc.implements
       updatedAnnotations = substituteAnnotation imports <$> desc.annotations
     in MkClassExport updatedName desc.idrisName updatedExtends updatedImplements desc.modifiers updatedAnnotations
 

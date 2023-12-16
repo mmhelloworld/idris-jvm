@@ -1301,7 +1301,7 @@ mutual
     cond [(startsWith desc "[", IArray (tySpecStr (assert_total (strTail desc)))),
           (startsWith desc "λ", IFunction (tySpecLambda (assert_total (strTail desc))))
          ]
-         (iref desc)
+         (iref desc [])
 
 export
 structName : Name
@@ -1322,8 +1322,8 @@ getIdrisConstructorType conInfo tag arity name =
 parseName : String -> Maybe InferredType
 parseName name =
   case words name of
-    (interfaceName :: methodName :: _) => Just $ IRef interfaceName Interface
-    (className :: []) => Just $ iref className
+    (interfaceName :: methodName :: _) => Just $ IRef interfaceName Interface []
+    (className :: []) => Just $ iref className []
     _ => Nothing
 
 mutual
@@ -1382,27 +1382,34 @@ mutual
 
 export
 getJvmTypeDescriptor : InferredType -> String
-getJvmTypeDescriptor IByte        = "B"
-getJvmTypeDescriptor IChar        = "C"
-getJvmTypeDescriptor IShort       = "S"
-getJvmTypeDescriptor IBool        = "Z"
-getJvmTypeDescriptor IDouble      = "D"
-getJvmTypeDescriptor IFloat       = "F"
-getJvmTypeDescriptor IInt         = "I"
-getJvmTypeDescriptor ILong        = "J"
-getJvmTypeDescriptor IVoid        = "V"
-getJvmTypeDescriptor (IRef ty _)    = "L" ++ ty ++ ";"
-getJvmTypeDescriptor (IArray ty)  = "[" ++ getJvmTypeDescriptor ty
+getJvmTypeDescriptor IByte         = "B"
+getJvmTypeDescriptor IChar         = "C"
+getJvmTypeDescriptor IShort        = "S"
+getJvmTypeDescriptor IBool         = "Z"
+getJvmTypeDescriptor IDouble       = "D"
+getJvmTypeDescriptor IFloat        = "F"
+getJvmTypeDescriptor IInt          = "I"
+getJvmTypeDescriptor ILong         = "J"
+getJvmTypeDescriptor IVoid         = "V"
+getJvmTypeDescriptor (IRef ty _ _) = "L" ++ ty ++ ";"
+getJvmTypeDescriptor (IArray ty)   = "[" ++ getJvmTypeDescriptor ty
 getJvmTypeDescriptor (IFunction lambdaType) = getJvmTypeDescriptor (lambdaType.javaInterface)
 getJvmTypeDescriptor IUnknown            = getJvmTypeDescriptor inferredObjectType
 
 export
 getJvmReferenceTypeName : InferredType -> Asm String
-getJvmReferenceTypeName (IRef ty _) = Pure ty
-getJvmReferenceTypeName (IArray (IRef ty _)) = Pure ("[L" ++ ty ++ ";")
+getJvmReferenceTypeName (IRef ty _ _) = Pure ty
+getJvmReferenceTypeName (IArray (IRef ty _ _)) = Pure ("[L" ++ ty ++ ";")
 getJvmReferenceTypeName (IArray ty) = Pure ("[" ++ !(getJvmReferenceTypeName ty))
 getJvmReferenceTypeName (IFunction lambdaType) = getJvmReferenceTypeName (lambdaType.javaInterface)
 getJvmReferenceTypeName ty = asmCrash ("Expected a reference type but found " ++ show ty)
+
+export
+getSignature : InferredType -> String
+getSignature (IRef ty _ typeParams@(_ :: _)) =
+  let typeParamsDescriptor = concat (getJvmTypeDescriptor <$> typeParams)
+  in "L" ++ ty ++ "<" ++ typeParamsDescriptor ++ ">;"
+getSignature type = getJvmTypeDescriptor type
 
 export
 asmReturn : InferredType -> Asm ()

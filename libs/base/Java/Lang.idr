@@ -21,6 +21,13 @@ namespace Object
     %foreign "jvm:.toString(java/lang/Object java/lang/String),java/lang/Object"
     prim_toString : Object -> PrimIO String
 
+    %foreign "jvm:<super>,java/lang/Object"
+    prim_super : PrimIO ()
+
+    export %inline
+    super : HasIO io => io ()
+    super = primIO prim_super
+
     export %inline
     toString : (HasIO io, Inherits a Object) => a -> io String
     toString obj = primIO $ prim_toString (subtyping obj)

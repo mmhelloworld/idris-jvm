@@ -112,9 +112,9 @@ assembleArray IInt = Anewintarray
 assembleArray ILong = Anewlongarray
 assembleArray IFloat = Anewfloatarray
 assembleArray IDouble = Anewdoublearray
-assembleArray (IRef ty _) = Anewarray ty
+assembleArray (IRef ty _ _) = Anewarray ty
 assembleArray (IArray ty) = Anewarray (getJvmTypeDescriptor ty)
-assembleArray (IFunction (MkJavaLambdaType (IRef ty _) _ _ _)) = Anewarray ty
+assembleArray (IFunction (MkJavaLambdaType (IRef ty _ _) _ _ _)) = Anewarray ty
 assembleArray _ = Anewarray "java/lang/Object"
 
 storeArray : (elemTy: InferredType) -> Asm ()
@@ -173,8 +173,8 @@ hashCode (Str value) = Just $ Object.hashCode value
 hashCode x = Nothing
 
 getHashCodeSwitchClass : FC -> InferredType -> Asm String
-getHashCodeSwitchClass fc (IRef "java/lang/String" _) = Pure stringClass
-getHashCodeSwitchClass fc (IRef "java/math/BigInteger" _) = Pure bigIntegerClass
+getHashCodeSwitchClass fc (IRef "java/lang/String" _ _) = Pure stringClass
+getHashCodeSwitchClass fc (IRef "java/math/BigInteger" _ _) = Pure bigIntegerClass
 getHashCodeSwitchClass fc ILong = Pure "java/lang/Long"
 getHashCodeSwitchClass fc constantType = asmCrash ("Constant type " ++ show constantType ++ " cannot be compiled to 'Switch'.")
 
@@ -246,7 +246,7 @@ assembleBits64 isTailCall returnType value = do
     when isTailCall $ asmReturn returnType
 
 isInterfaceInvocation : InferredType -> Bool
-isInterfaceInvocation (IRef _ Interface) = True
+isInterfaceInvocation (IRef _ Interface _) = True
 isInterfaceInvocation _ = False
 
 assembleNil : (isTailCall: Bool) -> InferredType -> Asm ()
@@ -608,7 +608,7 @@ mutual
     assembleExprComparableBinaryBoolOp : InferredType -> String -> (String -> Asm ()) ->
         NamedCExp -> NamedCExp -> Asm ()
     assembleExprComparableBinaryBoolOp returnType className operator expr1 expr2 = do
-        let exprType = IRef className Class
+        let exprType = IRef className Class []
         assembleExpr False exprType expr1
         assembleExpr False exprType expr2
         ifLabel <- newLabel
@@ -1754,7 +1754,7 @@ mutual
         argTypes <- traverse tySpec (map fst instanceMethodArgs)
         methodReturnType <- tySpec ret
         let (cname, mnameWithDot) = break (== '.') fn
-        traverse_ assembleParameter $ zip (snd obj :: map snd instanceMethodArgs) (iref cname :: argTypes)
+        traverse_ assembleParameter $ zip (snd obj :: map snd instanceMethodArgs) (iref cname [] :: argTypes)
         let (_, mname) = break (/= '.') mnameWithDot
         instanceType <- tySpec $ fst obj
         let isInterfaceInvocation = isInterfaceInvocation instanceType
@@ -1774,10 +1774,13 @@ mutual
         when isConstructor $ do
             New cname
             Dup
+        let isSuper = mname == "<super>"
+        when isSuper $ Aload 0
         traverse_ assembleParameter $ zip (map snd args) argTypes
-        let descriptorReturnType = if isConstructor then IVoid else methodReturnType
+        let descriptorReturnType = if isConstructor || isSuper then IVoid else methodReturnType
         let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType descriptorReturnType argTypes
-        let invocationType = if isConstructor then InvokeSpecial else InvokeStatic
+        let invocationType = if isConstructor || isSuper then InvokeSpecial else InvokeStatic
+        let mname = if isSuper then "<init>" else mname
         InvokeMethod invocationType cname mname methodDescriptor False
         asmCast methodReturnType returnType
     jvmExtPrim _ returnType SetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
@@ -1785,7 +1788,7 @@ mutual
             | _ => asmCrash ("Setting an instance field should have two arguments for " ++ fn)
         fieldType <- tySpec (fst value)
         let (cname, fnameWithDot) = break (== '.') fn
-        assembleExpr False (iref cname) (snd obj)
+        assembleExpr False (iref cname []) (snd obj)
         assembleExpr False fieldType (snd value)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#' && c /= '=') fnameWithDot
         Field PutField cname fieldName (getJvmTypeDescriptor fieldType)
@@ -1806,7 +1809,7 @@ mutual
             | _ => asmCrash ("Getting an instance field should have one argument for " ++ fn)
         fieldType <- tySpec ret
         let (cname, fnameWithDot) = break (== '.') fn
-        assembleExpr False (iref cname) (snd obj)
+        assembleExpr False (iref cname []) (snd obj)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
         Field GetField cname fieldName (getJvmTypeDescriptor fieldType)
         asmCast fieldType returnType
@@ -1884,7 +1887,7 @@ mutual
         asmCast inferredObjectType returnType
     jvmExtPrim _ returnType JvmClassLiteral [ty] = do
         assembleClassLiteral !(tySpec ty)
-        asmCast (IRef "java/lang/Class" Class) returnType
+        asmCast (IRef "java/lang/Class" Class []) returnType
     jvmExtPrim _ returnType JvmInstanceOf [_, obj, ty] = do
         assembleExpr False IUnknown obj
         typeName <- getJvmReferenceTypeName !(tySpec ty)

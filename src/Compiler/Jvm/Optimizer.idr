@@ -596,7 +596,7 @@ getJavaLambdaType fc [functionType, javaInterfaceType, _] =
                 then case words namePartsStr of
                   (interfaceName :: methodName :: _) => do
                     methodType <- parseFunctionType methodTypeExp
-                    Pure (IRef interfaceName Interface, methodName, methodType)
+                    Pure (IRef interfaceName Interface [], methodName, methodType)
                   _ => asmCrash ("Expected interface name and method separated by space at " ++ show fc ++ ": " ++
                         namePartsStr)
                 else throwExpectedStruct namePartsStr
@@ -806,7 +806,7 @@ mutual
     inferExtPrim _ returnType SysOS [] = pure inferredStringType
     inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
     inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
-    inferExtPrim _ returnType JvmClassLiteral [_] = pure $ IRef "java/lang/Class" Class
+    inferExtPrim _ returnType JvmClassLiteral [_] = pure $ IRef "java/lang/Class" Class []
     inferExtPrim _ returnType JvmInstanceOf [_, obj, _] = do
       ignore $ inferExpr IUnknown obj
       pure IBool

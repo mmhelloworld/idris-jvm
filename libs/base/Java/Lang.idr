@@ -21,12 +21,12 @@ namespace Object
     %foreign "jvm:.toString(java/lang/Object java/lang/String),java/lang/Object"
     prim_toString : Object -> PrimIO String
 
-    %foreign "jvm:<super>,java/lang/Object"
-    prim_super : PrimIO ()
+    %foreign "jvm:<init>,java/lang/Object"
+    prim_new : PrimIO Object
 
     export %inline
-    super : HasIO io => io ()
-    super = primIO prim_super
+    new : HasIO io => io Object
+    new = primIO prim_new
 
     export %inline
     toString : (HasIO io, Inherits a Object) => a -> io String
@@ -65,6 +65,18 @@ public export
 %inline
 jlambda : {fTy: Type} -> (f: fTy) -> {intfTy: Type} -> intfTy
 jlambda {fTy} f {intfTy} = prim__javaLambda fTy intfTy f
+
+public export
+data FArgList : Type where
+     Nil : FArgList
+     (::) : {a : Type} -> (1 arg : a) -> (1 args : FArgList) -> FArgList
+
+export
+%extern prim__jvmSuper : Type -> (1 args : FArgList) -> PrimIO ()
+
+export %inline
+super : Type -> (1 args : FArgList) -> IO ()
+super clazz args = fromPrim (prim__jvmSuper clazz args)
 
 public export
 data Array : (elemTy: Type) -> Type where
@@ -146,3 +158,34 @@ namespace Array
                         then pure Nothing
                         else pure (Just value)
         else pure Nothing
+
+public export
+Runnable : Type
+Runnable = (Struct "java/lang/Runnable run" [], PrimIO ())
+
+namespace Thread
+
+    public export
+    Thread : Type
+    Thread = Struct "java/lang/Thread" []
+
+    %foreign "jvm:<init>"
+    prim_new : Runnable -> PrimIO Thread
+
+    %foreign "jvm:.start"
+    prim_start : Thread -> PrimIO ()
+
+    %foreign "jvm:.join"
+    prim_join : Thread -> PrimIO ()
+
+    export
+    new : HasIO io => PrimIO () -> io Thread
+    new runnable = primIO $ prim_new (jlambda runnable)
+
+    export
+    start : HasIO io => Thread -> io ()
+    start = primIO . prim_start
+
+    export
+    join : HasIO io => Thread -> io ()
+    join = primIO . prim_join

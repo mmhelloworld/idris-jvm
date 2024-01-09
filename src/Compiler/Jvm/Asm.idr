@@ -717,10 +717,10 @@ data Asm : Type -> Type where
     Lload : Int  -> Asm ()
     Lmul : Asm ()
     Lneg : Asm ()
-    Lor : Asm ()
     LocalVariable : (name: String) -> (descriptor: String) -> (signature: Maybe String) -> (startLabel: String) ->
                         (endLabel: String) -> (index: Int) -> Asm ()
     LookupSwitch : (defaultLabel: String) -> (labels: List String) -> (cases: List Int) -> Asm ()
+    Lor : Asm ()
     Lrem : Asm ()
     Lreturn : Asm ()
     Lshl : Asm ()
@@ -1626,6 +1626,20 @@ mutual
       properties <- traverse toJAnnotationProperty props
       primIO $ prim_newJAnnotation name $ believe_me properties
 
+mutual
+  asmAnnotationValue : AnnotationValue -> AnnotationValue
+  asmAnnotationValue (AnnArray values) = AnnArray (asmAnnotationValue <$> values)
+  asmAnnotationValue (AnnAnnotation annotation) = AnnAnnotation (asmAnnotation annotation)
+  asmAnnotationValue value = value
+
+  asmAnnotationProperty : (String, AnnotationValue) -> (String, AnnotationValue)
+  asmAnnotationProperty (name, value) = (name, asmAnnotationValue value)
+
+  export
+  asmAnnotation : Annotation -> Annotation
+  asmAnnotation (MkAnnotation name properties) =
+    MkAnnotation ("L" ++ name ++ ";") (asmAnnotationProperty <$> properties)
+
 export
 toJFieldInitialValue : FieldInitialValue -> Object
 toJFieldInitialValue (IntField n) = believe_me $ integerValueOf n
@@ -1703,11 +1717,11 @@ shouldDebug =
 
 export
 debugFunction : String
-debugFunction = fromMaybe " " $ unsafePerformIO $ getEnv "IDRIS_JVM_DEBUG"
+debugFunction = fromMaybe "<all>" $ unsafePerformIO $ getEnv "IDRIS_JVM_DEBUG"
 
 export
 shouldDebugFunction : Jname -> Bool
-shouldDebugFunction jname = shouldDebug && (debugFunction `isInfixOf` (getSimpleName jname))
+shouldDebugFunction jname = shouldDebug && (debugFunction == "<all>" || (debugFunction `isInfixOf` (getSimpleName jname)))
 
 namespace LocalDateTime
     data LocalDateTime : Type where [external]
@@ -1780,16 +1794,20 @@ data FArgList : Type where
 export
 %extern prim__jvmInstance : (ret : Type) -> String -> (1 args : FArgList) -> (1 x : %World) -> IORes ret
 
-export
-%extern prim__jvmStatic : (ret : Type) -> String -> (1 args : FArgList) -> (1 x : %World) -> IORes ret
-
-export %inline
-jvmStatic : (ret : Type) -> String -> (1 args : FArgList) -> IO ret
-jvmStatic ret fn args = fromPrim (prim__jvmStatic ret fn args)
-
 export %inline
 jvmInstance : (ret : Type) -> String -> (1 args : FArgList) -> IO ret
 jvmInstance ret fn args = fromPrim (prim__jvmInstance ret fn args)
+
+export
+superName : Name
+superName = NS (mkNamespace "Java.Lang") (UN $ Basic "super")
+
+export
+isSuperCall : Name -> List NamedCExp -> Bool
+isSuperCall name
+  [(NmExtPrim fc f@(NS ns (UN (Basic "prim__jvmStatic"))) args@(ret :: NmPrimVal primFc (Str fn):: rest))]
+  = name == superName && endsWith ".<init>" fn
+isSuperCall _ _ = False
 
 export
 runAsm : HasIO io => AsmState -> Asm a -> io (a, AsmState)

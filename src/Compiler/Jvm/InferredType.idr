@@ -268,9 +268,13 @@ public export
 Monoid InferredType where
   neutral = IUnknown
 
-public export
+export
 %foreign "jvm:.indexOf(java/lang/String int int),java/lang/String"
 indexOf : String -> Int -> Int
+
+export
+%foreign "jvm:.replaceAll,java/lang/String"
+replaceAll : String -> String -> String -> String
 
 export
 iref : String -> List InferredType -> InferredType
@@ -290,6 +294,10 @@ stripInterfacePrefix ty = ty
 public export
 %foreign "jvm:.startsWith(java/lang/String java/lang/String boolean),java/lang/String"
 startsWith : String -> String -> Bool
+
+public export
+%foreign "jvm:.endsWith(java/lang/String java/lang/String boolean),java/lang/String"
+endsWith : String -> String -> Bool
 
 export
 %foreign

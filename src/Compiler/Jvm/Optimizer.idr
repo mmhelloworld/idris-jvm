@@ -554,6 +554,9 @@ isIoAction (NmCon _ name _ _ _) = name == primio "IORes"
 isIoAction (NmLam fc arg expr) = isIoAction expr
 isIoAction expr = False
 
+voidTypeExpr : NamedCExp
+voidTypeExpr = NmCon emptyFC (UN (Basic "void")) TYCON Nothing []
+
 export
 getJavaLambdaType : FC -> List NamedCExp -> Asm JavaLambdaType
 getJavaLambdaType fc [functionType, javaInterfaceType, _] =
@@ -617,6 +620,7 @@ mutual
     inferExpr exprTy (NmDelay _ _ expr) = inferExprLam AppliedLambdaUnknown Nothing Nothing expr
     inferExpr exprTy expr@(NmLocal _ var) = addVariableType (jvmSimpleName var) exprTy
     inferExpr exprTy (NmRef _ name) = pure exprTy
+    inferExpr exprTy app@(NmApp _ (NmRef _ name) args) = inferExprApp exprTy app
     inferExpr _ (NmApp fc (NmLam _ var body) [expr]) =
         inferExprLam (getAppliedLambdaType fc) (Just expr) (Just var) body
     inferExpr _ (NmLam _ var body) = inferExprLam AppliedLambdaUnknown Nothing (Just var) body
@@ -755,12 +759,17 @@ mutual
       inferExtPrim fc returnType JvmStaticMethodCall descriptors
     inferExtPrim fc returnType JvmStaticMethodCall [ret, NmApp _ _ [functionNamePrimVal], fargs, world] =
       inferExtPrim fc returnType JvmStaticMethodCall [ret, functionNamePrimVal, fargs, world]
-    inferExtPrim _ returnType JvmStaticMethodCall [ret, NmPrimVal fc (Str fn), fargs, world]
+    inferExtPrim _ returnType JvmStaticMethodCall [ret, _, fargs, _]
       = do args <- getFArgs fargs
            argTypes <- traverse tySpec (map fst args)
            methodReturnType <- tySpec ret
            traverse_ inferExtPrimArg $ zip (map snd args) argTypes
            pure $ if methodReturnType == IVoid then inferredObjectType else methodReturnType
+    inferExtPrim fc returnType JvmSuper [clazz, fargs, world] = do
+      rootMethodName <- getRootMethodName
+      if (endsWith (methodName rootMethodName) "$ltinit$gt")
+        then inferExtPrim fc returnType JvmStaticMethodCall [voidTypeExpr, NmErased fc, fargs, world]
+        else pure IUnknown
     inferExtPrim _ returnType NewArray [_, size, val, world] = do
         ignore $ inferExpr IInt size
         ignore $ inferExpr IUnknown val

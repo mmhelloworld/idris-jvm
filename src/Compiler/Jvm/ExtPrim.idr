@@ -2,10 +2,11 @@ module Compiler.Jvm.ExtPrim
 
 import Core.Context
 import Core.Name
+import Debug.Trace
 
 ||| Extended primitives for the scheme backend, outside the standard set of primFn
 public export
-data ExtPrim = JvmStaticMethodCall | JvmInstanceMethodCall
+data ExtPrim = JvmStaticMethodCall | JvmInstanceMethodCall | JvmSuper
              | JavaLambda
              | NewIORef | ReadIORef | WriteIORef
              | NewArray | ArrayGet | ArraySet
@@ -23,6 +24,7 @@ Show ExtPrim where
   show JvmStaticMethodCall = "JvmStaticMethodCall"
   show JvmInstanceMethodCall = "JvmInstanceMethodCall"
   show JavaLambda = "JavaLambda"
+  show JvmSuper = "JvmSuper"
   show JvmClassLiteral = "JvmClassLiteral"
   show JvmInstanceOf = "JvmInstanceOf"
   show JvmRefEq = "JvmRefEq"
@@ -46,12 +48,18 @@ Show ExtPrim where
   show MakeFuture = "MakeFuture"
   show (Unknown n) = "Unknown " ++ show n
 
+export
+isSuper : Name -> Bool
+isSuper (UN (Basic "prim__jvmSuper")) = True
+isSuper n = False
+
 ||| Match on a user given name to get the scheme primitive
 export
 toPrim : Name -> ExtPrim
 toPrim pn@(NS _ n)
     = cond [(n == UN (Basic "prim__jvmStatic"), JvmStaticMethodCall),
             (n == UN (Basic "prim__jvmInstance"), JvmInstanceMethodCall),
+            (isSuper n, JvmSuper),
             (n == UN (Basic "prim__javaLambda"), JavaLambda),
             (n == UN (Basic "prim__jvmClassLiteral"), JvmClassLiteral),
             (n == UN (Basic "prim__jvmInstanceOf"), JvmInstanceOf),

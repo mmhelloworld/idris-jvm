@@ -109,6 +109,7 @@ mockRunAsm state (CreateIdrisConstructorClass className isStringConstructor cons
 
 mockRunAsm state D2i = assemble state $ log "d2i"
 mockRunAsm state D2f = assemble state $ log "d2f"
+mockRunAsm state D2l = assemble state $ log "d2l"
 mockRunAsm state Dadd = assemble state $ log "dadd"
 mockRunAsm state Dcmpl = assemble state $ log "dcmpl"
 mockRunAsm state Dcmpg = assemble state $ log "dcmpg"
@@ -238,19 +239,17 @@ mockRunAsm state Irem = assemble state $ log "irem"
 mockRunAsm state Ireturn = assemble state $ log "ireturn"
 mockRunAsm state Ishl = assemble state $ log "ishl"
 mockRunAsm state Ishr = assemble state $ log "ishr"
-mockRunAsm state (Istore n) = assemble state $
-    log $ "istore " ++ show n
+mockRunAsm state (Istore n) = assemble state $ log $ "istore " ++ show n
 mockRunAsm state Isub = assemble state $ log "isub"
 mockRunAsm state Iushr = assemble state $ log "iushr"
 mockRunAsm state L2d = assemble state $ log "l2d"
 mockRunAsm state L2i = assemble state $ log "l2i"
 mockRunAsm state (LabelStart label) = assemble state $ log (label ++ ":")
 mockRunAsm state Ladd = assemble state $ log "ladd"
-mockRunAsm state Land = assemble state $ log "land"
 mockRunAsm state Laload = assemble state $ log "laload"
+mockRunAsm state Land = assemble state $ log "land"
 mockRunAsm state Lastore = assemble state $ log "lastore"
-mockRunAsm state Lor = assemble state $ log "lor"
-mockRunAsm state Lxor = assemble state $ log "lxor"
+mockRunAsm state Lcmp = assemble state $ log "lcmp"
 mockRunAsm state Lcompl = assemble state $ log "lcompl"
 
 mockRunAsm state (Ldc (TypeConst ty)) =
@@ -270,13 +269,6 @@ mockRunAsm state (Lload n) = assemble state $
     log $ "lload " ++ show n
 mockRunAsm state Lmul = assemble state $ log "lmul"
 mockRunAsm state Lneg = assemble state $ log "lneg"
-mockRunAsm state (LookupSwitch defaultLabel labels cases) = assemble state $ do
-  let jcases = integerValueOf <$> cases
-  log $ unwords [
-    "lookupSwitch",
-    defaultLabel,
-    (objectToString (the Object $ believe_me labels)),
-    (objectToString (the Object $ believe_me jcases))]
 
 mockRunAsm state (LocalVariable name descriptor signature startLabel endLabel index) = assemble state $
     log $ unwords [
@@ -287,6 +279,15 @@ mockRunAsm state (LocalVariable name descriptor signature startLabel endLabel in
         startLabel,
         endLabel,
         show index]
+mockRunAsm state (LookupSwitch defaultLabel labels cases) = assemble state $ do
+  let jcases = integerValueOf <$> cases
+  log $ unwords [
+    "lookupSwitch",
+    defaultLabel,
+    (objectToString (the Object $ believe_me labels)),
+    (objectToString (the Object $ believe_me jcases))]
+
+mockRunAsm state Lor = assemble state $ log "lor"
 
 mockRunAsm state Lrem = assemble state $ log "lrem"
 mockRunAsm state Lreturn = assemble state $ log "lreturn"
@@ -296,6 +297,7 @@ mockRunAsm state (Lstore n) = assemble state $
     log $ "lstore " ++ show n
 mockRunAsm state Lsub = assemble state $ log "lsub"
 mockRunAsm state Lushr = assemble state $ log "lushr"
+mockRunAsm state Lxor = assemble state $ log "lxor"
 mockRunAsm state (MaxStackAndLocal stack local) = assemble state $
     log $ "maxStackAndLocal " ++ show stack ++ " " ++ show local
 mockRunAsm state MethodCodeStart = assemble state $
@@ -324,4 +326,3 @@ mockRunAsm st (Pure value) = pure (value, st)
 mockRunAsm st (Bind action f) = do
   (result, nextSt) <- mockRunAsm st action
   mockRunAsm nextSt $ f result
-mockRunAsm state action = pure (believe_me $ crash "Unsupported action", state)

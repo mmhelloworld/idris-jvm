@@ -205,7 +205,7 @@ ifeq ($(OS), windows)
 	-install ${TARGET}.cmd ${DESTDIR}${PREFIX}/bin
 endif
 	mkdir -p ${DESTDIR}${PREFIX}/bin/${NAME}_app
-	install ${TARGETDIR}/${NAME}_app/* ${DESTDIR}${PREFIX}/bin/${NAME}_app
+	cp -rf ${TARGETDIR}/${NAME}_app ${DESTDIR}${PREFIX}/bin/
 
 install-support:
 	@${MAKE} -C support install

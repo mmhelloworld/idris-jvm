@@ -204,7 +204,7 @@ endif
 	mkdir -p ${PREFIX}/lib/
 	install support/c/${IDRIS2_SUPPORT} ${PREFIX}/lib
 	mkdir -p ${PREFIX}/bin/${NAME}_app
-	install ${TARGETDIR}/${NAME}_app/* ${PREFIX}/bin/${NAME}_app
+	cp -rf ${TARGETDIR}/${NAME}_app ${PREFIX}/bin/
 
 install-support:
 	mkdir -p ${PREFIX}/${NAME_VERSION}/support/docs

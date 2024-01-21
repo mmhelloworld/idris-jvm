@@ -12,8 +12,10 @@ class IdrisListTest {
     @Test
     void reverse() {
         assertThat(IdrisList.reverse(IdrisList.Nil.INSTANCE)).isEqualTo(IdrisList.Nil.INSTANCE);
-        assertThat(IdrisList.reverse(new IdrisList.Cons(1, new IdrisList.Cons(2, new IdrisList.Cons(3, IdrisList.Nil.INSTANCE)))))
-            .isEqualTo(new IdrisList.Cons(3, new IdrisList.Cons(2, new IdrisList.Cons(1, IdrisList.Nil.INSTANCE))));
+        assertThat(IdrisList.reverse(new IdrisList.Cons(1, new IdrisList.Cons(2,
+            new IdrisList.Cons(3, IdrisList.Nil.INSTANCE)))))
+            .isEqualTo(new IdrisList.Cons(3, new IdrisList.Cons(2,
+                new IdrisList.Cons(1, IdrisList.Nil.INSTANCE))));
     }
 
     @Test

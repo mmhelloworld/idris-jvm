@@ -42,6 +42,7 @@ namespace Class
 
 %extern prim__jvmClassLiteral : (ty: Type) -> Class ty
 
+public export
 %extern prim__jvmInstanceOf : a -> (ty: Type) -> Bool
 
 %extern prim__jvmRefEq : a -> b -> Bool
@@ -50,7 +51,7 @@ public export %inline
 classLiteral : {ty: Type} -> Class ty
 classLiteral {ty} = prim__jvmClassLiteral ty
 
-public export
+public export %inline
 jvmInstanceOf : a -> (ty: Type) -> Bool
 jvmInstanceOf = prim__jvmInstanceOf
 
@@ -77,6 +78,19 @@ export
 export %inline
 super : Type -> (1 args : FArgList) -> IO ()
 super clazz args = fromPrim (prim__jvmSuper clazz args)
+
+namespace JInteger
+  public export
+  JInteger : Type
+  JInteger = Struct "java/lang/Integer" []
+
+  export
+  %foreign "jvm:valueOf,java/lang/Integer"
+  box : Int -> JInteger
+
+  export
+  %foreign "jvm:.intValue"
+  unbox : JInteger -> Int
 
 public export
 data Array : (elemTy: Type) -> Type where
@@ -165,7 +179,7 @@ Runnable = (Struct "java/lang/Runnable run" [], PrimIO ())
 
 namespace Thread
 
-    public export
+    public export %inline
     Thread : Type
     Thread = Struct "java/lang/Thread" []
 

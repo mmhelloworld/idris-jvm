@@ -133,7 +133,7 @@
                                 <argument>idris2-exec</argument>
                             </arguments>
                             <environmentVariables>
-                                <JAVA_OPTS>-Xss70m -Xms3g -Xmx3g</JAVA_OPTS>
+                                <JAVA_OPTS>-Xss92m -Xms3g -Xmx3g</JAVA_OPTS>
                                 <IDRIS2_CG>jvm</IDRIS2_CG>
                             </environmentVariables>
                         </configuration>
@@ -180,7 +180,7 @@
                             </arguments>
                             <environmentVariables>
                                 <IDRIS2_CG>jvm</IDRIS2_CG>
-                                <JAVA_OPTS>-Xss70m -Xms3g -Xmx3g</JAVA_OPTS>
+                                <JAVA_OPTS>-Xss92m -Xms3g -Xmx3g</JAVA_OPTS>
                             </environmentVariables>
                         </configuration>
                     </execution>

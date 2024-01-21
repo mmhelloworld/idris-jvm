@@ -20,6 +20,7 @@
     </properties>
 
     <build>
+        <outputDirectory>${project.parent.basedir}/tests/build/exec/runtests_app</outputDirectory>
         <plugins>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
@@ -89,10 +90,9 @@
                 <executions>
                     <execution>
                         <id>default-jar</id>
-                        <phase>none</phase>
+                        <phase>package</phase>
                         <configuration>
-                            <finalName>unwanted</finalName>
-                            <classifier>unwanted</classifier>
+                            <classesDirectory>${project.parent.basedir}/tests/build/exec/runtests_app</classesDirectory>
                         </configuration>
                     </execution>
                 </executions>
@@ -110,29 +110,12 @@
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <execution>
-                        <phase>compile</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>copy-dependencies</goal>
                         </goals>
                         <configuration>
                             <outputDirectory>${project.parent.basedir}/tests/build/exec/runtests_app</outputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>copy-runtests-jar</id>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <copy file="../tests/build/exec/runtests_app/runtests.jar" tofile="./target/idris-jvm-tests-${project.version}.jar" />
-                            </target>
                         </configuration>
                     </execution>
                 </executions>

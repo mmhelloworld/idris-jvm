@@ -64,3 +64,4 @@ jobs:
           IGNORE_GENERATED_FILES: true
           NATURAL_LANGUAGE_CONFIG_FILE: '.textlintrc.yml'
           CSS_FILE_NAME: '.stylelintrc.json'
+          FILTER_REGEX_EXCLUDE: .*Test.java

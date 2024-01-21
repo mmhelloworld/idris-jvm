@@ -1,7 +1,10 @@
 module Java.Util
 
+import Java.Util.Function
 import Java.Lang
 import System.FFI
+
+%hide Prelude.Stream.Stream
 
 namespace Arrays
     public export
@@ -44,6 +47,51 @@ namespace Arrays
     %foreign "jvm:toString,java/util/Arrays"
     prim_arrayToString : Array Object -> PrimIO String
 
+    namespace BoolArray
+      public export %inline
+      toString : (HasIO io) => Array Bool -> io String
+      toString arr = primIO $ prim_boolArrayToString arr
+
+    namespace CharArray
+      public export %inline
+      toString : (HasIO io) => Array Char -> io String
+      toString arr = primIO $ prim_charArrayToString arr
+
+    namespace ByteArray
+      public export %inline
+      toString : (HasIO io) => Array Int8 -> io String
+      toString arr = primIO $ prim_byteArrayToString arr
+
+    namespace ShortArray
+      public export %inline
+      toString : (HasIO io) => Array Int16 -> io String
+      toString arr = primIO $ prim_shortArrayToString arr
+
+    namespace Int32Array
+      public export %inline
+      toString : (HasIO io) => Array Int32 -> io String
+      toString arr = primIO $ prim_int32ArrayToString arr
+
+    namespace IntArray
+      public export %inline
+      toString : (HasIO io) => Array Int -> io String
+      toString arr = primIO $ prim_intArrayToString arr
+
+    namespace Int64Array
+      public export %inline
+      toString : (HasIO io) => Array Int64 -> io String
+      toString arr = primIO $ prim_int64ArrayToString arr
+
+    namespace DoubleArray
+      public export %inline
+      toString : (HasIO io) => Array Double -> io String
+      toString arr = primIO $ prim_doubleArrayToString arr
+
+    namespace ObjectArray
+      public export %inline
+      toString : (HasIO io) => Array Object -> io String
+      toString arr = primIO $ prim_arrayToString arr
+
     public export %inline
     fromList : HasIO io => (a: Type) -> List a -> io (Array a)
     fromList a xs = do
@@ -66,6 +114,10 @@ namespace Objects
   export %inline
   hash : (HasIO io) => Array Object -> io Int
   hash array = primIO $ prim_hash array
+
+public export %inline
+Comparator : Type -> Type
+Comparator a = (Struct "java/util/Comparator compare" [], Object -> Object -> Int)
 
 namespace Collection
     public export
@@ -106,8 +158,9 @@ public export
 Inherits obj (JList a) => Inherits obj (Collection a) where
 
 namespace ArrayList
-    export
-    data ArrayList : Type -> Type where [external]
+    public export
+    ArrayList : Type -> Type
+    ArrayList elem = Struct "java/util/ArrayList" [("<>", elem)]
 
     %foreign "jvm:<init>(java/util/ArrayList),java/util/ArrayList"
     prim_new : PrimIO (ArrayList a)
@@ -152,3 +205,37 @@ namespace HashMap
 
 public export
 Inherits (HashMap key value) (Map key value) where
+
+namespace Stream
+
+  public export
+  Stream : Type -> Type
+  Stream a = Struct "i:java/util/stream/Stream" [("<>", a)]
+
+  %foreign "jvm:.stream(i:java/util/Collection java/util/stream/Stream)"
+  prim_fromCollection : Collection a -> PrimIO (Stream a)
+
+  export
+  fromCollection : (HasIO io, Inherits obj (Collection a)) => obj -> io (Stream a)
+  fromCollection collection = primIO $ prim_fromCollection {a} (subtyping collection)
+
+  %foreign "jvm:.map"
+  prim_map : Stream a -> Function a b -> PrimIO (Stream b)
+
+  %foreign "jvm:.filter"
+  prim_filter : Stream a -> Predicate a -> PrimIO (Stream a)
+
+  export
+  map : HasIO io => {a, b: Type} -> Stream a -> (a -> PrimIO b) -> io (Stream b)
+  map {a} {b} stream f = primIO $ prim_map {a} {b} stream (jlambda f)
+
+  export
+  filter : HasIO io => {a: Type} -> Stream a -> (a -> PrimIO Bool) -> io (Stream a)
+  filter {a} stream f = primIO $ prim_filter {a} stream (jlambda f)
+
+  %foreign "jvm:.count"
+  prim_count : Stream a -> PrimIO Int64
+
+  export
+  count : HasIO io => Stream a -> io Int64
+  count = primIO . prim_count {a}

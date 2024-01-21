@@ -493,7 +493,7 @@ record AsmState where
     assembler : Assembler
 
 public export
-data Access = Private | Public | Protected | Static | Synthetic | Final | Interface | Abstract
+data Access = Private | Public | Protected | Static | Synthetic | Final | Interface | Abstract | Transient
 
 export
 Eq Access where
@@ -505,6 +505,7 @@ Eq Access where
   Final == Final = True
   Interface == Interface = True
   Abstract == Abstract = True
+  Transient == Transient = True
   _ == _ = False
 
 export
@@ -517,6 +518,7 @@ Show Access where
     show Final = "Final"
     show Interface = "Interface"
     show Abstract = "Abstract"
+    show Transient = "Transient"
 
 public export
 data FieldInstructionType = GetStatic | PutStatic | GetField | PutField
@@ -590,6 +592,16 @@ mutual
 
     public export
     data Annotation = MkAnnotation String (List AnnotationProperty)
+
+export
+getStringAnnotationValue : AnnotationValue -> Maybe String
+getStringAnnotationValue (AnnString value) = Just value
+getStringAnnotationValue _ = Nothing
+
+export
+getStringAnnotationValues : AnnotationValue -> List String
+getStringAnnotationValues (AnnArray values) = mapMaybe getStringAnnotationValue values
+getStringAnnotationValues _ = []
 
 public export
 data Asm : Type -> Type where
@@ -1435,6 +1447,7 @@ accessNum Final     = 0x0010
 accessNum Interface = 0x0200
 accessNum Abstract  = 0x0400
 accessNum Synthetic = 0x1000
+accessNum Transient = 0x0080
 
 export
 fieldInsTypeNum : FieldInstructionType -> Int
@@ -1666,6 +1679,14 @@ getMethodDescriptor (MkInferredFunctionType retTy argTypes) =
     in "(" ++ (the String $ concat argDescs) ++ ")" ++ retTyDesc
 
 export
+getMethodSignature : InferredFunctionType -> String
+getMethodSignature (MkInferredFunctionType retTy []) = "()" ++ getSignature retTy
+getMethodSignature (MkInferredFunctionType retTy argTypes) =
+    let argDescs = getSignature <$> argTypes
+        retTyDesc = getSignature retTy
+    in "(" ++ (the String $ concat argDescs) ++ ")" ++ retTyDesc
+
+export
 assemble : HasIO io => AsmState -> IO a -> io (a, AsmState)
 assemble state m = do
     res <- primIO $ toPrim m
@@ -1808,6 +1829,16 @@ isSuperCall name
   [(NmExtPrim fc f@(NS ns (UN (Basic "prim__jvmStatic"))) args@(ret :: NmPrimVal primFc (Str fn):: rest))]
   = name == superName && endsWith ".<init>" fn
 isSuperCall _ _ = False
+
+public export
+%inline
+methodStartLabel : String
+methodStartLabel = "methodStartLabel"
+
+public export
+%inline
+methodEndLabel : String
+methodEndLabel = "methodEndLabel"
 
 export
 runAsm : HasIO io => AsmState -> Asm a -> io (a, AsmState)

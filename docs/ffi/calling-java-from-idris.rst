@@ -195,3 +195,16 @@ The above example prints:
    "int"
    "class java.math.BigInteger"
    "class java.lang.String"
+
+JVM reference equality
+======================
+Reference equality should be avoided in Idris but it might be useful to interface with Java, for example, for overriding ``equals`` method in Idris.
+
+.. code-block:: console
+
+    Main> :module Java.Lang
+    Imported module Java.Lang
+    Main> :exec printLn (jvmRefEq "foo" "foo")
+    True
+    Main> :exec printLn (jvmRefEq "foo" ("fo" ++ "o"))
+    False

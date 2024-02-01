@@ -36,12 +36,12 @@ ifeq ($(OS), windows)
 	IDRIS2_PREFIX ?= $(shell cygpath -m ${PREFIX})
 	IDRIS2_CURDIR := $(shell cygpath -m ${CURDIR})
 	SEP := ;
-	TARGET = $(shell cygpath -m ${TARGETDIR}/${NAME}.bat)
+	TARGET := $(shell cygpath -m ${TARGETDIR}/${NAME}.bat)
 else
 	IDRIS2_PREFIX ?= ${PREFIX}
 	IDRIS2_CURDIR := ${CURDIR}
 	SEP := :
-	TARGET = ${TARGETDIR}/${NAME}
+	TARGET := ${TARGETDIR}/${NAME}
 endif
 
 TEST_PREFIX ?= ${IDRIS2_CURDIR}/build/env
@@ -151,7 +151,7 @@ ci-windows-test:
 test: testenv
 	@echo
 	@echo "NOTE: \`${MAKE} test\` does not rebuild Idris or the libraries packaged with it; to do that run \`${MAKE}\`"
-	@if [ ! -x "${TARGET}" ]; then echo "ERROR: Missing IDRIS2 executable. Cannot run tests!\n"; exit 1; fi
+	@if [ ! -f "${TARGET}" ]; then echo "ERROR: Missing IDRIS2 executable. Cannot run tests!\n"; exit 1; fi
 	@echo
 	@${MAKE} -C tests only=$(only) except=$(except) IDRIS2=${TARGET} IDRIS2_PREFIX=${TEST_PREFIX}
 
@@ -159,7 +159,7 @@ test: testenv
 retest: testenv
 	@echo
 	@echo "NOTE: \`${MAKE} retest\` does not rebuild Idris or the libraries packaged with it; to do that run \`${MAKE}\`"
-	@if [ ! -x "${TARGET}" ]; then echo "ERROR: Missing IDRIS2 executable. Cannot run tests!\n"; exit 1; fi
+	@if [ ! -f "${TARGET}" ]; then echo "ERROR: Missing IDRIS2 executable. Cannot run tests!\n"; exit 1; fi
 	@echo
 	@${MAKE} -C tests retest only=$(only) IDRIS2=${TARGET} IDRIS2_PREFIX=${TEST_PREFIX}
 

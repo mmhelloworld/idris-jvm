@@ -1,5 +1,5 @@
 $1 --build dummy.ipkg
 
-./custom_output/check_dir
+./custom_output/check_dir${IDRIS_EXEC_EXT}
 
 rm -rf custom_build custom_output

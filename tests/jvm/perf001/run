@@ -1,5 +1,5 @@
 rm -rf build
 
 $1 -c Fact.idr -o fact
-./build/exec/fact
+./build/exec/fact${IDRIS_EXEC_EXT}
 

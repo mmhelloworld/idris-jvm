@@ -213,13 +213,13 @@ options args = case args of
 
 ||| Normalise strings between different OS.
 |||
-||| on Windows, we just ignore backslashes and slashes when comparing,
+||| on Windows, we just ignore carriage return, backslashes and slashes when comparing,
 ||| similarity up to that is good enough. Leave errors that depend
 ||| on the confusion of slashes and backslashes to unix machines.
 normalize : String -> String
 normalize str =
     if isWindows
-      then pack $ filter (\ch => ch /= '/' && ch /= '\\') (unpack str)
+      then pack $ filter (\ch => ch /= '/' && ch /= '\\' && ch /= '\r') (unpack str)
       else str
 
 ||| The result of a test run

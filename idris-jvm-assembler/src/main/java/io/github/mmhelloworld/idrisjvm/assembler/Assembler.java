@@ -29,6 +29,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static io.github.mmhelloworld.idrisjvm.runtime.Conversion.intToBoolean;
+import static io.github.mmhelloworld.idrisjvm.runtime.IdrisSystem.getOsName;
 import static java.lang.String.format;
 import static java.lang.System.lineSeparator;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -224,6 +225,9 @@ public final class Assembler {
 
     private static void createWindowsExecutable(String directoryName, String fileName, String mainClass,
                                                 String javaOpts) throws IOException {
+        if (!"windows".equals(getOsName())) {
+            return;
+        }
         File batExe = new File(directoryName, fileName + ".bat");
         String batHeader = "@echo off";
         String classpath = "%~dp0\\" + fileName + "_app\\*;" + "%~dp0\\" + fileName + "_app";
@@ -235,6 +239,9 @@ public final class Assembler {
 
     private static void createPosixExecutable(String directoryName, String fileName, String mainClass,
                                               String javaOpts) throws IOException {
+        if ("windows".equals(getOsName())) {
+            return;
+        }
         File shExe = new File(directoryName, fileName);
         String shHeader = "#!/bin/sh";
         String classpath = "\"`dirname $0`/" + fileName + "_app/*" + ":`dirname $0`/" + fileName + "_app\"";
@@ -1449,4 +1456,3 @@ public final class Assembler {
         );
     }
 }
-

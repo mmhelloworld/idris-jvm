@@ -19,7 +19,6 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
@@ -31,6 +30,11 @@ import java.util.function.Function;
 
 import static io.github.mmhelloworld.idrisjvm.runtime.Directories.getWorkingDir;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
+import static java.nio.file.StandardOpenOption.WRITE;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_READ;
 import static java.nio.file.attribute.PosixFilePermission.GROUP_WRITE;
@@ -217,18 +221,23 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
     private static Collection<OpenOption> getOpenOptions(String mode) {
         switch (mode.toLowerCase()) {
             case "r":
-                return singletonList(StandardOpenOption.READ);
+            case "rb":
+                return singletonList(READ);
             case "w":
-                return asList(StandardOpenOption.CREATE, StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
+            case "wb":
+                return asList(CREATE, WRITE, TRUNCATE_EXISTING);
             case "a":
-                return asList(StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            case "ab":
+                return asList(CREATE, APPEND);
             case "r+":
-                return asList(StandardOpenOption.READ, StandardOpenOption.WRITE);
+            case "rb+":
+                return asList(READ, WRITE);
             case "w+":
-                return asList(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
+            case "wb+":
+                return asList(CREATE, READ, WRITE);
             case "a+":
-                return asList(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.APPEND);
+            case "ab+":
+                return asList(CREATE, READ, APPEND);
             default:
                 throw new IllegalArgumentException("Unknown file mode " + mode);
         }

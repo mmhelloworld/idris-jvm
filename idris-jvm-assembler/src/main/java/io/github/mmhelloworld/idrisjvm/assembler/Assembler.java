@@ -228,13 +228,13 @@ public final class Assembler {
         if (!"windows".equals(getOsName())) {
             return;
         }
-        File batExe = new File(directoryName, fileName + ".bat");
+        File exe = new File(directoryName, fileName + ".bat");
         String batHeader = "@echo off";
         String classpath = "%~dp0\\" + fileName + "_app\\*;" + "%~dp0\\" + fileName + "_app";
         String javaCommand = Stream.of("java", "%JAVA_OPTS%", javaOpts, "-cp", classpath, mainClass, "%*")
             .filter(Assembler::isNotNullOrEmpty)
             .collect(joining(" "));
-        Files.write(batExe.toPath(), createExecutableFileContent(batHeader, javaCommand));
+        Files.write(exe.toPath(), createExecutableFileContent(batHeader, javaCommand));
     }
 
     private static void createPosixExecutable(String directoryName, String fileName, String mainClass,

@@ -6,7 +6,6 @@ export IDRIS2_BOOT ?= idris2
 # Idris 2 executable we're building
 NAME = idris2
 TARGETDIR = ${CURDIR}/build/exec
-TARGET = ${TARGETDIR}/${NAME}
 
 # Default code generator. This is passed to the libraries for incremental
 # builds, but overridable via environment variables or arguments to make
@@ -37,10 +36,12 @@ ifeq ($(OS), windows)
 	IDRIS2_PREFIX ?= $(shell cygpath -m ${PREFIX})
 	IDRIS2_CURDIR := $(shell cygpath -m ${CURDIR})
 	SEP := ;
+	TARGET = $(shell cygpath -m ${TARGETDIR}/${NAME}.bat)
 else
 	IDRIS2_PREFIX ?= ${PREFIX}
 	IDRIS2_CURDIR := ${CURDIR}
 	SEP := :
+	TARGET = ${TARGETDIR}/${NAME}
 endif
 
 TEST_PREFIX ?= ${IDRIS2_CURDIR}/build/env
@@ -57,7 +58,7 @@ export IDRIS2_BOOT_PATH := "$(IDRIS2_BOOT_PATH)"
 
 export SCHEME
 
-.PHONY: all idris2-exec libdocs testenv testenv-clean support clean-support clean FORCE
+.PHONY: all idris2-exec libdocs testenv testenv-clean clean FORCE
 
 maven-property:
 	mkdir -p ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes
@@ -117,7 +118,6 @@ libdocs:
 
 ifeq ($(OS), windows)
 ${TEST_PREFIX}/${NAME_VERSION} :
-	${MAKE} install-support PREFIX=${TEST_PREFIX}
 	cp -rf ${IDRIS2_CURDIR}/libs/prelude/build/ttc ${TEST_PREFIX}/${NAME_VERSION}/prelude-${IDRIS2_VERSION}
 	cp -rf ${IDRIS2_CURDIR}/libs/base/build/ttc    ${TEST_PREFIX}/${NAME_VERSION}/base-${IDRIS2_VERSION}
 	cp -rf ${IDRIS2_CURDIR}/libs/linear/build/ttc  ${TEST_PREFIX}/${NAME_VERSION}/linear-${IDRIS2_VERSION}
@@ -126,7 +126,6 @@ ${TEST_PREFIX}/${NAME_VERSION} :
 	cp -rf ${IDRIS2_CURDIR}/libs/test/build/ttc    ${TEST_PREFIX}/${NAME_VERSION}/test-${IDRIS2_VERSION}
 else
 ${TEST_PREFIX}/${NAME_VERSION} :
-	${MAKE} install-support PREFIX=${TEST_PREFIX}
 	ln -sf ${IDRIS2_CURDIR}/libs/prelude/build/ttc ${TEST_PREFIX}/${NAME_VERSION}/prelude-${IDRIS2_VERSION}
 	ln -sf ${IDRIS2_CURDIR}/libs/base/build/ttc    ${TEST_PREFIX}/${NAME_VERSION}/base-${IDRIS2_VERSION}
 	ln -sf ${IDRIS2_CURDIR}/libs/linear/build/ttc  ${TEST_PREFIX}/${NAME_VERSION}/linear-${IDRIS2_VERSION}
@@ -168,12 +167,6 @@ test-installed:
 	@${MAKE} -C tests testbin      IDRIS2=$(IDRIS2_PREFIX)/bin/idris2 IDRIS2_PREFIX=${IDRIS2_PREFIX}
 	@${MAKE} -C tests only=$(only) IDRIS2=$(IDRIS2_PREFIX)/bin/idris2 IDRIS2_PREFIX=${IDRIS2_PREFIX}
 
-support:
-	@${MAKE} -C support
-
-clean-support:
-	@${MAKE} -C support clean
-
 clean-libs:
 	${MAKE} -C libs/prelude clean
 	${MAKE} -C libs/base clean
@@ -183,14 +176,14 @@ clean-libs:
 	${MAKE} -C libs/linear clean
 	${MAKE} -C libs/papers clean
 
-clean: clean-libs clean-support testenv-clean
+clean: clean-libs testenv-clean
 	-${IDRIS2_BOOT} --clean ${IDRIS2_APP_IPKG}
 	$(RM) src/IdrisPaths.idr
 	${MAKE} -C tests clean
 	$(RM) -r build
 
-install: install-idris2 install-support install-libs
-bootstrap-install: install-idris2 install-support install-bootstrap-libs
+install: install-idris2 install-libs
+bootstrap-install: install-idris2 install-bootstrap-libs
 
 install-api: src/IdrisPaths.idr
 	${IDRIS2_BOOT} --install ${IDRIS2_LIB_IPKG}
@@ -201,14 +194,8 @@ install-with-src-api: src/IdrisPaths.idr
 install-idris2:
 	mkdir -p ${DESTDIR}${PREFIX}/bin/
 	install ${TARGET} ${DESTDIR}${PREFIX}/bin
-ifeq ($(OS), windows)
-	-install ${TARGET}.cmd ${DESTDIR}${PREFIX}/bin
-endif
 	mkdir -p ${DESTDIR}${PREFIX}/bin/${NAME}_app
 	cp -rf ${TARGETDIR}/${NAME}_app ${DESTDIR}${PREFIX}/bin/
-
-install-support:
-	@${MAKE} -C support install
 
 install-bootstrap-libs:
 	${MAKE} -C libs/prelude install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}
@@ -247,11 +234,10 @@ install-libdocs: libdocs
 .PHONY: bootstrap bootstrap-build bootstrap-racket bootstrap-racket-build bootstrap-test bootstrap-clean
 
 # Bootstrapping using SCHEME
-bootstrap: support
+bootstrap:
 	@if [ "$$(echo '(threaded?)' | $(SCHEME) --quiet)" = "#f" ] ; then \
 		echo "ERROR: Chez is missing threading support" ; exit 1 ; fi
 	mkdir -p bootstrap-build/idris2_app
-	cp support/c/${IDRIS2_SUPPORT} bootstrap-build/idris2_app/
 	sed 's/libidris2_support.so/${IDRIS2_SUPPORT}/g; s|__PREFIX__|${IDRIS2_BOOT_PREFIX}|g' \
 		bootstrap/idris2_app/idris2.ss \
 		> bootstrap-build/idris2_app/idris2-boot.ss
@@ -259,9 +245,8 @@ bootstrap: support
 	IDRIS2_CG="chez" $(SHELL) ./bootstrap-stage2.sh
 
 # Bootstrapping using racket
-bootstrap-racket: support
+bootstrap-racket:
 	mkdir -p bootstrap-build/idris2_app
-	cp support/c/${IDRIS2_SUPPORT} bootstrap-build/idris2_app/
 	sed 's|__PREFIX__|${IDRIS2_BOOT_PREFIX}|g' \
 		bootstrap/idris2_app/idris2.rkt \
 		> bootstrap-build/idris2_app/idris2-boot.rkt

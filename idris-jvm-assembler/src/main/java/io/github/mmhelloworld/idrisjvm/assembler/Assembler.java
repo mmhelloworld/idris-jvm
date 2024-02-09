@@ -225,9 +225,6 @@ public final class Assembler {
 
     private static void createWindowsExecutable(String directoryName, String fileName, String mainClass,
                                                 String javaOpts) throws IOException {
-        if (!"windows".equals(getOsName())) {
-            return;
-        }
         File exe = new File(directoryName, fileName + ".bat");
         String batHeader = "@echo off";
         String classpath = "%~dp0\\" + fileName + "_app\\*;" + "%~dp0\\" + fileName + "_app";
@@ -239,9 +236,6 @@ public final class Assembler {
 
     private static void createPosixExecutable(String directoryName, String fileName, String mainClass,
                                               String javaOpts) throws IOException {
-        if ("windows".equals(getOsName())) {
-            return;
-        }
         File shExe = new File(directoryName, fileName);
         String shHeader = "#!/bin/sh";
         String classpath = "\"`dirname $0`/" + fileName + "_app/*" + ":`dirname $0`/" + fileName + "_app\"";
@@ -249,7 +243,9 @@ public final class Assembler {
             .filter(Assembler::isNotNullOrEmpty)
             .collect(joining(" "));
         Files.write(shExe.toPath(), createExecutableFileContent(shHeader, javaCommand));
-        setPosixFilePermissions(shExe.toPath(), PosixFilePermissions.fromString("rwxr-xr-x"));
+        if (!"windows".equals(getOsName())) {
+            setPosixFilePermissions(shExe.toPath(), PosixFilePermissions.fromString("rwxr-xr-x"));
+        }
     }
 
     private static boolean isNotNullOrEmpty(String value) {

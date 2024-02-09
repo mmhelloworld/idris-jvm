@@ -253,7 +253,6 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
         } else if (currentException instanceof FileAlreadyExistsException) {
             return EXISTING_FILE_ERROR_CODE;
         } else {
-            currentException.printStackTrace();
             return GENERAL_ERROR_CODE;
         }
     }

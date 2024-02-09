@@ -132,9 +132,6 @@ public final class IdrisSocket implements Closeable {
     }
 
     static int getErrorNumber(Exception exception) {
-        if (exception != null) {
-            exception.printStackTrace();
-        }
         // To return error codes to conform to Idris functions with C FFIs
         if (exception == null) {
             return 0;

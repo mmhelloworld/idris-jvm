@@ -227,7 +227,7 @@ public final class Assembler {
                                                 String javaOpts) throws IOException {
         File exe = new File(directoryName, fileName + ".bat");
         String batHeader = "@echo off";
-        String classpath = "%~dp0\\" + fileName + "_app\\*;" + "%~dp0\\" + fileName + "_app";
+        String classpath = "%~dp0\\" + fileName + "_app;" + "%~dp0\\" + fileName + "_app\\*";
         String javaCommand = Stream.of("java", "%JAVA_OPTS%", javaOpts, "-cp", classpath, mainClass, "%*")
             .filter(Assembler::isNotNullOrEmpty)
             .collect(joining(" "));
@@ -238,7 +238,7 @@ public final class Assembler {
                                               String javaOpts) throws IOException {
         File shExe = new File(directoryName, fileName);
         String shHeader = "#!/bin/sh";
-        String classpath = "\"`dirname $0`/" + fileName + "_app/*" + ":`dirname $0`/" + fileName + "_app\"";
+        String classpath = "\"`dirname $0`/" + fileName + "_app:" + "`dirname $0`/" + fileName + "_app/*\"";
         String javaCommand = Stream.of("java", "$JAVA_OPTS", javaOpts, "-cp", classpath, mainClass, "\"$@\"")
             .filter(Assembler::isNotNullOrEmpty)
             .collect(joining(" "));

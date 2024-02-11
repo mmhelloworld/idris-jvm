@@ -9,8 +9,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,13 +21,14 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
 import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
 import static java.nio.file.Files.createTempDirectory;
-import static java.nio.file.Files.newInputStream;
 import static java.nio.file.Files.newOutputStream;
 import static java.util.Arrays.asList;
 import static java.util.Collections.synchronizedSet;
@@ -36,7 +39,7 @@ public final class AsmGlobalState {
     private static final String RUNTIME_JAR_NAME;
     private static final List<String> JAVA_OPTIONS = getJavaOptions();
     private static final int IDRIS_REPL_TIMEOUT = Integer.parseInt(getProperty("IDRIS_REPL_TIMEOUT", "30"));
-    private static final int BUFFER_SIZE = 1024;
+    private static final int BUFFER_SIZE = 10 * 1024;
 
     static {
         try {
@@ -63,17 +66,32 @@ public final class AsmGlobalState {
         this.fcAndDefinitionsByName = fcAndDefinitionsByName;
     }
 
-    public static void copyRuntimeJar(String directory) throws IOException {
+    public static void copyRuntimeJar(String directory) {
         String runtimeJarFile = Arrays.stream(System.getProperty("java.class.path").split(pathSeparator))
             .filter(name -> name.contains(RUNTIME_JAR_NAME))
             .findAny()
             .orElseThrow(() -> new RuntimeException("Unable to find idris runtime jar"));
-        try (
-            InputStream jarInputStream = newInputStream(Paths.get(runtimeJarFile));
-            InputStream jarBufferedInputStream = new BufferedInputStream(jarInputStream);
-            OutputStream outputStream = new BufferedOutputStream(
-                newOutputStream(Paths.get(directory, RUNTIME_JAR_NAME)))) {
-            copy(jarBufferedInputStream, outputStream);
+        copyRuntimeClasses(new File(runtimeJarFile), directory);
+    }
+
+    private static void copyRuntimeClasses(File file, String directory) {
+        try (JarFile jarFile = new JarFile(file)) {
+            Collections.list(jarFile.entries()).stream()
+                .filter(jarEntry -> !jarEntry.isDirectory() && jarEntry.getName().endsWith(".class"))
+                .forEach(jarEntry -> copy(jarFile, jarEntry, directory));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void copy(JarFile jarFile, JarEntry jarEntry, String directory) {
+        Path outputPath = Paths.get(directory, jarEntry.getName());
+        outputPath.getParent().toFile().mkdirs();
+        try (InputStream inputStream = new BufferedInputStream(jarFile.getInputStream(jarEntry));
+             OutputStream outputStream = new BufferedOutputStream(newOutputStream(outputPath))) {
+            copy(inputStream, outputStream);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -89,8 +107,9 @@ public final class AsmGlobalState {
 
     private static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
         byte[] buffer = new byte[BUFFER_SIZE];
-        while (inputStream.read(buffer) > 0) {
-            outputStream.write(buffer);
+        int length;
+        while ((length = inputStream.read(buffer)) > 0) {
+            outputStream.write(buffer, 0, length);
         }
         outputStream.flush();
     }

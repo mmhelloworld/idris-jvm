@@ -35,6 +35,7 @@ prim__fileStatusTime : FilePtr -> PrimIO Int
 
 %foreign supportC "idris2_fileIsTTY"
          "node:lambda:fp=>Number(require('tty').isatty(fp.fd))"
+         jvm' fileClass ".isTty" fileClass "int"
 prim__fileIsTTY : FilePtr -> PrimIO Int
 
 ||| Check if a file exists for reading.

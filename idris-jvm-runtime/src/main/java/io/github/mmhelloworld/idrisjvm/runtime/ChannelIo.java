@@ -420,6 +420,11 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
         return ((WritableByteChannel) channel).write(src);
     }
 
+    public int isTty() {
+        // revisit when on Java 22 or later: https://bugs.openjdk.org/browse/JDK-8309155
+        return System.console() == null ? 0 : 1;
+    }
+
     private <T> T withExceptionHandling(SupplierE<T, ? extends Exception> action) {
         exception = null;
         Runtime.setErrorNumber(0);

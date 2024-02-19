@@ -345,11 +345,6 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
         return isEof || exception != null ? 1 : 0;
     }
 
-    public int isTty() {
-        // revisit when on Java 22 or later: https://bugs.openjdk.org/browse/JDK-8309155
-        return System.console() == null ? 0 : 1;
-    }
-
     public int size() {
         return (int) withExceptionHandling(() -> {
             if (channel instanceof SeekableByteChannel) {
@@ -465,6 +460,11 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
     @Override
     public int write(ByteBuffer src) throws IOException {
         return ((WritableByteChannel) channel).write(src);
+    }
+
+    public int isTty() {
+        // revisit when on Java 22 or later: https://bugs.openjdk.org/browse/JDK-8309155
+        return System.console() == null ? 0 : 1;
     }
 
     private <T> T withExceptionHandling(SupplierE<T, ? extends Exception> action) {

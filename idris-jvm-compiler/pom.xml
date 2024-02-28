@@ -21,18 +21,11 @@
     <build>
         <plugins>
             <plugin>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
-                </configuration>
-            </plugin>
-            <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
                 <executions>
                     <execution>
                         <id>default-jar</id>
-                        <phase>compile</phase>
+                        <phase>package</phase>
                     </execution>
                 </executions>
             </plugin>
@@ -96,6 +89,28 @@
                             <excludeArtifactIds>idris-jvm-runtime</excludeArtifactIds>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>unpack-runtime-jar</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>io.github.mmhelloworld</groupId>
+                                    <artifactId>idris-jvm-runtime</artifactId>
+                                    <version>${project.version}</version>
+                                    <type>jar</type>
+                                    <overWrite>true</overWrite>
+                                    <outputDirectory>${project.parent.basedir}/build/exec/idris2_app</outputDirectory>
+                                    <includes>**/*.class</includes>
+                                </artifactItem>
+                            </artifactItems>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <plugin>
@@ -141,33 +156,6 @@
                         </configuration>
                     </execution>
                     <execution>
-                        <id>runtime-jar-cleanup</id>
-                        <phase>process-test-classes</phase>
-                        <goals>
-                            <goal>java</goal>
-                        </goals>
-                        <configuration>
-                            <skip>${skipIdrisCompile}</skip>
-                            <!--
-                            This is a hack to remove bootstrap compiler runtime JAR under "build/exec/idris2_app".
-                            Idris JVM compiler copies runtime JAR into application output directories so that we don't
-                            have to setup the JAR explicitly in the classpath to run programs but for compiler code
-                            itself, we want to use the runtime JAR from the current version, not of the compiler that
-                            compiles the current code. This program compares the semantic versions of runtime JARs
-                            and removes the old JAR. This is specifically inside "test" directory so that dependencies
-                            for this class like "maven-artifact" dependency wouldn't be copied
-                            into "build/exec/idris2_app" directory.
-                            -->
-                            <mainClass>
-                                io.github.mmhelloworld.idrisjvm.compiler.RuntimeJarCleanup
-                            </mainClass>
-                            <classpathScope>test</classpathScope>
-                            <arguments>
-                                <argument>${project.parent.basedir}/build/exec/idris2_app</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <execution>
                         <id>idris-install-libs</id>
                         <phase>package</phase>
                         <goals>
@@ -207,6 +195,29 @@
                 </executions>
             </plugin>
             <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-resources</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.parent.basedir}/build/exec/idris2_app</directory>
+                                    <includes>
+                                        <include>**/*.class</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
                 <executions>
                     <execution>
@@ -218,6 +229,11 @@
                         <configuration>
                             <failOnError>false</failOnError>
                             <target>
+                                <!--
+This is to remove bootstrap compiler runtime JAR under build/exec/idris2_app. This is only temporary as old Idris
+JVM compiler copies runtime JAR into output directory. New compiler would copy the runtime classes instead of JAR
+so when we have the newer bootstrap compiler, this can be removed.
+                                -->
                                 <delete failonerror="false">
                                     <fileset dir="${project.parent.basedir}/build/exec/idris2_app" includes="idris-jvm-runtime-*.jar"/>
                                 </delete>

@@ -1,13 +1,16 @@
 package io.github.mmhelloworld.idrisjvm.assembler;
 
 import io.github.mmhelloworld.idrisjvm.runtime.Directories;
+import io.github.mmhelloworld.idrisjvm.runtime.Runtime;
 import org.objectweb.asm.ClassWriter;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -26,6 +29,7 @@ import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
+import static java.lang.ClassLoader.getSystemClassLoader;
 import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
 import static java.nio.file.Files.createTempDirectory;
@@ -72,6 +76,30 @@ public final class AsmGlobalState {
             .findAny()
             .orElseThrow(() -> new RuntimeException("Unable to find idris runtime jar"));
         copyRuntimeClasses(new File(runtimeJarFile), directory);
+    }
+
+    private static void copyRuntimeClasses(String outputDirectory) {
+        String packageName = Runtime.class.getPackage().getName();
+        String packagePath = packageName.replaceAll("[.]", "/");
+        ClassLoader classLoader = getSystemClassLoader();
+        InputStream stream = classLoader.getResourceAsStream(packagePath);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
+        reader.lines()
+            .filter(className -> className.endsWith(".class"))
+            .forEach(className -> copyRuntimeClass(classLoader, className, packagePath, outputDirectory));
+    }
+
+    private static void copyRuntimeClass(ClassLoader classLoader, String className, String packagePath,
+                                         String outputDirectory) {
+        Path outputPath = Paths.get(outputDirectory, packagePath, className);
+        outputPath.getParent().toFile().mkdirs();
+        try (InputStream inputStream = new BufferedInputStream(classLoader
+            .getResourceAsStream("runtimeclasses/" + packagePath + "/" + className));
+             OutputStream outputStream = new BufferedOutputStream(newOutputStream(outputPath))) {
+            copy(inputStream, outputStream);
+        } catch (IOException exception) {
+            throw new RuntimeException(exception);
+        }
     }
 
     private static void copyRuntimeClasses(File file, String directory) {
@@ -164,11 +192,11 @@ public final class AsmGlobalState {
                 writeClass(classNameAndClassWriter.getKey(), classNameAndClassWriter.getValue(), classDirectory));
         String mainClassNoSlash = mainClass.replace('/', '.');
         if (outputDirectory.isEmpty()) {
-            copyRuntimeJar(normalizedOutputDirectory);
+            copyRuntimeClasses(normalizedOutputDirectory);
             interpret(mainClassNoSlash, normalizedOutputDirectory);
         } else {
             new File(classDirectory).mkdirs();
-            copyRuntimeJar(classDirectory);
+            copyRuntimeClasses(classDirectory);
             Assembler.createExecutable(normalizedOutputDirectory, outputFile, mainClassNoSlash);
         }
     }

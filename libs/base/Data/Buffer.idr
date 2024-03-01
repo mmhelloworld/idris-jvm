@@ -186,6 +186,7 @@ setInt8 buf offset val
     = primIO (prim__setInt8 buf offset val)
 
 %foreign "scheme:blodwen-buffer-getint8"
+         jvm bufferClass "getByte"
 prim__getInt8 : Buffer -> (offset : Int) -> PrimIO Int8
 
 export %inline
@@ -196,6 +197,7 @@ getInt8 buf offset
 %foreign "scheme:blodwen-buffer-setint16"
          "RefC:setBufferInt16LE"
          "node:lambda:(buf,offset,value)=>buf.writeInt16LE(value, offset)"
+         jvm bufferClass "setShort"
 prim__setInt16 : Buffer -> (offset : Int) -> (val : Int16) -> PrimIO ()
 
 export %inline
@@ -204,6 +206,7 @@ setInt16 buf offset val
     = primIO (prim__setInt16 buf offset val)
 
 %foreign "scheme:blodwen-buffer-getint16"
+         jvm bufferClass "getShort"
 prim__getInt16 : Buffer -> (offset : Int) -> PrimIO Int16
 
 export %inline
@@ -215,6 +218,7 @@ getInt16 buf offset
 %foreign "scheme:blodwen-buffer-setint32"
          "RefC:setBufferInt32LE"
          "node:lambda:(buf,offset,value)=>buf.writeInt32LE(value, offset)"
+         jvm bufferClass "setInt"
 prim__setInt32 : Buffer -> (offset : Int) -> (val : Int32) -> PrimIO ()
 
 export %inline
@@ -234,6 +238,7 @@ getInt32 buf offset
     = primIO (prim__getInt32 buf offset)
 
 %foreign "scheme:blodwen-buffer-setint64"
+         jvm bufferClass "setLong"
 prim__setInt64 : Buffer -> (offset : Int) -> (val : Int64) -> PrimIO ()
 
 export %inline
@@ -242,6 +247,7 @@ setInt64 buf offset val
     = primIO (prim__setInt64 buf offset val)
 
 %foreign "scheme:blodwen-buffer-getint64"
+         jvm bufferClass "getLong"
 prim__getInt64 : Buffer -> (offset : Int) -> PrimIO Int64
 
 export %inline

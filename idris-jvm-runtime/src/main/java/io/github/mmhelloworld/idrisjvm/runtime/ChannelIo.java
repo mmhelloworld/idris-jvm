@@ -1,5 +1,7 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
+import org.jline.terminal.Terminal;
+
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.File;
@@ -50,7 +52,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toSet;
 
-public final class ChannelIo implements ReadableByteChannel, WritableByteChannel, Closeable, IdrisFile<ChannelIo> {
+public final class ChannelIo implements ReadableByteChannel, WritableByteChannel, Closeable, IdrisFile {
     private static final boolean IS_POSIX = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
     private static final Map<Integer, PosixFilePermission> MODE_TO_PERMISSIONS = new HashMap<>();
     private static final int MISSING_FILE_ERROR_CODE = 2;
@@ -341,6 +343,11 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
     public int isEof() {
         boolean isEof = withExceptionHandling(byteBufferIo::isEof, true);
         return isEof || exception != null ? 1 : 0;
+    }
+
+    public int isTty() {
+        // revisit when on Java 22 or later: https://bugs.openjdk.org/browse/JDK-8309155
+        return System.console() == null ? 0 : 1;
     }
 
     public int size() {

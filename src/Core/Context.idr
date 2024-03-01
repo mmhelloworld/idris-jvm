@@ -350,6 +350,7 @@ newDef fc n rig vars ty vis def
         , compexpr = Nothing
         , namedcompexpr = Nothing
         , sizeChange = []
+        , schemeExpr = Nothing
         }
 
 -- Rewrite rules, applied after type checking, for runtime code only
@@ -1381,7 +1382,8 @@ updateDef n fdef
              | Nothing => pure ()
          case fdef (definition gdef) of
               Nothing => pure ()
-              Just def' => ignore $ addDef n ({ definition := def' } gdef)
+              Just def' => ignore $ addDef n ({ definition := def',
+                                                schemeExpr := Nothing } gdef)
 
 export
 updateTy : {auto c : Ref Ctxt Defs} ->

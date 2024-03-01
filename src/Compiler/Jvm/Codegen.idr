@@ -10,6 +10,7 @@ import Core.Directory
 import Core.Name
 import Core.Options
 import Core.TT
+import Core.TT.Primitive
 
 import Data.List
 import Data.List1
@@ -44,9 +45,10 @@ import Idris.Syntax
 
 %default covering
 
-%hide System.FFI.runtimeClass
-%hide Compiler.Jvm.Asm.assemble
 %hide Core.Context.Context.Constructor.arity
+%hide Core.Name.Scoped.Scope
+%hide Compiler.Jvm.Asm.assemble
+%hide System.FFI.runtimeClass
 
 addScopeLocalVariables : Scope -> Asm ()
 addScopeLocalVariables scope = do
@@ -157,7 +159,7 @@ int64HashCode : Int64 -> Int
 %foreign jvm' "java/lang/Long" "hashCode" "long" "int"
 bits64HashCode : Bits64 -> Int
 
-hashCode : TT.Constant -> Maybe Int
+hashCode : Primitive.Constant -> Maybe Int
 hashCode (BI value) = Just $ Object.hashCode value
 hashCode (I64 value) = Just $ int64HashCode value
 hashCode (B64 value) = Just $ bits64HashCode value
@@ -170,7 +172,7 @@ getHashCodeSwitchClass fc (IRef "java/math/BigInteger" _ _) = Pure bigIntegerCla
 getHashCodeSwitchClass fc ILong = Pure "java/lang/Long"
 getHashCodeSwitchClass fc constantType = asmCrash ("Constant type " ++ show constantType ++ " cannot be compiled to 'Switch'.")
 
-assembleHashCodeSwitchConstant : FC -> TT.Constant -> Asm ()
+assembleHashCodeSwitchConstant : FC -> Primitive.Constant -> Asm ()
 assembleHashCodeSwitchConstant _ (BI value) = newBigInteger $ show value
 assembleHashCodeSwitchConstant _ (I64 value) = Ldc $ Int64Const value
 assembleHashCodeSwitchConstant _ (B64 value) = Ldc $ Bits64Const value

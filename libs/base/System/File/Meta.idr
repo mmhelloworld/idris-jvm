@@ -8,7 +8,6 @@ import System.FFI
 import System.File.Handle
 import System.File.Support
 import public System.File.Types
-import System.FFI
 
 %default total
 
@@ -68,6 +67,7 @@ prim__filetimeStatusTimeNsec : FileTimePtr -> PrimIO Int
 
 %foreign supportC "idris2_fileIsTTY"
          "node:lambda:fp=>Number(require('tty').isatty(fp.fd))"
+         jvm' fileClass ".isTty" fileClass "int"
 prim__fileIsTTY : FilePtr -> PrimIO Int
 
 ||| Check if a file exists for reading.

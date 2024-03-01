@@ -26,6 +26,7 @@ import Compiler.Jvm.ShowUtil
 import System
 import System.FFI
 
+%hide Core.Name.Scoped.Scope
 %hide Debug.Trace.toString
 
 public export

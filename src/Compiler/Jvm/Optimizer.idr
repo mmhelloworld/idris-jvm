@@ -12,6 +12,7 @@ import Core.Context
 import Core.Name
 import Core.Reflect
 import Core.TT
+import Core.TT.Primitive
 
 import Libraries.Data.SortedMap
 import Libraries.Data.SortedSet
@@ -29,6 +30,7 @@ import Compiler.Jvm.Jname
 import Compiler.Jvm.MockAsm
 import Compiler.Jvm.ShowUtil
 
+%hide Core.Name.Scoped.Scope
 %hide Core.Context.Context.Constructor.arity
 %hide Compiler.TailRec.Function.fc
 %hide Compiler.TailRec.TcFunction.fc
@@ -496,7 +498,7 @@ getConstantType ((MkNConstAlt constant _) :: _) = case constant of
     unsupportedConstant => Throw emptyFC $ "Unsupported constant switch " ++ show unsupportedConstant
 
 export
-getIntConstantValue : FC -> TT.Constant -> Asm Int
+getIntConstantValue : FC -> Primitive.Constant -> Asm Int
 getIntConstantValue _ (I i) = Pure i
 getIntConstantValue _ (I8 i) = Pure (cast i)
 getIntConstantValue _ (I16 i) = Pure (cast i)
@@ -667,7 +669,7 @@ mutual
         defaultTy <- traverse (inferExprWithNewScope exprTy) def
         Pure $ combineSwitchTypes defaultTy altTypes
       where
-        getConstant : NamedConstAlt -> TT.Constant
+        getConstant : NamedConstAlt -> Primitive.Constant
         getConstant (MkNConstAlt constant _) = constant
 
         sortConstCases : InferredType -> List NamedConstAlt -> Asm (List NamedConstAlt)

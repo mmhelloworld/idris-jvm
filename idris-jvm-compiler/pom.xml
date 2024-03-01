@@ -3,7 +3,7 @@
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.6.1-SNAPSHOT</version>
+        <version>0.7.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -93,6 +93,7 @@
                         <configuration>
                             <includeScope>compile</includeScope>
                             <outputDirectory>${project.parent.basedir}/build/exec/idris2_app</outputDirectory>
+                            <excludeArtifactIds>idris-jvm-runtime</excludeArtifactIds>
                         </configuration>
                     </execution>
                 </executions>
@@ -102,6 +103,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <configuration>
                     <quietLogs>true</quietLogs>
+                    <inheritIo>true</inheritIo>
                 </configuration>
                 <executions>
                     <execution>
@@ -208,7 +210,7 @@
                 <artifactId>maven-antrun-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>copy-compiler-jar</id>
+                        <id>delete-runtime-jar</id>
                         <phase>process-classes</phase>
                         <goals>
                             <goal>run</goal>
@@ -216,7 +218,9 @@
                         <configuration>
                             <failOnError>false</failOnError>
                             <target>
-                                <copy file="../build/exec/idris2_app/idris2.jar" tofile="./target/idris-jvm-compiler-${project.version}.jar" overwrite="true" />
+                                <delete failonerror="false">
+                                    <fileset dir="${project.parent.basedir}/build/exec/idris2_app" includes="idris-jvm-runtime-*.jar"/>
+                                </delete>
                             </target>
                         </configuration>
                     </execution>

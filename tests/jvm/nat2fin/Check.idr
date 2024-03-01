@@ -15,7 +15,7 @@ isOptimized (_ :: _ :: []) = False
 isOptimized (_ :: []) = False
 isOptimized (line1 :: line2 :: line3 :: rest) = (("String 375" `isSuffixOf` line1) &&
   ("Method java/math/BigInteger.\"<init>\":(Ljava/lang/String;)V" `isSuffixOf` line2) &&
-  ("Method M_Prelude/IO.printLn:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" `isSuffixOf` line3)) ||
+  ("Method M_Data/Fin.show$show_Show_$lparFin$s$n$rpar:(Ljava/lang/Object;)Ljava/lang/Object;" `isSuffixOf` line3)) ||
   isOptimized (line2 :: line3 :: rest)
 
 main : IO ()

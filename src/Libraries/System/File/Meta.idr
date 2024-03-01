@@ -14,32 +14,45 @@ import public System.File.Types
 FileTimePtr : Type
 FileTimePtr = AnyPtr
 
+fileClass : String
+fileClass = "io/github/mmhelloworld/idrisjvm/runtime/ChannelIo"
+
+basicFileAttributesClass : String
+basicFileAttributesClass = "java/nio/file/attribute/BasicFileAttributes"
+
 %foreign supportC "idris2_fileTime"
          "node:support:filetime,support_system_file"
+         jvm' fileClass ".getFileAttributes" fileClass basicFileAttributesClass
 prim__fileTime : FilePtr -> PrimIO FileTimePtr
 
 %foreign supportC "idris2_filetimeAccessTimeSec"
          "node:lambda:ft=>ft.atime_sec"
+         jvm' fileClass "getAccessTimeSec" basicFileAttributesClass "int"
 prim__filetimeAccessTimeSec : FileTimePtr -> PrimIO Int
 
 %foreign supportC "idris2_filetimeAccessTimeNsec"
          "node:lambda:ft=>ft.atime_nsec"
+         jvm' fileClass "getAccessTimeNsec" basicFileAttributesClass "int"
 prim__filetimeAccessTimeNsec : FileTimePtr -> PrimIO Int
 
 %foreign supportC "idris2_filetimeModifiedTimeSec"
          "node:lambda:ft=>ft.mtime_sec"
+         jvm' fileClass "getModifiedTimeSec" basicFileAttributesClass "int"
 prim__filetimeModifiedTimeSec : FileTimePtr -> PrimIO Int
 
 %foreign supportC "idris2_filetimeModifiedTimeNsec"
          "node:lambda:ft=>ft.mtime_nsec"
+         jvm' fileClass "getModifiedTimeNsec" basicFileAttributesClass "int"
 prim__filetimeModifiedTimeNsec : FileTimePtr -> PrimIO Int
 
 %foreign supportC "idris2_filetimeStatusTimeSec"
          "node:lambda:ft=>ft.ctime_sec"
+         jvm' fileClass "getCreationTimeSec" basicFileAttributesClass "int"
 prim__filetimeStatusTimeSec : FileTimePtr -> PrimIO Int
 
 %foreign supportC "idris2_filetimeStatusTimeNsec"
          "node:lambda:ft=>ft.ctime_nsec"
+         jvm' fileClass "getCreationTimeNsec" basicFileAttributesClass "int"
 prim__filetimeStatusTimeNsec : FileTimePtr -> PrimIO Int
 
 ||| Record that holds timestamps with nanosecond precision

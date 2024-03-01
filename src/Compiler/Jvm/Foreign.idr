@@ -23,6 +23,8 @@ import Compiler.Jvm.Asm
 import Compiler.Jvm.ExtPrim
 import Compiler.Jvm.ShowUtil
 
+%hide Core.Name.Scoped.Scope
+
 getArity : Nat -> CFType -> Nat
 getArity arity (CFFun argument _) = getArity (arity + 1) argument
 getArity arity _ = arity

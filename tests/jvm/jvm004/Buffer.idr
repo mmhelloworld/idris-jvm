@@ -18,6 +18,12 @@ main
          val <- getDouble buf 10
          printLn val
 
+         let stringWithNULs = "string\NUL\NUL\NUL\NULcontaining 4 NULs"
+         -- since the string contains only ASCII characters, `stringByteLength`
+         -- should equal `length`
+         putStrLn $ "bytes: " ++ show (stringByteLength stringWithNULs)
+         putStrLn $ "characters: " ++ show (length stringWithNULs)
+
          setString buf 20 "Hello there!"
          val <- getString buf 20 5
          printLn val
@@ -40,7 +46,7 @@ main
          ds <- bufferData buf2
          printLn ds
 
-         setByte buf2 0 1
+         setBits8 buf2 0 1
          Just ccBuf <- concatBuffers [buf, buf2]
             | Nothing => putStrLn "Buffer concat failed"
          printLn !(bufferData ccBuf)

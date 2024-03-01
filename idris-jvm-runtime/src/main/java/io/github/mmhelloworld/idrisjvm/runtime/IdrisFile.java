@@ -1,6 +1,6 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
-public interface IdrisFile<T extends IdrisFile<T>> {
+public interface IdrisFile {
     void close();
 
     int getErrorNumber();

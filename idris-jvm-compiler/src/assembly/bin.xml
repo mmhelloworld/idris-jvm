@@ -27,10 +27,6 @@
             <outputDirectory>/env/idris2-${idris.version}/prelude-${idris.version}</outputDirectory>
         </fileSet>
         <fileSet>
-            <directory>${project.parent.basedir}/libs/prelude/build/ttc</directory>
-            <outputDirectory>/env/idris2-${idris.version}/prelude-${idris.version}</outputDirectory>
-        </fileSet>
-        <fileSet>
             <directory>${project.parent.basedir}/libs/test/build/ttc</directory>
             <outputDirectory>/env/idris2-${idris.version}/test-${idris.version}</outputDirectory>
         </fileSet>

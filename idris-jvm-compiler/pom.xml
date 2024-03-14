@@ -3,7 +3,7 @@
     <parent>
         <groupId>io.github.mmhelloworld</groupId>
         <artifactId>idris-jvm</artifactId>
-        <version>0.6.1-SNAPSHOT</version>
+        <version>0.6.0.7</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -234,7 +234,7 @@ JVM compiler copies runtime JAR into output directory. New compiler would copy t
 so when we have the newer bootstrap compiler, this can be removed.
                                 -->
                                 <delete failonerror="false">
-                                    <fileset dir="${project.parent.basedir}/build/exec/idris2_app" includes="idris-jvm-runtime-*.jar"/>
+                                    <fileset dir="${project.parent.basedir}/build/exec/idris2_app" includes="idris-jvm-runtime-*.jar" />
                                 </delete>
                             </target>
                         </configuration>

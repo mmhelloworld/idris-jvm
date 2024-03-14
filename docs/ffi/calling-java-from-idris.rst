@@ -100,6 +100,10 @@ Here is a detailed example showing the hierarchy between Java's ``Collection``, 
 
 .. code-block:: idris
 
+module Main
+
+import Java.Lang
+
   namespace Collection
     export
     data Collection : Type -> Type where [external]
@@ -158,7 +162,8 @@ Here is a detailed example showing the hierarchy between Java's ``Collection``, 
       elem <- JList.get {elemTy=String} list 1
       printLn elem
       printLn !(size {elemTy=String} list)
-      printLn !(toString list)
+      -- Can't find an implementation for (HasIO IO, Inherits (ArrayList String) (Struct "java/lang/Object" [])).
+      -- printLn !(toString list)
 
 Here, we create an ``ArrayList`` instance and call ``get`` method from ``List`` and methods from ``Collection`` such as
 ``add`` and ``size``. We are able to pass ``ArrayList`` instance to the ``List`` and ``Collection`` functions because of

@@ -10,6 +10,8 @@ Calling static methods
 
 .. code-block:: idris
 
+    import System.FFI
+
     %foreign "jvm:toBinaryString(int java/lang/String),java/lang/Integer"
     intToBinaryString : Int -> String
 
@@ -27,6 +29,8 @@ Calling instance methods
 
 .. code-block:: idris
 
+    import System.FFI
+
     %foreign "jvm:.substring(java/lang/String int int java/lang/String),java/lang/String"
     substring : String -> Int -> Int -> String
 
@@ -40,6 +44,7 @@ Calling constructors
 
 .. code-block:: idris
 
+    import System.FFI
     import Java.Lang
     import Java.Util
 
@@ -67,6 +72,8 @@ Accessing fields
 ================
 
 .. code-block:: idris
+
+    import System.FFI
 
     data Point : Type where [external]
 

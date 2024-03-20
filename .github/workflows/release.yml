@@ -72,7 +72,7 @@ jobs:
           gpg-passphrase: GPG_PASSPHRASE
 
       - name: Publish to Maven Central
-        run: mvn -X -B release:perform
+        run: mvn -X -B release:perform -Darguments="-Dmaven.javadoc.skip=true"
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}

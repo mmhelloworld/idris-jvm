@@ -38,7 +38,7 @@ jobs:
         run: |
           mvn dependency:copy "-Dartifact=io.github.mmhelloworld:idris-jvm-compiler:$PREVIOUS_VERSION:zip" -DoutputDirectory=. -U
           unzip idris-jvm-compiler-*.zip -d "$HOME/bin"
-          echo "::add-path::$HOME/bin/idris2-$PREVIOUS_VERSION/exec"
+          echo "$HOME/bin/idris2-$PREVIOUS_VERSION/exec" >> $GITHUB_PATH
 
       - name: Build
         run: mvn -B install -Dinteractive= -Didris.tests=only=jvm
@@ -46,12 +46,12 @@ jobs:
       - name: Copy new version
         run: |
           mkdir -p "$HOME/bin/idris2-current"
-          cp -rf build/exec "$HOME/bin/idris2-current/exec"
-          cp -rf build/env "$HOME/bin/idris2-current/env"
+          cp -LR build/exec "$HOME/bin/idris2-current/exec"
+          cp -LR build/env "$HOME/bin/idris2-current/env"
 
       - name: Use new version
         run: |
-          echo "::add-path::$HOME/bin/idris2-current/exec"
+          echo "$HOME/bin/idris2-current/exec" >> $GITHUB_PATH
           echo IDRIS2_PREFIX="$HOME/bin/idris2-current/env" >> "$GITHUB_ENV"
           echo PREFIX="$IDRIS2_PREFIX" >> "$GITHUB_ENV"
 
@@ -96,7 +96,7 @@ jobs:
         run: |
           mvn dependency:copy "-Dartifact=io.github.mmhelloworld:idris-jvm-compiler:$PREVIOUS_VERSION:zip" -DoutputDirectory=. -U
           unzip idris-jvm-compiler-*.zip -d "$HOME/bin"
-          echo "::add-path::$HOME/bin/idris2-$PREVIOUS_VERSION/exec"
+          echo "$HOME/bin/idris2-$PREVIOUS_VERSION/exec" >> $GITHUB_PATH
 
       - name: Build
         run: mvn -B install -Dinteractive= -Didris.tests=only=jvm
@@ -109,7 +109,7 @@ jobs:
 
       - name: Use new version
         run: |
-          echo "::add-path::$HOME/bin/idris2-current/exec"
+          echo "$HOME/bin/idris2-current/exec" >> $GITHUB_PATH
           echo IDRIS2_PREFIX="$HOME/bin/idris2-current/env" >> "$GITHUB_ENV"
           echo PREFIX="$IDRIS2_PREFIX" >> "$GITHUB_ENV"
 

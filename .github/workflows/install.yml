@@ -46,8 +46,8 @@ jobs:
       - name: Copy new version
         run: |
           mkdir -p "$HOME/bin/idris2-current"
-          cp -r build/exec "$HOME/bin/idris2-current/exec"
-          cp -r build/env "$HOME/bin/idris2-current/env"
+          cp -rf build/exec "$HOME/bin/idris2-current/exec"
+          cp -rf build/env "$HOME/bin/idris2-current/env"
 
       - name: Use new version
         run: |

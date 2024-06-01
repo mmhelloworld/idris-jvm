@@ -2161,8 +2161,8 @@ generateSetters descriptorsByEncloser classExport =
   generateAccessors descriptorsByEncloser classExport (createSetter classExport)
 
 generateConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport ->
-                        List FieldExport -> Asm ()
-generateConstructor descriptorsByEncloser classExport fields = do
+                        List FieldExport -> List Annotation -> Asm ()
+generateConstructor descriptorsByEncloser classExport fields annotations = do
   let fieldTypes = FieldExport.type <$> fields
   let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid fieldTypes
   let signature = Just $ getMethodSignature $ MkInferredFunctionType IVoid fieldTypes
@@ -2170,7 +2170,7 @@ generateConstructor descriptorsByEncloser classExport fields = do
   extendsTypeName <- getJvmReferenceTypeName classExport.extends
   let arity = the Int $ cast $ length fields
   jvmArgumentTypesByIndex <- LiftIo $ Map.fromList $ zip [0 .. arity] (classType :: fieldTypes)
-  CreateMethod [Public] "generated.idr" classExport.name "<init>" descriptor signature Nothing [] []
+  CreateMethod [Public] "generated.idr" classExport.name "<init>" descriptor signature Nothing annotations []
   MethodCodeStart
   CreateLabel methodStartLabel
   CreateLabel methodEndLabel
@@ -2203,11 +2203,15 @@ generateConstructor descriptorsByEncloser classExport fields = do
     let fieldType = field.type
     LocalVariable field.name (getJvmTypeDescriptor fieldType) Nothing methodStartLabel methodEndLabel index
 
-generateRequiredArgsConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport -> Asm ()
-generateRequiredArgsConstructor descriptorsByEncloser classExport = do
+generateRequiredArgsConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport ->
+                                    List AnnotationProperty -> Asm ()
+generateRequiredArgsConstructor descriptorsByEncloser classExport props = do
   let allFields = getFields $ fromMaybe [] $ SortedMap.lookup classExport descriptorsByEncloser
-  let requiredFields = filter isRequiredField allFields
-  when (not $ isNil requiredFields) $ generateConstructor descriptorsByEncloser classExport requiredFields
+  let requiredFields@(_ :: _) = filter isRequiredField allFields
+        | [] => Pure ()
+  let annotations = getAnnotationValues $ snd $ fromMaybe ("annotations", AnnArray []) $
+                        (find (\(name, value) => name == "annotations") props)
+  generateConstructor descriptorsByEncloser classExport requiredFields annotations
 
 generateAllArgsConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport -> Asm ()
 generateAllArgsConstructor descriptorsByEncloser classExport = do
@@ -2217,10 +2221,16 @@ generateAllArgsConstructor descriptorsByEncloser classExport = do
   let excludedFields = getStringAnnotationValues $ snd $ fromMaybe ("exclude", AnnArray []) $
                         (find (\(name, value) => name == "exclude") props)
   let constructorFields = filter (\fieldExport => not $ elem fieldExport.name excludedFields) fields
-  generateConstructor descriptorsByEncloser classExport constructorFields
+  let annotations = getAnnotationValues $ snd $ fromMaybe ("annotations", AnnArray []) $
+                      (find (\(name, value) => name == "annotations") props)
+  generateConstructor descriptorsByEncloser classExport constructorFields annotations
 
 generateNoArgsConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport -> Asm ()
 generateNoArgsConstructor descriptorsByEncloser classExport = do
+  let Just (MkAnnotation _ props) = findNoArgsConstructor classExport
+        | _ => Pure ()
+  let annotations = getAnnotationValues $ snd $ fromMaybe ("annotations", AnnArray []) $
+                        (find (\(name, value) => name == "annotations") props)
   CreateMethod [Public] "generated.idr" classExport.name "<init>" "()V" Nothing Nothing [] []
   MethodCodeStart
   Aload 0
@@ -2371,7 +2381,7 @@ generateDataClass : SortedMap ClassExport (List ExportDescriptor) -> ClassExport
 generateDataClass descriptorsByEncloser classExport = do
   generateGetters descriptorsByEncloser classExport
   generateSetters descriptorsByEncloser classExport
-  generateRequiredArgsConstructor descriptorsByEncloser classExport
+  generateRequiredArgsConstructor descriptorsByEncloser classExport []
   generateHashCode descriptorsByEncloser classExport
   generateEquals descriptorsByEncloser classExport
   generateToString descriptorsByEncloser classExport
@@ -2410,10 +2420,11 @@ exportMemberIo globalState descriptorsByEncloser (MkClassExportDescriptor classE
   ignore $ asm asmState $ exportClass classExport
   let hasDataAnnotation = isJust (findClassAnnotation "Data" classExport)
   ignore $ asm asmState $ generateAllArgsConstructor descriptorsByEncloser classExport
-  when (isJust (findNoArgsConstructor classExport)) $
-    ignore $ asm asmState $ generateNoArgsConstructor descriptorsByEncloser classExport
-  when (not hasDataAnnotation && isJust (findRequiredArgsConstructor classExport)) $
-    ignore $ asm asmState $ generateRequiredArgsConstructor descriptorsByEncloser classExport
+  ignore $ asm asmState $ generateNoArgsConstructor descriptorsByEncloser classExport
+  when (not hasDataAnnotation) $
+    ignore $ asm asmState $
+      generateRequiredArgsConstructor descriptorsByEncloser classExport
+        (maybe [] getAnnotationProperties $ findRequiredArgsConstructor classExport)
   when hasDataAnnotation $ ignore $ asm asmState $ generateDataClass descriptorsByEncloser classExport
   when (not hasDataAnnotation && isJust (findClassAnnotation "Getter" classExport)) $
     ignore $ asm asmState $ generateGetters descriptorsByEncloser classExport

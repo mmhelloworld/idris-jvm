@@ -71,7 +71,7 @@ mutual
   parseAnnotationProperty : Name -> String -> String -> JSON -> Asm AnnotationProperty
   parseAnnotationProperty functionName annotationName propertyName valueJson = do
     value <- parseAnnotationValue functionName annotationName valueJson
-    Pure $ (propertyName, value)
+    Pure (propertyName, value)
 
   parseAnnotation : Name -> JSON -> Asm Annotation
   parseAnnotation functionName (JObject [(annotationName, (JObject propertyNameAndValues))]) = do

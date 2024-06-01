@@ -82,6 +82,13 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argume
     getInstanceMemberClass errorMessage ((IRef className _ _) :: _) = Pure className
     getInstanceMemberClass errorMessage _ = Throw fc errorMessage
 
+    getDescriptorClassName : String -> Asm String
+    getDescriptorClassName memberName =
+      case descriptorParts of
+        (className :: _) => Pure className
+        _ => Throw fc
+               ("Static member " ++ memberName ++ " must have an explicit class name in foreign descriptor")
+
     getClassName : String -> List String -> InferredType -> List InferredType -> Asm String
     getClassName memberName descriptorParts returnType argumentTypes =
       let arity = length argumentTypes
@@ -90,26 +97,25 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argume
             getInstanceMemberClass
               ("Instance method " ++ memberName ++ " must have first argument to be of reference type")
               argumentTypes
-        else if startsWith memberName "#=" && arity >= 2 then
-          getInstanceMemberClass
-            ("Setter for instance field " ++ memberName ++ " must have first argument to be of reference type")
-            argumentTypes
-        else if startsWith memberName "#" && arity >= 1 then
-          getInstanceMemberClass
-            ("Getter for instance field " ++ memberName ++ " must have first argument to be of reference type")
-            argumentTypes
+        else if startsWith memberName "#=" then
+          if arity >= 2 then
+            getInstanceMemberClass
+              ("Setter for instance field " ++ memberName ++ " must have first argument to be of reference type")
+              argumentTypes
+          else getDescriptorClassName memberName
+        else if startsWith memberName "#" then
+          if arity >= 1 then
+            getInstanceMemberClass
+              ("Getter for instance field " ++ memberName ++ " must have first argument to be of reference type")
+              argumentTypes
+          else getDescriptorClassName memberName
         else
           if memberName == "<init>"
             then
               case returnType of
                 IRef className _ _ => Pure className
                 _ => Throw fc ("Constructor must return a reference type")
-            else
-              case descriptorParts of
-                (className :: _) => Pure className
-                _ => Throw fc
-                       ("Static member " ++ memberName ++ " must have an explicit class name in foreign descriptor")
-
+            else getDescriptorClassName memberName
 
     go : List InferredType -> List String -> Asm (List InferredType, InferredType)
     go acc [] = Pure (acc, IUnknown)

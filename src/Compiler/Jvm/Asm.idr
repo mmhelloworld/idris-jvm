@@ -604,6 +604,20 @@ getStringAnnotationValues : AnnotationValue -> List String
 getStringAnnotationValues (AnnArray values) = mapMaybe getStringAnnotationValue values
 getStringAnnotationValues _ = []
 
+getAnnotationValue : AnnotationValue -> Maybe Annotation
+getAnnotationValue (AnnAnnotation annotation) = Just annotation
+getAnnotationValue _ = Nothing
+
+export
+getAnnotationValues : AnnotationValue -> List Annotation
+getAnnotationValues (AnnArray values) = mapMaybe getAnnotationValue values
+getAnnotationValues _ = []
+
+export
+getAnnotationProperties : Annotation -> List AnnotationProperty
+getAnnotationProperties (MkAnnotation _ props) = props
+getAnnotationProperties _ = []
+
 public export
 data Asm : Type -> Type where
     Aaload : Asm ()

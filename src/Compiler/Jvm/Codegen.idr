@@ -2170,7 +2170,8 @@ generateConstructor descriptorsByEncloser classExport fields annotations = do
   extendsTypeName <- getJvmReferenceTypeName classExport.extends
   let arity = the Int $ cast $ length fields
   jvmArgumentTypesByIndex <- LiftIo $ Map.fromList $ zip [0 .. arity] (classType :: fieldTypes)
-  CreateMethod [Public] "generated.idr" classExport.name "<init>" descriptor signature Nothing annotations []
+  let asmAnnotations = asmAnnotation <$> annotations
+  CreateMethod [Public] "generated.idr" classExport.name "<init>" descriptor signature Nothing asmAnnotations []
   MethodCodeStart
   CreateLabel methodStartLabel
   CreateLabel methodEndLabel

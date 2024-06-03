@@ -2161,8 +2161,8 @@ generateSetters descriptorsByEncloser classExport =
   generateAccessors descriptorsByEncloser classExport (createSetter classExport)
 
 generateConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport ->
-                        List FieldExport -> List Annotation -> Asm ()
-generateConstructor descriptorsByEncloser classExport fields annotations = do
+                        List FieldExport -> List Annotation -> List (List Annotation) -> Asm ()
+generateConstructor descriptorsByEncloser classExport fields annotations parameterAnnotations = do
   let fieldTypes = FieldExport.type <$> fields
   let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid fieldTypes
   let signature = Just $ getMethodSignature $ MkInferredFunctionType IVoid fieldTypes
@@ -2171,7 +2171,9 @@ generateConstructor descriptorsByEncloser classExport fields annotations = do
   let arity = the Int $ cast $ length fields
   jvmArgumentTypesByIndex <- LiftIo $ Map.fromList $ zip [0 .. arity] (classType :: fieldTypes)
   let asmAnnotations = asmAnnotation <$> annotations
-  CreateMethod [Public] "generated.idr" classExport.name "<init>" descriptor signature Nothing asmAnnotations []
+  let asmParameterAnnotations = (\annotations => asmAnnotation <$> annotations) <$> parameterAnnotations
+  CreateMethod [Public] "generated.idr" classExport.name "<init>" descriptor signature Nothing asmAnnotations
+    asmParameterAnnotations
   MethodCodeStart
   CreateLabel methodStartLabel
   CreateLabel methodEndLabel
@@ -2204,15 +2206,19 @@ generateConstructor descriptorsByEncloser classExport fields annotations = do
     let fieldType = field.type
     LocalVariable field.name (getJvmTypeDescriptor fieldType) Nothing methodStartLabel methodEndLabel index
 
+getMatchingAnnotationProperty : String -> List AnnotationProperty -> Maybe AnnotationValue
+getMatchingAnnotationProperty name props = snd <$> find (\(currentName, value) => name == currentName) props
+
 generateRequiredArgsConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport ->
                                     List AnnotationProperty -> Asm ()
 generateRequiredArgsConstructor descriptorsByEncloser classExport props = do
   let allFields = getFields $ fromMaybe [] $ SortedMap.lookup classExport descriptorsByEncloser
   let requiredFields@(_ :: _) = filter isRequiredField allFields
         | [] => Pure ()
-  let annotations = getAnnotationValues $ snd $ fromMaybe ("annotations", AnnArray []) $
-                        (find (\(name, value) => name == "annotations") props)
-  generateConstructor descriptorsByEncloser classExport requiredFields annotations
+  let annotations = getAnnotationValues $ fromMaybe (AnnArray []) $ getMatchingAnnotationProperty "annotations" props
+  let parameterAnnotations = getParameterAnnotationValues $ fromMaybe (AnnArray []) $
+                               getMatchingAnnotationProperty "parameterAnnotations" props
+  generateConstructor descriptorsByEncloser classExport requiredFields annotations parameterAnnotations
 
 generateAllArgsConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport -> Asm ()
 generateAllArgsConstructor descriptorsByEncloser classExport = do
@@ -2222,9 +2228,10 @@ generateAllArgsConstructor descriptorsByEncloser classExport = do
   let excludedFields = getStringAnnotationValues $ snd $ fromMaybe ("exclude", AnnArray []) $
                         (find (\(name, value) => name == "exclude") props)
   let constructorFields = filter (\fieldExport => not $ elem fieldExport.name excludedFields) fields
-  let annotations = getAnnotationValues $ snd $ fromMaybe ("annotations", AnnArray []) $
-                      (find (\(name, value) => name == "annotations") props)
-  generateConstructor descriptorsByEncloser classExport constructorFields annotations
+  let annotations = getAnnotationValues $ fromMaybe (AnnArray []) $ getMatchingAnnotationProperty "annotations" props
+  let parameterAnnotations = getParameterAnnotationValues $ fromMaybe (AnnArray []) $
+                               getMatchingAnnotationProperty "parameterAnnotations" props
+  generateConstructor descriptorsByEncloser classExport constructorFields annotations parameterAnnotations
 
 generateNoArgsConstructor : SortedMap ClassExport (List ExportDescriptor) -> ClassExport -> Asm ()
 generateNoArgsConstructor descriptorsByEncloser classExport = do

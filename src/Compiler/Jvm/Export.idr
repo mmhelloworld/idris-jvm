@@ -46,9 +46,8 @@ mutual
       | _ => asmCrash ("Expected 'string' enum value for annotation " ++ show annotationName ++ " in " ++
                show functionName)
     Pure $ AnnEnum type value
-  parseAnnotationTypeValue functionName annotationName "annotation" annotationJson = do
-    annotation <- parseAnnotation functionName annotationJson
-    Pure $ AnnAnnotation annotation
+  parseAnnotationTypeValue functionName annotationName "annotation" annotationJson =
+    AnnAnnotation <$> parseAnnotation functionName annotationJson
   parseAnnotationTypeValue functionName annotationName type _ =
     asmCrash ("Unknown type " ++ show type ++ " for annotation " ++ annotationName ++ " in " ++ show functionName)
 
@@ -56,10 +55,10 @@ mutual
   parseAnnotationValue functionName annotationName (JNumber value) = Pure $ AnnInt $ cast value
   parseAnnotationValue functionName annotationName (JString value) = Pure $ AnnString value
   parseAnnotationValue functionName annotationName (JBoolean value) = Pure $ AnnBoolean value
-  parseAnnotationValue functionName annotationName (JObject properties) = do
+  parseAnnotationValue functionName annotationName annotationJson@(JObject properties) = do
     let propertiesByName = SortedMap.fromList properties
     let Just (JString type) = lookup "type" propertiesByName
-      | _ => asmCrash ("Missing 'string' type for annotation " ++ annotationName ++ " in " ++ show functionName)
+      | _ => AnnAnnotation <$> parseAnnotation functionName annotationJson
     let Just value = SortedMap.lookup "value" propertiesByName
       | _ => asmCrash ("Missing 'string' value for annotation " ++ annotationName ++ " in " ++ show functionName)
     parseAnnotationTypeValue functionName annotationName type value

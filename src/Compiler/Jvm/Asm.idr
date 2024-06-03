@@ -614,9 +614,13 @@ getAnnotationValues (AnnArray values) = mapMaybe getAnnotationValue values
 getAnnotationValues _ = []
 
 export
+getParameterAnnotationValues : AnnotationValue -> List (List Annotation)
+getParameterAnnotationValues (AnnArray values) = getAnnotationValues <$> values
+getParameterAnnotationValues _ = []
+
+export
 getAnnotationProperties : Annotation -> List AnnotationProperty
 getAnnotationProperties (MkAnnotation _ props) = props
-getAnnotationProperties _ = []
 
 public export
 data Asm : Type -> Type where

@@ -622,6 +622,10 @@ export
 getAnnotationProperties : Annotation -> List AnnotationProperty
 getAnnotationProperties (MkAnnotation _ props) = props
 
+export
+%foreign "jvm:#JAVA_VERSION(int),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+javaClassFileVersion : Int
+
 public export
 data Asm : Type -> Type where
     Aaload : Asm ()

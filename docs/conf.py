@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Idris JVM'
-copyright = '2023, Marimuthu Madasamy'
+copyright = '2024, Marimuthu Madasamy'
 author = 'Marimuthu Madasamy'
 
 # -- General configuration ---------------------------------------------------
@@ -22,4 +22,5 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_rtd_theme"
+html_theme_options = {'navigation_depth': 5}
 html_static_path = ['_static']

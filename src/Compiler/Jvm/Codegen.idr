@@ -2038,8 +2038,9 @@ isForeignDef : (Name, FC, NamedDef) -> Bool
 isForeignDef (_, _, MkNmForeign _ _ _) = True
 isForeignDef _ = False
 
-exportConstructor : Map Int InferredType -> InferredType -> Int -> Jname -> Name -> InferredFunctionType -> Asm ()
-exportConstructor jvmArgumentTypesByIndex jvmReturnType arity jvmIdrisName idrisName idrisFunctionType = do
+exportConstructor : SortedMap Namespace (List String) -> Map Int InferredType -> InferredType -> Int -> Jname ->
+                      Name -> InferredFunctionType -> Asm ()
+exportConstructor typeExports jvmArgumentTypesByIndex jvmReturnType arity jvmIdrisName idrisName idrisFunctionType = do
   function <- getCurrentFunction
   initializeFunctionState
   let optimizedExpr = optimizedBody function
@@ -2057,7 +2058,7 @@ exportConstructor jvmArgumentTypesByIndex jvmReturnType arity jvmIdrisName idris
     updateScopeStartLabel scopeIndex methodStartLabel
     updateScopeEndLabel scopeIndex methodEndLabel
     assembleExpr False IVoid (optimizedBody function)
-    loadArguments jvmArgumentTypesByIndex idrisName arity (parameterTypes idrisFunctionType)
+    loadArguments typeExports jvmArgumentTypesByIndex idrisName arity (parameterTypes idrisFunctionType)
     let idrisMethodDescriptor = getMethodDescriptor idrisFunctionType
     programName <- getProgramName
     let qualifiedJvmIdrisName = getIdrisFunctionName programName (className jvmIdrisName) (methodName jvmIdrisName)
@@ -2070,8 +2071,9 @@ exportConstructor jvmArgumentTypesByIndex jvmReturnType arity jvmIdrisName idris
   MaxStackAndLocal (-1) (-1)
   MethodCodeEnd
 
-exportFunction : MethodExport -> Asm ()
-exportFunction (MkMethodExport jvmFunctionName idrisName type shouldPerformIO encloser modifiers annotations parameterAnnotations) = do
+exportFunction : SortedMap Namespace (List String) -> MethodExport -> Asm ()
+exportFunction typeExports (MkMethodExport jvmFunctionName idrisName type shouldPerformIO encloser
+  modifiers annotations parameterAnnotations) = do
     let jvmClassName = encloser.name
     let fileName = fst $ getSourceLocationFromFc emptyFC
     let MkInferredFunctionType jvmReturnType jvmArgumentTypes = type
@@ -2090,7 +2092,7 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type shouldPerformIO en
     CreateMethod modifiers fileName jvmClassName jvmFunctionName descriptor signature Nothing asmAnnotations
       asmParameterAnnotations
     MethodCodeStart
-    (_, MkNmFun idrisFunctionArgs idrisFunctionBody) <- getFcAndDefinition (jvmSimpleName idrisName)
+    (_, MkNmFun idrisFunctionArgs _) <- getFcAndDefinition (jvmSimpleName idrisName)
       | _ => asmCrash ("Unknown idris function " ++ show idrisName)
     let idrisFunctionArity = length idrisFunctionArgs
     let idrisArgumentTypes = replicate idrisFunctionArity inferredObjectType
@@ -2099,9 +2101,9 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type shouldPerformIO en
     let isField = idrisFunctionArity == 0
     let isConstructor = jvmFunctionName == "<init>"
     if isConstructor
-      then exportConstructor jvmArgumentTypesByIndex jvmReturnType arityInt jvmIdrisName idrisName idrisFunctionType
+      then exportConstructor typeExports jvmArgumentTypesByIndex jvmReturnType arityInt jvmIdrisName idrisName idrisFunctionType
       else if not isField then do
-        loadArguments jvmArgumentTypesByIndex idrisName arityInt (parameterTypes idrisFunctionType)
+        loadArguments typeExports jvmArgumentTypesByIndex idrisName arityInt (parameterTypes idrisFunctionType)
         let idrisMethodDescriptor = getMethodDescriptor idrisFunctionType
         programName <- getProgramName
         let qualifiedJvmIdrisName = getIdrisFunctionName programName (className jvmIdrisName)
@@ -2111,7 +2113,7 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type shouldPerformIO en
         when shouldPerformIO $
           InvokeMethod InvokeStatic (programName ++ "/PrimIO") "unsafePerformIO"
             "(Ljava/lang/Object;)Ljava/lang/Object;" False
-        asmCast (returnType idrisFunctionType) jvmReturnType
+        toJava idrisName typeExports jvmReturnType (returnType idrisFunctionType)
         asmReturn jvmReturnType
         MaxStackAndLocal (-1) (-1)
         MethodCodeEnd
@@ -2123,27 +2125,10 @@ exportFunction (MkMethodExport jvmFunctionName idrisName type shouldPerformIO en
             "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
         InvokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
             "()Ljava/lang/Object;" False
-        asmCast inferredObjectType jvmReturnType
+        toJava idrisName typeExports jvmReturnType (returnType idrisFunctionType)
         asmReturn jvmReturnType
         MaxStackAndLocal (-1) (-1)
         MethodCodeEnd
-
-exportField : FieldExport -> Asm ()
-exportField (MkFieldExport fieldName type encloser modifiers annotations) = do
-  let jvmClassName = encloser.name
-  let asmAnnotations = asmAnnotation <$> annotations
-  CreateField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing asmAnnotations
-  FieldEnd
-
-exportClass : ClassExport -> Asm ()
-exportClass (MkClassExport name idrisName extends implements modifiers annotations) = do
-  CreateClass [ComputeMaxs, ComputeFrames]
-  let annotations = filter (not . isIdrisJvmAnnotation) annotations
-  let signature = getSignature extends ++ concat (getSignature <$> implements)
-  extendsTypeName <- getJvmReferenceTypeName extends
-  implementsTypeNames <- traverse getJvmReferenceTypeName implements
-  let asmAnnotations = asmAnnotation <$> annotations
-  ClassCodeStart 52 modifiers name (Just signature) extendsTypeName implementsTypeNames asmAnnotations
 
 generateAccessors : SortedMap ClassExport (List ExportDescriptor) -> ClassExport ->
                       (accessorCreator: FieldExport -> Asm ()) -> Asm ()
@@ -2394,8 +2379,9 @@ generateDataClass descriptorsByEncloser classExport = do
   generateEquals descriptorsByEncloser classExport
   generateToString descriptorsByEncloser classExport
 
-exportMemberIo : AsmGlobalState -> SortedMap ClassExport (List ExportDescriptor) -> ExportDescriptor -> IO ()
-exportMemberIo globalState descriptorsByEncloser (MkMethodExportDescriptor desc) =
+exportMemberIo : AsmGlobalState -> SortedMap Namespace (List String) ->
+                   SortedMap ClassExport (List ExportDescriptor) -> ExportDescriptor -> IO ()
+exportMemberIo globalState typeExports descriptorsByEncloser (MkMethodExportDescriptor desc) =
   if desc.name == "<init>"
     then do
       let idrisName = desc.idrisName
@@ -2413,17 +2399,17 @@ exportMemberIo globalState descriptorsByEncloser (MkMethodExportDescriptor desc)
               inferDef programName constructorIdrisName fc (MkNmFun args superCallExpr)
               resetScope
               loadFunction $ jvmName constructorIdrisName
-              exportFunction desc
+              exportFunction typeExports desc
               scopes <- LiftIo $ ArrayList.new {elemTy=Scope}
               updateCurrentFunction $ { scopes := (subtyping scopes), optimizedBody := emptyFunction }
         _ => pure ()
     else do
       asmState <- createAsmStateJavaName globalState desc.encloser.name
-      ignore $ asm asmState $ exportFunction desc
-exportMemberIo globalState descriptorsByEncloser (MkFieldExportDescriptor desc) = do
+      ignore $ asm asmState $ exportFunction typeExports desc
+exportMemberIo globalState typeExports descriptorsByEncloser (MkFieldExportDescriptor desc) = do
   asmState <- createAsmStateJavaName globalState desc.encloser.name
   ignore $ asm asmState $ exportField desc
-exportMemberIo globalState descriptorsByEncloser (MkClassExportDescriptor classExport) = do
+exportMemberIo globalState _ descriptorsByEncloser (MkClassExportDescriptor classExport) = do
   asmState <- createAsmStateJavaName globalState classExport.name
   ignore $ asm asmState $ exportClass classExport
   let hasDataAnnotation = isJust (findClassAnnotation "Data" classExport)
@@ -2441,7 +2427,7 @@ exportMemberIo globalState descriptorsByEncloser (MkClassExportDescriptor classE
   when (not hasDataAnnotation && isJust (findClassAnnotation "EqualsAndHashCode" classExport)) $ do
       ignore $ asm asmState $ generateEquals descriptorsByEncloser classExport
       ignore $ asm asmState $ generateHashCode descriptorsByEncloser classExport
-exportMemberIo _ _ _ = pure ()
+exportMemberIo _ _ _ _ = pure ()
 
 groupByEncloser : List ExportDescriptor -> SortedMap ClassExport (List ExportDescriptor)
 groupByEncloser descriptors =
@@ -2456,10 +2442,9 @@ groupByEncloser descriptors =
       partitionExports (classExports, desc :: methodFieldExports) rest
     partitionExports (classExports, methodFieldExports) (desc@(MkFieldExportDescriptor _) :: rest) =
       partitionExports (classExports, desc :: methodFieldExports) rest
-    partitionExports (classExports, methodFieldExports) (desc@(MkImportDescriptor _ _) :: rest) =
-      partitionExports (classExports, methodFieldExports) rest
     partitionExports (classExports, methodFieldExports) ((MkClassExportDescriptor desc) :: rest) =
       partitionExports (desc :: classExports, methodFieldExports) rest
+    partitionExports exports (_ :: rest) = partitionExports exports rest
 
     updateExportDescriptors : ClassExport -> ExportDescriptor -> SortedMap ClassExport (List ExportDescriptor) ->
                                 SortedMap ClassExport (List ExportDescriptor)
@@ -2479,12 +2464,20 @@ groupByEncloser descriptors =
       in pairEncloserDescriptor classExports (updateExportDescriptors classExport desc acc) rest
     pairEncloserDescriptor classExports acc (_ :: rest) = pairEncloserDescriptor classExports acc rest
 
-export
+exportTypeIo : AsmGlobalState -> String -> IO ()
+exportTypeIo globalState name = do
+  asmState <- createAsmStateJavaName globalState name
+  ignore $ asm asmState $ exportType name
+
+exportTypes : AsmGlobalState -> SortedMap Namespace (List String) -> IO ()
+exportTypes globalState typeExports = traverse_ (exportTypeIo globalState) $ concat $ values typeExports
+
 exportDefs : AsmGlobalState -> List (Name, String) -> IO ()
 exportDefs globalState nameAndDescriptors = do
-  descriptors <- parseExportDescriptors globalState nameAndDescriptors
+  (typeExports, descriptors) <- parseExportDescriptors globalState nameAndDescriptors
   let descriptorsByEncloser = groupByEncloser descriptors
-  traverse_ (exportMemberIo globalState descriptorsByEncloser) descriptors
+  exportTypes globalState typeExports
+  traverse_ (exportMemberIo globalState typeExports descriptorsByEncloser) descriptors
 
 export
 getExport : NoMangleMap -> Name -> Maybe (Name, String)

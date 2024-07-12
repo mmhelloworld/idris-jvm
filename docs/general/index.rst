@@ -1,53 +1,11 @@
 .. _tutorial-index:
 
-#########################
+########
 Overview
-#########################
+########
 
 * Idris JVM compiles Idris programs into Java 8 bytecode.
   The compiler is self hosting so the compiler itself is written in Idris and runs on the JVM.
-
-* **Install**
-
-  * Download the latest Idris 2 JVM release from `releases page`_.
-  * Extract the archive and add ``idris2`` launcher script directory ``<EXTRACTED_DIRECTORY_ROOT>/exec`` to ``PATH``.
-  * Create an environment variable ``IDRIS2_PREFIX`` pointing to ``<EXTRACTED_DIRECTORY_ROOT>/env``
-
-* **Hello World**
-
-.. code-block:: idris
-
-  module Main
-
-    data Tree a = Leaf
-                | Node (Tree a) a (Tree a)
-
-    inorder : Tree a -> List a
-    inorder Leaf = []
-    inorder (Node left a right) = inorder left ++ [a] ++ inorder right
-
-    tree : Tree String
-    tree = Node
-            (Node
-              (Node Leaf "3" Leaf)
-              "+"
-              (Node Leaf "7" Leaf))
-            "/"
-            (Node Leaf "2" Leaf)
-
-    main : IO ()
-    main = printLn $ inorder tree
-
-**Compile**
-
-``idris2 helloworld.idr -o main``
-
-**Run**
-
-.. code-block:: shell
-
-  % build/exec/main
-  ["3", "+", "7", "/", "2"]
 
 * Idris basic types are mapped to Java types. Idris modules and functions are compiled into Java classes and
   static methods respectively.
@@ -84,7 +42,7 @@ Overview
   +------------------------+---------------------+
 
 * **Tail recursion** is eliminated using JVM's ``GOTO`` (``while`` loop equivalent in Java). For the following code,
-  ``sum 50000`` wouldn't overflow the stack. See :ref:`general-tail-call-optimization` for more details.
+  ``sum 50000`` wouldn't overflow the stack. See :ref:`tail-call-optimization-self-tail-recursion` for more details.
 
 .. code-block:: idris
 
@@ -95,7 +53,7 @@ Overview
       go acc n@(S k) = go (acc + n) k
 
 * **Non-recursive tail calls** are handled using trampolines. For the following code, ``isOdd 100000`` wouldn't
-  overflow the stack. See :ref:`general-tail-call-optimization` for more details.
+  overflow the stack. See :ref:`tail-call-optimization-mutual-tail-recursion` for more details.
 
 .. code-block:: idris
 
@@ -119,6 +77,7 @@ Overview
     main : IO ()
     main = printLn $ intToBinaryString 128
 
-* **FFI - Calling Idris from Java** - This is currently in progress.
-
-.. _releases page: https://github.com/mmhelloworld/idris-jvm/releases/latest
+* **FFI - Calling Idris from Java**
+  Idris functions can be exported to Java as static functions, instance functions and constructors. Java classes with
+  fields can be created. Java annotations can be generated as well.
+  See :ref:`ffi-calling-idris-from-java` for more details.

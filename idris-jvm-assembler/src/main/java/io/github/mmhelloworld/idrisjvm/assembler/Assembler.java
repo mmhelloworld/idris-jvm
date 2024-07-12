@@ -184,6 +184,7 @@ public final class Assembler {
     public static final int ICONST_MAX = 5;
     public static final int BUFFER_SIZE = 1024;
     private static final boolean SHOULD_DEBUG;
+    public static final int JAVA_VERSION = V1_8;
 
     static {
         String shouldDebug = System.getProperty("IDRIS_JVM_DEBUG", System.getenv("IDRIS_JVM_DEBUG"));
@@ -589,7 +590,7 @@ public final class Assembler {
             FieldVisitor newFieldVisitor;
             MethodVisitor newMethodVisitor;
 
-            newClassWriter.visit(V1_8, ACC_PUBLIC + ACC_SUPER, newClassName, null, "java/lang/Object",
+            newClassWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_SUPER, newClassName, null, "java/lang/Object",
                 new String[]{"io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"});
 
             newClassWriter.visitSource(format("IdrisGenerated$%s.idr", newClassName.replaceAll("/", "\\$")), null);
@@ -1291,7 +1292,7 @@ public final class Assembler {
 
     private ClassWriter createClassWriter(String sourceFile, String cname) {
         ClassWriter classWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-        classWriter.visit(V1_8, ACC_PUBLIC + ACC_FINAL, cname, null, "java/lang/Object", null);
+        classWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_FINAL, cname, null, "java/lang/Object", null);
         classWriter.visitSource(sourceFile, null);
         return classWriter;
     }

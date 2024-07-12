@@ -87,6 +87,23 @@ parseAnnotations : Name -> JSON -> Asm (List Annotation)
 parseAnnotations functionName (JArray annotations) = traverse (parseAnnotation functionName) annotations
 parseAnnotations functionName _ = asmCrash ("Expected an array for parameter annotations in " ++ show functionName)
 
+getNamespace : Name -> Namespace
+getNamespace (NS n _) = n
+getNamespace n = emptyNS
+
+findByNamespace : SortedMap Namespace value -> Name -> Maybe value
+findByNamespace functionImports name = go (sortBy comparingNamespaceLength parents) where
+
+    parents : List Namespace
+    parents = allParents $ getNamespace name
+
+    comparingNamespaceLength : Namespace -> Namespace -> Ordering
+    comparingNamespaceLength = comparing (negate . cast {to=Int} . String.length . show)
+
+    go : List Namespace -> Maybe value
+    go [] = Nothing
+    go (ns :: rest) = maybe (go rest) Just $ SortedMap.lookup ns functionImports
+
 record ExportArgument where
   constructor MkExportArgument
   type: InferredType
@@ -114,8 +131,38 @@ parseArgumentsJson functionName _ =
   asmCrash ("Expected an array of arguments for foreign export function: " ++ show functionName)
 
 export
-loadArguments : Map Int InferredType -> Name -> Int -> List InferredType -> Asm ()
-loadArguments typesByIndex functionName arity idrisTypes = go 0 idrisTypes
+loadJavaVar : Name -> Map Int InferredType -> Int -> InferredType -> SortedMap Namespace (List String) ->
+                InferredType -> Asm ()
+loadJavaVar functionName typesByIndex varIndex idrisType typeExports jvmType@(IRef name _ _) =
+  case findByNamespace typeExports functionName of
+    Just exportedTypeNames =>
+      if elem name exportedTypeNames
+        then do
+          loadVar typesByIndex jvmType jvmType varIndex
+          let descriptor = getMethodDescriptor $ MkInferredFunctionType idrisType []
+          InvokeMethod InvokeVirtual name "toIdris" descriptor False
+        else
+          loadVar typesByIndex jvmType idrisType varIndex
+    Nothing => loadVar typesByIndex jvmType idrisType varIndex
+loadJavaVar _ typesByIndex varIndex idrisType _ jvmType = loadVar typesByIndex jvmType idrisType varIndex
+
+export
+toJava : Name -> SortedMap Namespace (List String) -> InferredType -> InferredType -> Asm ()
+toJava functionName typeExports jvmType@(IRef name _ _) idrisType =
+  case findByNamespace typeExports functionName of
+    Just exportedTypeNames =>
+      if elem name exportedTypeNames
+        then do
+          let descriptor = getMethodDescriptor $ MkInferredFunctionType jvmType [idrisType]
+          InvokeMethod InvokeStatic name "toJava" descriptor False
+        else
+          asmCast idrisType jvmType
+    Nothing => asmCast idrisType jvmType
+toJava _ _ jvmType idrisType = asmCast idrisType jvmType
+
+export
+loadArguments : SortedMap Namespace (List String) -> Map Int InferredType -> Name -> Int -> List InferredType -> Asm ()
+loadArguments typeExports typesByIndex functionName arity idrisTypes = go 0 idrisTypes
   where
     go : Int -> List InferredType -> Asm ()
     go n [] =
@@ -127,7 +174,7 @@ loadArguments typesByIndex functionName arity idrisTypes = go 0 idrisTypes
         | Nothing => do -- World type only exists for Idris functions
            Iconst 0 -- Load "world" for PrimIO functions
            InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
-      loadVar typesByIndex jvmType idrisType varIndex
+      loadJavaVar functionName typesByIndex varIndex idrisType typeExports jvmType
       go (varIndex + 1) rest
 
 public export
@@ -175,6 +222,7 @@ data ExportDescriptor : Type where
   MkMethodExportDescriptor : MethodExport -> ExportDescriptor
   MkClassExportDescriptor : ClassExport -> ExportDescriptor
   MkImportDescriptor : Name -> SortedMap String String -> ExportDescriptor
+  MkTypeExportDescriptor : Name -> List String -> ExportDescriptor
 
 parseModifier : Name -> String -> Access
 parseModifier _ "public" = Public
@@ -195,7 +243,7 @@ getEncloser : ExportDescriptor -> Maybe ClassExport
 getEncloser (MkMethodExportDescriptor methodExport) = Just methodExport.encloser
 getEncloser (MkFieldExportDescriptor fieldExport) = Just fieldExport.encloser
 getEncloser (MkClassExportDescriptor classExport) = Just classExport
-getEncloser (MkImportDescriptor _ _) = Nothing
+getEncloser _ = Nothing
 
 parseModifierJson : Name -> JSON -> Access
 parseModifierJson name (JString value) = parseModifier name value
@@ -406,17 +454,16 @@ parseImport line = case words line of
   (type :: alias :: []) => Just (alias, type)
   _ => Nothing
 
-getNamespace : Name -> Namespace
-getNamespace (NS n _) = n
-getNamespace n = emptyNS
-
 parseImports : Name -> String -> Asm ExportDescriptor
 parseImports functionName descriptor =
   case String.break isWhitespace descriptor of
     ("", _) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (_, "") => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
+    ("export", exportsDescriptor) =>
+      Pure $ MkTypeExportDescriptor functionName (trim <$> (drop 1 $ lines exportsDescriptor))
     (_, importsDescriptor) =>
-      Pure $ MkImportDescriptor functionName $ SortedMap.fromList $ catMaybes $ parseImport <$> lines importsDescriptor
+      Pure $ MkImportDescriptor functionName $ SortedMap.fromList $ catMaybes $
+        parseImport <$> (lines importsDescriptor)
 
 parseExportDescriptor : Name -> String -> Asm (List ExportDescriptor)
 parseExportDescriptor functionName descriptor = cond
@@ -568,21 +615,13 @@ mutual
   substituteAnnotation imports (MkAnnotation name props) =
     MkAnnotation (substituteTypeName imports name) (substituteAnnotationProperty imports <$> props)
 
-findImports : SortedMap Namespace (SortedMap String String) -> Name -> Maybe (SortedMap String String)
-findImports functionImports name = go (sortBy comparingNamespaceLength parents) where
-
-    parents : List Namespace
-    parents = allParents $ getNamespace name
-
-    comparingNamespaceLength : Namespace -> Namespace -> Ordering
-    comparingNamespaceLength = comparing (negate . cast {to=Int} . String.length . show)
-
-    go : List Namespace -> Maybe (SortedMap String String)
-    go [] = Nothing
-    go (ns :: rest) = maybe (go rest) Just $ SortedMap.lookup ns functionImports
+substituteTypeExports : SortedMap Namespace (SortedMap String String) -> Name -> List String -> List String
+substituteTypeExports functionImports name exports = case findByNamespace functionImports name of
+  Nothing => exports
+  Just imports => substituteTypeName imports <$> exports
 
 substituteClassExport : SortedMap Namespace (SortedMap String String) -> ClassExport -> ClassExport
-substituteClassExport functionImports desc = case findImports functionImports desc.idrisName of
+substituteClassExport functionImports desc = case findByNamespace functionImports desc.idrisName of
   Nothing => desc
   Just imports =>
     let
@@ -594,7 +633,7 @@ substituteClassExport functionImports desc = case findImports functionImports de
 
 substituteImport : SortedMap Namespace (SortedMap String String) -> ExportDescriptor -> ExportDescriptor
 substituteImport functionImports exportDesc@(MkMethodExportDescriptor desc) =
-  case findImports functionImports desc.idrisName of
+  case findByNamespace functionImports desc.idrisName of
     Nothing => exportDesc
     Just imports =>
       let
@@ -605,7 +644,7 @@ substituteImport functionImports exportDesc@(MkMethodExportDescriptor desc) =
       in MkMethodExportDescriptor $ MkMethodExport desc.name desc.idrisName updatedType desc.shouldPerformIO
            updatedEncloser desc.modifiers updatedAnnotations updatedParameterAnnotations
 substituteImport functionImports exportDesc@(MkFieldExportDescriptor desc) =
-  case findImports functionImports desc.encloser.idrisName of
+  case findByNamespace functionImports desc.encloser.idrisName of
     Nothing => exportDesc
     Just imports =>
       let
@@ -616,16 +655,38 @@ substituteImport functionImports exportDesc@(MkFieldExportDescriptor desc) =
            updatedAnnotations
 substituteImport functionImports (MkClassExportDescriptor desc) =
   MkClassExportDescriptor $ substituteClassExport functionImports desc
+substituteImport functionImports (MkTypeExportDescriptor name exports) =
+  MkTypeExportDescriptor name $ substituteTypeExports functionImports name exports
 substituteImport _ desc = desc
 
 substituteImports : SortedMap Namespace (SortedMap String String) -> List ExportDescriptor -> List ExportDescriptor
 substituteImports imports descriptors = (substituteImport imports) <$> descriptors
 
+isTypeExportDescriptor : ExportDescriptor -> Bool
+isTypeExportDescriptor (MkTypeExportDescriptor _ _) = True
+isTypeExportDescriptor _ = False
+
+getExportsMap : List ExportDescriptor -> SortedMap Namespace (List String)
+getExportsMap descriptors = go SortedMap.empty (descriptors >>= toTypeDescriptor) where
+
+  go : SortedMap Namespace (List String) -> List (Name, List String) -> SortedMap Namespace (List String)
+  go exportsByNamespace ((name, exports) :: rest) =
+    let newExportsByNamespace = SortedMap.merge exportsByNamespace (SortedMap.singleton (getNamespace name) exports)
+    in go newExportsByNamespace rest
+  go exportsByNamespace [] = exportsByNamespace
+
+  toTypeDescriptor : ExportDescriptor -> List (Name, List String)
+  toTypeDescriptor (MkTypeExportDescriptor name exports) = [(name, exports)]
+  toTypeDescriptor _ = []
+
 export
-parseExportDescriptors : AsmGlobalState -> List (Name, String) -> IO (List ExportDescriptor)
+parseExportDescriptors : AsmGlobalState -> List (Name, String) ->
+                           IO (SortedMap Namespace (List String), List ExportDescriptor)
 parseExportDescriptors globalState descriptors = do
     (imports, exportDescriptors) <- go (SortedMap.empty, []) descriptors
-    pure $ substituteImports imports $ sortBy (comparing memberTypeOrder) exportDescriptors
+    let substitutedDescriptors = substituteImports imports $ sortBy (comparing memberTypeOrder) exportDescriptors
+    let (exports, others) = partition isTypeExportDescriptor substitutedDescriptors
+    pure (getExportsMap exports, others)
   where
     memberTypeOrder : ExportDescriptor -> Nat
     memberTypeOrder (MkClassExportDescriptor _) = 0
@@ -688,3 +749,60 @@ knownAnnotations = ["Data", "Getter", "Setter", "NoArgsConstructor", "RequiredAr
 export
 isIdrisJvmAnnotation : Annotation -> Bool
 isIdrisJvmAnnotation (MkAnnotation name _) = name `elem` knownAnnotations
+
+export
+exportClass : ClassExport -> Asm ()
+exportClass (MkClassExport name _ extends implements modifiers annotations) = do
+  CreateClass [ComputeMaxs, ComputeFrames]
+  let annotations = filter (not . isIdrisJvmAnnotation) annotations
+  let signature = getSignature extends ++ concat (getSignature <$> implements)
+  extendsTypeName <- getJvmReferenceTypeName extends
+  implementsTypeNames <- traverse getJvmReferenceTypeName implements
+  let asmAnnotations = asmAnnotation <$> annotations
+  ClassCodeStart javaClassFileVersion modifiers name (Just signature) extendsTypeName implementsTypeNames asmAnnotations
+
+export
+exportField : FieldExport -> Asm ()
+exportField (MkFieldExport fieldName type encloser modifiers annotations) = do
+  let jvmClassName = encloser.name
+  let asmAnnotations = asmAnnotation <$> annotations
+  CreateField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing asmAnnotations
+  FieldEnd
+
+export
+exportType : String -> Asm ()
+exportType name = do
+  exportClass (MkClassExport name (UN $ Basic name) inferredObjectType [] [Public] [])
+  CreateField [Private, Final] "Unknown.idr" name "idrisValue" (getJvmTypeDescriptor inferredObjectType)
+    Nothing Nothing []
+  FieldEnd
+
+  CreateMethod [Private] "Unknown.idr" name "<init>" "(Ljava/lang/Object;)V" Nothing Nothing [] []
+  MethodCodeStart
+  Aload 0
+  InvokeMethod InvokeSpecial "java/lang/Object" "<init>" "()V" False
+  Aload 0
+  Aload 1
+  Field PutField name "idrisValue" "Ljava/lang/Object;"
+  Return
+  MaxStackAndLocal (-1) (-1)
+  MethodCodeEnd
+
+  let toJavaDescriptor = getMethodDescriptor $ MkInferredFunctionType (IRef name Class []) [inferredObjectType]
+  CreateMethod [Public, Static] "Unknown.idr" name "toJava" toJavaDescriptor Nothing Nothing [] []
+  MethodCodeStart
+  New name
+  Dup
+  Aload 0
+  InvokeMethod InvokeSpecial name "<init>" "(Ljava/lang/Object;)V" False
+  Areturn
+  MaxStackAndLocal (-1) (-1)
+  MethodCodeEnd
+
+  CreateMethod [Public] "Unknown.idr" name "toIdris" "()Ljava/lang/Object;" Nothing Nothing [] []
+  MethodCodeStart
+  Aload 0
+  Field GetField name "idrisValue" "Ljava/lang/Object;"
+  Areturn
+  MaxStackAndLocal (-1) (-1)
+  MethodCodeEnd

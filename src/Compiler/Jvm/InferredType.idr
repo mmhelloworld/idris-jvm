@@ -364,6 +364,7 @@ parse "double" = IDouble
 parse "String" = inferredStringType
 parse "BigInteger" = inferredBigIntegerType
 parse "void" = IVoid
+parse "Object" = inferredObjectType
 parse "[" = throwInvalidDescriptor "["
 parse desc =
   if startsWith desc "["

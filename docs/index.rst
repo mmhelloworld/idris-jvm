@@ -13,8 +13,26 @@ compiled with JVM backend so the compiler itself is self hosting and runs on Jav
 .. _Idris 2: https://idris2.readthedocs.io/en/latest/index.html
 
 .. toctree::
-   :maxdepth: 2
+   :caption: Idris JVM Documentation
+   :maxdepth: 4
 
    general/index
+   general/install
+   general/hello-world-compile-run
+
+.. toctree::
+   :caption: Tail Call Optimization
+   :maxdepth: 4
+
+   tail-call-optimization/index
+   tail-call-optimization/self-tail-recursion
+   tail-call-optimization/mutual-tail-recursion
+   tail-call-optimization/self-mutual-tail-recursion
+
+.. toctree::
+   :caption: Interoperability
+   :maxdepth: 4
+
+   ffi/index
    ffi/calling-java-from-idris
-   general/tail-call-optimization
+   ffi/calling-idris-from-java

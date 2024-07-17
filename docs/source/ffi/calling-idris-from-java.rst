@@ -17,7 +17,7 @@ Exporting Idris Functions
             "returnType": "String"
         }
         """
-    exportStringReplicate :Nat -> Char -> String
+    exportStringReplicate : Nat -> Char -> String
     exportStringReplicate = String.replicate
 
 This code exports ``replicate`` function from ``Data.String`` Idris module. The export block starting with ``%export``
@@ -87,7 +87,7 @@ integers which Java code shouldn't rely on.
       idris/data/List
       helloworld/Color
       """
-  typeExports: List String
+  typeExports : List String
   typeExports = []
 
 Similar to ``jvmExports`` block explained above, ``typeExports`` is a special export function that exports Idris types
@@ -112,7 +112,7 @@ Exporting Idris functions with Generic Types
         jvm:export
         IdrisList
         """
-    typeExports: List String
+    typeExports : List String
     typeExports = []
 
     %export """
@@ -239,7 +239,7 @@ Here is a complete example in Idris and Java:
       Show
       Color
       """
-  typeExports: List String
+  typeExports : List String
   typeExports = []
 
   %export """
@@ -461,6 +461,20 @@ Java calling the Idris functions:
         }
 
     }
+
+This is the output:
+
+.. code-block:: text
+
+    [23, 45]
+    ["foo", "bar"]
+    [Red, Blue]
+    Green
+    Blue
+    Just Green
+    Nothing
+    AAAAAAAAAA
+
 
 Here line numbers 29-33 retrieve type class instances for different types and the instances are passed in the lines
 below when ``show`` function is called. Another thing to note here is that when we call generic Idris functions, Idris

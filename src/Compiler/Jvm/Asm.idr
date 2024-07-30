@@ -29,6 +29,7 @@ import System.FFI
 
 %hide Core.Name.Scoped.Scope
 %hide Debug.Trace.toString
+%hide Core.TT.Primitive.Constant
 
 public export
 data Assembler : Type where [external]
@@ -679,436 +680,6 @@ export
 asmCrash : String -> Core a
 asmCrash message = throw (InternalError message)
 
-export
-newBigInteger : String -> Core ()
-newBigInteger "0" = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-newBigInteger "1" = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-newBigInteger "10" = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
-newBigInteger i = do
-    New "java/math/BigInteger"
-    Dup
-    Ldc $ StringConst i
-    invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
-
-export
-getGlobalState : {auto stateRef: Ref AsmState AsmState} -> Core AsmGlobalState
-getGlobalState = pure$ globalState !GetState
-
-export
-findFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (Maybe Function)
-findFunction name = LiftIo $ AsmGlobalState.findFunction !getGlobalState name
-
-export
-getFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core Function
-getFunction name = maybe (asmCrash $ "Unknown function " ++ show name) pure!(findFunction name)
-
-export
-getCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Core Function
-getCurrentFunction = currentIdrisFunction <$> GetState
-
-export
-getProgramName : {auto stateRef: Ref AsmState AsmState} -> Core String
-getProgramName = LiftIo $ AsmGlobalState.getProgramName !getGlobalState
-
-export
-getFcAndDefinition : {auto stateRef: Ref AsmState AsmState} -> String -> Core (FC, NamedDef)
-getFcAndDefinition name = LiftIo $ AsmGlobalState.getFcAndDefinition !getGlobalState name
-
-export
-isUntypedFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core Bool
-isUntypedFunction name = LiftIo $ AsmGlobalState.isUntypedFunction !getGlobalState name
-
-export
-addUntypedFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core ()
-addUntypedFunction name = LiftIo $ AsmGlobalState.addUntypedFunction !getGlobalState name
-
-export
-setCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Function -> Core ()
-setCurrentFunction function = updateState $ { currentIdrisFunction := function }
-
-getAndUpdateFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core Function
-getAndUpdateFunction f = do
-    function <- getCurrentFunction
-    let newFunction = f function
-    setCurrentFunction newFunction
-    globalState <- getGlobalState
-    LiftIo $ addFunction globalState (idrisName newFunction) newFunction
-    purefunction
-
-export
-updateCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core ()
-updateCurrentFunction f = ignore $ getAndUpdateFunction f
-
-export
-loadFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core ()
-loadFunction idrisName = do
-    function <- getFunction idrisName
-    updateState $ { currentIdrisFunction := function }
-
-export
-getFunctionType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core InferredFunctionType
-getFunctionType name = inferredFunctionType <$> (getFunction name)
-
-export
-getFunctionParameterTypes : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (List InferredType)
-getFunctionParameterTypes functionName = do
-    functionType <- getFunctionType functionName
-    pure $ parameterTypes functionType
-
-export
-findFunctionType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (Maybe InferredFunctionType)
-findFunctionType functionName = do
-    state <- GetState
-    function <- findFunction functionName
-    pure$ inferredFunctionType <$> function
-
-export
-getFunctionReturnType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core InferredType
-getFunctionReturnType functionName =  do
-    state <- GetState
-    function <- findFunction functionName
-    pure$ maybe IUnknown (returnType . inferredFunctionType) $ function
-
-export
-getCurrentScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
-getCurrentScopeIndex = currentScopeIndex <$> GetState
-
-export
-updateCurrentScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
-updateCurrentScopeIndex scopeIndex = updateState $ { currentScopeIndex := scopeIndex }
-
-export
-newScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
-newScopeIndex = scopeCounter <$> (getAndUpdateState $ {scopeCounter $= (+1)})
-
-export
-newDynamicVariableIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
-newDynamicVariableIndex = dynamicVariableCounter <$> (getAndUpdateFunction $ {dynamicVariableCounter $= (+1)})
-
-export
-resetScope : {auto stateRef: Ref AsmState AsmState} -> Core ()
-resetScope = updateState $
-    {
-        scopeCounter := 0,
-        currentScopeIndex := 0
-    }
-
-fillNull : (HasIO io, Inherits list (JList a)) => Int -> list -> io ()
-fillNull index aList = do
-    let list = the (JList a) $ believe_me aList
-    size <- Collection.size {elemTy=a,obj=Collection a} $ believe_me list
-    nulls <- JList.nCopies {a=a} (index - size) nullValue
-    ignore $ JList.addAll {a=a, obj=Collection a} list $ believe_me nulls
-
-export
-saveScope : {auto stateRef: Ref AsmState AsmState} -> Scope -> Core ()
-saveScope scope = do
-    scopes <- scopes <$> getCurrentFunction
-    size <- LiftIo $ Collection.size {elemTy=Scope, obj=Collection Scope} $ believe_me scopes
-    let scopeIndex = index scope
-    LiftIo $
-      if scopeIndex < size
-          then ignore $ JList.set scopes scopeIndex scope
-          else do
-              fillNull {a=Scope} scopeIndex scopes
-              JList.add scopes scopeIndex scope
-
-export
-getScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Scope
-getScope scopeIndex = do
-   scopes <- scopes <$> getCurrentFunction
-   LiftIo $ JList.get scopes scopeIndex
-
-export
-addScopeChild : {auto stateRef: Ref AsmState AsmState} -> Int -> Int -> Core ()
-addScopeChild parentScopeIndex childScopeIndex = do
-    scope <- getScope parentScopeIndex
-    saveScope $ {childIndices $= (childScopeIndex ::)} scope
-
-export
-getRootMethodName : {auto stateRef: Ref AsmState AsmState} -> Core Jname
-getRootMethodName = jvmClassMethodName <$> getCurrentFunction
-
-export
-newLabel : {auto stateRef: Ref AsmState AsmState} -> Core String
-newLabel = do
-    state <- GetState
-    let label = "L" ++ show (labelCounter state)
-    updateState $ { labelCounter $= (+1) }
-    purelabel
-
-hasLabelAtLine : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Bool
-hasLabelAtLine lineNumber = do
-    state <- GetState
-    LiftIo $ Map.containsKey {value=String} (lineNumberLabels state) lineNumber
-
-export
-addLineNumber : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
-addLineNumber lineNumber label = do
-    hasLabel <- hasLabelAtLine lineNumber
-    when (not hasLabel) $ do
-        state <- GetState
-        LineNumber lineNumber label
-        _ <- LiftIo $ Map.put (lineNumberLabels state) lineNumber label
-        pure()
-
-export
-getLineNumberLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> Core String
-getLineNumberLabel lineNumber = do
-    state <- GetState
-    let currentLineNumberLabels = lineNumberLabels state
-    optLabel <- LiftIo $ Map.get {value=String} currentLineNumberLabels lineNumber
-    case nullableToMaybe optLabel of
-        Just label => purelabel
-        Nothing => do
-            label <- newLabel
-            _ <- LiftIo $ Map.put currentLineNumberLabels lineNumber label
-            purelabel
-
-export
-getClassName : {auto stateRef: Ref AsmState AsmState} -> Core String
-getClassName = className . currentMethodName <$> GetState
-
-export
-getMethodName : {auto stateRef: Ref AsmState AsmState} -> Core String
-getMethodName = methodName . currentMethodName <$> GetState
-
-export
-freshLambdaIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
-freshLambdaIndex = lambdaCounter <$> (getAndUpdateState $ {lambdaCounter $= (+1)})
-
-export
-setScopeCounter : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
-setScopeCounter scopeCounter = updateState $ {scopeCounter := scopeCounter}
-
-export
-updateScopeStartLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
-updateScopeStartLabel scopeIndex label = do
-    scope <- getScope scopeIndex
-    saveScope $ {labels $= updateFirst label} scope
-
-export
-updateScopeEndLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
-updateScopeEndLabel scopeIndex label = do
-    scope <- getScope scopeIndex
-    saveScope $ {labels $= updateSecond label} scope
-
-export
-createVariable : {auto stateRef: Ref AsmState AsmState} -> String -> Core ()
-createVariable var = do
-    scopeIndex <- getCurrentScopeIndex
-    scope <- getScope scopeIndex
-    let variableIndex = nextVariableIndex scope
-    _ <- LiftIo $ Map.put (variableTypes scope) var IUnknown
-    _ <- LiftIo $ Map.put (variableIndices scope) var variableIndex
-    saveScope $ { nextVariableIndex $= (+1) } scope
-
-export
-generateVariable : {auto stateRef: Ref AsmState AsmState} -> String -> Core String
-generateVariable namePrefix = do
-    dynamicVariableIndex <- newDynamicVariableIndex
-    let variableName = namePrefix ++ show dynamicVariableIndex
-    createVariable variableName
-    purevariableName
-
-namespace JAsmState
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "updateVariableIndices" "java/util/Map java/util/Map" "void"
-    prim_updateVariableIndices : Map key value -> Map key value -> PrimIO ()
-
-    export
-    updateVariableIndices : HasIO io => Map String Int -> Map String Int -> io ()
-    updateVariableIndices resultIndicesByName indicesByName =
-        primIO $ prim_updateVariableIndices resultIndicesByName indicesByName
-
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "getVariableNames" "java/util/Map" "java/util/List"
-    prim_getVariableNames : Map key value -> PrimIO (JList key)
-
-    export
-    getVariableNames : HasIO io => Map String Int -> io (List String)
-    getVariableNames indicesByName = do
-        jlist <- primIO $ prim_getVariableNames indicesByName
-        JList.fromIterable jlist
-
-retrieveVariableIndicesByName : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map String Int)
-retrieveVariableIndicesByName scopeIndex = do
-    variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
-    go variableIndices scopeIndex
-    purevariableIndices
-  where
-    go : {auto stateRef: Ref AsmState AsmState} -> Map String Int -> Int -> Core ()
-    go acc scopeIndex = go1 scopeIndex where
-        go1 : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
-        go1 scopeIndex = do
-            scope <- getScope scopeIndex
-            LiftIo $ updateVariableIndices acc (variableIndices scope)
-            maybe (pure()) go1 (parentIndex scope)
-
-export
-retrieveVariables : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (List String)
-retrieveVariables scopeIndex = do
-    variableIndicesByName <- retrieveVariableIndicesByName scopeIndex
-    LiftIo $ getVariableNames variableIndicesByName
-
-retrieveVariableIndexAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core Int
-retrieveVariableIndexAtScope currentScopeIndex name = go currentScopeIndex where
-    go : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Int
-    go scopeIndex = do
-        scope <- getScope scopeIndex
-        optIndex <- LiftIo $ Map.get {value=Int} (variableIndices scope) name
-        case nullableToMaybe optIndex of
-            Just index => pureindex
-            Nothing => case parentIndex scope of
-                Just parentScopeIndex => go parentScopeIndex
-                Nothing => do
-                  rootMethodName <- getRootMethodName
-                  Throw emptyFC
-                    ("retrieveVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
-                      name ++ " at index " ++ show currentScopeIndex)
-
-export
-retrieveVariableIndex : {auto stateRef: Ref AsmState AsmState} -> String -> Core Int
-retrieveVariableIndex name = retrieveVariableIndexAtScope !getCurrentScopeIndex name
-
-retrieveVariableTypeAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core InferredType
-retrieveVariableTypeAtScope scopeIndex name = do
-    scope <- getScope scopeIndex
-    optTy <- LiftIo $ Map.get (variableTypes scope) name
-    case nullableToMaybe optTy of
-        Just ty => purety
-        Nothing => case parentIndex scope of
-            Just parentScope => retrieveVariableTypeAtScope parentScope name
-            Nothing => pure IUnknown
-
-export
-retrieveVariableTypesAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map Int InferredType)
-retrieveVariableTypesAtScope scopeIndex = do
-    typesByIndex <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
-    go typesByIndex !(retrieveVariables scopeIndex)
-    puretypesByIndex
-  where
-    go : {auto stateRef: Ref AsmState AsmState} -> Map Int InferredType -> List String -> Core ()
-    go acc names = go1 names where
-        go1 : {auto stateRef: Ref AsmState AsmState} -> List String -> Core ()
-        go1 [] = pure()
-        go1 (var :: vars) = do
-            varIndex <- retrieveVariableIndexAtScope scopeIndex var
-            ty <- retrieveVariableTypeAtScope scopeIndex var
-            hasVar <- LiftIo $ containsKey {value=InferredType} acc varIndex
-            when (not hasVar) $ LiftIo $ do
-                oldTy <- Map.put acc varIndex ty
-                pure ()
-            go1 vars
-
-export
-getVariableIndicesByName : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map String Int)
-getVariableIndicesByName scopeIndex = allVariableIndices <$> getScope scopeIndex
-
-export
-getVariableIndexAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core Int
-getVariableIndexAtScope currentScopeIndex name = do
-    variableIndicesByName <- getVariableIndicesByName currentScopeIndex
-    optIndex <- LiftIo $ Map.get {value=Int} variableIndicesByName name
-    case nullableToMaybe optIndex of
-        Just index => pureindex
-        Nothing => do
-          rootMethodName <- getRootMethodName
-          asmCrash ("getVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
-              name ++ " at index " ++ show currentScopeIndex)
-
-export
-getVariableIndex : {auto stateRef: Ref AsmState AsmState} -> String -> Core Int
-getVariableIndex name = getVariableIndexAtScope !getCurrentScopeIndex name
-
-export
-getVariableTypesAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map Int InferredType)
-getVariableTypesAtScope scopeIndex = allVariableTypes <$> getScope scopeIndex
-
-export
-getVariableTypes : {auto stateRef: Ref AsmState AsmState} -> Core (Map Int InferredType)
-getVariableTypes = getVariableTypesAtScope !getCurrentScopeIndex
-
-export
-getVariableTypeAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core InferredType
-getVariableTypeAtScope scopeIndex name = do
-    scope <- getScope scopeIndex
-    variableIndicesByName <- getVariableIndicesByName scopeIndex
-    optIndex <- LiftIo $ Map.get {value=Int} variableIndicesByName name
-    case nullableToMaybe optIndex of
-        Just index => do
-            variableTypes <- getVariableTypesAtScope scopeIndex
-            optTy <- LiftIo $ Map.get {value=InferredType} variableTypes index
-            pure$ fromMaybe IUnknown $ nullableToMaybe optTy
-        Nothing => pureIUnknown
-
-export
-getVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> Core InferredType
-getVariableType name = getVariableTypeAtScope !getCurrentScopeIndex name
-
-updateArgumentsForUntyped : Map Int InferredType -> Nat -> IO ()
-updateArgumentsForUntyped _ Z = pure ()
-updateArgumentsForUntyped types (S n) = do
-  ignore $ Map.put types (cast {to=Int} n) inferredObjectType
-  updateArgumentsForUntyped types n
-
-export
-updateScopeVariableTypes : {auto stateRef: Ref AsmState AsmState} -> Nat -> Core ()
-updateScopeVariableTypes arity = go (scopeCounter !GetState - 1) where
-    go : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
-    go scopeIndex =
-        if scopeIndex < 0 then pure()
-        else do
-            variableTypes <- retrieveVariableTypesAtScope scopeIndex
-            when (scopeIndex == 0) $ LiftIo $ updateArgumentsForUntyped variableTypes arity
-            variableIndices <- retrieveVariableIndicesByName scopeIndex
-            scope <- getScope scopeIndex
-            saveScope $ {allVariableTypes := variableTypes, allVariableIndices := variableIndices} scope
-            go (scopeIndex - 1)
-
-getVariableScope : {auto stateRef: Ref AsmState AsmState} -> String -> Core Scope
-getVariableScope name = go !getCurrentScopeIndex where
-    go : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Scope
-    go scopeIndex = do
-        scope <- getScope scopeIndex
-        optTy <- LiftIo $ Map.get {value=InferredType} (variableTypes scope) name
-        case nullableToMaybe optTy of
-            Just _ => purescope
-            Nothing => case parentIndex scope of
-                Just parentScopeIndex => go parentScopeIndex
-                Nothing => asmCrash ("Unknown variable " ++ name)
-
-export
-addVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> InferredType -> Core InferredType
-addVariableType var IUnknown = pureIUnknown
-addVariableType var ty = do
-    scope <- getVariableScope var
-    let scopeIndex = index scope
-    existingTy <- retrieveVariableTypeAtScope scopeIndex var
-    let newTy = existingTy <+> ty
-    _ <- LiftIo $ Map.put (variableTypes scope) var newTy
-    purenewTy
-
-%inline
-export
-lambdaMaxCountPerMethod: Int
-lambdaMaxCountPerMethod = 50
-
-export
-getLambdaImplementationMethodName : {auto stateRef: Ref AsmState AsmState} -> String -> Core Jname
-getLambdaImplementationMethodName namePrefix = do
-    lambdaIndex <- freshLambdaIndex
-    rootMethodJname <- getRootMethodName
-    let declaringMethodName = methodName rootMethodJname
-    let rootMethodClassName = className rootMethodJname
-    let lambdaClassName =
-        if lambdaIndex >= lambdaMaxCountPerMethod
-            then rootMethodClassName ++ "$" ++ namePrefix ++ "$" ++ declaringMethodName ++ "$" ++ show (lambdaIndex `div` 100)
-            else rootMethodClassName
-    let lambdaMethodName =
-        if lambdaIndex >= lambdaMaxCountPerMethod
-            then namePrefix ++ "$" ++ show lambdaIndex
-            else namePrefix ++ "$" ++ declaringMethodName ++ "$" ++ show lambdaIndex
-    pure$ Jqualified lambdaClassName lambdaMethodName
-
 isBoolTySpec : Name -> Bool
 isBoolTySpec name = name == basics "Bool" || name == (NS preludeNS (UN $ Basic "Bool"))
 
@@ -1170,60 +741,6 @@ parseName name =
     (className :: []) => Just $ iref className []
     _ => Nothing
 
-mutual
-  parseArrayType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
-  parseArrayType expr@(NmCon _ name _ _ [elemTy]) =
-    if name == arrayName then pure. Just $ IArray !(tySpec elemTy)
-    else pureNothing
-  parseArrayType _ = pureNothing
-
-  parseLambdaType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
-  parseLambdaType (NmCon _ name _ _ [interfaceType, _]) =
-    if name == builtin "Pair" then parseJvmReferenceType interfaceType
-    else pureNothing
-  parseLambdaType _ = pureNothing
-
-  parseJvmReferenceType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
-  parseJvmReferenceType (NmCon _ name _ _ (NmPrimVal _ (Str namePartsStr) :: _)) =
-    if name == structName
-      then pure$ parseName namePartsStr
-      else pureNothing
-  parseJvmReferenceType (NmCon _ name conInfo tag args) =
-    if name == primio "IORes" then
-      maybe (asmCrash "Expected an argument for IORes") (\res => pure$ Just !(tySpec res)) (head' args)
-    else pure$ Just $ getIdrisConstructorType conInfo tag (length args) name
-  parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do
-    (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
-      | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++
-               show fc)
-    ty <- tySpec def
-    pure$ Just ty
-  parseJvmReferenceType (NmDelay _ _ expr) = pure$ Just !(tySpec expr)
-  parseJvmReferenceType expr = pureNothing
-
-  tryParse : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
-  tryParse expr = do
-    arrayTypeMaybe <- parseArrayType expr
-    case arrayTypeMaybe of
-      Nothing => do
-        lambdaTypeMaybe <- parseLambdaType expr
-        case lambdaTypeMaybe of
-          Nothing => parseJvmReferenceType expr
-          Just lambdaType => pure$ Just lambdaType
-      Just arrayType => pure$ Just arrayType
-
-  export
-  tySpec : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
-  tySpec (NmCon _ (UN (Basic ty)) _ _ []) = pure$ tySpecStr ty
-  tySpec (NmCon _ _ NOTHING _ []) = pureidrisMaybeType
-  tySpec (NmCon _ _ JUST _ [_]) = pureidrisMaybeType
-  tySpec (NmCon _ _ NIL _ []) = pureidrisListType
-  tySpec (NmCon _ _ CONS _ [_, _]) = pureidrisListType
-  tySpec expr@(NmCon _ (NS _ (UN (Basic "Unit"))) _ _ []) = pureIVoid
-  tySpec expr = do
-    ty <- tryParse expr
-    pure$ fromMaybe inferredObjectType ty
-
 export
 getJvmTypeDescriptor : InferredType -> String
 getJvmTypeDescriptor IByte         = "B"
@@ -1243,9 +760,9 @@ getJvmTypeDescriptor (TypeParam name) = getJvmTypeDescriptor inferredObjectType
 
 export
 getJvmReferenceTypeName : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core String
-getJvmReferenceTypeName (IRef ty _ _) = purety
-getJvmReferenceTypeName (IArray (IRef ty _ _)) = pure("[L" ++ ty ++ ";")
-getJvmReferenceTypeName (IArray ty) = pure("[" ++ !(getJvmReferenceTypeName ty))
+getJvmReferenceTypeName (IRef ty _ _) = pure ty
+getJvmReferenceTypeName (IArray (IRef ty _ _)) = pure ("[L" ++ ty ++ ";")
+getJvmReferenceTypeName (IArray ty) = pure ("[" ++ !(getJvmReferenceTypeName ty))
 getJvmReferenceTypeName (IFunction lambdaType) = getJvmReferenceTypeName (lambdaType.javaInterface)
 getJvmReferenceTypeName ty = asmCrash ("Expected a reference type but found " ++ show ty)
 
@@ -1257,19 +774,6 @@ getSignature (IRef ty _ typeParams@(_ :: _)) =
 getSignature (TypeParam name) = "T" ++ name ++ ";"
 getSignature (IArray ty)   = "[" ++ getSignature ty
 getSignature type = getJvmTypeDescriptor type
-
-export
-asmReturn : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core ()
-asmReturn IVoid    = Return
-asmReturn IBool    = Ireturn
-asmReturn IByte    = Ireturn
-asmReturn IShort   = Ireturn
-asmReturn IInt     = Ireturn
-asmReturn IChar    = Ireturn
-asmReturn ILong    = Lreturn
-asmReturn IFloat   = Freturn
-asmReturn IDouble  = Dreturn
-asmReturn _        = areturn
 
 -- constant values from org.objectweb.asm.Opcodes
 export
@@ -1337,7 +841,7 @@ export
 int64ToJLong : Int64 -> JLong
 
 export
-constantToObject : {auto stateRef: Ref AsmState AsmState} -> Core.Constant -> Object
+constantToObject : {auto stateRef: Ref AsmState AsmState} -> Constant -> Object
 constantToObject (DoubleConst d) = believe_me $ doubleValueOf d
 constantToObject (IntegerConst n) = believe_me $ integerValueOf n
 constantToObject (Int64Const n) = believe_me $ int64ToJLong n
@@ -1495,17 +999,6 @@ toJFieldInitialValue (StringField s) = believe_me s
 toJFieldInitialValue (DoubleField d) = believe_me $ doubleValueOf d
 
 export
-loadBigInteger : {auto stateRef: Ref AsmState AsmState} -> Integer -> Core ()
-loadBigInteger 0 = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-loadBigInteger 1 = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-loadBigInteger 10 = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
-loadBigInteger value = do
-    New "java/math/BigInteger"
-    Dup
-    Ldc $ StringConst $ show value
-    invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
-
-export
 getMethodDescriptor : InferredFunctionType -> String
 getMethodDescriptor (MkInferredFunctionType retTy []) = "()" ++ getJvmTypeDescriptor retTy
 getMethodDescriptor (MkInferredFunctionType retTy argTypes) =
@@ -1537,21 +1030,6 @@ getIdrisFunctionName programName moduleName idrisFunctionName =
 metafactoryDesc : String
 metafactoryDesc =
     "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
-
-export
-asmInvokeDynamic : (implClassName: String) -> (implMethodName: String) -> (interfaceMethodName: String) ->
-                (invokeDynamicDesc: String) -> (samDesc: String) -> (implMethodDesc: String) ->
-                (instantiatedMethodDesc: {auto stateRef: Ref AsmState AsmState} -> String) -> Core ()
-asmInvokeDynamic implClassName implMethodName interfaceMethodName invokeDynamicDesc samDesc implMethodDesc
-    instantiatedMethodDesc =
-    let metafactoryHandle = MkHandle InvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory"
-            metafactoryDesc False
-        implMethodHandle = MkHandle InvokeStatic implClassName implMethodName implMethodDesc False
-        metafactoryArgs = [ BsmArgGetType samDesc
-                        , BsmArgHandle implMethodHandle
-                        , BsmArgGetType instantiatedMethodDesc
-                        ]
-    in InvokeDynamic interfaceMethodName invokeDynamicDesc metafactoryHandle metafactoryArgs
 
 export
 shouldDebugAsm : Bool
@@ -1634,7 +1112,7 @@ log message val =
 
 export
 logAsm : {auto stateRef: Ref AsmState AsmState} -> Lazy String -> Core ()
-logAsm message = log message (pure())
+logAsm message = log message (pure ())
 
 public export
 data FArgList : Type where
@@ -1670,153 +1148,563 @@ methodEndLabel : String
 methodEndLabel = "methodEndLabel"
 
 parameters {auto state: Ref AsmState AsmState}
+  public export
+  %inline
   aaload : Core ()
+
+  public export
+  %inline
   aastore : Core ()
+
+  public export
+  %inline
   aconstnull : Core ()
+
+  public export
+  %inline
   aload : Int -> Core ()
+
+  public export
+  %inline
   anewarray : (descriptor: String) -> Core ()
 
+  public export
+  %inline
   anewbooleanarray : Core ()
+
+  public export
+  %inline
   anewbytearray : Core ()
+
+  public export
+  %inline
   anewchararray : Core ()
+
+  public export
+  %inline
   anewshortarray : Core ()
+
+  public export
+  %inline
   anewintarray : Core ()
+
+  public export
+  %inline
   anewlongarray : Core ()
+
+  public export
+  %inline
   anewfloatarray : Core ()
+
+  public export
+  %inline
   anewdoublearray : Core ()
 
+  public export
+  %inline
   arraylength : Core ()
+
+  public export
+  %inline
   areturn : Core ()
+
+  public export
+  %inline
   astore : Int -> Core ()
+
+  public export
+  %inline
   baload : Core ()
+
+  public export
+  %inline
   bastore : Core ()
+
+  public export
+  %inline
   caload : Core ()
+
+  public export
+  %inline
   castore : Core ()
+
+  public export
+  %inline
   checkcast : (descriptor: String) -> Core ()
+
+  public export
+  %inline
   classCodeStart : Int -> List Access -> (className: String) -> (signature: Maybe String) -> (parentClassName: String) ->
                       (interfaces: List String) -> List Asm.Annotation -> Core ()
+
+  public export
+  %inline
   createClass : List ClassOpts -> Core ()
+
+  public export
+  %inline
   createField : List Access -> (sourceFileName: String) -> (className: String) -> (fieldName: String) -> (descriptor: String) ->
                   (signature: Maybe String) -> Maybe FieldInitialValue -> (annotations: List Asm.Annotation) -> Core ()
+
+  public export
+  %inline
   createLabel : String -> Core ()
+
+  public export
+  %inline
   createMethod : List Access -> (sourceFileName: String) -> (className: String) ->
                   (methodName: String) -> (descriptor: String) ->
                   (signature: Maybe String) -> (exceptions: Maybe (List String)) ->
                   (annotations: List Asm.Annotation) ->
                   (parameterAnnotations: List (List Asm.Annotation)) -> Core ()
+
+  public export
+  %inline
   createIdrisConstructorClass : String -> Bool -> Int -> Core ()
+
+  public export
+  %inline
   d2i : Core ()
+
+  public export
+  %inline
   d2f : Core ()
+
+  public export
+  %inline
   d2l : Core ()
+
+  public export
+  %inline
   dadd : Core ()
+
+  public export
+  %inline
   daload : Core ()
+
+  public export
+  %inline
   dastore : Core ()
+
+  public export
+  %inline
   dcmpg : Core ()
+
+  public export
+  %inline
   dcmpl : Core ()
+
+  public export
+  %inline
   dconst : Double -> Core ()
+
+  public export
+  %inline
   ddiv : Core ()
+
+  public export
+  %inline
   debug : String -> Core ()
+
+  public export
+  %inline
   dload : Int -> Core ()
+
+  public export
+  %inline
   dmul : Core ()
+
+  public export
+  %inline
   dneg : Core ()
+
+  public export
+  %inline
   drem : Core ()
+
+  public export
+  %inline
   dreturn : Core ()
+
+  public export
+  %inline
   dstore : Int -> Core ()
+
+  public export
+  %inline
   dsub : Core ()
+
+  public export
+  %inline
   dup : Core ()
+
+  public export
+  %inline
   f2d : Core ()
+
+  public export
+  %inline
   faload : Core ()
+
+  public export
+  %inline
   fastore : Core ()
+
+  public export
+  %inline
   fconst : Double -> Core ()
+
+  public export
+  %inline
   field : FieldInstructionType -> (className: String) -> (fieldName: String) -> (descriptor: String) -> Core ()
+
+  public export
+  %inline
   fieldEnd : Core ()
+
+  public export
+  %inline
   fload : Int -> Core ()
+
+  public export
+  %inline
   frame : FrameType -> Int -> (signatures: List String) -> Int -> (signatures: List String) -> Core ()
+
+  public export
+  %inline
   freturn : Core ()
+
+  public export
+  %inline
   fstore : Int -> Core ()
+
+  public export
+  %inline
   goto : (label: String) -> Core ()
+
+  public export
+  %inline
   i2b : Core ()
+
+  public export
+  %inline
   i2c : Core ()
+
+  public export
+  %inline
   i2d : Core ()
+
+  public export
+  %inline
   i2l : Core ()
+
+  public export
+  %inline
   i2s : Core ()
+
+  public export
+  %inline
   iadd : Core ()
+
+  public export
+  %inline
   iaload : Core ()
+
+  public export
+  %inline
   iand : Core ()
+
+  public export
+  %inline
   iastore : Core ()
+
+  public export
+  %inline
   ior : Core ()
+
+  public export
+  %inline
   ixor : Core ()
+
+  public export
+  %inline
   icompl : Core ()
+
+  public export
+  %inline
   iconst : Int -> Core ()
+
+  public export
+  %inline
   idiv : Core ()
+
+  public export
+  %inline
   ifeq : (label: String) -> Core ()
+
+  public export
+  %inline
   ifge : (label: String) -> Core ()
+
+  public export
+  %inline
   ifgt : (label: String) -> Core ()
+
+  public export
+  %inline
   ificmpge : (label: String) -> Core ()
+
+  public export
+  %inline
   ificmpgt : (label: String) -> Core ()
+
+  public export
+  %inline
   ificmple : (label: String) -> Core ()
+
+  public export
+  %inline
   ificmplt : (label: String) -> Core ()
+
+  public export
+  %inline
   ificmpeq : (label: String) -> Core ()
+
+  public export
+  %inline
   ifacmpne : (label: String) -> Core ()
+
+  public export
+  %inline
   ificmpne : (label: String) -> Core ()
+
+  public export
+  %inline
   ifle : (label: String) -> Core ()
+
+  public export
+  %inline
   iflt : (label: String) -> Core ()
+
+  public export
+  %inline
   ifne : (label: String) -> Core ()
+
+  public export
+  %inline
   ifnonnull : (label: String) -> Core ()
+
+  public export
+  %inline
   ifnull : (label: String) -> Core ()
+
+  public export
+  %inline
   iload : Int -> Core ()
+
+  public export
+  %inline
   imul : Core ()
+
+  public export
+  %inline
   ineg : Core ()
+
+  public export
+  %inline
   instanceOf : (className: String) -> Core ()
+
+  public export
+  %inline
   invokeMethod : InvocationType -> (className: String) -> (methodName: String) -> (descriptor: String)
                   -> Bool -> Core ()
+  public export
+  %inline
   invokeDynamic : (methodName: String) -> (descriptor: String) -> Handle -> List BsmArg -> Core ()
+
+  public export
+  %inline
   irem : Core ()
+
+  public export
+  %inline
   ireturn : Core ()
+
+  public export
+  %inline
   ishl : Core ()
+
+  public export
+  %inline
   ishr : Core ()
+
+  public export
+  %inline
   istore : Int -> Core ()
+
+  public export
+  %inline
   isub : Core ()
+
+  public export
+  %inline
   iushr : Core ()
+
+  public export
+  %inline
   l2d : Core ()
+
+  public export
+  %inline
   l2i : Core ()
+
+  public export
+  %inline
   labelStart : (label: String) -> Core ()
+
+  public export
+  %inline
   ladd : Core ()
+
+  public export
+  %inline
   laload : Core ()
+
+  public export
+  %inline
   land : Core ()
+
+  public export
+  %inline
   lastore : Core ()
+
+  public export
+  %inline
   lcmp : Core ()
+
+  public export
+  %inline
   lcompl : Core ()
-  ldc : {auto stateRef: Ref AsmState AsmState} -> Core.Constant -> Core ()
+
+  public export
+  %inline
+  ldc : Constant -> Core ()
+
+  public export
+  %inline
   ldiv : Core ()
+
+  public export
+  %inline
   lineNumber : Int -> String -> Core ()
+
+  public export
+  %inline
   lload : Int  -> Core ()
+
+  public export
+  %inline
   lmul : Core ()
+
+  public export
+  %inline
   lneg : Core ()
+
+  public export
+  %inline
   localVariable : (name: String) -> (descriptor: String) -> (signature: Maybe String) -> (startLabel: String) ->
                       (endLabel: String) -> (index: Int) -> Core ()
+
+  public export
+  %inline
   lookupSwitch : (defaultLabel: String) -> (labels: List String) -> (cases: List Int) -> Core ()
+
+  public export
+  %inline
   lor : Core ()
+
+  public export
+  %inline
   lrem : Core ()
+
+  public export
+  %inline
   lreturn : Core ()
+
+  public export
+  %inline
   lshl : Core ()
+
+  public export
+  %inline
   lshr : Core ()
+
+  public export
+  %inline
   lstore : Int -> Core ()
+
+  public export
+  %inline
   lsub : Core ()
+
+  public export
+  %inline
   lushr : Core ()
+
+  public export
+  %inline
   lxor : Core ()
+
+  public export
+  %inline
   maxStackAndLocal : Int -> Int -> Core ()
+
+  public export
+  %inline
   methodCodeStart : Core ()
+
+  public export
+  %inline
   methodCodeEnd : Core ()
+
+  public export
+  %inline
   multianewarray : (descriptor: String) -> Int -> Core ()
+
+  public export
+  %inline
   new : (className: String) -> Core ()
+
+  public export
+  %inline
   pop : Core ()
+
+  public export
+  %inline
   pop2 : Core ()
+
+  public export
+  %inline
   return : Core ()
+
+  public export
+  %inline
   saload : Core ()
+
+  public export
+  %inline
   sastore : Core ()
+
+  public export
+  %inline
   sourceInfo : (sourceFileName: String) -> Core ()
+
+  public export
+  %inline
   getState : Core AsmState
+
+  public export
+  %inline
   setState : AsmState -> Core ()
 
   aaload = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aaload" [assembler !(get AsmState)]
@@ -2125,3 +2013,535 @@ parameters {auto state: Ref AsmState AsmState}
 
   getState = get AsmState
   setState newState = put AsmState newState
+
+export
+updateState : {auto stateRef: Ref AsmState AsmState} -> (AsmState -> AsmState) -> Core ()
+updateState = update AsmState
+
+getAndUpdateState : {auto stateRef: Ref AsmState AsmState} -> (AsmState -> AsmState) -> Core AsmState
+getAndUpdateState f = do
+    updateState f
+    getState
+
+export
+loadBigInteger : {auto stateRef: Ref AsmState AsmState} -> Integer -> Core ()
+loadBigInteger 0 = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
+loadBigInteger 1 = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
+loadBigInteger 10 = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
+loadBigInteger value = do
+    new "java/math/BigInteger"
+    dup
+    ldc $ StringConst $ show value
+    invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
+
+export
+asmInvokeDynamic : {auto stateRef: Ref AsmState AsmState} -> (implClassName: String) -> (implMethodName: String)
+                 -> (interfaceMethodName: String) -> (invokeDynamicDesc: String) -> (samDesc: String)
+                 -> (implMethodDesc: String) -> (instantiatedMethodDesc: String) -> Core ()
+asmInvokeDynamic implClassName implMethodName interfaceMethodName invokeDynamicDesc samDesc implMethodDesc
+    instantiatedMethodDesc =
+    let metafactoryHandle = MkHandle InvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory"
+            metafactoryDesc False
+        implMethodHandle = MkHandle InvokeStatic implClassName implMethodName implMethodDesc False
+        metafactoryArgs = [ BsmArgGetType samDesc
+                        , BsmArgHandle implMethodHandle
+                        , BsmArgGetType instantiatedMethodDesc
+                        ]
+    in invokeDynamic interfaceMethodName invokeDynamicDesc metafactoryHandle metafactoryArgs
+
+export
+newBigInteger : {auto stateRef: Ref AsmState AsmState} -> String -> Core ()
+newBigInteger "0" = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
+newBigInteger "1" = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
+newBigInteger "10" = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
+newBigInteger i = do
+    new "java/math/BigInteger"
+    dup
+    ldc $ StringConst i
+    invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
+
+export
+getGlobalState : {auto stateRef: Ref AsmState AsmState} -> Core AsmGlobalState
+getGlobalState = pure $ globalState !getState
+
+export
+findFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (Maybe Function)
+findFunction name = coreLift $ AsmGlobalState.findFunction !getGlobalState name
+
+export
+getFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core Function
+getFunction name = maybe (asmCrash $ "Unknown function " ++ show name) pure!(findFunction name)
+
+export
+getCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Core Function
+getCurrentFunction = currentIdrisFunction <$> getState
+
+export
+getProgramName : {auto stateRef: Ref AsmState AsmState} -> Core String
+getProgramName = coreLift $ AsmGlobalState.getProgramName !getGlobalState
+
+export
+getFcAndDefinition : {auto stateRef: Ref AsmState AsmState} -> String -> Core (FC, NamedDef)
+getFcAndDefinition name = coreLift $ AsmGlobalState.getFcAndDefinition !getGlobalState name
+
+export
+isUntypedFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core Bool
+isUntypedFunction name = coreLift $ AsmGlobalState.isUntypedFunction !getGlobalState name
+
+export
+addUntypedFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core ()
+addUntypedFunction name = coreLift $ AsmGlobalState.addUntypedFunction !getGlobalState name
+
+export
+setCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Function -> Core ()
+setCurrentFunction function = updateState $ { currentIdrisFunction := function }
+
+getAndUpdateFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core Function
+getAndUpdateFunction f = do
+    function <- getCurrentFunction
+    let newFunction = f function
+    setCurrentFunction newFunction
+    globalState <- getGlobalState
+    coreLift $ addFunction globalState (idrisName newFunction) newFunction
+    pure function
+
+export
+updateCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core ()
+updateCurrentFunction f = ignore $ getAndUpdateFunction f
+
+export
+loadFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core ()
+loadFunction idrisName = do
+    function <- getFunction idrisName
+    updateState $ { currentIdrisFunction := function }
+
+export
+getFunctionType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core InferredFunctionType
+getFunctionType name = inferredFunctionType <$> (getFunction name)
+
+export
+getFunctionParameterTypes : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (List InferredType)
+getFunctionParameterTypes functionName = do
+    functionType <- getFunctionType functionName
+    pure $ parameterTypes functionType
+
+export
+findFunctionType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (Maybe InferredFunctionType)
+findFunctionType functionName = do
+    state <- getState
+    function <- findFunction functionName
+    pure $ inferredFunctionType <$> function
+
+export
+getFunctionReturnType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core InferredType
+getFunctionReturnType functionName =  do
+    state <- getState
+    function <- findFunction functionName
+    pure $ maybe IUnknown (returnType . inferredFunctionType) $ function
+
+export
+getCurrentScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
+getCurrentScopeIndex = currentScopeIndex <$> getState
+
+export
+updateCurrentScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
+updateCurrentScopeIndex scopeIndex = updateState $ { currentScopeIndex := scopeIndex }
+
+export
+newScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
+newScopeIndex = scopeCounter <$> (getAndUpdateState $ {scopeCounter $= (+1)})
+
+export
+newDynamicVariableIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
+newDynamicVariableIndex = dynamicVariableCounter <$> (getAndUpdateFunction $ {dynamicVariableCounter $= (+1)})
+
+export
+resetScope : {auto stateRef: Ref AsmState AsmState} -> Core ()
+resetScope = updateState $
+    {
+        scopeCounter := 0,
+        currentScopeIndex := 0
+    }
+
+fillNull : (HasIO io, Inherits list (JList a)) => Int -> list -> io ()
+fillNull index aList = do
+    let list = the (JList a) $ believe_me aList
+    size <- Collection.size {elemTy=a,obj=Collection a} $ believe_me list
+    nulls <- JList.nCopies {a=a} (index - size) nullValue
+    ignore $ JList.addAll {a=a, obj=Collection a} list $ believe_me nulls
+
+export
+saveScope : {auto stateRef: Ref AsmState AsmState} -> Scope -> Core ()
+saveScope scope = do
+    scopes <- scopes <$> getCurrentFunction
+    size <- coreLift $ Collection.size {elemTy=Scope, obj=Collection Scope} $ believe_me scopes
+    let scopeIndex = index scope
+    coreLift $
+      if scopeIndex < size
+          then ignore $ JList.set scopes scopeIndex scope
+          else do
+              fillNull {a=Scope} scopeIndex scopes
+              JList.add scopes scopeIndex scope
+
+export
+getScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Scope
+getScope scopeIndex = do
+   scopes <- scopes <$> getCurrentFunction
+   coreLift $ JList.get scopes scopeIndex
+
+export
+addScopeChild : {auto stateRef: Ref AsmState AsmState} -> Int -> Int -> Core ()
+addScopeChild parentScopeIndex childScopeIndex = do
+    scope <- getScope parentScopeIndex
+    saveScope $ {childIndices $= (childScopeIndex ::)} scope
+
+export
+getRootMethodName : {auto stateRef: Ref AsmState AsmState} -> Core Jname
+getRootMethodName = jvmClassMethodName <$> getCurrentFunction
+
+export
+newLabel : {auto stateRef: Ref AsmState AsmState} -> Core String
+newLabel = do
+    state <- getState
+    let label = "L" ++ show (labelCounter state)
+    updateState $ { labelCounter $= (+1) }
+    pure label
+
+hasLabelAtLine : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Bool
+hasLabelAtLine lineNumber = do
+    state <- getState
+    coreLift $ Map.containsKey {value=String} (lineNumberLabels state) lineNumber
+
+export
+addLineNumber : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
+addLineNumber number label = do
+    hasLabel <- hasLabelAtLine number
+    when (not hasLabel) $ do
+        state <- getState
+        lineNumber number label
+        ignore $ coreLift $ Map.put (lineNumberLabels state) number label
+
+export
+getLineNumberLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> Core String
+getLineNumberLabel lineNumber = do
+    state <- getState
+    let currentLineNumberLabels = lineNumberLabels state
+    optLabel <- coreLift $ Map.get {value=String} currentLineNumberLabels lineNumber
+    case nullableToMaybe optLabel of
+        Just label => pure label
+        Nothing => do
+            label <- newLabel
+            _ <- coreLift $ Map.put currentLineNumberLabels lineNumber label
+            pure label
+
+export
+getClassName : {auto stateRef: Ref AsmState AsmState} -> Core String
+getClassName = className . currentMethodName <$> getState
+
+export
+getMethodName : {auto stateRef: Ref AsmState AsmState} -> Core String
+getMethodName = methodName . currentMethodName <$> getState
+
+export
+freshLambdaIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
+freshLambdaIndex = lambdaCounter <$> (getAndUpdateState $ {lambdaCounter $= (+1)})
+
+export
+setScopeCounter : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
+setScopeCounter scopeCounter = updateState $ {scopeCounter := scopeCounter}
+
+export
+updateScopeStartLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
+updateScopeStartLabel scopeIndex label = do
+    scope <- getScope scopeIndex
+    saveScope $ {labels $= updateFirst label} scope
+
+export
+updateScopeEndLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
+updateScopeEndLabel scopeIndex label = do
+    scope <- getScope scopeIndex
+    saveScope $ {labels $= updateSecond label} scope
+
+export
+createVariable : {auto stateRef: Ref AsmState AsmState} -> String -> Core ()
+createVariable var = do
+    scopeIndex <- getCurrentScopeIndex
+    scope <- getScope scopeIndex
+    let variableIndex = nextVariableIndex scope
+    _ <- coreLift $ Map.put (variableTypes scope) var IUnknown
+    _ <- coreLift $ Map.put (variableIndices scope) var variableIndex
+    saveScope $ { nextVariableIndex $= (+1) } scope
+
+export
+generateVariable : {auto stateRef: Ref AsmState AsmState} -> String -> Core String
+generateVariable namePrefix = do
+    dynamicVariableIndex <- newDynamicVariableIndex
+    let variableName = namePrefix ++ show dynamicVariableIndex
+    createVariable variableName
+    pure variableName
+
+namespace JAsmState
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "updateVariableIndices" "java/util/Map java/util/Map" "void"
+    prim_updateVariableIndices : Map key value -> Map key value -> PrimIO ()
+
+    export
+    updateVariableIndices : HasIO io => Map String Int -> Map String Int -> io ()
+    updateVariableIndices resultIndicesByName indicesByName =
+        primIO $ prim_updateVariableIndices resultIndicesByName indicesByName
+
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "getVariableNames" "java/util/Map" "java/util/List"
+    prim_getVariableNames : Map key value -> PrimIO (JList key)
+
+    export
+    getVariableNames : HasIO io => Map String Int -> io (List String)
+    getVariableNames indicesByName = do
+        jlist <- primIO $ prim_getVariableNames indicesByName
+        JList.fromIterable jlist
+
+retrieveVariableIndicesByName : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map String Int)
+retrieveVariableIndicesByName scopeIndex = do
+    variableIndices <- coreLift $ Map.newTreeMap {key=String} {value=Int}
+    go variableIndices scopeIndex
+    pure variableIndices
+  where
+    go : Map String Int -> Int -> Core ()
+    go acc scopeIndex = go1 scopeIndex where
+        go1 : Int -> Core ()
+        go1 scopeIndex = do
+            scope <- getScope scopeIndex
+            coreLift $ updateVariableIndices acc (variableIndices scope)
+            maybe (pure ()) go1 (parentIndex scope)
+
+export
+retrieveVariables : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (List String)
+retrieveVariables scopeIndex = do
+    variableIndicesByName <- retrieveVariableIndicesByName scopeIndex
+    coreLift $ getVariableNames variableIndicesByName
+
+retrieveVariableIndexAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core Int
+retrieveVariableIndexAtScope currentScopeIndex name = go currentScopeIndex where
+    go : Int -> Core Int
+    go scopeIndex = do
+        scope <- getScope scopeIndex
+        optIndex <- coreLift $ Map.get {value=Int} (variableIndices scope) name
+        case nullableToMaybe optIndex of
+            Just index => pure index
+            Nothing => case parentIndex scope of
+                Just parentScopeIndex => go parentScopeIndex
+                Nothing => do
+                  rootMethodName <- getRootMethodName
+                  throw $ GenericMsg emptyFC
+                    ("retrieveVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
+                      name ++ " at index " ++ show currentScopeIndex)
+
+export
+retrieveVariableIndex : {auto stateRef: Ref AsmState AsmState} -> String -> Core Int
+retrieveVariableIndex name = retrieveVariableIndexAtScope !getCurrentScopeIndex name
+
+retrieveVariableTypeAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core InferredType
+retrieveVariableTypeAtScope scopeIndex name = do
+    scope <- getScope scopeIndex
+    optTy <- coreLift $ Map.get (variableTypes scope) name
+    case nullableToMaybe optTy of
+        Just ty => pure ty
+        Nothing => case parentIndex scope of
+            Just parentScope => retrieveVariableTypeAtScope parentScope name
+            Nothing => pure IUnknown
+
+export
+retrieveVariableTypesAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map Int InferredType)
+retrieveVariableTypesAtScope scopeIndex = do
+    typesByIndex <- coreLift $ Map.newTreeMap {key=Int} {value=InferredType}
+    go typesByIndex !(retrieveVariables scopeIndex)
+    pure typesByIndex
+  where
+    go : Map Int InferredType -> List String -> Core ()
+    go acc names = go1 names where
+        go1 : List String -> Core ()
+        go1 [] = pure ()
+        go1 (var :: vars) = do
+            varIndex <- retrieveVariableIndexAtScope scopeIndex var
+            ty <- retrieveVariableTypeAtScope scopeIndex var
+            hasVar <- coreLift $ containsKey {value=InferredType} acc varIndex
+            when (not hasVar) $ coreLift $ do
+                oldTy <- Map.put acc varIndex ty
+                pure ()
+            go1 vars
+
+export
+getVariableIndicesByName : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map String Int)
+getVariableIndicesByName scopeIndex = allVariableIndices <$> getScope scopeIndex
+
+export
+getVariableIndexAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core Int
+getVariableIndexAtScope currentScopeIndex name = do
+    variableIndicesByName <- getVariableIndicesByName currentScopeIndex
+    optIndex <- coreLift $ Map.get {value=Int} variableIndicesByName name
+    case nullableToMaybe optIndex of
+        Just index => pure index
+        Nothing => do
+          rootMethodName <- getRootMethodName
+          asmCrash ("getVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
+              name ++ " at index " ++ show currentScopeIndex)
+
+export
+getVariableIndex : {auto stateRef: Ref AsmState AsmState} -> String -> Core Int
+getVariableIndex name = getVariableIndexAtScope !getCurrentScopeIndex name
+
+export
+getVariableTypesAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map Int InferredType)
+getVariableTypesAtScope scopeIndex = allVariableTypes <$> getScope scopeIndex
+
+export
+getVariableTypes : {auto stateRef: Ref AsmState AsmState} -> Core (Map Int InferredType)
+getVariableTypes = getVariableTypesAtScope !getCurrentScopeIndex
+
+export
+getVariableTypeAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core InferredType
+getVariableTypeAtScope scopeIndex name = do
+    scope <- getScope scopeIndex
+    variableIndicesByName <- getVariableIndicesByName scopeIndex
+    optIndex <- coreLift $ Map.get {value=Int} variableIndicesByName name
+    case nullableToMaybe optIndex of
+        Just index => do
+            variableTypes <- getVariableTypesAtScope scopeIndex
+            optTy <- coreLift $ Map.get {value=InferredType} variableTypes index
+            pure $ fromMaybe IUnknown $ nullableToMaybe optTy
+        Nothing => pure IUnknown
+
+export
+getVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> Core InferredType
+getVariableType name = getVariableTypeAtScope !getCurrentScopeIndex name
+
+updateArgumentsForUntyped : Map Int InferredType -> Nat -> IO ()
+updateArgumentsForUntyped _ Z = pure ()
+updateArgumentsForUntyped types (S n) = do
+  ignore $ Map.put types (cast {to=Int} n) inferredObjectType
+  updateArgumentsForUntyped types n
+
+export
+updateScopeVariableTypes : {auto stateRef: Ref AsmState AsmState} -> Nat -> Core ()
+updateScopeVariableTypes arity = go (scopeCounter !getState - 1) where
+    go : Int -> Core ()
+    go scopeIndex =
+        if scopeIndex < 0 then pure ()
+        else do
+            variableTypes <- retrieveVariableTypesAtScope scopeIndex
+            when (scopeIndex == 0) $ coreLift $ updateArgumentsForUntyped variableTypes arity
+            variableIndices <- retrieveVariableIndicesByName scopeIndex
+            scope <- getScope scopeIndex
+            saveScope $ {allVariableTypes := variableTypes, allVariableIndices := variableIndices} scope
+            go (scopeIndex - 1)
+
+getVariableScope : {auto stateRef: Ref AsmState AsmState} -> String -> Core Scope
+getVariableScope name = go !getCurrentScopeIndex where
+    go : Int -> Core Scope
+    go scopeIndex = do
+        scope <- getScope scopeIndex
+        optTy <- coreLift $ Map.get {value=InferredType} (variableTypes scope) name
+        case nullableToMaybe optTy of
+            Just _ => pure scope
+            Nothing => case parentIndex scope of
+                Just parentScopeIndex => go parentScopeIndex
+                Nothing => asmCrash ("Unknown variable " ++ name)
+
+export
+addVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> InferredType -> Core InferredType
+addVariableType var IUnknown = pure IUnknown
+addVariableType var ty = do
+    scope <- getVariableScope var
+    let scopeIndex = index scope
+    existingTy <- retrieveVariableTypeAtScope scopeIndex var
+    let newTy = existingTy <+> ty
+    _ <- coreLift $ Map.put (variableTypes scope) var newTy
+    pure newTy
+
+%inline
+export
+lambdaMaxCountPerMethod: Int
+lambdaMaxCountPerMethod = 50
+
+export
+getLambdaImplementationMethodName : {auto stateRef: Ref AsmState AsmState} -> String -> Core Jname
+getLambdaImplementationMethodName namePrefix = do
+    lambdaIndex <- freshLambdaIndex
+    rootMethodJname <- getRootMethodName
+    let declaringMethodName = methodName rootMethodJname
+    let rootMethodClassName = className rootMethodJname
+    let lambdaClassName =
+        if lambdaIndex >= lambdaMaxCountPerMethod
+            then rootMethodClassName ++ "$" ++ namePrefix ++ "$" ++ declaringMethodName ++ "$" ++ show (lambdaIndex `div` 100)
+            else rootMethodClassName
+    let lambdaMethodName =
+        if lambdaIndex >= lambdaMaxCountPerMethod
+            then namePrefix ++ "$" ++ show lambdaIndex
+            else namePrefix ++ "$" ++ declaringMethodName ++ "$" ++ show lambdaIndex
+    pure $ Jqualified lambdaClassName lambdaMethodName
+
+mutual
+  parseArrayType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
+  parseArrayType expr@(NmCon _ name _ _ [elemTy]) =
+    if name == arrayName then pure. Just $ IArray !(tySpec elemTy)
+    else pure Nothing
+  parseArrayType _ = pure Nothing
+
+  parseLambdaType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
+  parseLambdaType (NmCon _ name _ _ [interfaceType, _]) =
+    if name == builtin "Pair" then parseJvmReferenceType interfaceType
+    else pure Nothing
+  parseLambdaType _ = pure Nothing
+
+  parseJvmReferenceType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
+  parseJvmReferenceType (NmCon _ name _ _ (NmPrimVal _ (Str namePartsStr) :: _)) =
+    if name == structName
+      then pure $ parseName namePartsStr
+      else pure Nothing
+  parseJvmReferenceType (NmCon _ name conInfo tag args) =
+    if name == primio "IORes" then
+      maybe (asmCrash "Expected an argument for IORes") (\res => pure $ Just !(tySpec res)) (head' args)
+    else pure $ Just $ getIdrisConstructorType conInfo tag (length args) name
+  parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do
+    (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
+      | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++
+               show fc)
+    ty <- tySpec def
+    pure $ Just ty
+  parseJvmReferenceType (NmDelay _ _ expr) = pure $ Just !(tySpec expr)
+  parseJvmReferenceType expr = pure Nothing
+
+  tryParse : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
+  tryParse expr = do
+    arrayTypeMaybe <- parseArrayType expr
+    case arrayTypeMaybe of
+      Nothing => do
+        lambdaTypeMaybe <- parseLambdaType expr
+        case lambdaTypeMaybe of
+          Nothing => parseJvmReferenceType expr
+          Just lambdaType => pure $ Just lambdaType
+      Just arrayType => pure $ Just arrayType
+
+  export
+  tySpec : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
+  tySpec (NmCon _ (UN (Basic ty)) _ _ []) = pure $ tySpecStr ty
+  tySpec (NmCon _ _ NOTHING _ []) = pure idrisMaybeType
+  tySpec (NmCon _ _ JUST _ [_]) = pure idrisMaybeType
+  tySpec (NmCon _ _ NIL _ []) = pure idrisListType
+  tySpec (NmCon _ _ CONS _ [_, _]) = pure idrisListType
+  tySpec expr@(NmCon _ (NS _ (UN (Basic "Unit"))) _ _ []) = pure IVoid
+  tySpec expr = do
+    ty <- tryParse expr
+    pure $ fromMaybe inferredObjectType ty
+
+
+export
+asmReturn : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core ()
+asmReturn IVoid    = return
+asmReturn IBool    = ireturn
+asmReturn IByte    = ireturn
+asmReturn IShort   = ireturn
+asmReturn IInt     = ireturn
+asmReturn IChar    = ireturn
+asmReturn ILong    = lreturn
+asmReturn IFloat   = freturn
+asmReturn IDouble  = dreturn
+asmReturn _        = areturn

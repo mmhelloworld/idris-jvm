@@ -30,66 +30,65 @@ getArity arity (CFFun argument _) = getArity (arity + 1) argument
 getArity arity _ = arity
 
 export
-parse : FC -> CFType -> Asm InferredType
-parse _ CFUnit = Pure IVoid
-parse _ CFInt = Pure IInt
-parse _ CFInt8 = Pure IByte
-parse _ CFInt16 = Pure IShort
-parse _ CFInt32 = Pure IInt
-parse _ CFInt64 = Pure ILong
-parse _ CFUnsigned8 = Pure IInt
-parse _ CFUnsigned16 = Pure IInt
-parse _ CFUnsigned32 = Pure IInt
-parse _ CFUnsigned64 = Pure ILong
-parse _ CFString = Pure inferredStringType
-parse _ CFDouble = Pure IDouble
-parse _ CFInteger = Pure inferredBigIntegerType
-parse _ CFChar = Pure IChar
-parse _ CFWorld = Pure IInt
+parse : {auto stateRef: Ref AsmState AsmState} -> FC -> CFType -> Core InferredType
+parse _ CFUnit = pureIVoid
+parse _ CFInt = pureIInt
+parse _ CFInt8 = pureIByte
+parse _ CFInt16 = pureIShort
+parse _ CFInt32 = pureIInt
+parse _ CFInt64 = pureILong
+parse _ CFUnsigned8 = pureIInt
+parse _ CFUnsigned16 = pureIInt
+parse _ CFUnsigned32 = pureIInt
+parse _ CFUnsigned64 = pureILong
+parse _ CFString = pureinferredStringType
+parse _ CFDouble = pureIDouble
+parse _ CFInteger = pureinferredBigIntegerType
+parse _ CFChar = pureIChar
+parse _ CFWorld = pureIInt
 parse fc (CFIORes returnType) = parse fc returnType
-parse fc (CFStruct name fields) = Pure $ iref name []
-parse fc (CFFun argument _) = Pure $ getFunctionInterface (getArity 1 argument)
+parse fc (CFStruct name fields) = pure$ iref name []
+parse fc (CFFun argument _) = pure$ getFunctionInterface (getArity 1 argument)
 parse fc (CFUser name (ty :: _)) =
   if name == builtin "Pair" then
     case ty of
       CFStruct name _ =>
         case words name of
           [] => asmCrash ("Invalid Java lambda type at " ++ show fc)
-          (javaInterfaceName :: _) => Pure $ IRef javaInterfaceName Interface []
-      _ => Pure inferredObjectType
-  else if name == arrayName then Pure $ IArray !(parse fc ty)
-  else Pure inferredObjectType
-parse _ ty = Pure inferredObjectType
+          (javaInterfaceName :: _) => pure$ IRef javaInterfaceName Interface []
+      _ => pureinferredObjectType
+  else if name == arrayName then pure$ IArray !(parse fc ty)
+  else pureinferredObjectType
+parse _ ty = pureinferredObjectType
 
 export
-parseForeignFunctionDescriptor : FC -> List String -> List InferredType -> InferredType ->
-  Asm (String, String, InferredType, List InferredType)
+parseForeignFunctionDescriptor : {auto stateRef: Ref AsmState AsmState} -> FC -> List String -> List InferredType -> InferredType -> Core (String, String, InferredType, List InferredType)
 parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argumentTypes returnType =
     case String.break (== '(') functionDescriptor of
         (fn, "") => do
             className <- getClassName fn descriptorParts returnType argumentTypes
-            Pure (className, fn, returnType, argumentTypes)
+            pure(className, fn, returnType, argumentTypes)
         (fn, signature) => do
             let descriptors =
               toList $ String.split (== ' ') (assert_total $ strTail . fst $ break (== ')') signature)
             (argumentDeclarationTypesReversed, returnType) <- go [] descriptors
             let argumentDeclarationTypes = List.reverse argumentDeclarationTypesReversed
             className <- getClassName fn descriptorParts returnType argumentDeclarationTypes
-            Pure (className, fn, returnType, argumentDeclarationTypes)
+            pure(className, fn, returnType, argumentDeclarationTypes)
   where
 
-    getInstanceMemberClass : (errorMessage: Lazy String) -> List InferredType -> Asm String
-    getInstanceMemberClass errorMessage ((IRef className _ _) :: _) = Pure className
+    getInstanceMemberClass : {auto stateRef: Ref AsmState AsmState} -> (errorMessage: Lazy String) -> List InferredType -> Core String
+    getInstanceMemberClass errorMessage ((IRef className _ _) :: _) = pureclassName
     getInstanceMemberClass errorMessage _ = Throw fc errorMessage
 
-    getDescriptorClassName : String -> Asm String
+    getDescriptorClassName : {auto stateRef: Ref AsmState AsmState} -> String -> Core String
     getDescriptorClassName memberName =
       case descriptorParts of
-        (className :: _) => Pure className
+        (className :: _) => pureclassName
         _ => Throw fc
                ("Static member " ++ memberName ++ " must have an explicit class name in foreign descriptor")
 
-    getClassName : String -> List String -> InferredType -> List InferredType -> Asm String
+    getClassName : {auto stateRef: Ref AsmState AsmState} -> String -> List String -> InferredType -> List InferredType -> Core String
     getClassName memberName descriptorParts returnType argumentTypes =
       let arity = length argumentTypes
       in
@@ -113,22 +112,22 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argume
           if memberName == "<init>"
             then
               case returnType of
-                IRef className _ _ => Pure className
+                IRef className _ _ => pureclassName
                 _ => Throw fc ("Constructor must return a reference type")
             else getDescriptorClassName memberName
 
-    go : List InferredType -> List String -> Asm (List InferredType, InferredType)
-    go acc [] = Pure (acc, IUnknown)
-    go acc (returnTypeDesc :: []) = Pure (acc, parse returnTypeDesc)
+    go : {auto stateRef: Ref AsmState AsmState} -> List InferredType -> List String -> Core (List InferredType, InferredType)
+    go acc [] = pure(acc, IUnknown)
+    go acc (returnTypeDesc :: []) = pure(acc, parse returnTypeDesc)
     go acc (argument :: rest) = do
         let foreignType = parse argument
         go (foreignType :: acc) rest
 parseForeignFunctionDescriptor fc descriptors _ _ = Throw fc $ "Invalid foreign descriptor: " ++ show descriptors
 
 export
-findJvmDescriptor : FC -> Name -> List String -> Asm (List String)
+findJvmDescriptor : {auto stateRef: Ref AsmState AsmState} -> FC -> Name -> List String -> Core (List String)
 findJvmDescriptor fc name descriptors = case parseCC ["jvm"] descriptors of
-    Just ("jvm", descriptorParts) => Pure descriptorParts
+    Just ("jvm", descriptorParts) => puredescriptorParts
     _ => Throw fc $ "Cannot compile foreign function " ++ show name ++ " to JVM as JVM foreign descriptor is missing"
 
 export
@@ -150,10 +149,9 @@ isValidArgumentType : CFType -> Bool
 isValidArgumentType (CFUser (UN (Basic "Type")) _) = False
 isValidArgumentType _ = True
 
-getIdrisJvmParameters : FC -> List CFType -> Asm (List (Nat, Bool, InferredType))
+getIdrisJvmParameters : {auto stateRef: Ref AsmState AsmState} -> FC -> List CFType -> Core (List (Nat, Bool, InferredType))
 getIdrisJvmParameters fc idrisTypes = pure $ reverse !(go [] 0 idrisTypes) where
-  go : List (Nat, Bool, InferredType) -> Nat -> List CFType ->
-         Asm (List (Nat, Bool, InferredType))
+  go : {auto stateRef: Ref AsmState AsmState} -> List (Nat, Bool, InferredType) -> Nat -> List CFType -> Core (List (Nat, Bool, InferredType))
   go acc _ [] = pure acc
   go acc index (idrisType :: rest) = do
     jvmType <- parse fc idrisType
@@ -166,18 +164,16 @@ getJvmType (_, _, jvmType) = jvmType
 shouldPassToForeign : (CFType, Nat, Bool, InferredType) -> Bool
 shouldPassToForeign (_, _, shouldPass, _) = shouldPass
 
-getArgumentNameAndTypes : FC -> List InferredType -> List (Nat, Bool, InferredType) ->
-                          Asm (List (String, InferredType))
+getArgumentNameAndTypes : {auto stateRef: Ref AsmState AsmState} -> FC -> List InferredType -> List (Nat, Bool, InferredType) -> Core (List (String, InferredType))
 getArgumentNameAndTypes fc descriptorTypes params = reverse <$> go [] descriptorTypes params where
-  go : List (String, InferredType) -> List InferredType -> List (Nat, Bool, InferredType) ->
-        Asm (List (String, InferredType))
+  go : {auto stateRef: Ref AsmState AsmState} -> List (String, InferredType) -> List InferredType -> List (Nat, Bool, InferredType) -> Core (List (String, InferredType))
   go acc [] _ = pure acc -- Ignore any additional arguments from Idris
   go acc _ [] = Throw fc "Foreign descriptor and Idris types do not match"
   go acc (descriptorType :: descriptorTypes) ((index, _, _) :: rest) =
     go (("arg" ++ show index, descriptorType) :: acc) descriptorTypes rest
 
 export
-inferForeign : String -> Name -> FC -> List String -> List CFType -> CFType -> Asm ()
+inferForeign : {auto stateRef: Ref AsmState AsmState} -> String -> Name -> FC -> List String -> List CFType -> CFType -> Core ()
 inferForeign programName idrisName fc foreignDescriptors argumentTypes returnType = do
     resetScope
     let jname = jvmName idrisName

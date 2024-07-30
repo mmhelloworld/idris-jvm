@@ -5,6 +5,7 @@ import Compiler.CompileExpr
 import Compiler.Inline
 
 import Core.Context
+import Core.Core
 import Core.Name
 import Core.Reflect
 import Core.TT
@@ -626,164 +627,6 @@ export
 %foreign "jvm:#JAVA_VERSION(int),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 javaClassFileVersion : Int
 
-public export
-data Asm : Type -> Type where
-    Aaload : Asm ()
-    Aastore : Asm ()
-    Aconstnull : Asm ()
-    Aload : Int -> Asm ()
-    Anewarray : (descriptor: String) -> Asm ()
-
-    Anewbooleanarray : Asm ()
-    Anewbytearray : Asm ()
-    Anewchararray : Asm ()
-    Anewshortarray : Asm ()
-    Anewintarray : Asm ()
-    Anewlongarray : Asm ()
-    Anewfloatarray : Asm ()
-    Anewdoublearray : Asm ()
-
-    Arraylength : Asm ()
-    Areturn : Asm ()
-    Astore : Int -> Asm ()
-    Baload : Asm ()
-    Bastore : Asm ()
-    Caload : Asm ()
-    Castore : Asm ()
-    Checkcast : (descriptor: String) -> Asm ()
-    ClassCodeStart : Int -> List Access -> (className: String) -> (signature: Maybe String) -> (parentClassName: String) ->
-                        (interfaces: List String) -> List Asm.Annotation -> Asm ()
-    CreateClass : List ClassOpts -> Asm ()
-    CreateField : List Access -> (sourceFileName: String) -> (className: String) -> (fieldName: String) -> (descriptor: String) ->
-                    (signature: Maybe String) -> Maybe FieldInitialValue -> (annotations: List Asm.Annotation) -> Asm ()
-    CreateLabel : String -> Asm ()
-    CreateMethod : List Access -> (sourceFileName: String) -> (className: String) ->
-                    (methodName: String) -> (descriptor: String) ->
-                    (signature: Maybe String) -> (exceptions: Maybe (List String)) ->
-                    (annotations: List Asm.Annotation) ->
-                    (parameterAnnotations: List (List Asm.Annotation)) -> Asm ()
-    CreateIdrisConstructorClass : String -> Bool -> Int -> Asm ()
-    D2i : Asm ()
-    D2f : Asm ()
-    D2l : Asm ()
-    Dadd : Asm ()
-    Daload : Asm ()
-    Dastore : Asm ()
-    Dcmpg : Asm ()
-    Dcmpl : Asm ()
-    Dconst : Double -> Asm ()
-    Ddiv : Asm ()
-    Debug : String -> Asm ()
-    Dload : Int -> Asm ()
-    Dmul : Asm ()
-    Dneg : Asm ()
-    Drem : Asm ()
-    Dreturn : Asm ()
-    Dstore : Int -> Asm ()
-    Dsub : Asm ()
-    Dup : Asm ()
-    Error : String -> Asm ()
-    F2d : Asm ()
-    Faload : Asm ()
-    Fastore : Asm ()
-    Fconst : Double -> Asm ()
-    Field : FieldInstructionType -> (className: String) -> (fieldName: String) -> (descriptor: String) -> Asm ()
-    FieldEnd : Asm ()
-    Fload : Int -> Asm ()
-    Frame : FrameType -> Int -> (signatures: List String) -> Int -> (signatures: List String) -> Asm ()
-    Freturn : Asm ()
-    Fstore : Int -> Asm ()
-    Goto : (label: String) -> Asm ()
-    I2b : Asm ()
-    I2c : Asm ()
-    I2d : Asm ()
-    I2l : Asm ()
-    I2s : Asm ()
-    Iadd : Asm ()
-    Iaload : Asm ()
-    Iand : Asm ()
-    Iastore : Asm ()
-    Ior : Asm ()
-    Ixor : Asm ()
-    Icompl : Asm ()
-    Iconst : Int -> Asm ()
-    Idiv : Asm ()
-    Ifeq : (label: String) -> Asm ()
-    Ifge : (label: String) -> Asm ()
-    Ifgt : (label: String) -> Asm ()
-    Ificmpge : (label: String) -> Asm ()
-    Ificmpgt : (label: String) -> Asm ()
-    Ificmple : (label: String) -> Asm ()
-    Ificmplt : (label: String) -> Asm ()
-    Ificmpeq : (label: String) -> Asm ()
-    Ifacmpne : (label: String) -> Asm ()
-    Ificmpne : (label: String) -> Asm ()
-    Ifle : (label: String) -> Asm ()
-    Iflt : (label: String) -> Asm ()
-    Ifne : (label: String) -> Asm ()
-    Ifnonnull : (label: String) -> Asm ()
-    Ifnull : (label: String) -> Asm ()
-    Iload : Int -> Asm ()
-    Imul : Asm ()
-    Ineg : Asm ()
-    InstanceOf : (className: String) -> Asm ()
-    InvokeMethod : InvocationType -> (className: String) -> (methodName: String) -> (descriptor: String)
-                    -> Bool -> Asm ()
-    InvokeDynamic : (methodName: String) -> (descriptor: String) -> Handle -> List BsmArg -> Asm ()
-    Irem : Asm ()
-    Ireturn : Asm ()
-    Ishl : Asm ()
-    Ishr : Asm ()
-    Istore : Int -> Asm ()
-    Isub : Asm ()
-    Iushr : Asm ()
-    L2d : Asm ()
-    L2i : Asm ()
-    LabelStart : (label: String) -> Asm ()
-    Ladd : Asm ()
-    Laload : Asm ()
-    Land : Asm ()
-    Lastore : Asm ()
-    Lcmp : Asm ()
-    Lcompl : Asm ()
-    Ldc : Asm.Constant -> Asm ()
-    Ldiv : Asm ()
-    LineNumber : Int -> String -> Asm ()
-    Lload : Int  -> Asm ()
-    Lmul : Asm ()
-    Lneg : Asm ()
-    LocalVariable : (name: String) -> (descriptor: String) -> (signature: Maybe String) -> (startLabel: String) ->
-                        (endLabel: String) -> (index: Int) -> Asm ()
-    LookupSwitch : (defaultLabel: String) -> (labels: List String) -> (cases: List Int) -> Asm ()
-    Lor : Asm ()
-    Lrem : Asm ()
-    Lreturn : Asm ()
-    Lshl : Asm ()
-    Lshr : Asm ()
-    Lstore : Int -> Asm ()
-    Lsub : Asm ()
-    Lushr : Asm ()
-    Lxor : Asm ()
-    MaxStackAndLocal : Int -> Int -> Asm ()
-    MethodCodeStart : Asm ()
-    MethodCodeEnd : Asm ()
-    Multianewarray : (descriptor: String) -> Int -> Asm ()
-    New : (className: String) -> Asm ()
-    Pop : Asm ()
-    Pop2 : Asm ()
-    Return : Asm ()
-    Saload : Asm ()
-    Sastore : Asm ()
-    SourceInfo : (sourceFileName: String) -> Asm ()
-    LiftIo : IO a -> Asm a
-
-    Throw : FC -> String -> Asm a
-    GetState : Asm AsmState
-    SetState : AsmState -> Asm ()
-
-    Pure : ty -> Asm ty
-    Bind : Asm a -> (a -> Asm b) -> Asm b
-
 export
 Show Scope where
     show scope = showType "Scope" [
@@ -818,30 +661,6 @@ Show AsmState where
         ("lambdaCounter", show $ lambdaCounter asmState)
     ]
 
-%inline
-public export
-Functor Asm where
-  map f a = Bind a (\a' => Pure $ f a')
-
-%inline
-public export
-Applicative Asm where
-  pure = Pure
-
-  (<*>) f a = Bind f (\f' =>
-              Bind a (\a' =>
-              Pure (f' a')))
-
-%inline
-public export
-Monad Asm where
-  (>>=) = Bind
-
-%inline
-public export
-HasIO Asm where
-  liftIO = LiftIo
-
 public export
 newAsmState : HasIO io => AsmGlobalState -> Assembler -> io AsmState
 newAsmState globalState assembler = do
@@ -852,132 +671,122 @@ newAsmState globalState assembler = do
                     0 defaultName (NmCrash emptyFC "uninitialized function")
     pure $ MkAsmState globalState function defaultName 0 0 0 0 lineNumberLabels assembler
 
-export
-updateState : (AsmState -> AsmState) -> Asm ()
-updateState f = SetState $ f !GetState
-
-getAndUpdateState : (AsmState -> AsmState) -> Asm AsmState
-getAndUpdateState f = do
-    state <- GetState
-    SetState $ f state
-    Pure state
-
 public export
 %foreign "jvm:crash(String java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 crash : String -> Object
 
 export
-asmCrash : String -> Asm a
-asmCrash message = Pure $ believe_me $ crash message
+asmCrash : String -> Core a
+asmCrash message = throw (InternalError message)
 
 export
-newBigInteger : String -> Asm ()
-newBigInteger "0" = Field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-newBigInteger "1" = Field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-newBigInteger "10" = Field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
+newBigInteger : String -> Core ()
+newBigInteger "0" = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
+newBigInteger "1" = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
+newBigInteger "10" = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
 newBigInteger i = do
     New "java/math/BigInteger"
     Dup
     Ldc $ StringConst i
-    InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
+    invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export
-getGlobalState : Asm AsmGlobalState
-getGlobalState = Pure $ globalState !GetState
+getGlobalState : {auto stateRef: Ref AsmState AsmState} -> Core AsmGlobalState
+getGlobalState = pure$ globalState !GetState
 
 export
-findFunction : Jname -> Asm (Maybe Function)
+findFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (Maybe Function)
 findFunction name = LiftIo $ AsmGlobalState.findFunction !getGlobalState name
 
 export
-getFunction : Jname -> Asm Function
-getFunction name = maybe (asmCrash $ "Unknown function " ++ show name) Pure !(findFunction name)
+getFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core Function
+getFunction name = maybe (asmCrash $ "Unknown function " ++ show name) pure!(findFunction name)
 
 export
-getCurrentFunction : Asm Function
+getCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Core Function
 getCurrentFunction = currentIdrisFunction <$> GetState
 
 export
-getProgramName : Asm String
+getProgramName : {auto stateRef: Ref AsmState AsmState} -> Core String
 getProgramName = LiftIo $ AsmGlobalState.getProgramName !getGlobalState
 
 export
-getFcAndDefinition : String -> Asm (FC, NamedDef)
+getFcAndDefinition : {auto stateRef: Ref AsmState AsmState} -> String -> Core (FC, NamedDef)
 getFcAndDefinition name = LiftIo $ AsmGlobalState.getFcAndDefinition !getGlobalState name
 
 export
-isUntypedFunction : Jname -> Asm Bool
+isUntypedFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core Bool
 isUntypedFunction name = LiftIo $ AsmGlobalState.isUntypedFunction !getGlobalState name
 
 export
-addUntypedFunction : Jname -> Asm ()
+addUntypedFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core ()
 addUntypedFunction name = LiftIo $ AsmGlobalState.addUntypedFunction !getGlobalState name
 
 export
-setCurrentFunction : Function -> Asm ()
+setCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Function -> Core ()
 setCurrentFunction function = updateState $ { currentIdrisFunction := function }
 
-getAndUpdateFunction : (Function -> Function) -> Asm Function
+getAndUpdateFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core Function
 getAndUpdateFunction f = do
     function <- getCurrentFunction
     let newFunction = f function
     setCurrentFunction newFunction
     globalState <- getGlobalState
     LiftIo $ addFunction globalState (idrisName newFunction) newFunction
-    Pure function
+    purefunction
 
 export
-updateCurrentFunction : (Function -> Function) -> Asm ()
+updateCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core ()
 updateCurrentFunction f = ignore $ getAndUpdateFunction f
 
 export
-loadFunction : Jname -> Asm ()
+loadFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core ()
 loadFunction idrisName = do
     function <- getFunction idrisName
     updateState $ { currentIdrisFunction := function }
 
 export
-getFunctionType : Jname -> Asm InferredFunctionType
+getFunctionType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core InferredFunctionType
 getFunctionType name = inferredFunctionType <$> (getFunction name)
 
 export
-getFunctionParameterTypes : Jname -> Asm (List InferredType)
+getFunctionParameterTypes : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (List InferredType)
 getFunctionParameterTypes functionName = do
     functionType <- getFunctionType functionName
     pure $ parameterTypes functionType
 
 export
-findFunctionType : Jname -> Asm (Maybe InferredFunctionType)
+findFunctionType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (Maybe InferredFunctionType)
 findFunctionType functionName = do
     state <- GetState
     function <- findFunction functionName
-    Pure $ inferredFunctionType <$> function
+    pure$ inferredFunctionType <$> function
 
 export
-getFunctionReturnType : Jname -> Asm InferredType
+getFunctionReturnType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core InferredType
 getFunctionReturnType functionName =  do
     state <- GetState
     function <- findFunction functionName
-    Pure $ maybe IUnknown (returnType . inferredFunctionType) $ function
+    pure$ maybe IUnknown (returnType . inferredFunctionType) $ function
 
 export
-getCurrentScopeIndex : Asm Int
+getCurrentScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
 getCurrentScopeIndex = currentScopeIndex <$> GetState
 
 export
-updateCurrentScopeIndex : Int -> Asm ()
+updateCurrentScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
 updateCurrentScopeIndex scopeIndex = updateState $ { currentScopeIndex := scopeIndex }
 
 export
-newScopeIndex : Asm Int
+newScopeIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
 newScopeIndex = scopeCounter <$> (getAndUpdateState $ {scopeCounter $= (+1)})
 
 export
-newDynamicVariableIndex : Asm Int
+newDynamicVariableIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
 newDynamicVariableIndex = dynamicVariableCounter <$> (getAndUpdateFunction $ {dynamicVariableCounter $= (+1)})
 
 export
-resetScope : Asm ()
+resetScope : {auto stateRef: Ref AsmState AsmState} -> Core ()
 resetScope = updateState $
     {
         scopeCounter := 0,
@@ -992,7 +801,7 @@ fillNull index aList = do
     ignore $ JList.addAll {a=a, obj=Collection a} list $ believe_me nulls
 
 export
-saveScope : Scope -> Asm ()
+saveScope : {auto stateRef: Ref AsmState AsmState} -> Scope -> Core ()
 saveScope scope = do
     scopes <- scopes <$> getCurrentFunction
     size <- LiftIo $ Collection.size {elemTy=Scope, obj=Collection Scope} $ believe_me scopes
@@ -1005,87 +814,87 @@ saveScope scope = do
               JList.add scopes scopeIndex scope
 
 export
-getScope : Int -> Asm Scope
+getScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Scope
 getScope scopeIndex = do
    scopes <- scopes <$> getCurrentFunction
    LiftIo $ JList.get scopes scopeIndex
 
 export
-addScopeChild : Int -> Int -> Asm ()
+addScopeChild : {auto stateRef: Ref AsmState AsmState} -> Int -> Int -> Core ()
 addScopeChild parentScopeIndex childScopeIndex = do
     scope <- getScope parentScopeIndex
     saveScope $ {childIndices $= (childScopeIndex ::)} scope
 
 export
-getRootMethodName : Asm Jname
+getRootMethodName : {auto stateRef: Ref AsmState AsmState} -> Core Jname
 getRootMethodName = jvmClassMethodName <$> getCurrentFunction
 
 export
-newLabel : Asm String
+newLabel : {auto stateRef: Ref AsmState AsmState} -> Core String
 newLabel = do
     state <- GetState
     let label = "L" ++ show (labelCounter state)
     updateState $ { labelCounter $= (+1) }
-    Pure label
+    purelabel
 
-hasLabelAtLine : Int -> Asm Bool
+hasLabelAtLine : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Bool
 hasLabelAtLine lineNumber = do
     state <- GetState
     LiftIo $ Map.containsKey {value=String} (lineNumberLabels state) lineNumber
 
 export
-addLineNumber : Int -> String -> Asm ()
+addLineNumber : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
 addLineNumber lineNumber label = do
     hasLabel <- hasLabelAtLine lineNumber
     when (not hasLabel) $ do
         state <- GetState
         LineNumber lineNumber label
         _ <- LiftIo $ Map.put (lineNumberLabels state) lineNumber label
-        Pure ()
+        pure()
 
 export
-getLineNumberLabel : Int -> Asm String
+getLineNumberLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> Core String
 getLineNumberLabel lineNumber = do
     state <- GetState
     let currentLineNumberLabels = lineNumberLabels state
     optLabel <- LiftIo $ Map.get {value=String} currentLineNumberLabels lineNumber
     case nullableToMaybe optLabel of
-        Just label => Pure label
+        Just label => purelabel
         Nothing => do
             label <- newLabel
             _ <- LiftIo $ Map.put currentLineNumberLabels lineNumber label
-            Pure label
+            purelabel
 
 export
-getClassName : Asm String
+getClassName : {auto stateRef: Ref AsmState AsmState} -> Core String
 getClassName = className . currentMethodName <$> GetState
 
 export
-getMethodName : Asm String
+getMethodName : {auto stateRef: Ref AsmState AsmState} -> Core String
 getMethodName = methodName . currentMethodName <$> GetState
 
 export
-freshLambdaIndex : Asm Int
+freshLambdaIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
 freshLambdaIndex = lambdaCounter <$> (getAndUpdateState $ {lambdaCounter $= (+1)})
 
 export
-setScopeCounter : Int -> Asm ()
+setScopeCounter : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
 setScopeCounter scopeCounter = updateState $ {scopeCounter := scopeCounter}
 
 export
-updateScopeStartLabel : Int -> String -> Asm ()
+updateScopeStartLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
 updateScopeStartLabel scopeIndex label = do
     scope <- getScope scopeIndex
     saveScope $ {labels $= updateFirst label} scope
 
 export
-updateScopeEndLabel : Int -> String -> Asm ()
+updateScopeEndLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
 updateScopeEndLabel scopeIndex label = do
     scope <- getScope scopeIndex
     saveScope $ {labels $= updateSecond label} scope
 
 export
-createVariable : String -> Asm ()
+createVariable : {auto stateRef: Ref AsmState AsmState} -> String -> Core ()
 createVariable var = do
     scopeIndex <- getCurrentScopeIndex
     scope <- getScope scopeIndex
@@ -1095,12 +904,12 @@ createVariable var = do
     saveScope $ { nextVariableIndex $= (+1) } scope
 
 export
-generateVariable : String -> Asm String
+generateVariable : {auto stateRef: Ref AsmState AsmState} -> String -> Core String
 generateVariable namePrefix = do
     dynamicVariableIndex <- newDynamicVariableIndex
     let variableName = namePrefix ++ show dynamicVariableIndex
     createVariable variableName
-    Pure variableName
+    purevariableName
 
 namespace JAsmState
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "updateVariableIndices" "java/util/Map java/util/Map" "void"
@@ -1120,34 +929,34 @@ namespace JAsmState
         jlist <- primIO $ prim_getVariableNames indicesByName
         JList.fromIterable jlist
 
-retrieveVariableIndicesByName : Int -> Asm (Map String Int)
+retrieveVariableIndicesByName : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map String Int)
 retrieveVariableIndicesByName scopeIndex = do
     variableIndices <- LiftIo $ Map.newTreeMap {key=String} {value=Int}
     go variableIndices scopeIndex
-    Pure variableIndices
+    purevariableIndices
   where
-    go : Map String Int -> Int -> Asm ()
+    go : {auto stateRef: Ref AsmState AsmState} -> Map String Int -> Int -> Core ()
     go acc scopeIndex = go1 scopeIndex where
-        go1 : Int -> Asm ()
+        go1 : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
         go1 scopeIndex = do
             scope <- getScope scopeIndex
             LiftIo $ updateVariableIndices acc (variableIndices scope)
-            maybe (Pure ()) go1 (parentIndex scope)
+            maybe (pure()) go1 (parentIndex scope)
 
 export
-retrieveVariables : Int -> Asm (List String)
+retrieveVariables : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (List String)
 retrieveVariables scopeIndex = do
     variableIndicesByName <- retrieveVariableIndicesByName scopeIndex
     LiftIo $ getVariableNames variableIndicesByName
 
-retrieveVariableIndexAtScope : Int -> String -> Asm Int
+retrieveVariableIndexAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core Int
 retrieveVariableIndexAtScope currentScopeIndex name = go currentScopeIndex where
-    go : Int -> Asm Int
+    go : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Int
     go scopeIndex = do
         scope <- getScope scopeIndex
         optIndex <- LiftIo $ Map.get {value=Int} (variableIndices scope) name
         case nullableToMaybe optIndex of
-            Just index => Pure index
+            Just index => pureindex
             Nothing => case parentIndex scope of
                 Just parentScopeIndex => go parentScopeIndex
                 Nothing => do
@@ -1157,30 +966,30 @@ retrieveVariableIndexAtScope currentScopeIndex name = go currentScopeIndex where
                       name ++ " at index " ++ show currentScopeIndex)
 
 export
-retrieveVariableIndex : String -> Asm Int
+retrieveVariableIndex : {auto stateRef: Ref AsmState AsmState} -> String -> Core Int
 retrieveVariableIndex name = retrieveVariableIndexAtScope !getCurrentScopeIndex name
 
-retrieveVariableTypeAtScope : Int -> String -> Asm InferredType
+retrieveVariableTypeAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core InferredType
 retrieveVariableTypeAtScope scopeIndex name = do
     scope <- getScope scopeIndex
     optTy <- LiftIo $ Map.get (variableTypes scope) name
     case nullableToMaybe optTy of
-        Just ty => Pure ty
+        Just ty => purety
         Nothing => case parentIndex scope of
             Just parentScope => retrieveVariableTypeAtScope parentScope name
             Nothing => pure IUnknown
 
 export
-retrieveVariableTypesAtScope : Int -> Asm (Map Int InferredType)
+retrieveVariableTypesAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map Int InferredType)
 retrieveVariableTypesAtScope scopeIndex = do
     typesByIndex <- LiftIo $ Map.newTreeMap {key=Int} {value=InferredType}
     go typesByIndex !(retrieveVariables scopeIndex)
-    Pure typesByIndex
+    puretypesByIndex
   where
-    go : Map Int InferredType -> List String -> Asm ()
+    go : {auto stateRef: Ref AsmState AsmState} -> Map Int InferredType -> List String -> Core ()
     go acc names = go1 names where
-        go1 : List String -> Asm ()
-        go1 [] = Pure ()
+        go1 : {auto stateRef: Ref AsmState AsmState} -> List String -> Core ()
+        go1 [] = pure()
         go1 (var :: vars) = do
             varIndex <- retrieveVariableIndexAtScope scopeIndex var
             ty <- retrieveVariableTypeAtScope scopeIndex var
@@ -1191,35 +1000,35 @@ retrieveVariableTypesAtScope scopeIndex = do
             go1 vars
 
 export
-getVariableIndicesByName : Int -> Asm (Map String Int)
+getVariableIndicesByName : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map String Int)
 getVariableIndicesByName scopeIndex = allVariableIndices <$> getScope scopeIndex
 
 export
-getVariableIndexAtScope : Int -> String -> Asm Int
+getVariableIndexAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core Int
 getVariableIndexAtScope currentScopeIndex name = do
     variableIndicesByName <- getVariableIndicesByName currentScopeIndex
     optIndex <- LiftIo $ Map.get {value=Int} variableIndicesByName name
     case nullableToMaybe optIndex of
-        Just index => Pure index
+        Just index => pureindex
         Nothing => do
           rootMethodName <- getRootMethodName
           asmCrash ("getVariableIndexAtScope: " ++ show rootMethodName ++ ": Unknown var " ++
               name ++ " at index " ++ show currentScopeIndex)
 
 export
-getVariableIndex : String -> Asm Int
+getVariableIndex : {auto stateRef: Ref AsmState AsmState} -> String -> Core Int
 getVariableIndex name = getVariableIndexAtScope !getCurrentScopeIndex name
 
 export
-getVariableTypesAtScope : Int -> Asm (Map Int InferredType)
+getVariableTypesAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map Int InferredType)
 getVariableTypesAtScope scopeIndex = allVariableTypes <$> getScope scopeIndex
 
 export
-getVariableTypes : Asm (Map Int InferredType)
+getVariableTypes : {auto stateRef: Ref AsmState AsmState} -> Core (Map Int InferredType)
 getVariableTypes = getVariableTypesAtScope !getCurrentScopeIndex
 
 export
-getVariableTypeAtScope : Int -> String -> Asm InferredType
+getVariableTypeAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core InferredType
 getVariableTypeAtScope scopeIndex name = do
     scope <- getScope scopeIndex
     variableIndicesByName <- getVariableIndicesByName scopeIndex
@@ -1228,11 +1037,11 @@ getVariableTypeAtScope scopeIndex name = do
         Just index => do
             variableTypes <- getVariableTypesAtScope scopeIndex
             optTy <- LiftIo $ Map.get {value=InferredType} variableTypes index
-            Pure $ fromMaybe IUnknown $ nullableToMaybe optTy
-        Nothing => Pure IUnknown
+            pure$ fromMaybe IUnknown $ nullableToMaybe optTy
+        Nothing => pureIUnknown
 
 export
-getVariableType : String -> Asm InferredType
+getVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> Core InferredType
 getVariableType name = getVariableTypeAtScope !getCurrentScopeIndex name
 
 updateArgumentsForUntyped : Map Int InferredType -> Nat -> IO ()
@@ -1242,11 +1051,11 @@ updateArgumentsForUntyped types (S n) = do
   updateArgumentsForUntyped types n
 
 export
-updateScopeVariableTypes : Nat -> Asm ()
+updateScopeVariableTypes : {auto stateRef: Ref AsmState AsmState} -> Nat -> Core ()
 updateScopeVariableTypes arity = go (scopeCounter !GetState - 1) where
-    go : Int -> Asm ()
+    go : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
     go scopeIndex =
-        if scopeIndex < 0 then Pure ()
+        if scopeIndex < 0 then pure()
         else do
             variableTypes <- retrieveVariableTypesAtScope scopeIndex
             when (scopeIndex == 0) $ LiftIo $ updateArgumentsForUntyped variableTypes arity
@@ -1255,28 +1064,28 @@ updateScopeVariableTypes arity = go (scopeCounter !GetState - 1) where
             saveScope $ {allVariableTypes := variableTypes, allVariableIndices := variableIndices} scope
             go (scopeIndex - 1)
 
-getVariableScope : String -> Asm Scope
+getVariableScope : {auto stateRef: Ref AsmState AsmState} -> String -> Core Scope
 getVariableScope name = go !getCurrentScopeIndex where
-    go : Int -> Asm Scope
+    go : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Scope
     go scopeIndex = do
         scope <- getScope scopeIndex
         optTy <- LiftIo $ Map.get {value=InferredType} (variableTypes scope) name
         case nullableToMaybe optTy of
-            Just _ => Pure scope
+            Just _ => purescope
             Nothing => case parentIndex scope of
                 Just parentScopeIndex => go parentScopeIndex
                 Nothing => asmCrash ("Unknown variable " ++ name)
 
 export
-addVariableType : String -> InferredType -> Asm InferredType
-addVariableType var IUnknown = Pure IUnknown
+addVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> InferredType -> Core InferredType
+addVariableType var IUnknown = pureIUnknown
 addVariableType var ty = do
     scope <- getVariableScope var
     let scopeIndex = index scope
     existingTy <- retrieveVariableTypeAtScope scopeIndex var
     let newTy = existingTy <+> ty
     _ <- LiftIo $ Map.put (variableTypes scope) var newTy
-    Pure newTy
+    purenewTy
 
 %inline
 export
@@ -1284,7 +1093,7 @@ lambdaMaxCountPerMethod: Int
 lambdaMaxCountPerMethod = 50
 
 export
-getLambdaImplementationMethodName : String -> Asm Jname
+getLambdaImplementationMethodName : {auto stateRef: Ref AsmState AsmState} -> String -> Core Jname
 getLambdaImplementationMethodName namePrefix = do
     lambdaIndex <- freshLambdaIndex
     rootMethodJname <- getRootMethodName
@@ -1298,7 +1107,7 @@ getLambdaImplementationMethodName namePrefix = do
         if lambdaIndex >= lambdaMaxCountPerMethod
             then namePrefix ++ "$" ++ show lambdaIndex
             else namePrefix ++ "$" ++ declaringMethodName ++ "$" ++ show lambdaIndex
-    Pure $ Jqualified lambdaClassName lambdaMethodName
+    pure$ Jqualified lambdaClassName lambdaMethodName
 
 isBoolTySpec : Name -> Bool
 isBoolTySpec name = name == basics "Bool" || name == (NS preludeNS (UN $ Basic "Bool"))
@@ -1362,37 +1171,37 @@ parseName name =
     _ => Nothing
 
 mutual
-  parseArrayType : NamedCExp -> Asm (Maybe InferredType)
+  parseArrayType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
   parseArrayType expr@(NmCon _ name _ _ [elemTy]) =
-    if name == arrayName then Pure . Just $ IArray !(tySpec elemTy)
-    else Pure Nothing
-  parseArrayType _ = Pure Nothing
+    if name == arrayName then pure. Just $ IArray !(tySpec elemTy)
+    else pureNothing
+  parseArrayType _ = pureNothing
 
-  parseLambdaType : NamedCExp -> Asm (Maybe InferredType)
+  parseLambdaType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
   parseLambdaType (NmCon _ name _ _ [interfaceType, _]) =
     if name == builtin "Pair" then parseJvmReferenceType interfaceType
-    else Pure Nothing
-  parseLambdaType _ = Pure Nothing
+    else pureNothing
+  parseLambdaType _ = pureNothing
 
-  parseJvmReferenceType : NamedCExp -> Asm (Maybe InferredType)
+  parseJvmReferenceType : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
   parseJvmReferenceType (NmCon _ name _ _ (NmPrimVal _ (Str namePartsStr) :: _)) =
     if name == structName
-      then Pure $ parseName namePartsStr
-      else Pure Nothing
+      then pure$ parseName namePartsStr
+      else pureNothing
   parseJvmReferenceType (NmCon _ name conInfo tag args) =
     if name == primio "IORes" then
-      maybe (asmCrash "Expected an argument for IORes") (\res => Pure $ Just !(tySpec res)) (head' args)
-    else Pure $ Just $ getIdrisConstructorType conInfo tag (length args) name
+      maybe (asmCrash "Expected an argument for IORes") (\res => pure$ Just !(tySpec res)) (head' args)
+    else pure$ Just $ getIdrisConstructorType conInfo tag (length args) name
   parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do
     (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
       | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++
                show fc)
     ty <- tySpec def
-    Pure $ Just ty
-  parseJvmReferenceType (NmDelay _ _ expr) = Pure $ Just !(tySpec expr)
-  parseJvmReferenceType expr = Pure Nothing
+    pure$ Just ty
+  parseJvmReferenceType (NmDelay _ _ expr) = pure$ Just !(tySpec expr)
+  parseJvmReferenceType expr = pureNothing
 
-  tryParse : NamedCExp -> Asm (Maybe InferredType)
+  tryParse : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe InferredType)
   tryParse expr = do
     arrayTypeMaybe <- parseArrayType expr
     case arrayTypeMaybe of
@@ -1400,20 +1209,20 @@ mutual
         lambdaTypeMaybe <- parseLambdaType expr
         case lambdaTypeMaybe of
           Nothing => parseJvmReferenceType expr
-          Just lambdaType => Pure $ Just lambdaType
-      Just arrayType => Pure $ Just arrayType
+          Just lambdaType => pure$ Just lambdaType
+      Just arrayType => pure$ Just arrayType
 
   export
-  tySpec : NamedCExp -> Asm InferredType
-  tySpec (NmCon _ (UN (Basic ty)) _ _ []) = Pure $ tySpecStr ty
-  tySpec (NmCon _ _ NOTHING _ []) = Pure idrisMaybeType
-  tySpec (NmCon _ _ JUST _ [_]) = Pure idrisMaybeType
-  tySpec (NmCon _ _ NIL _ []) = Pure idrisListType
-  tySpec (NmCon _ _ CONS _ [_, _]) = Pure idrisListType
-  tySpec expr@(NmCon _ (NS _ (UN (Basic "Unit"))) _ _ []) = Pure IVoid
+  tySpec : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
+  tySpec (NmCon _ (UN (Basic ty)) _ _ []) = pure$ tySpecStr ty
+  tySpec (NmCon _ _ NOTHING _ []) = pureidrisMaybeType
+  tySpec (NmCon _ _ JUST _ [_]) = pureidrisMaybeType
+  tySpec (NmCon _ _ NIL _ []) = pureidrisListType
+  tySpec (NmCon _ _ CONS _ [_, _]) = pureidrisListType
+  tySpec expr@(NmCon _ (NS _ (UN (Basic "Unit"))) _ _ []) = pureIVoid
   tySpec expr = do
     ty <- tryParse expr
-    Pure $ fromMaybe inferredObjectType ty
+    pure$ fromMaybe inferredObjectType ty
 
 export
 getJvmTypeDescriptor : InferredType -> String
@@ -1430,24 +1239,27 @@ getJvmTypeDescriptor (IRef ty _ _) = "L" ++ ty ++ ";"
 getJvmTypeDescriptor (IArray ty)   = "[" ++ getJvmTypeDescriptor ty
 getJvmTypeDescriptor (IFunction lambdaType) = getJvmTypeDescriptor (lambdaType.javaInterface)
 getJvmTypeDescriptor IUnknown            = getJvmTypeDescriptor inferredObjectType
+getJvmTypeDescriptor (TypeParam name) = getJvmTypeDescriptor inferredObjectType
 
 export
-getJvmReferenceTypeName : InferredType -> Asm String
-getJvmReferenceTypeName (IRef ty _ _) = Pure ty
-getJvmReferenceTypeName (IArray (IRef ty _ _)) = Pure ("[L" ++ ty ++ ";")
-getJvmReferenceTypeName (IArray ty) = Pure ("[" ++ !(getJvmReferenceTypeName ty))
+getJvmReferenceTypeName : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core String
+getJvmReferenceTypeName (IRef ty _ _) = purety
+getJvmReferenceTypeName (IArray (IRef ty _ _)) = pure("[L" ++ ty ++ ";")
+getJvmReferenceTypeName (IArray ty) = pure("[" ++ !(getJvmReferenceTypeName ty))
 getJvmReferenceTypeName (IFunction lambdaType) = getJvmReferenceTypeName (lambdaType.javaInterface)
 getJvmReferenceTypeName ty = asmCrash ("Expected a reference type but found " ++ show ty)
 
 export
 getSignature : InferredType -> String
 getSignature (IRef ty _ typeParams@(_ :: _)) =
-  let typeParamsDescriptor = concat (getJvmTypeDescriptor <$> typeParams)
-  in "L" ++ ty ++ "<" ++ typeParamsDescriptor ++ ">;"
+  let typeParamsSignature = concat (getSignature <$> typeParams)
+  in "L" ++ ty ++ "<" ++ typeParamsSignature ++ ">;"
+getSignature (TypeParam name) = "T" ++ name ++ ";"
+getSignature (IArray ty)   = "[" ++ getSignature ty
 getSignature type = getJvmTypeDescriptor type
 
 export
-asmReturn : InferredType -> Asm ()
+asmReturn : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core ()
 asmReturn IVoid    = Return
 asmReturn IBool    = Ireturn
 asmReturn IByte    = Ireturn
@@ -1457,14 +1269,14 @@ asmReturn IChar    = Ireturn
 asmReturn ILong    = Lreturn
 asmReturn IFloat   = Freturn
 asmReturn IDouble  = Dreturn
-asmReturn _        = Areturn
+asmReturn _        = areturn
 
-export
 -- constant values from org.objectweb.asm.Opcodes
+export
 accessNum : Access -> Int
 accessNum Public    = 0x0001
 accessNum Private   = 0x0002
-accessNum Protected   = 0x0004
+accessNum Protected = 0x0004
 accessNum Static    = 0x0008
 accessNum Final     = 0x0010
 accessNum Interface = 0x0200
@@ -1525,7 +1337,7 @@ export
 int64ToJLong : Int64 -> JLong
 
 export
-constantToObject : Asm.Constant -> Object
+constantToObject : {auto stateRef: Ref AsmState AsmState} -> Core.Constant -> Object
 constantToObject (DoubleConst d) = believe_me $ doubleValueOf d
 constantToObject (IntegerConst n) = believe_me $ integerValueOf n
 constantToObject (Int64Const n) = believe_me $ int64ToJLong n
@@ -1683,15 +1495,15 @@ toJFieldInitialValue (StringField s) = believe_me s
 toJFieldInitialValue (DoubleField d) = believe_me $ doubleValueOf d
 
 export
-loadBigInteger : Integer -> Asm ()
-loadBigInteger 0 = Field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-loadBigInteger 1 = Field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-loadBigInteger 10 = Field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
+loadBigInteger : {auto stateRef: Ref AsmState AsmState} -> Integer -> Core ()
+loadBigInteger 0 = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
+loadBigInteger 1 = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
+loadBigInteger 10 = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
 loadBigInteger value = do
     New "java/math/BigInteger"
     Dup
     Ldc $ StringConst $ show value
-    InvokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
+    invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export
 getMethodDescriptor : InferredFunctionType -> String
@@ -1708,12 +1520,6 @@ getMethodSignature (MkInferredFunctionType retTy argTypes) =
     let argDescs = getSignature <$> argTypes
         retTyDesc = getSignature retTy
     in "(" ++ (the String $ concat argDescs) ++ ")" ++ retTyDesc
-
-export
-assemble : HasIO io => AsmState -> IO a -> io (a, AsmState)
-assemble state m = do
-    res <- primIO $ toPrim m
-    pure (res, state)
 
 %foreign
     jvm' "io/github/mmhelloworld/idrisjvm/assembler/IdrisName" "getIdrisFunctionName"
@@ -1733,10 +1539,10 @@ metafactoryDesc =
     "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;"
 
 export
-invokeDynamic : (implClassName: String) -> (implMethodName: String) -> (interfaceMethodName: String) ->
+asmInvokeDynamic : (implClassName: String) -> (implMethodName: String) -> (interfaceMethodName: String) ->
                 (invokeDynamicDesc: String) -> (samDesc: String) -> (implMethodDesc: String) ->
-                (instantiatedMethodDesc: String) -> Asm ()
-invokeDynamic implClassName implMethodName interfaceMethodName invokeDynamicDesc samDesc implMethodDesc
+                (instantiatedMethodDesc: {auto stateRef: Ref AsmState AsmState} -> String) -> Core ()
+asmInvokeDynamic implClassName implMethodName interfaceMethodName invokeDynamicDesc samDesc implMethodDesc
     instantiatedMethodDesc =
     let metafactoryHandle = MkHandle InvokeStatic "java/lang/invoke/LambdaMetafactory" "metafactory"
             metafactoryDesc False
@@ -1827,8 +1633,8 @@ log message val =
     else val
 
 export
-logAsm : Lazy String -> Asm ()
-logAsm message = log message (Pure ())
+logAsm : {auto stateRef: Ref AsmState AsmState} -> Lazy String -> Core ()
+logAsm message = log message (pure())
 
 public export
 data FArgList : Type where
@@ -1863,67 +1669,220 @@ public export
 methodEndLabel : String
 methodEndLabel = "methodEndLabel"
 
-export
-runAsm : HasIO io => AsmState -> Asm a -> io (a, AsmState)
-runAsm state Aaload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aaload" [assembler state]
+parameters {auto state: Ref AsmState AsmState}
+  aaload : Core ()
+  aastore : Core ()
+  aconstnull : Core ()
+  aload : Int -> Core ()
+  anewarray : (descriptor: String) -> Core ()
 
-runAsm state Aastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aastore" [assembler state]
+  anewbooleanarray : Core ()
+  anewbytearray : Core ()
+  anewchararray : Core ()
+  anewshortarray : Core ()
+  anewintarray : Core ()
+  anewlongarray : Core ()
+  anewfloatarray : Core ()
+  anewdoublearray : Core ()
 
-runAsm state Aconstnull = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aconstnull" [assembler state]
+  arraylength : Core ()
+  areturn : Core ()
+  astore : Int -> Core ()
+  baload : Core ()
+  bastore : Core ()
+  caload : Core ()
+  castore : Core ()
+  checkcast : (descriptor: String) -> Core ()
+  classCodeStart : Int -> List Access -> (className: String) -> (signature: Maybe String) -> (parentClassName: String) ->
+                      (interfaces: List String) -> List Asm.Annotation -> Core ()
+  createClass : List ClassOpts -> Core ()
+  createField : List Access -> (sourceFileName: String) -> (className: String) -> (fieldName: String) -> (descriptor: String) ->
+                  (signature: Maybe String) -> Maybe FieldInitialValue -> (annotations: List Asm.Annotation) -> Core ()
+  createLabel : String -> Core ()
+  createMethod : List Access -> (sourceFileName: String) -> (className: String) ->
+                  (methodName: String) -> (descriptor: String) ->
+                  (signature: Maybe String) -> (exceptions: Maybe (List String)) ->
+                  (annotations: List Asm.Annotation) ->
+                  (parameterAnnotations: List (List Asm.Annotation)) -> Core ()
+  createIdrisConstructorClass : String -> Bool -> Int -> Core ()
+  d2i : Core ()
+  d2f : Core ()
+  d2l : Core ()
+  dadd : Core ()
+  daload : Core ()
+  dastore : Core ()
+  dcmpg : Core ()
+  dcmpl : Core ()
+  dconst : Double -> Core ()
+  ddiv : Core ()
+  debug : String -> Core ()
+  dload : Int -> Core ()
+  dmul : Core ()
+  dneg : Core ()
+  drem : Core ()
+  dreturn : Core ()
+  dstore : Int -> Core ()
+  dsub : Core ()
+  dup : Core ()
+  f2d : Core ()
+  faload : Core ()
+  fastore : Core ()
+  fconst : Double -> Core ()
+  field : FieldInstructionType -> (className: String) -> (fieldName: String) -> (descriptor: String) -> Core ()
+  fieldEnd : Core ()
+  fload : Int -> Core ()
+  frame : FrameType -> Int -> (signatures: List String) -> Int -> (signatures: List String) -> Core ()
+  freturn : Core ()
+  fstore : Int -> Core ()
+  goto : (label: String) -> Core ()
+  i2b : Core ()
+  i2c : Core ()
+  i2d : Core ()
+  i2l : Core ()
+  i2s : Core ()
+  iadd : Core ()
+  iaload : Core ()
+  iand : Core ()
+  iastore : Core ()
+  ior : Core ()
+  ixor : Core ()
+  icompl : Core ()
+  iconst : Int -> Core ()
+  idiv : Core ()
+  ifeq : (label: String) -> Core ()
+  ifge : (label: String) -> Core ()
+  ifgt : (label: String) -> Core ()
+  ificmpge : (label: String) -> Core ()
+  ificmpgt : (label: String) -> Core ()
+  ificmple : (label: String) -> Core ()
+  ificmplt : (label: String) -> Core ()
+  ificmpeq : (label: String) -> Core ()
+  ifacmpne : (label: String) -> Core ()
+  ificmpne : (label: String) -> Core ()
+  ifle : (label: String) -> Core ()
+  iflt : (label: String) -> Core ()
+  ifne : (label: String) -> Core ()
+  ifnonnull : (label: String) -> Core ()
+  ifnull : (label: String) -> Core ()
+  iload : Int -> Core ()
+  imul : Core ()
+  ineg : Core ()
+  instanceOf : (className: String) -> Core ()
+  invokeMethod : InvocationType -> (className: String) -> (methodName: String) -> (descriptor: String)
+                  -> Bool -> Core ()
+  invokeDynamic : (methodName: String) -> (descriptor: String) -> Handle -> List BsmArg -> Core ()
+  irem : Core ()
+  ireturn : Core ()
+  ishl : Core ()
+  ishr : Core ()
+  istore : Int -> Core ()
+  isub : Core ()
+  iushr : Core ()
+  l2d : Core ()
+  l2i : Core ()
+  labelStart : (label: String) -> Core ()
+  ladd : Core ()
+  laload : Core ()
+  land : Core ()
+  lastore : Core ()
+  lcmp : Core ()
+  lcompl : Core ()
+  ldc : {auto stateRef: Ref AsmState AsmState} -> Core.Constant -> Core ()
+  ldiv : Core ()
+  lineNumber : Int -> String -> Core ()
+  lload : Int  -> Core ()
+  lmul : Core ()
+  lneg : Core ()
+  localVariable : (name: String) -> (descriptor: String) -> (signature: Maybe String) -> (startLabel: String) ->
+                      (endLabel: String) -> (index: Int) -> Core ()
+  lookupSwitch : (defaultLabel: String) -> (labels: List String) -> (cases: List Int) -> Core ()
+  lor : Core ()
+  lrem : Core ()
+  lreturn : Core ()
+  lshl : Core ()
+  lshr : Core ()
+  lstore : Int -> Core ()
+  lsub : Core ()
+  lushr : Core ()
+  lxor : Core ()
+  maxStackAndLocal : Int -> Int -> Core ()
+  methodCodeStart : Core ()
+  methodCodeEnd : Core ()
+  multianewarray : (descriptor: String) -> Int -> Core ()
+  new : (className: String) -> Core ()
+  pop : Core ()
+  pop2 : Core ()
+  return : Core ()
+  saload : Core ()
+  sastore : Core ()
+  sourceInfo : (sourceFileName: String) -> Core ()
+  getState : Core AsmState
+  setState : AsmState -> Core ()
 
-runAsm state (Aload n) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aload" [assembler state, n]
+  aaload = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aaload" [assembler !(get AsmState)]
 
-runAsm state (Anewarray desc) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewarray" [assembler state, desc]
-runAsm state Anewintarray     = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewintarray" [assembler state]
-runAsm state Anewbooleanarray = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewbooleanarray" [assembler state]
-runAsm state Anewbytearray    = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewbytearray" [assembler state]
-runAsm state Anewchararray    = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewchararray" [assembler state]
-runAsm state Anewshortarray   = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewshortarray" [assembler state]
-runAsm state Anewlongarray    = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewlongarray" [assembler state]
-runAsm state Anewfloatarray   = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewfloatarray" [assembler state]
-runAsm state Anewdoublearray  = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewdoublearray" [assembler state]
-runAsm state Arraylength      = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.arraylength" [assembler state]
-runAsm state Areturn          = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.areturn" [assembler state]
-runAsm state (Astore n)       = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.astore" [assembler state, n]
-runAsm state Baload           = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.baload" [assembler state]
-runAsm state Bastore          = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.bastore" [assembler state]
-runAsm state Caload           = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.caload" [assembler state]
-runAsm state Castore          = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.castore" [assembler state]
-runAsm state (Checkcast desc) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.checkcast" [assembler state, desc]
-runAsm state (ClassCodeStart version access className sig parent intf anns) = assemble state $ do
-  janns <- sequence $ toJAnnotation <$> anns
-  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.classCodeStart"
-    [assembler state, version, sum $ accessNum <$> access, className, maybeToNullable sig, parent,
-        the (JList String) $ believe_me intf, the (JList JAnnotation) $ believe_me janns]
+  aastore = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aastore" [assembler !(get AsmState)]
 
-runAsm state (CreateClass opts) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createClass"
-      [assembler state, sum $ toJClassOpts <$> opts]
-runAsm state (CreateField accs sourceFileName className fieldName desc sig fieldInitialValue anns) = assemble state $ do
-  let jaccs = sum $ accessNum <$> accs
-  janns <- sequence $ toJAnnotation <$> anns
-  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createField"
-    [assembler state, jaccs, sourceFileName, className, fieldName, desc, maybeToNullable sig,
-        maybeToNullable (toJFieldInitialValue <$> fieldInitialValue), the (JList JAnnotation) $ believe_me janns]
+  aconstnull = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aconstnull" [assembler !(get AsmState)]
 
-runAsm state (CreateLabel label) = assemble state $
-  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createLabel" [assembler state, label]
+  aload n = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.aload" [assembler !(get AsmState), n]
 
-runAsm state (CreateMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns) =
-    let newState = { currentMethodName := Jqualified className methodName } state
-    in assemble newState $ do
+  anewarray desc = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewarray" [assembler !(get AsmState), desc]
+  anewintarray     = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewintarray" [assembler !(get AsmState)]
+  anewbooleanarray = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewbooleanarray" [assembler !(get AsmState)]
+  anewbytearray    = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewbytearray" [assembler !(get AsmState)]
+  anewchararray    = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewchararray" [assembler !(get AsmState)]
+  anewshortarray   = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewshortarray" [assembler !(get AsmState)]
+  anewlongarray    = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewlongarray" [assembler !(get AsmState)]
+  anewfloatarray   = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewfloatarray" [assembler !(get AsmState)]
+  anewdoublearray  = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.anewdoublearray" [assembler !(get AsmState)]
+  arraylength      = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.arraylength" [assembler !(get AsmState)]
+  areturn          = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.areturn" [assembler !(get AsmState)]
+  astore n       = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.astore" [assembler !(get AsmState), n]
+  baload           = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.baload" [assembler !(get AsmState)]
+  bastore          = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.bastore" [assembler !(get AsmState)]
+  caload           = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.caload" [assembler !(get AsmState)]
+  castore          = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.castore" [assembler !(get AsmState)]
+  checkcast desc = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.checkcast" [assembler !(get AsmState), desc]
+  classCodeStart version access className sig parent intf anns = do
+    state <- get AsmState
+    coreLift $ do
+      janns <- sequence $ toJAnnotation <$> anns
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.classCodeStart"
+        [assembler state, version, sum $ accessNum <$> access, className, maybeToNullable sig, parent,
+            the (JList String) $ believe_me intf, the (JList JAnnotation) $ believe_me janns]
+
+  createClass opts =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createClass"
+        [assembler !(get AsmState), sum $ toJClassOpts <$> opts]
+  createField accs sourceFileName className fieldName desc sig fieldInitialValue anns = do
+    state <- get AsmState
+    coreLift $ do
+      let jaccs = sum $ accessNum <$> accs
+      janns <- sequence $ toJAnnotation <$> anns
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createField"
+        [assembler state, jaccs, sourceFileName, className, fieldName, desc, maybeToNullable sig,
+            maybeToNullable (toJFieldInitialValue <$> fieldInitialValue), the (JList JAnnotation) $ believe_me janns]
+
+  createLabel label = coreLift $
+    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createLabel" [assembler !(get AsmState), label]
+
+  createMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns = do
+      state <- get AsmState
+      put AsmState ({ currentMethodName := Jqualified className methodName } state)
+      coreLift $ do
         let jaccs = sum $ accessNum <$> accs
         janns <- sequence $ toJAnnotation <$> anns
         jparamAnns <- sequence $ (\paramAnn => sequence $ toJAnnotation <$> paramAnn) <$> paramAnns
@@ -1932,235 +1891,237 @@ runAsm state (CreateMethod accs sourceFileName className methodName desc sig exc
                 the (JList String) $ believe_me $ maybeToNullable exceptions,
                 the (JList JAnnotation) $ believe_me janns, the (JList (JList JAnnotation)) $ believe_me jparamAnns]
 
-runAsm state (CreateIdrisConstructorClass className isStringConstructor constructorParameterCount) =
-    assemble state $  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createIdrisConstructorClass"
-        [assembler state, className, isStringConstructor, constructorParameterCount]
+  createIdrisConstructorClass className isStringConstructor constructorParameterCount =
+      coreLift $  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createIdrisConstructorClass"
+          [assembler !(get AsmState), className, isStringConstructor, constructorParameterCount]
 
-runAsm state D2i =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2i" [assembler state]
-runAsm state D2f =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2f" [assembler state]
-runAsm state D2l =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2l" [assembler state]
-runAsm state Dadd =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dadd" [assembler state]
-runAsm state Dcmpg =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dcmpg" [assembler state]
-runAsm state Dcmpl =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dcmpl" [assembler state]
-runAsm state (Dconst n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dconst" [assembler state, n]
-runAsm state Daload =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.daload" [assembler state]
-runAsm state Dastore =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dastore" [assembler state]
-runAsm state Ddiv =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ddiv" [assembler state]
-runAsm state (Debug message) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.debug"
-        [assembler state, message]
-runAsm state (Dload n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dload" [assembler state, n]
-runAsm state Dmul =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dmul" [assembler state]
-runAsm state Dneg =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dneg" [assembler state]
-runAsm state Drem =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.drem" [assembler state]
-runAsm state Dreturn =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dreturn" [assembler state]
-runAsm state (Dstore n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dstore" [assembler state, n]
-runAsm state Dsub =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dsub" [assembler state]
-runAsm state Dup =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dup" [assembler state]
-runAsm state (Error err) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.error" [assembler state, err]
-runAsm state F2d =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.f2d" [assembler state]
-runAsm state Faload =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.faload" [assembler state]
-runAsm state Fastore =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fastore" [assembler state]
-runAsm state (Fconst n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fconst" [assembler state, n]
-runAsm state (Field finsType cname fname desc) = assemble state $ do
-  let finsTypeNum = fieldInsTypeNum finsType
-  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.field"
-    [assembler state, finsTypeNum, cname, fname, desc]
+  d2i =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2i" [assembler !(get AsmState)]
+  d2f =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2f" [assembler !(get AsmState)]
+  d2l =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2l" [assembler !(get AsmState)]
+  dadd =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dadd" [assembler !(get AsmState)]
+  dcmpg =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dcmpg" [assembler !(get AsmState)]
+  dcmpl =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dcmpl" [assembler !(get AsmState)]
+  dconst n =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dconst" [assembler !(get AsmState), n]
+  daload =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.daload" [assembler !(get AsmState)]
+  dastore =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dastore" [assembler !(get AsmState)]
+  ddiv =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ddiv" [assembler !(get AsmState)]
+  debug message =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.debug"
+          [assembler !(get AsmState), message]
+  dload n =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dload" [assembler !(get AsmState), n]
+  dmul =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dmul" [assembler !(get AsmState)]
+  dneg =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dneg" [assembler !(get AsmState)]
+  drem =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.drem" [assembler !(get AsmState)]
+  dreturn =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dreturn" [assembler !(get AsmState)]
+  dstore n =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dstore" [assembler !(get AsmState), n]
+  dsub =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dsub" [assembler !(get AsmState)]
+  dup =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dup" [assembler !(get AsmState)]
+  f2d =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.f2d" [assembler !(get AsmState)]
+  faload =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.faload" [assembler !(get AsmState)]
+  fastore =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fastore" [assembler !(get AsmState)]
+  fconst n =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fconst" [assembler !(get AsmState), n]
+  field finsType cname fname desc = do
+    state <- get AsmState
+    coreLift $ do
+      let finsTypeNum = fieldInsTypeNum finsType
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.field"
+        [assembler state, finsTypeNum, cname, fname, desc]
 
-runAsm state FieldEnd =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fieldEnd" [assembler state]
+  fieldEnd =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fieldEnd" [assembler !(get AsmState)]
 
-runAsm state (Fload n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fload" [assembler state, n]
+  fload n =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fload" [assembler !(get AsmState), n]
 
-runAsm state (Frame frameType nLocal localSigs nStack stackSigs) = assemble state $ do
-  let ftypeNum = frameTypeNum frameType
-  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.frame"
-    [assembler state, ftypeNum, nLocal, the (JList String) $ believe_me localSigs, nStack,
-        the (JList String) $ believe_me stackSigs]
+  frame frameType nLocal localSigs nStack stackSigs = do
+    state <- get AsmState
+    coreLift $ do
+      let ftypeNum = frameTypeNum frameType
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.frame"
+        [assembler state, ftypeNum, nLocal, the (JList String) $ believe_me localSigs, nStack,
+            the (JList String) $ believe_me stackSigs]
 
-runAsm state Freturn =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.freturn" [assembler state]
-runAsm state (Fstore n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fstore" [assembler state, n]
+  freturn =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.freturn" [assembler !(get AsmState)]
+  fstore n =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.fstore" [assembler !(get AsmState), n]
 
-runAsm state (Goto label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.gotoLabel"
-        [assembler state, label]
+  goto label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.gotoLabel"
+          [assembler !(get AsmState), label]
 
-runAsm state I2b =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2b" [assembler state]
-runAsm state I2c =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2c" [assembler state]
-runAsm state I2d =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2d" [assembler state]
-runAsm state I2l =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2l" [assembler state]
-runAsm state I2s =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2s" [assembler state]
-runAsm state Iadd =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iadd" [assembler state]
-runAsm state Iaload =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iaload" [assembler state]
-runAsm state Iand =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iand" [assembler state]
-runAsm state Iastore =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iastore" [assembler state]
-runAsm state Ior =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ior" [assembler state]
-runAsm state Ixor =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ixor" [assembler state]
-runAsm state Icompl =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.icompl" [assembler state]
-runAsm state (Iconst n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iconst" [assembler state, n]
-runAsm state Idiv =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.idiv" [assembler state]
-runAsm state (Ifeq label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifeq" [assembler state, label]
-runAsm state (Ifge label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifge" [assembler state, label]
-runAsm state (Ifgt label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifgt" [assembler state, label]
-runAsm state (Ificmpge label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpge" [assembler state, label]
-runAsm state (Ificmpgt label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpgt" [assembler state, label]
-runAsm state (Ificmple label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmple" [assembler state, label]
-runAsm state (Ificmplt label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmplt" [assembler state, label]
-runAsm state (Ificmpeq label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpeq" [assembler state, label]
-runAsm state (Ifacmpne label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifacmpne" [assembler state, label]
-runAsm state (Ificmpne label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpne" [assembler state, label]
-runAsm state (Ifle label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifle" [assembler state, label]
-runAsm state (Iflt label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iflt" [assembler state, label]
-runAsm state (Ifne label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifne" [assembler state, label]
-runAsm state (Ifnonnull label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifnonnull" [assembler state, label]
-runAsm state (Ifnull label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifnull" [assembler state, label]
-runAsm state (Iload n) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iload" [assembler state, n]
-runAsm state Imul = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.imul" [assembler state]
-runAsm state Ineg = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ineg" [assembler state]
-runAsm state (InstanceOf className) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.instanceOf" [assembler state, className]
-runAsm state (InvokeMethod invocType cname mname desc isIntf) = assemble state $ do
-  let invocTypeAsm = invocTypeNum invocType
-  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.invokeMethod"
-    [assembler state, invocTypeAsm, cname, mname, desc, isIntf]
+  i2b =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2b" [assembler !(get AsmState)]
+  i2c =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2c" [assembler !(get AsmState)]
+  i2d =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2d" [assembler !(get AsmState)]
+  i2l =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2l" [assembler !(get AsmState)]
+  i2s =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.i2s" [assembler !(get AsmState)]
+  iadd =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iadd" [assembler !(get AsmState)]
+  iaload =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iaload" [assembler !(get AsmState)]
+  iand =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iand" [assembler !(get AsmState)]
+  iastore =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iastore" [assembler !(get AsmState)]
+  ior =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ior" [assembler !(get AsmState)]
+  ixor =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ixor" [assembler !(get AsmState)]
+  icompl =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.icompl" [assembler !(get AsmState)]
+  iconst n =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iconst" [assembler !(get AsmState), n]
+  idiv =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.idiv" [assembler !(get AsmState)]
+  ifeq label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifeq" [assembler !(get AsmState), label]
+  ifge label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifge" [assembler !(get AsmState), label]
+  ifgt label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifgt" [assembler !(get AsmState), label]
+  ificmpge label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpge" [assembler !(get AsmState), label]
+  ificmpgt label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpgt" [assembler !(get AsmState), label]
+  ificmple label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmple" [assembler !(get AsmState), label]
+  ificmplt label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmplt" [assembler !(get AsmState), label]
+  ificmpeq label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpeq" [assembler !(get AsmState), label]
+  ifacmpne label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifacmpne" [assembler !(get AsmState), label]
+  ificmpne label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ificmpne" [assembler !(get AsmState), label]
+  ifle label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifle" [assembler !(get AsmState), label]
+  iflt label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iflt" [assembler !(get AsmState), label]
+  ifne label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifne" [assembler !(get AsmState), label]
+  ifnonnull label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifnonnull" [assembler !(get AsmState), label]
+  ifnull label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ifnull" [assembler !(get AsmState), label]
+  iload n =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iload" [assembler !(get AsmState), n]
+  imul = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.imul" [assembler !(get AsmState)]
+  ineg = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ineg" [assembler !(get AsmState)]
+  instanceOf className =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.instanceOf" [assembler !(get AsmState), className]
+  invokeMethod invocType cname mname desc isIntf = do
+    state <- get AsmState
+    coreLift $ do
+      let invocTypeAsm = invocTypeNum invocType
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.invokeMethod"
+        [assembler state, invocTypeAsm, cname, mname, desc, isIntf]
 
-runAsm state (InvokeDynamic mname desc handle bsmArgs) = assemble state $ do
-  jbsmArgsList <- sequence $ toJbsmArg <$> bsmArgs
-  jhandle <- toJHandle handle
-  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.invokeDynamic"
-    [assembler state, mname, desc, jhandle, the (JList JBsmArg) $ believe_me jbsmArgsList]
+  invokeDynamic mname desc handle bsmArgs = do
+    state <- get AsmState
+    coreLift $ do
+      jbsmArgsList <- sequence $ toJbsmArg <$> bsmArgs
+      jhandle <- toJHandle handle
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.invokeDynamic"
+        [assembler state, mname, desc, jhandle, the (JList JBsmArg) $ believe_me jbsmArgsList]
 
-runAsm state Irem = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.irem" [assembler state]
-runAsm state Ireturn = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ireturn" [assembler state]
-runAsm state Ishl = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ishl" [assembler state]
-runAsm state Ishr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ishr" [assembler state]
-runAsm state (Istore n) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.istore" [assembler state, n]
-runAsm state Isub = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.isub" [assembler state]
-runAsm state Iushr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iushr" [assembler state]
-runAsm state L2d = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2d" [assembler state]
-runAsm state L2i = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2i" [assembler state]
-runAsm state (LabelStart label) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.labelStart" [assembler state, label]
-runAsm state Ladd = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ladd" [assembler state]
-runAsm state Land = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.land" [assembler state]
-runAsm state Laload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.laload" [assembler state]
-runAsm state Lastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lastore" [assembler state]
-runAsm state Lcmp = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcmp" [assembler state]
-runAsm state Lor = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lor" [assembler state]
-runAsm state Lxor = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lxor" [assembler state]
-runAsm state Lcompl = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcompl" [assembler state]
+  irem = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.irem" [assembler !(get AsmState)]
+  ireturn = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ireturn" [assembler !(get AsmState)]
+  ishl = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ishl" [assembler !(get AsmState)]
+  ishr = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ishr" [assembler !(get AsmState)]
+  istore n = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.istore" [assembler !(get AsmState), n]
+  isub = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.isub" [assembler !(get AsmState)]
+  iushr = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.iushr" [assembler !(get AsmState)]
+  l2d = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2d" [assembler !(get AsmState)]
+  l2i = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.l2i" [assembler !(get AsmState)]
+  labelStart label =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.labelStart" [assembler !(get AsmState), label]
+  ladd = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ladd" [assembler !(get AsmState)]
+  land = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.land" [assembler !(get AsmState)]
+  laload = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.laload" [assembler !(get AsmState)]
+  lastore = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lastore" [assembler !(get AsmState)]
+  lcmp = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcmp" [assembler !(get AsmState)]
+  lor = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lor" [assembler !(get AsmState)]
+  lxor = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lxor" [assembler !(get AsmState)]
+  lcompl = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lcompl" [assembler !(get AsmState)]
 
-runAsm state (Ldc (TypeConst ty)) =
-    assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldcType" [assembler state, ty]
-runAsm state (Ldc constant) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldc" [assembler state, constantToObject constant]
+  ldc (TypeConst ty) =
+      coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldcType" [assembler !(get AsmState), ty]
+  ldc constant = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldc" [assembler !(get AsmState), constantToObject constant]
 
-runAsm state Ldiv = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldiv" [assembler state]
+  ldiv = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ldiv" [assembler !(get AsmState)]
 
-runAsm state (LineNumber lineNumber label) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lineNumber" [assembler state, lineNumber, label]
+  lineNumber number label = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lineNumber" [assembler !(get AsmState), number, label]
 
-runAsm state (Lload n) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lload" [assembler state, n]
-runAsm state Lmul = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lmul" [assembler state]
-runAsm state Lneg = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lneg" [assembler state]
-runAsm state (LookupSwitch defaultLabel labels cases) = assemble state $ do
-  let jcases = integerValueOf <$> cases
-  jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lookupSwitch"
-    [assembler state, defaultLabel, the (JList String) $ believe_me labels, the (JList Int) $ believe_me jcases]
+  lload n = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lload" [assembler !(get AsmState), n]
+  lmul = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lmul" [assembler !(get AsmState)]
+  lneg = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lneg" [assembler !(get AsmState)]
+  lookupSwitch defaultLabel labels cases = do
+    state <- get AsmState
+    coreLift $ do
+      let jcases = integerValueOf <$> cases
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lookupSwitch"
+        [assembler state, defaultLabel, the (JList String) $ believe_me labels, the (JList Int) $ believe_me jcases]
 
-runAsm state (LocalVariable name descriptor signature startLabel endLabel index) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.localVariable"
-        [assembler state, name, descriptor, maybeToNullable signature, startLabel, endLabel, index]
+  localVariable name descriptor signature startLabel endLabel index = do
+    state <- get AsmState
+    coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.localVariable"
+          [assembler state, name, descriptor, maybeToNullable signature, startLabel, endLabel, index]
 
-runAsm state Lrem = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lrem" [assembler state]
-runAsm state Lreturn = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lreturn" [assembler state]
-runAsm state Lshl = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lshl" [assembler state]
-runAsm state Lshr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lshr" [assembler state]
-runAsm state (Lstore n) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lstore" [assembler state, n]
-runAsm state Lsub = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lsub" [assembler state]
-runAsm state Lushr = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lushr" [assembler state]
-runAsm state (MaxStackAndLocal stack local) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.maxStackAndLocal" [assembler state, stack, local]
-runAsm state MethodCodeStart = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.methodCodeStart" [assembler state]
-runAsm state MethodCodeEnd = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.methodCodeEnd" [assembler state]
-runAsm state (Multianewarray desc dims) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.multiANewArray" [assembler state, desc, dims]
-runAsm state (New cname) = assemble state $
-    jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.asmNew" [assembler state, cname]
-runAsm state Pop = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.pop" [assembler state]
-runAsm state Pop2 = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.pop2" [assembler state]
-runAsm state Return = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.voidReturn" [assembler state]
-runAsm state Saload = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.saload" [assembler state]
-runAsm state Sastore = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.sastore" [assembler state]
-runAsm state (SourceInfo sourceFileName)
-  = assemble state $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.sourceInfo" [assembler state, sourceFileName]
-runAsm state (LiftIo action) = assemble state action
+  lrem = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lrem" [assembler !(get AsmState)]
+  lreturn = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lreturn" [assembler !(get AsmState)]
+  lshl = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lshl" [assembler !(get AsmState)]
+  lshr = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lshr" [assembler !(get AsmState)]
+  lstore n = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lstore" [assembler !(get AsmState), n]
+  lsub = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lsub" [assembler !(get AsmState)]
+  lushr = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lushr" [assembler !(get AsmState)]
+  maxStackAndLocal stack local = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.maxStackAndLocal" [assembler !(get AsmState), stack, local]
+  methodCodeStart = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.methodCodeStart" [assembler !(get AsmState)]
+  methodCodeEnd = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.methodCodeEnd" [assembler !(get AsmState)]
+  multianewarray desc dims = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.multiANewArray" [assembler !(get AsmState), desc, dims]
+  new cname = coreLift $
+      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.asmNew" [assembler !(get AsmState), cname]
+  pop = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.pop" [assembler !(get AsmState)]
+  pop2 = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.pop2" [assembler !(get AsmState)]
+  return = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.voidReturn" [assembler !(get AsmState)]
+  saload = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.saload" [assembler !(get AsmState)]
+  sastore = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.sastore" [assembler !(get AsmState)]
+  sourceInfo sourceFileName = coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.sourceInfo" [assembler !(get AsmState), sourceFileName]
 
-runAsm state (Throw fc message) = pure (believe_me $ crash $ show fc ++ ": " ++ message, state)
-runAsm state GetState = pure (state, state)
-runAsm state (SetState newState) = pure ((), newState)
-
-runAsm st (Pure value) = pure (value, st)
-runAsm st (Bind action f) = do
-  (result, nextSt) <- runAsm st action
-  runAsm nextSt $ f result
+  getState = get AsmState
+  setState newState = put AsmState newState

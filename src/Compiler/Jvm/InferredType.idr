@@ -19,6 +19,7 @@ mutual
                     | IArray InferredType | IVoid
                     | IFunction JavaLambdaType
                     | IUnknown
+                    | TypeParam String
 
   public export
   record InferredFunctionType where
@@ -63,6 +64,7 @@ mutual
     (IFunction javaLambdaType1) == (IFunction javaLambdaType2) = assert_total $ javaLambdaType1 == javaLambdaType2
     IUnknown == IUnknown = True
     IVoid == IVoid = True
+    (TypeParam name1) == (TypeParam name2) = name1 == name2
     _ == _ = False
 
 mutual
@@ -92,6 +94,7 @@ mutual
       show (IFunction lambdaTy) = assert_total $ "Function " ++ show lambdaTy
       show IUnknown = "unknown"
       show IVoid = "void"
+      show (TypeParam name) = name
 
 export
 inferredObjectType : InferredType
@@ -398,6 +401,7 @@ mutual
       createExtPrimTypeSpecFn implementationType]
   createExtPrimTypeSpec (IArray ty) = "[" ++ createExtPrimTypeSpec ty
   createExtPrimTypeSpec IUnknown = createExtPrimTypeSpec inferredObjectType
+  createExtPrimTypeSpec (TypeParam name) = name
 
 export
 isObjectType : InferredType -> Bool

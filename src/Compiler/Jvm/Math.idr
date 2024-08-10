@@ -1,103 +1,105 @@
 module Compiler.Jvm.Math
 
 import Core.TT
+import Core.Context
+import Core.Core
 import Compiler.Jvm.Asm
 
 export
-longDivideUnsigned : Asm ()
-longDivideUnsigned = InvokeMethod InvokeStatic "java/lang/Long" "divideUnsigned" "(JJ)J" False
+longDivideUnsigned : {auto stateRef: Ref AsmState AsmState} -> Core ()
+longDivideUnsigned = invokeMethod InvokeStatic "java/lang/Long" "divideUnsigned" "(JJ)J" False
 
 export
-longRemainderUnsigned : Asm ()
-longRemainderUnsigned = InvokeMethod InvokeStatic "java/lang/Long" "remainderUnsigned" "(JJ)J" False
+longRemainderUnsigned : {auto stateRef: Ref AsmState AsmState} -> Core ()
+longRemainderUnsigned = invokeMethod InvokeStatic "java/lang/Long" "remainderUnsigned" "(JJ)J" False
 
 export
-longCompareUnsigned : Asm ()
-longCompareUnsigned = InvokeMethod InvokeStatic "java/lang/Long" "compareUnsigned" "(JJ)I" False
+longCompareUnsigned : {auto stateRef: Ref AsmState AsmState} -> Core ()
+longCompareUnsigned = invokeMethod InvokeStatic "java/lang/Long" "compareUnsigned" "(JJ)I" False
 
 export
-integerDivideUnsigned : Asm ()
-integerDivideUnsigned = InvokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
+integerDivideUnsigned : {auto stateRef: Ref AsmState AsmState} -> Core ()
+integerDivideUnsigned = invokeMethod InvokeStatic "java/lang/Integer" "divideUnsigned" "(II)I" False
 
 export
-integerRemainderUnsigned : Asm ()
-integerRemainderUnsigned = InvokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
+integerRemainderUnsigned : {auto stateRef: Ref AsmState AsmState} -> Core ()
+integerRemainderUnsigned = invokeMethod InvokeStatic "java/lang/Integer" "remainderUnsigned" "(II)I" False
 
 export
-integerCompareUnsigned : Asm ()
-integerCompareUnsigned = InvokeMethod InvokeStatic "java/lang/Integer" "compareUnsigned" "(II)I" False
+integerCompareUnsigned : {auto stateRef: Ref AsmState AsmState} -> Core ()
+integerCompareUnsigned = invokeMethod InvokeStatic "java/lang/Integer" "compareUnsigned" "(II)I" False
 
 export
-add : IntKind -> Asm ()
-add (Signed Unlimited) = InvokeMethod InvokeVirtual "java/math/BigInteger" "add"
+add : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
+add (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "add"
                            "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-add (Signed (P 64)) = Ladd
-add (Signed (P 32)) = Iadd
-add (Signed (P n)) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("add" ++ show n)
+add (Signed (P 64)) = ladd
+add (Signed (P 32)) = iadd
+add (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("add" ++ show n)
                       "(II)I" False
-add (Unsigned 64) = Ladd
-add (Unsigned 32) = Iadd
-add (Unsigned n) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("uadd" ++ show n)
+add (Unsigned 64) = ladd
+add (Unsigned 32) = iadd
+add (Unsigned n) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("uadd" ++ show n)
                     "(II)I" False
 
 export
-sub : IntKind -> Asm ()
-sub (Signed Unlimited) = InvokeMethod InvokeVirtual "java/math/BigInteger" "subtract"
+sub : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
+sub (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "subtract"
                            "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-sub (Signed (P 64)) = Lsub
-sub (Signed (P 32)) = Isub
-sub (Signed (P n)) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("sub" ++ show n)
+sub (Signed (P 64)) = lsub
+sub (Signed (P 32)) = isub
+sub (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("sub" ++ show n)
                       "(II)I" False
-sub (Unsigned 64) = Lsub
-sub (Unsigned 32) = Isub
-sub (Unsigned n) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("usub" ++ show n)
+sub (Unsigned 64) = lsub
+sub (Unsigned 32) = isub
+sub (Unsigned n) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("usub" ++ show n)
                       "(II)I" False
 
 export
-mul : IntKind -> Asm ()
-mul (Signed Unlimited) = InvokeMethod InvokeVirtual "java/math/BigInteger" "multiply"
+mul : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
+mul (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "multiply"
                            "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-mul (Signed (P 64)) = Lmul
-mul (Signed (P 32)) = Imul
-mul (Signed (P n)) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("mul" ++ show n)
+mul (Signed (P 64)) = lmul
+mul (Signed (P 32)) = imul
+mul (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("mul" ++ show n)
                       "(II)I" False
-mul (Unsigned 64) = Lmul
-mul (Unsigned 32) = Imul
-mul (Unsigned n) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("umul" ++ show n)
+mul (Unsigned 64) = lmul
+mul (Unsigned 32) = imul
+mul (Unsigned n) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("umul" ++ show n)
                       "(II)I" False
 
 export
-div : IntKind -> Asm ()
-div (Signed Unlimited) = InvokeMethod InvokeVirtual "java/math/BigInteger" "divide"
+div : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
+div (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "divide"
                            "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-div (Signed (P 64)) = Ldiv
-div (Signed (P 32)) = Idiv
-div (Signed (P n)) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("div" ++ show n)
+div (Signed (P 64)) = ldiv
+div (Signed (P 32)) = idiv
+div (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("div" ++ show n)
                        "(II)I" False
 div (Unsigned 64) = longDivideUnsigned
 div (Unsigned 32) = integerDivideUnsigned
-div (Unsigned n) = Idiv
+div (Unsigned n) = idiv
 
 export
-mod : IntKind -> Asm ()
-mod (Signed Unlimited) = InvokeMethod InvokeVirtual "java/math/BigInteger" "remainder"
+mod : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
+mod (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "remainder"
                            "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-mod (Signed (P 64)) = Lrem
-mod (Signed (P n)) = Irem
+mod (Signed (P 64)) = lrem
+mod (Signed (P n)) = irem
 mod (Unsigned 64) = longRemainderUnsigned
 mod (Unsigned 32) = integerRemainderUnsigned
-mod (Unsigned n) = Irem
+mod (Unsigned n) = irem
 
 export
-shl : IntKind -> Asm ()
+shl : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
 shl (Signed Unlimited) = do
-  InvokeMethod InvokeVirtual "java/math/BigInteger" "intValueExact" "()I" False
-  InvokeMethod InvokeVirtual "java/math/BigInteger" "shiftLeft" "(I)Ljava/math/BigInteger;" False
-shl (Signed (P 64)) = do L2i; Lshl
-shl (Signed (P 32)) = Ishl
-shl (Signed (P n)) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("shl" ++ show n)
+  invokeMethod InvokeVirtual "java/math/BigInteger" "intValueExact" "()I" False
+  invokeMethod InvokeVirtual "java/math/BigInteger" "shiftLeft" "(I)Ljava/math/BigInteger;" False
+shl (Signed (P 64)) = do l2i; lshl
+shl (Signed (P 32)) = ishl
+shl (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("shl" ++ show n)
                        "(II)I" False
-shl (Unsigned 64) = do L2i; Lshl
-shl (Unsigned 32) = Ishl
-shl (Unsigned n) = InvokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("ushl" ++ show n)
+shl (Unsigned 64) = do l2i; lshl
+shl (Unsigned 32) = ishl
+shl (Unsigned n) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("ushl" ++ show n)
                       "(II)I" False

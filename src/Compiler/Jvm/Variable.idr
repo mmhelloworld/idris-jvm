@@ -1,5 +1,6 @@
 module Compiler.Jvm.Variable
 
+import Core.Context
 import Core.Core
 import Core.FC
 
@@ -26,126 +27,121 @@ getVarIndex types index = go 0 0 where
         let nextPos = if isTwoWordTy then pos + 2 else succ pos
         go nextPos (succ currVarIndex)
 
-opWithWordSize : Map Int InferredType -> (Int -> Asm ()) -> Int -> Asm ()
+opWithWordSize : {auto stateRef: Ref AsmState AsmState} -> Map Int InferredType -> (Int -> Core ()) -> Int -> Core ()
 opWithWordSize types op var = do
-    newPos <- LiftIo $ getVarIndex types var
+    newPos <- coreLift $ getVarIndex types var
     op newPos
 
-boxDouble : Asm ()
-boxDouble = InvokeMethod InvokeStatic "java/lang/Double" "valueOf" "(D)Ljava/lang/Double;" False
+boxDouble : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boxDouble = invokeMethod InvokeStatic "java/lang/Double" "valueOf" "(D)Ljava/lang/Double;" False
 
-boxFloat : Asm ()
-boxFloat = InvokeMethod InvokeStatic "java/lang/Float" "valueOf" "(F)Ljava/lang/Float;" False
+boxFloat : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boxFloat = invokeMethod InvokeStatic "java/lang/Float" "valueOf" "(F)Ljava/lang/Float;" False
 
-boxBool : Asm ()
-boxBool = InvokeMethod InvokeStatic "java/lang/Boolean" "valueOf" "(Z)Ljava/lang/Boolean;" False
+boxBool : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boxBool = invokeMethod InvokeStatic "java/lang/Boolean" "valueOf" "(Z)Ljava/lang/Boolean;" False
 
-boxByte : Asm ()
-boxByte = InvokeMethod InvokeStatic "java/lang/Byte" "valueOf" "(B)Ljava/lang/Byte;" False
+boxByte : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boxByte = invokeMethod InvokeStatic "java/lang/Byte" "valueOf" "(B)Ljava/lang/Byte;" False
 
-boxChar : Asm ()
-boxChar = InvokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
+boxChar : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boxChar = invokeMethod InvokeStatic "java/lang/Character" "valueOf" "(C)Ljava/lang/Character;" False
 
-boxInt : Asm ()
-boxInt = InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
+boxInt : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boxInt = invokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
 
-boxShort : Asm ()
-boxShort = InvokeMethod InvokeStatic "java/lang/Short" "valueOf" "(S)Ljava/lang/Short;" False
+boxShort : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boxShort = invokeMethod InvokeStatic "java/lang/Short" "valueOf" "(S)Ljava/lang/Short;" False
 
-boxLong : Asm ()
-boxLong = InvokeMethod InvokeStatic "java/lang/Long" "valueOf" "(J)Ljava/lang/Long;" False
+boxLong : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boxLong = invokeMethod InvokeStatic "java/lang/Long" "valueOf" "(J)Ljava/lang/Long;" False
 
-unboxBool : Asm ()
-unboxBool = InvokeMethod InvokeVirtual "java/lang/Boolean" "booleanValue" "()Z" False
+unboxBool : {auto stateRef: Ref AsmState AsmState} -> Core ()
+unboxBool = invokeMethod InvokeVirtual "java/lang/Boolean" "booleanValue" "()Z" False
 
-unboxByte : Asm ()
-unboxByte = InvokeMethod InvokeVirtual "java/lang/Byte" "byteValue" "()B" False
+unboxByte : {auto stateRef: Ref AsmState AsmState} -> Core ()
+unboxByte = invokeMethod InvokeVirtual "java/lang/Byte" "byteValue" "()B" False
 
-unboxInt : Asm ()
-unboxInt = InvokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
+unboxInt : {auto stateRef: Ref AsmState AsmState} -> Core ()
+unboxInt = invokeMethod InvokeVirtual "java/lang/Integer" "intValue" "()I" False
 
-unboxChar : Asm ()
-unboxChar = InvokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
+unboxChar : {auto stateRef: Ref AsmState AsmState} -> Core ()
+unboxChar = invokeMethod InvokeVirtual "java/lang/Character" "charValue" "()C" False
 
-unboxShort : Asm ()
-unboxShort = InvokeMethod InvokeVirtual "java/lang/Short" "shortValue" "()S" False
+unboxShort : {auto stateRef: Ref AsmState AsmState} -> Core ()
+unboxShort = invokeMethod InvokeVirtual "java/lang/Short" "shortValue" "()S" False
 
-unboxLong : Asm ()
-unboxLong = InvokeMethod InvokeVirtual "java/lang/Long" "longValue" "()J" False
+unboxLong : {auto stateRef: Ref AsmState AsmState} -> Core ()
+unboxLong = invokeMethod InvokeVirtual "java/lang/Long" "longValue" "()J" False
 
-unboxDouble : Asm ()
-unboxDouble = InvokeMethod InvokeVirtual "java/lang/Double" "doubleValue" "()D" False
+unboxDouble : {auto stateRef: Ref AsmState AsmState} -> Core ()
+unboxDouble = invokeMethod InvokeVirtual "java/lang/Double" "doubleValue" "()D" False
 
-unboxFloat : Asm ()
-unboxFloat = InvokeMethod InvokeVirtual "java/lang/Float" "floatValue" "()F" False
+unboxFloat : {auto stateRef: Ref AsmState AsmState} -> Core ()
+unboxFloat = invokeMethod InvokeVirtual "java/lang/Float" "floatValue" "()F" False
 
 %inline
 export
 conversionClass : String
 conversionClass = "io/github/mmhelloworld/idrisjvm/runtime/Conversion"
 
-boolObjToBool : Asm ()
-boolObjToBool = InvokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False
+boolObjToBool : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boolObjToBool = invokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False
 
-boolToInt : Asm ()
-boolToInt = InvokeMethod InvokeStatic conversionClass "boolToInt1" "(Z)I" False
+boolToInt : {auto stateRef: Ref AsmState AsmState} -> Core ()
+boolToInt = invokeMethod InvokeStatic conversionClass "boolToInt1" "(Z)I" False
 
-objToInt : Asm ()
-objToInt = InvokeMethod InvokeStatic conversionClass "toInt" "(Ljava/lang/Object;)I" False
+objToInt : {auto stateRef: Ref AsmState AsmState} -> Core ()
+objToInt = invokeMethod InvokeStatic conversionClass "toInt" "(Ljava/lang/Object;)I" False
 
-objToChar : Asm ()
-objToChar = InvokeMethod InvokeStatic conversionClass "toChar" "(Ljava/lang/Object;)C" False
+objToChar : {auto stateRef: Ref AsmState AsmState} -> Core ()
+objToChar = invokeMethod InvokeStatic conversionClass "toChar" "(Ljava/lang/Object;)C" False
 
-objToBoolean : Asm ()
-objToBoolean = InvokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False
+objToBoolean : {auto stateRef: Ref AsmState AsmState} -> Core ()
+objToBoolean = invokeMethod InvokeStatic conversionClass "toBoolean" "(Ljava/lang/Object;)Z" False
 
-objToByte : Asm ()
-objToByte = InvokeMethod InvokeStatic conversionClass "toByte" "(Ljava/lang/Object;)B" False
+objToByte : {auto stateRef: Ref AsmState AsmState} -> Core ()
+objToByte = invokeMethod InvokeStatic conversionClass "toByte" "(Ljava/lang/Object;)B" False
 
-charObjToChar : Asm ()
-charObjToChar = do Checkcast "java/lang/Character"; unboxChar
+charObjToChar : {auto stateRef: Ref AsmState AsmState} -> Core ()
+charObjToChar = do checkcast "java/lang/Character"; unboxChar
 
-objToShort : Asm ()
-objToShort = InvokeMethod InvokeStatic conversionClass "toShort" "(Ljava/lang/Object;)S" False
+objToShort : {auto stateRef: Ref AsmState AsmState} -> Core ()
+objToShort = invokeMethod InvokeStatic conversionClass "toShort" "(Ljava/lang/Object;)S" False
 
-objToLong : Asm ()
-objToLong = InvokeMethod InvokeStatic conversionClass "toLong" "(Ljava/lang/Object;)J" False
+objToLong : {auto stateRef: Ref AsmState AsmState} -> Core ()
+objToLong = invokeMethod InvokeStatic conversionClass "toLong" "(Ljava/lang/Object;)J" False
 
-objToFloat : Asm ()
-objToFloat = InvokeMethod InvokeStatic conversionClass "toFloat" "(Ljava/lang/Object;)F" False
+objToFloat : {auto stateRef: Ref AsmState AsmState} -> Core ()
+objToFloat = invokeMethod InvokeStatic conversionClass "toFloat" "(Ljava/lang/Object;)F" False
 
-objToDouble : Asm ()
-objToDouble = InvokeMethod InvokeStatic conversionClass "toDouble" "(Ljava/lang/Object;)D" False
-
-export
-checkcast : String -> Asm ()
-checkcast "java/lang/Object" = pure ()
-checkcast cname              = Checkcast cname
+objToDouble : {auto stateRef: Ref AsmState AsmState} -> Core ()
+objToDouble = invokeMethod InvokeStatic conversionClass "toDouble" "(Ljava/lang/Object;)D" False
 
 export
-asmCast : (sourceType: InferredType) -> (targetType: InferredType) -> Asm ()
+asmCast : {auto stateRef: Ref AsmState AsmState} -> (sourceType: InferredType) -> (targetType: InferredType) -> Core ()
 
 asmCast ty1@(IRef class1 _ _) ty2@(IRef class2 _ _) = when (class1 /= class2) (checkcast class2)
 
 asmCast IUnknown ty@(IRef clazz _ _) = checkcast clazz
 
-asmCast IBool IBool     = Pure ()
-asmCast IByte IByte     = Pure ()
-asmCast IChar IChar     = Pure ()
-asmCast IShort IShort   = Pure ()
-asmCast IInt IBool      = Pure ()
-asmCast IInt IInt       = Pure ()
-asmCast ILong ILong     = Pure ()
-asmCast IFloat IFloat   = Pure ()
-asmCast IDouble IDouble = Pure ()
-asmCast (IArray _) (IArray _) = Pure ()
+asmCast IBool IBool     = pure ()
+asmCast IByte IByte     = pure ()
+asmCast IChar IChar     = pure ()
+asmCast IShort IShort   = pure ()
+asmCast IInt IBool      = pure ()
+asmCast IInt IInt       = pure ()
+asmCast ILong ILong     = pure ()
+asmCast IFloat IFloat   = pure ()
+asmCast IDouble IDouble = pure ()
+asmCast (IArray _) (IArray _) = pure ()
 
 asmCast IBool IInt = boolToInt
-asmCast IInt IChar = I2c
-asmCast IInt IByte = I2b
-asmCast IInt IShort = I2s
-asmCast IFloat IDouble = F2d
-asmCast IDouble IFloat = D2f
+asmCast IInt IChar = i2c
+asmCast IInt IByte = i2b
+asmCast IInt IShort = i2s
+asmCast IFloat IDouble = f2d
+asmCast IDouble IFloat = d2f
 
 asmCast ty IBool = objToBoolean
 
@@ -173,8 +169,8 @@ asmCast IShort ty = boxShort
 
 asmCast IInt ty =
     if ty == inferredBigIntegerType then do
-        I2l
-        InvokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
+        i2l
+        invokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
     else boxInt
 
 asmCast ILong ty = boxLong
@@ -183,95 +179,96 @@ asmCast IFloat ty = boxFloat
 
 asmCast IDouble ty = boxDouble
 
-asmCast (IRef _ _ _) arr@(IArray _) = Checkcast $ getJvmTypeDescriptor arr
-asmCast (IArray _) (IRef clazz _ _) = Checkcast clazz
+asmCast (IRef _ _ _) arr@(IArray _) = checkcast $ getJvmTypeDescriptor arr
+asmCast (IArray _) (IRef clazz _ _) = checkcast clazz
 
-asmCast _ IVoid = Pure ()
-asmCast IVoid IVoid = Pure ()
-asmCast IVoid (IRef _ _ _) = Aconstnull
-asmCast IVoid IUnknown = Aconstnull
-asmCast ty IUnknown = Pure ()
+asmCast _ IVoid = pure ()
+asmCast IVoid IVoid = pure ()
+asmCast IVoid (IRef _ _ _) = aconstnull
+asmCast IVoid IUnknown = aconstnull
+asmCast ty IUnknown = pure ()
 
-asmCast ty1 ty2 = Throw emptyFC $ "Cannot convert from " ++ show ty1 ++ " to " ++ show ty2
+asmCast ty1 ty2 = throw $ GenericMsg emptyFC $ "Cannot convert from " ++ show ty1 ++ " to " ++ show ty2
 
-loadAndBox : (Int -> Asm ()) -> Asm () -> Map Int InferredType -> Int -> Asm ()
+loadAndBox : {auto stateRef: Ref AsmState AsmState} -> (Int -> Core ()) -> Core () -> Map Int InferredType
+           -> Int -> Core ()
 loadAndBox loadOp boxOp sourceLocTys var = let op = \index => do loadOp index; boxOp
                                            in opWithWordSize sourceLocTys op var
 
-loadAndBoxBool : InferredType -> Map Int InferredType -> Int -> Asm ()
-loadAndBoxBool ty = loadAndBox Iload boxBool
+loadAndBoxBool : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
+loadAndBoxBool ty = loadAndBox iload boxBool
 
-loadAndBoxByte : InferredType -> Map Int InferredType -> Int -> Asm ()
-loadAndBoxByte ty = loadAndBox Iload boxByte
+loadAndBoxByte : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
+loadAndBoxByte ty = loadAndBox iload boxByte
 
-loadAndBoxChar : InferredType -> Map Int InferredType -> Int -> Asm ()
-loadAndBoxChar ty = loadAndBox Iload boxChar
+loadAndBoxChar : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
+loadAndBoxChar ty = loadAndBox iload boxChar
 
-loadAndBoxShort : InferredType -> Map Int InferredType -> Int -> Asm ()
-loadAndBoxShort ty = loadAndBox Iload boxShort
+loadAndBoxShort : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
+loadAndBoxShort ty = loadAndBox iload boxShort
 
-loadAndBoxInt : InferredType -> Map Int InferredType -> Int -> Asm ()
-loadAndBoxInt ty = loadAndBox Iload boxInt
+loadAndBoxInt : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
+loadAndBoxInt ty = loadAndBox iload boxInt
 
-loadAndBoxLong : InferredType -> Map Int InferredType -> Int -> Asm ()
-loadAndBoxLong ty = loadAndBox Lload boxLong
+loadAndBoxLong : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
+loadAndBoxLong ty = loadAndBox lload boxLong
 
-loadAndBoxFloat : Map Int InferredType -> Int -> Asm ()
-loadAndBoxFloat = loadAndBox Fload boxFloat
+loadAndBoxFloat : {auto stateRef: Ref AsmState AsmState} -> Map Int InferredType -> Int -> Core ()
+loadAndBoxFloat = loadAndBox fload boxFloat
 
-loadAndBoxDouble : InferredType -> Map Int InferredType -> Int -> Asm ()
-loadAndBoxDouble ty = loadAndBox Dload boxDouble
+loadAndBoxDouble : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
+loadAndBoxDouble ty = loadAndBox dload boxDouble
 
-loadAndUnboxBool : InferredType -> Map Int InferredType -> Int -> Asm ()
+loadAndUnboxBool : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
 loadAndUnboxBool ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; boolObjToBool
+    let loadInstr = \index => do aload index; boolObjToBool
     in opWithWordSize sourceLocTys loadInstr var
 
-loadAndUnboxByte : InferredType -> Map Int InferredType -> Int -> Asm ()
+loadAndUnboxByte : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
 loadAndUnboxByte ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; objToByte
+    let loadInstr = \index => do aload index; objToByte
     in opWithWordSize sourceLocTys loadInstr var
 
-loadAndUnboxChar : InferredType -> Map Int InferredType -> Int -> Asm ()
+loadAndUnboxChar : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
 loadAndUnboxChar ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; objToChar
+    let loadInstr = \index => do aload index; objToChar
     in opWithWordSize sourceLocTys loadInstr var
 
-loadAndUnboxShort : InferredType -> Map Int InferredType -> Int -> Asm ()
+loadAndUnboxShort : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
 loadAndUnboxShort ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; objToShort
+    let loadInstr = \index => do aload index; objToShort
     in opWithWordSize sourceLocTys loadInstr var
 
-loadAndUnboxInt : InferredType -> Map Int InferredType -> Int -> Asm ()
+loadAndUnboxInt : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
 loadAndUnboxInt ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; objToInt
+    let loadInstr = \index => do aload index; objToInt
     in opWithWordSize sourceLocTys loadInstr var
 
-loadAndUnboxDouble : InferredType -> Map Int InferredType -> Int -> Asm ()
+loadAndUnboxDouble : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Map Int InferredType -> Int -> Core ()
 loadAndUnboxDouble ty sourceLocTys var =
-    let loadInstr = \index => do Aload index; objToDouble
+    let loadInstr = \index => do aload index; objToDouble
     in opWithWordSize sourceLocTys loadInstr var
 
 export
-loadVar : Map Int InferredType -> (srcTy: InferredType) -> (targetTy: InferredType) -> Int -> Asm ()
-loadVar sourceLocTys IBool IBool var = opWithWordSize sourceLocTys Iload var
-loadVar sourceLocTys IByte IByte var = opWithWordSize sourceLocTys Iload var
-loadVar sourceLocTys IChar IChar var  = opWithWordSize sourceLocTys Iload var
-loadVar sourceLocTys IShort IShort var = opWithWordSize sourceLocTys Iload var
-loadVar sourceLocTys IBool IInt  var = opWithWordSize sourceLocTys (\var => do Iload var; boolToInt) var
-loadVar sourceLocTys IByte IInt  var = opWithWordSize sourceLocTys Iload var
-loadVar sourceLocTys IChar IInt  var = opWithWordSize sourceLocTys Iload var
-loadVar sourceLocTys IShort IInt  var = opWithWordSize sourceLocTys Iload var
-loadVar sourceLocTys IInt IInt  var = opWithWordSize sourceLocTys Iload var
-loadVar sourceLocTys IInt IChar  var = opWithWordSize sourceLocTys (\var => do Iload var; I2c) var
-loadVar sourceLocTys IInt IByte  var = opWithWordSize sourceLocTys (\var => do Iload var; I2b) var
-loadVar sourceLocTys IInt IShort  var = opWithWordSize sourceLocTys (\var => do Iload var; I2s) var
-loadVar sourceLocTys ILong ILong  var = opWithWordSize sourceLocTys Lload var
-loadVar sourceLocTys IFloat IFloat var = opWithWordSize sourceLocTys Fload var
-loadVar sourceLocTys IFloat IDouble var = opWithWordSize sourceLocTys (\var => do Fload var; F2d) var
-loadVar sourceLocTys IDouble IDouble var = opWithWordSize sourceLocTys Dload var
-loadVar sourceLocTys IDouble IFloat var = opWithWordSize sourceLocTys (\var => do Dload var; D2f) var
-loadVar sourceLocTys ty1@(IArray _) ty2@(IArray _) var = opWithWordSize sourceLocTys Aload var
+loadVar : {auto stateRef: Ref AsmState AsmState} -> Map Int InferredType -> (srcTy: InferredType) -> (targetTy: InferredType) -> Int -> Core ()
+loadVar sourceLocTys IBool IBool var = opWithWordSize sourceLocTys iload var
+loadVar sourceLocTys IByte IByte var = opWithWordSize sourceLocTys iload var
+loadVar sourceLocTys IChar IChar var  = opWithWordSize sourceLocTys iload var
+loadVar sourceLocTys IShort IShort var = opWithWordSize sourceLocTys iload var
+loadVar sourceLocTys IBool IInt  var = opWithWordSize sourceLocTys (\var => do iload var; boolToInt) var
+loadVar sourceLocTys IByte IInt  var = opWithWordSize sourceLocTys iload var
+loadVar sourceLocTys IChar IInt  var = opWithWordSize sourceLocTys iload var
+loadVar sourceLocTys IShort IInt  var = opWithWordSize sourceLocTys iload var
+loadVar sourceLocTys IInt IInt  var = opWithWordSize sourceLocTys iload var
+loadVar sourceLocTys IInt IChar  var = opWithWordSize sourceLocTys (\var => do iload var; i2c) var
+loadVar sourceLocTys IInt IByte  var = opWithWordSize sourceLocTys (\var => do iload var; i2b) var
+loadVar sourceLocTys IInt IShort  var = opWithWordSize sourceLocTys (\var => do iload var; i2s) var
+loadVar sourceLocTys ILong ILong  var = opWithWordSize sourceLocTys lload var
+loadVar sourceLocTys IFloat IFloat var = opWithWordSize sourceLocTys fload var
+loadVar sourceLocTys IFloat IDouble var = opWithWordSize sourceLocTys (\var => do fload var; f2d) var
+loadVar sourceLocTys IDouble IDouble var = opWithWordSize sourceLocTys dload var
+loadVar sourceLocTys IDouble IFloat var = opWithWordSize sourceLocTys (\var => do dload var; d2f) var
+loadVar sourceLocTys ty1@(IArray _) ty2@(IArray _) var = opWithWordSize sourceLocTys aload var
 
 loadVar sourceLocTys IBool ty var = loadAndBoxBool ty sourceLocTys var
 loadVar sourceLocTys IByte ty var = loadAndBoxByte ty sourceLocTys var
@@ -296,59 +293,59 @@ loadVar sourceLocTys ty IShort var = loadAndUnboxShort ty sourceLocTys var
 loadVar sourceLocTys ty IInt var = loadAndUnboxInt ty sourceLocTys var
 
 loadVar sourceLocTys ty ILong var =
-    let loadInstr = \index => do Aload index; objToLong
+    let loadInstr = \index => do aload index; objToLong
     in opWithWordSize sourceLocTys loadInstr var
 
 loadVar sourceLocTys _ (IRef "java/math/BigInteger" _ _) var =
     let loadInstr = \index => do
-      Aload index
-      InvokeMethod InvokeStatic conversionClass "toInteger" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+      aload index
+      invokeMethod InvokeStatic conversionClass "toInteger" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
     in opWithWordSize sourceLocTys loadInstr var
 
 loadVar sourceLocTys ty IFloat var =
-    let loadInstr = \index => do Aload index; objToFloat
+    let loadInstr = \index => do aload index; objToFloat
     in opWithWordSize sourceLocTys loadInstr var
 
 loadVar sourceLocTys ty IDouble var = loadAndUnboxDouble ty sourceLocTys var
 
 loadVar sourceLocTys _ arr@(IArray _) var =
-    let loadInstr = \index => do Aload index; checkcast $ getJvmTypeDescriptor arr
+    let loadInstr = \index => do aload index; checkcast $ getJvmTypeDescriptor arr
     in opWithWordSize sourceLocTys loadInstr var
 
 loadVar sourceLocTys IUnknown ty2@(IRef _ _ _) var =
-    let loadInstr = \index => do Aload index; asmCast IUnknown ty2
+    let loadInstr = \index => do aload index; asmCast IUnknown ty2
     in opWithWordSize sourceLocTys loadInstr var
 
-loadVar sourceLocTys (IArray _) (IRef _ _ _) var = opWithWordSize sourceLocTys Aload var
-loadVar sourceLocTys (IArray _) IUnknown var = opWithWordSize sourceLocTys Aload var
+loadVar sourceLocTys (IArray _) (IRef _ _ _) var = opWithWordSize sourceLocTys aload var
+loadVar sourceLocTys (IArray _) IUnknown var = opWithWordSize sourceLocTys aload var
 
-loadVar sourceLocTys (IRef _ _ _) IUnknown var = opWithWordSize sourceLocTys Aload var
-loadVar sourceLocTys IUnknown IUnknown var = opWithWordSize sourceLocTys Aload var
+loadVar sourceLocTys (IRef _ _ _) IUnknown var = opWithWordSize sourceLocTys aload var
+loadVar sourceLocTys IUnknown IUnknown var = opWithWordSize sourceLocTys aload var
 
 loadVar sourceLocTys ty1@(IRef _ _ _) ty2@(IRef _ _ _) var =
-    let loadInstr = \index => do Aload index; asmCast ty1 ty2
+    let loadInstr = \index => do aload index; asmCast ty1 ty2
     in opWithWordSize sourceLocTys loadInstr var
 
-loadVar sourceLocTys ty1 ty2 var = Throw emptyFC ("Cannot load variable " ++ show var ++ " of type " ++ show ty1 ++
+loadVar sourceLocTys ty1 ty2 var = throw $ GenericMsg emptyFC ("Cannot load variable " ++ show var ++ " of type " ++ show ty1 ++
     " to type " ++ show ty2)
 
-storeVarWithWordSize : (Int -> Asm ()) -> Int -> Asm ()
+storeVarWithWordSize : {auto stateRef: Ref AsmState AsmState} -> (Int -> Core ()) -> Int -> Core ()
 storeVarWithWordSize storeOp var = opWithWordSize !getVariableTypes storeOp var
 
-boxStore : Asm () -> Int -> Asm ()
-boxStore boxOp var = storeVarWithWordSize (\index => do boxOp; Astore index) var
+boxStore : {auto stateRef: Ref AsmState AsmState} -> Core () -> Int -> Core ()
+boxStore boxOp var = storeVarWithWordSize (\index => do boxOp; astore index) var
 
 export
-storeVar : (srcTy: InferredType) -> (targetTy: InferredType) -> Int -> Asm ()
-storeVar IBool IBool     var = do types <- getVariableTypes; opWithWordSize types Istore var
-storeVar IByte IByte     var = do types <- getVariableTypes; opWithWordSize types Istore var
-storeVar IChar IChar     var = do types <- getVariableTypes; opWithWordSize types Istore var
-storeVar IShort IShort   var = do types <- getVariableTypes; opWithWordSize types Istore var
-storeVar IInt IInt       var = do types <- getVariableTypes; opWithWordSize types Istore var
-storeVar ILong ILong     var = do types <- getVariableTypes; opWithWordSize types Lstore var
-storeVar IFloat IFloat   var = do types <- getVariableTypes; opWithWordSize types Fstore var
-storeVar IDouble IDouble var = do types <- getVariableTypes; opWithWordSize types Dstore var
-storeVar (IArray _) (IArray _) var = do types <- getVariableTypes; opWithWordSize types Astore var
+storeVar : {auto stateRef: Ref AsmState AsmState} -> (srcTy: InferredType) -> (targetTy: InferredType) -> Int -> Core ()
+storeVar IBool IBool     var = do types <- getVariableTypes; opWithWordSize types istore var
+storeVar IByte IByte     var = do types <- getVariableTypes; opWithWordSize types istore var
+storeVar IChar IChar     var = do types <- getVariableTypes; opWithWordSize types istore var
+storeVar IShort IShort   var = do types <- getVariableTypes; opWithWordSize types istore var
+storeVar IInt IInt       var = do types <- getVariableTypes; opWithWordSize types istore var
+storeVar ILong ILong     var = do types <- getVariableTypes; opWithWordSize types lstore var
+storeVar IFloat IFloat   var = do types <- getVariableTypes; opWithWordSize types fstore var
+storeVar IDouble IDouble var = do types <- getVariableTypes; opWithWordSize types dstore var
+storeVar (IArray _) (IArray _) var = do types <- getVariableTypes; opWithWordSize types astore var
 
 storeVar IBool ty var = boxStore boxBool var
 storeVar IByte ty var = boxStore boxByte var
@@ -359,28 +356,28 @@ storeVar ILong ty var = boxStore boxLong var
 storeVar IFloat ty var = boxStore boxFloat var
 storeVar IDouble ty var = boxStore boxDouble var
 
-storeVar ty IBool var = storeVarWithWordSize (\index => do asmCast ty IBool; Istore index) var
+storeVar ty IBool var = storeVarWithWordSize (\index => do asmCast ty IBool; istore index) var
 
-storeVar ty IByte var = storeVarWithWordSize (\index => do asmCast ty IByte; Istore index) var
+storeVar ty IByte var = storeVarWithWordSize (\index => do asmCast ty IByte; istore index) var
 
-storeVar ty IChar var = storeVarWithWordSize (\index => do asmCast ty IChar; Istore index) var
+storeVar ty IChar var = storeVarWithWordSize (\index => do asmCast ty IChar; istore index) var
 
-storeVar ty IShort var = storeVarWithWordSize (\index => do asmCast ty IShort; Istore index) var
+storeVar ty IShort var = storeVarWithWordSize (\index => do asmCast ty IShort; istore index) var
 
-storeVar ty IInt var = storeVarWithWordSize (\index => do asmCast ty IInt; Istore index) var
+storeVar ty IInt var = storeVarWithWordSize (\index => do asmCast ty IInt; istore index) var
 
-storeVar ty ILong var = storeVarWithWordSize (\index => do asmCast ty ILong; Lstore index) var
+storeVar ty ILong var = storeVarWithWordSize (\index => do asmCast ty ILong; lstore index) var
 
-storeVar ty IFloat var = storeVarWithWordSize (\index => do asmCast ty IFloat; Fstore index) var
+storeVar ty IFloat var = storeVarWithWordSize (\index => do asmCast ty IFloat; fstore index) var
 
-storeVar ty IDouble var = storeVarWithWordSize (\index => do asmCast ty IDouble; Dstore index) var
+storeVar ty IDouble var = storeVarWithWordSize (\index => do asmCast ty IDouble; dstore index) var
 
 storeVar ty arr@(IArray elemTy) var =
-    storeVarWithWordSize (\index => do checkcast $ getJvmTypeDescriptor arr; Astore index) var
+    storeVarWithWordSize (\index => do checkcast $ getJvmTypeDescriptor arr; astore index) var
 
 storeVar ty targetTy@(IRef _ _ _) var = do
     types <- getVariableTypes
     asmCast ty targetTy
-    opWithWordSize types Astore var
+    opWithWordSize types astore var
 
-storeVar _ _ var = opWithWordSize !getVariableTypes Astore var
+storeVar _ _ var = opWithWordSize !getVariableTypes astore var

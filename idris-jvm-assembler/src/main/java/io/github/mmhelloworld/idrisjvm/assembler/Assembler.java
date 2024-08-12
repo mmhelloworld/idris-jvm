@@ -475,7 +475,9 @@ public final class Assembler {
     }
 
     public void checkcast(String desc) {
-        mv.visitTypeInsn(CHECKCAST, desc);
+        if (!desc.equals("java/lang/Object")) {
+            mv.visitTypeInsn(CHECKCAST, desc);
+        }
     }
 
     public void classCodeStart(int version,

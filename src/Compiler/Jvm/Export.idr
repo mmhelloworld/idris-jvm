@@ -29,14 +29,14 @@ import Libraries.Utils.Path
 import System.FFI
 
 mutual
-  parseAnnotationTypeValue : Name -> String -> String -> JSON -> Asm AnnotationValue
-  parseAnnotationTypeValue functionName annotationName "int" (JNumber value) = Pure $ AnnInt $ cast value
-  parseAnnotationTypeValue functionName annotationName "boolean" (JBoolean value) = Pure $ AnnBoolean value
+  parseAnnotationTypeValue : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> String -> JSON -> Core AnnotationValue
+  parseAnnotationTypeValue functionName annotationName "int" (JNumber value) = pure $ AnnInt $ cast value
+  parseAnnotationTypeValue functionName annotationName "boolean" (JBoolean value) = pure $ AnnBoolean value
   parseAnnotationTypeValue functionName annotationName "char" (JString value) =
-    Pure $ AnnChar $ assert_total (prim__strHead value)
-  parseAnnotationTypeValue functionName annotationName "double" (JNumber value) = Pure $ AnnDouble value
-  parseAnnotationTypeValue functionName annotationName "String" (JString value) = Pure $ AnnString value
-  parseAnnotationTypeValue functionName annotationName "class" (JString value) = Pure $ AnnClass value
+    pure $ AnnChar $ assert_total (prim__strHead value)
+  parseAnnotationTypeValue functionName annotationName "double" (JNumber value) = pure $ AnnDouble value
+  parseAnnotationTypeValue functionName annotationName "String" (JString value) = pure $ AnnString value
+  parseAnnotationTypeValue functionName annotationName "class" (JString value) = pure $ AnnClass value
   parseAnnotationTypeValue functionName annotationName "enum" (JObject properties) = do
     let propertiesByName = SortedMap.fromList properties
     let Just (JString type) = lookup "type" properties
@@ -45,16 +45,16 @@ mutual
     let Just (JString value) = lookup "value" properties
       | _ => asmCrash ("Expected 'string' enum value for annotation " ++ show annotationName ++ " in " ++
                show functionName)
-    Pure $ AnnEnum type value
+    pure $ AnnEnum type value
   parseAnnotationTypeValue functionName annotationName "annotation" annotationJson =
     AnnAnnotation <$> parseAnnotation functionName annotationJson
   parseAnnotationTypeValue functionName annotationName type _ =
     asmCrash ("Unknown type " ++ show type ++ " for annotation " ++ annotationName ++ " in " ++ show functionName)
 
-  parseAnnotationValue : Name -> String -> JSON -> Asm AnnotationValue
-  parseAnnotationValue functionName annotationName (JNumber value) = Pure $ AnnInt $ cast value
-  parseAnnotationValue functionName annotationName (JString value) = Pure $ AnnString value
-  parseAnnotationValue functionName annotationName (JBoolean value) = Pure $ AnnBoolean value
+  parseAnnotationValue : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> JSON -> Core AnnotationValue
+  parseAnnotationValue functionName annotationName (JNumber value) = pure $ AnnInt $ cast value
+  parseAnnotationValue functionName annotationName (JString value) = pure $ AnnString value
+  parseAnnotationValue functionName annotationName (JBoolean value) = pure $ AnnBoolean value
   parseAnnotationValue functionName annotationName annotationJson@(JObject properties) = do
     let propertiesByName = SortedMap.fromList properties
     let Just (JString type) = lookup "type" propertiesByName
@@ -63,27 +63,27 @@ mutual
       | _ => asmCrash ("Missing 'string' value for annotation " ++ annotationName ++ " in " ++ show functionName)
     parseAnnotationTypeValue functionName annotationName type value
   parseAnnotationValue functionName annotationName (JArray valuesJson) =
-    Pure $ AnnArray !(traverse (parseAnnotationValue functionName annotationName) valuesJson)
+    pure $ AnnArray !(traverse (parseAnnotationValue functionName annotationName) valuesJson)
   parseAnnotationValue functionName annotationName JNull = asmCrash ("Annotation property value cannot be null " ++
     " for annotation " ++ show annotationName ++ " in function " ++ show functionName)
 
-  parseAnnotationProperty : Name -> String -> String -> JSON -> Asm AnnotationProperty
+  parseAnnotationProperty : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> String -> JSON -> Core AnnotationProperty
   parseAnnotationProperty functionName annotationName propertyName valueJson = do
     value <- parseAnnotationValue functionName annotationName valueJson
-    Pure (propertyName, value)
+    pure (propertyName, value)
 
-  parseAnnotation : Name -> JSON -> Asm Annotation
+  parseAnnotation : {auto stateRef: Ref AsmState AsmState} -> Name -> JSON -> Core Annotation
   parseAnnotation functionName (JObject [(annotationName, (JObject propertyNameAndValues))]) = do
     properties <- traverse
       (\(propertyName, value) => parseAnnotationProperty functionName annotationName propertyName value)
       propertyNameAndValues
-    Pure $ MkAnnotation annotationName properties
+    pure $ MkAnnotation annotationName properties
   parseAnnotation functionName (JObject [(annotationName, simplifiedValue)]) =
     parseAnnotation functionName (JObject [(annotationName, (JObject [("value", simplifiedValue)]))])
   parseAnnotation functionName _ =
     asmCrash ("Expected a JSON object for parameter annotations in " ++ show functionName)
 
-parseAnnotations : Name -> JSON -> Asm (List Annotation)
+parseAnnotations : {auto stateRef: Ref AsmState AsmState} -> Name -> JSON -> Core (List Annotation)
 parseAnnotations functionName (JArray annotations) = traverse (parseAnnotation functionName) annotations
 parseAnnotations functionName _ = asmCrash ("Expected an array for parameter annotations in " ++ show functionName)
 
@@ -109,30 +109,30 @@ record ExportArgument where
   type: InferredType
   annotations: List Annotation
 
-parseArgument : Name -> List (String, JSON) -> Asm ExportArgument
+parseArgument : {auto stateRef: Ref AsmState AsmState} -> Name -> List (String, JSON) -> Core ExportArgument
 parseArgument functionName keyAndValues = do
   let valuesByKey = SortedMap.fromList keyAndValues
   let Just (JString typeStr) = lookup "type" valuesByKey
     | _ => asmCrash $ "Expected 'string' argument type for " ++ show functionName
   let annotationsJson = fromMaybe (JArray []) $ lookup "annotations" valuesByKey
   annotations <- parseAnnotations functionName annotationsJson
-  Pure $ MkExportArgument (parse typeStr) annotations
+  pure $ MkExportArgument (parse typeStr) annotations
 
-parseArgumentsJson : Name -> JSON -> Asm (List ExportArgument)
+parseArgumentsJson : {auto stateRef: Ref AsmState AsmState} -> Name -> JSON -> Core (List ExportArgument)
 parseArgumentsJson functionName (JArray arguments) = go arguments where
-  go : List JSON -> Asm (List ExportArgument)
-  go [] = Pure []
+  go : List JSON -> Core (List ExportArgument)
+  go [] = pure[]
   go ((JObject keyAndValues) :: rest) = do
     argument <- parseArgument functionName keyAndValues
     restArguments <- go rest
-    Pure (argument :: restArguments)
+    pure (argument :: restArguments)
   go _ = asmCrash ("Expected an argument object for foreign export function: " ++ show functionName)
 parseArgumentsJson functionName _ =
   asmCrash ("Expected an array of arguments for foreign export function: " ++ show functionName)
 
 export
-loadJavaVar : Name -> Map Int InferredType -> Int -> InferredType -> SortedMap Namespace (List String) ->
-                InferredType -> Asm ()
+loadJavaVar : {auto stateRef: Ref AsmState AsmState} -> Name -> Map Int InferredType -> Int -> InferredType
+            -> SortedMap Namespace (List String) -> InferredType -> Core ()
 loadJavaVar functionName typesByIndex varIndex idrisType typeExports jvmType@(IRef name _ _) =
   case findByNamespace typeExports functionName of
     Just exportedTypeNames =>
@@ -140,40 +140,40 @@ loadJavaVar functionName typesByIndex varIndex idrisType typeExports jvmType@(IR
         then do
           loadVar typesByIndex jvmType jvmType varIndex
           let descriptor = getMethodDescriptor $ MkInferredFunctionType idrisType []
-          InvokeMethod InvokeVirtual name "toIdris" descriptor False
+          invokeMethod InvokeVirtual name "toIdris" descriptor False
         else
           loadVar typesByIndex jvmType idrisType varIndex
     Nothing => loadVar typesByIndex jvmType idrisType varIndex
 loadJavaVar _ typesByIndex varIndex idrisType _ jvmType = loadVar typesByIndex jvmType idrisType varIndex
 
 export
-toJava : Name -> SortedMap Namespace (List String) -> InferredType -> InferredType -> Asm ()
+toJava : {auto stateRef: Ref AsmState AsmState} -> Name -> SortedMap Namespace (List String) -> InferredType -> InferredType -> Core ()
 toJava functionName typeExports jvmType@(IRef name _ _) idrisType =
   case findByNamespace typeExports functionName of
     Just exportedTypeNames =>
       if elem name exportedTypeNames
         then do
           let descriptor = getMethodDescriptor $ MkInferredFunctionType jvmType [idrisType]
-          InvokeMethod InvokeStatic name "toJava" descriptor False
+          invokeMethod InvokeStatic name "toJava" descriptor False
         else
           asmCast idrisType jvmType
     Nothing => asmCast idrisType jvmType
 toJava _ _ jvmType idrisType = asmCast idrisType jvmType
 
 export
-loadArguments : SortedMap Namespace (List String) -> Map Int InferredType -> Name -> Int -> List InferredType -> Asm ()
+loadArguments : {auto stateRef: Ref AsmState AsmState} -> SortedMap Namespace (List String) -> Map Int InferredType -> Name -> Int -> List InferredType -> Core ()
 loadArguments typeExports typesByIndex functionName arity idrisTypes = go 0 idrisTypes
   where
-    go : Int -> List InferredType -> Asm ()
+    go : Int -> List InferredType -> Core ()
     go n [] =
       if n == arity
-        then Pure ()
+        then pure ()
         else asmCrash ("JVM and Idris types do not match in foreign export for " ++ show functionName)
     go varIndex (idrisType :: rest) = do
-      Just jvmType <- nullableToMaybe <$> Map.get typesByIndex varIndex
+      Just jvmType <- coreLift $ nullableToMaybe <$> Map.get typesByIndex varIndex
         | Nothing => do -- World type only exists for Idris functions
-           Iconst 0 -- Load "world" for PrimIO functions
-           InvokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
+           iconst 0 -- Load "world" for PrimIO functions
+           invokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
       loadJavaVar functionName typesByIndex varIndex idrisType typeExports jvmType
       go (varIndex + 1) rest
 
@@ -235,8 +235,8 @@ parseModifier _ "abstract" = Abstract
 parseModifier _ "transient" = Transient
 parseModifier name invalid = believe_me $ crash ("Invalid modifier " ++ invalid ++ " in export " ++ show name)
 
-parseString : String -> JSON -> Asm String
-parseString _ (JString value) = Pure value
+parseString : {auto stateRef: Ref AsmState AsmState} -> String -> JSON -> Core String
+parseString _ (JString value) = pure value
 parseString errorMessage _ = asmCrash errorMessage
 
 getEncloser : ExportDescriptor -> Maybe ClassExport
@@ -253,9 +253,9 @@ parseModifiers : Name -> JSON -> List Access
 parseModifiers name (JArray modifiers) = (parseModifierJson name) <$> modifiers
 parseModifiers name invalid = believe_me $ crash ("Invalid modifiers " ++ show invalid ++ " in export " ++ show name)
 
-parseClassFieldExport : Name -> ClassExport -> String -> JSON -> Asm FieldExport
+parseClassFieldExport : {auto stateRef: Ref AsmState AsmState} -> Name -> ClassExport -> String -> JSON -> Core FieldExport
 parseClassFieldExport idrisName encloser fieldName (JString type) =
-  Pure $ MkFieldExport fieldName (parse type) encloser [Private] []
+  pure $ MkFieldExport fieldName (parse type) encloser [Private] []
 parseClassFieldExport idrisName encloser fieldName (JObject desc) = do
   let modifiersJson = fromMaybe (JArray [JString "private"]) $ lookup "modifiers" desc
   let modifiers = parseModifiers idrisName modifiersJson
@@ -264,14 +264,14 @@ parseClassFieldExport idrisName encloser fieldName (JObject desc) = do
   type <- parseString ("Invalid type for " ++ fieldName ++ " in export " ++ show idrisName) typeJson
   let annotationsJson = fromMaybe (JArray []) $ lookup "annotations" desc
   annotations <- parseAnnotations idrisName annotationsJson
-  Pure $ MkFieldExport fieldName (parse type) encloser modifiers annotations
+  pure $ MkFieldExport fieldName (parse type) encloser modifiers annotations
 parseClassFieldExport idrisName encloser fieldName descriptor =
   asmCrash ("Expected a JSON string or object for field export in " ++ show idrisName ++
     " but found: " ++ show descriptor)
 
-parseClassFieldExports : Name -> ClassExport -> SortedMap String JSON -> Asm (List FieldExport)
+parseClassFieldExports : {auto stateRef: Ref AsmState AsmState} -> Name -> ClassExport -> SortedMap String JSON -> Core (List FieldExport)
 parseClassFieldExports name encloser descriptor = case lookup "fields" descriptor of
-  Nothing => Pure []
+  Nothing => pure[]
   Just (JObject nameAndValues) => traverse (uncurry $ parseClassFieldExport name encloser) nameAndValues
   Just descriptor => asmCrash ("Expected a JSON object for exported fields in " ++ show name ++
                          " but found: " ++ show descriptor)
@@ -281,19 +281,18 @@ getModifiersAndName name acc [] = believe_me $ crash ("Missing exported function
 getModifiersAndName _ acc (functionName :: []) = (acc, functionName)
 getModifiersAndName name acc (modifier :: rest) = getModifiersAndName name (parseModifier name modifier :: acc) rest
 
-parseClassExport : Name -> (parts : List String) -> SortedMap String JSON -> List Annotation ->
-                     Asm (List ExportDescriptor)
+parseClassExport : {auto stateRef: Ref AsmState AsmState} -> Name -> (parts : List String) -> SortedMap String JSON -> List Annotation -> Core (List ExportDescriptor)
 parseClassExport name parts descriptor annotations = do
   let isInterface = "interface" `elem` parts
   extends <- if isInterface
-              then Pure "java/lang/Object"
+              then pure"java/lang/Object"
               else case lookup "extends" descriptor of
-                     Nothing => Pure "java/lang/Object"
-                     Just (JString superName) => Pure superName
+                     Nothing => pure"java/lang/Object"
+                     Just (JString superName) => pure superName
                      _ => asmCrash ("Invalid 'extends' for " ++ show name)
   let implementsKey = if isInterface then "extends" else "implements"
   implements <- case lookup implementsKey descriptor of
-                  Nothing => Pure []
+                  Nothing => pure[]
                   Just (JArray implementsJson) =>
                     traverse (parseString ("Expected a string value for '" ++ implementsKey ++ "' for " ++ show name))
                       implementsJson
@@ -304,10 +303,10 @@ parseClassExport name parts descriptor annotations = do
                       modifiers annotations
   let classExportDescriptor = MkClassExportDescriptor classExport
   fieldExportDescriptors <- parseClassFieldExports name classExport descriptor
-  Pure $ (classExportDescriptor :: (MkFieldExportDescriptor <$> fieldExportDescriptors))
+  pure $ (classExportDescriptor :: (MkFieldExportDescriptor <$> fieldExportDescriptors))
 
-getReferenceTypeName : String -> InferredType -> Asm String
-getReferenceTypeName _ (IRef name _ _) = Pure name
+getReferenceTypeName : {auto stateRef: Ref AsmState AsmState} -> String -> InferredType -> Core String
+getReferenceTypeName _ (IRef name _ _) = pure name
 getReferenceTypeName functionName _ = asmCrash ("Expected a reference type to export function " ++ functionName)
 
 makePublicByDefault : List Access -> List Access
@@ -317,19 +316,19 @@ makePublicByDefault modifiers =
       then modifiers
       else (Public :: modifiers)
 
-parseJvmReturnType : String -> SortedMap String JSON -> Asm InferredType
+parseJvmReturnType : {auto stateRef: Ref AsmState AsmState} -> String -> SortedMap String JSON -> Core InferredType
 parseJvmReturnType functionName descriptor = do
   typeString <- parseString ("Invalid return type for function " ++ functionName) $
     fromMaybe (JString "java/lang/Object") $ lookup "returnType" descriptor
-  Pure $ parse typeString
+  pure $ parse typeString
 
 stripLastChar : String -> String
 stripLastChar str = case length str of
   Z => str
   (S n) => substr 0 n str
 
-parseMethodExport : Name -> (javaName: String) -> (nameParts: List String) ->
-                      SortedMap String JSON -> List Annotation -> Asm MethodExport
+parseMethodExport : {auto stateRef: Ref AsmState AsmState} -> Name -> (javaName: String) -> (nameParts: List String)
+                  -> SortedMap String JSON -> List Annotation -> Core MethodExport
 parseMethodExport idrisName javaName parts descriptor annotations = do
     let argumentsJson = fromMaybe (JArray []) $ lookup "arguments" descriptor
     arguments <- parseArgumentsJson idrisName argumentsJson
@@ -338,7 +337,7 @@ parseMethodExport idrisName javaName parts descriptor annotations = do
     let (modifiers, initialMethodName) = getModifiersAndName idrisName [] parts
     let shouldPerformIO = endsWith initialMethodName "!"
     let methodName = if shouldPerformIO then stripLastChar initialMethodName else initialMethodName
-    jvmReturnType <- if methodName == "<init>" then Pure IVoid else parseJvmReturnType javaName descriptor
+    jvmReturnType <- if methodName == "<init>" then pure IVoid else parseJvmReturnType javaName descriptor
     let functionType = MkInferredFunctionType jvmReturnType jvmArgumentTypes
     let adjustedModifiers = makePublicByDefault modifiers
     let isInstance = not $ elem Static modifiers
@@ -355,26 +354,26 @@ parseMethodExport idrisName javaName parts descriptor annotations = do
         enclosingTypeParts@(_ :: _) =>
           parseClassExport idrisName enclosingTypeParts SortedMap.empty []
       | _ => asmCrash ("Unexpected 'enclosingType' for " ++ show javaName)
-    Pure $ MkMethodExport methodName idrisName functionType shouldPerformIO encloser adjustedModifiers annotations
+    pure $ MkMethodExport methodName idrisName functionType shouldPerformIO encloser adjustedModifiers annotations
       adjustedParameterAnnotations
 
-parseFieldExport : Name -> (nameParts: List String) ->
-                     SortedMap String JSON -> List Annotation -> Asm (List ExportDescriptor)
+parseFieldExport : {auto stateRef: Ref AsmState AsmState} -> Name -> (nameParts: List String)
+                   -> SortedMap String JSON -> List Annotation -> Core (List ExportDescriptor)
 parseFieldExport name parts descriptor annotations = do
   let (modifiers, fieldName) = getModifiersAndName name [] parts
   Just enclosingTypeName <-
-      traverse (parseString ("Invalid 'enclosingType' for " ++ show name)) $ lookup "enclosingType" descriptor
+      traverseOpt (parseString ("Invalid 'enclosingType' for " ++ show name)) $ lookup "enclosingType" descriptor
     | Nothing => asmCrash ("Missing 'enclosingType' for " ++ show name)
   [MkClassExportDescriptor encloser] <- case words enclosingTypeName of
        [] => asmCrash ("Missing enclosing type for " ++ show name)
        enclosingTypeParts@(_ :: _) => parseClassExport name enclosingTypeParts SortedMap.empty []
      | _ => asmCrash ("Unexpected 'enclosingType' for " ++ show name)
-  Just typeString <- traverse (parseString ("Invalid type for field " ++ show name)) $ lookup "type" descriptor
+  Just typeString <- traverseOpt (parseString ("Invalid type for field " ++ show name)) $ lookup "type" descriptor
       | Nothing => asmCrash ("Missing type for " ++ show name)
   let type = parse typeString
-  Pure [MkFieldExportDescriptor $ MkFieldExport fieldName type encloser modifiers annotations]
+  pure[MkFieldExportDescriptor $ MkFieldExport fieldName type encloser modifiers annotations]
 
-parseObjectExportDescriptor : Name -> String -> List (String, JSON) -> Asm (List ExportDescriptor)
+parseObjectExportDescriptor : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> List (String, JSON) -> Core (List ExportDescriptor)
 parseObjectExportDescriptor idrisName javaName descriptorKeyAndValues = do
   let descriptor = SortedMap.fromList descriptorKeyAndValues
   let annotationsJson = fromMaybe (JArray []) $ lookup "annotations" descriptor
@@ -387,12 +386,12 @@ parseObjectExportDescriptor idrisName javaName descriptorKeyAndValues = do
           ((isJust (lookup "returnType" descriptor) || elem "<init>" parts),
             do
               methodExport <- parseMethodExport idrisName javaName parts descriptor annotations
-              Pure [MkMethodExportDescriptor methodExport]),
+              pure[MkMethodExportDescriptor methodExport]),
           (isJust $ lookup "type" descriptor, parseFieldExport idrisName parts descriptor annotations)
         ]
         (parseClassExport idrisName parts descriptor annotations)
 
-parseJsonExport : Name -> String -> Asm (List ExportDescriptor)
+parseJsonExport : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> Core (List ExportDescriptor)
 parseJsonExport functionName descriptor = case String.break (\c => c == '{') descriptor of
   ("", _) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
   (_, "") => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
@@ -401,7 +400,7 @@ parseJsonExport functionName descriptor = case String.break (\c => c == '{') des
       Just (JObject keyAndValues) => parseObjectExportDescriptor functionName name keyAndValues
       _ => asmCrash ("Invalid foreign export descriptor " ++ descriptor ++ " for " ++ show functionName)
 
-parseMethodSimpleExport : Name -> String -> Asm MethodExport
+parseMethodSimpleExport : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> Core MethodExport
 parseMethodSimpleExport functionName descriptor = case String.break (\c => c == '.') descriptor of
   ("", instanceMethodNameAndSig) => case words instanceMethodNameAndSig of
     [] => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
@@ -414,7 +413,7 @@ parseMethodSimpleExport functionName descriptor = case String.break (\c => c == 
       let functionType = MkInferredFunctionType (parse (last types)) (instanceType :: (parse <$> (init types)))
       className <- getReferenceTypeName ("Invalid instance type in export for " ++ show functionName) instanceType
       let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
-      Pure $ MkMethodExport javaName functionName functionType shouldPerformIO encloser [Public] [] []
+      pure $ MkMethodExport javaName functionName functionType shouldPerformIO encloser [Public] [] []
   (className, staticMethodNameAndArgs) => case words staticMethodNameAndArgs of
     [] => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (_ :: []) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
@@ -423,9 +422,9 @@ parseMethodSimpleExport functionName descriptor = case String.break (\c => c == 
       let javaName = if shouldPerformIO then stripLastChar javaName else javaName
       let functionType = MkInferredFunctionType (parse (last types)) (parse <$> (init types))
       let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
-      Pure $ MkMethodExport javaName functionName functionType shouldPerformIO encloser [Public, Static] [] []
+      pure $ MkMethodExport javaName functionName functionType shouldPerformIO encloser [Public, Static] [] []
 
-parseFieldSimpleExport : Name -> String -> Asm FieldExport
+parseFieldSimpleExport : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> Core FieldExport
 parseFieldSimpleExport functionName descriptor = case String.break (\c => c == '#') descriptor of
   ("", instanceFieldNameAndSig) => case words instanceFieldNameAndSig of
     [] => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
@@ -435,13 +434,13 @@ parseFieldSimpleExport functionName descriptor = case String.break (\c => c == '
       className <- getReferenceTypeName ("Invalid instance type in export for " ++ show functionName)
                      (parse instanceType)
       let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
-      Pure $ MkFieldExport javaName (parse type) encloser [Public] []
+      pure $ MkFieldExport javaName (parse type) encloser [Public] []
   (className, staticFieldNameAndType) => case words staticFieldNameAndType of
     [] => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (_ :: []) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (javaName :: type :: _) => do
       let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
-      Pure $ MkFieldExport javaName (parse type) encloser [Public, Static] []
+      pure $ MkFieldExport javaName (parse type) encloser [Public, Static] []
 
 %foreign jvm' "java/lang/Character" "isWhitespace" "char" "boolean"
 isWhitespace : Char -> Bool
@@ -454,45 +453,45 @@ parseImport line = case words line of
   (type :: alias :: []) => Just (alias, type)
   _ => Nothing
 
-parseImports : Name -> String -> Asm ExportDescriptor
+parseImports : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> Core ExportDescriptor
 parseImports functionName descriptor =
   case String.break isWhitespace descriptor of
     ("", _) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (_, "") => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     ("export", exportsDescriptor) =>
-      Pure $ MkTypeExportDescriptor functionName (trim <$> (drop 1 $ lines exportsDescriptor))
+      pure $ MkTypeExportDescriptor functionName (trim <$> (drop 1 $ lines exportsDescriptor))
     (_, importsDescriptor) =>
-      Pure $ MkImportDescriptor functionName $ SortedMap.fromList $ catMaybes $
+      pure $ MkImportDescriptor functionName $ SortedMap.fromList $ catMaybes $
         parseImport <$> (lines importsDescriptor)
 
-parseExportDescriptor : Name -> String -> Asm (List ExportDescriptor)
+parseExportDescriptor : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> Core (List ExportDescriptor)
 parseExportDescriptor functionName descriptor = cond
   [
     ("{" `isInfixOf` descriptor, parseJsonExport functionName descriptor),
     ("." `isInfixOf` descriptor, do
       methodExport <- parseMethodSimpleExport functionName descriptor
-      Pure [MkMethodExportDescriptor methodExport]),
+      pure[MkMethodExportDescriptor methodExport]),
     ("#" `isInfixOf` descriptor, do
       fieldExport <- parseFieldSimpleExport functionName descriptor
-      Pure $ [MkFieldExportDescriptor fieldExport])
+      pure $ [MkFieldExportDescriptor fieldExport])
   ]
-  (Pure [!(parseImports functionName descriptor)])
+  (pure[!(parseImports functionName descriptor)])
 
 export
-adjustArgumentsForInstanceMember : Name -> (isInstance: Bool) -> List InferredType -> Asm (List InferredType)
-adjustArgumentsForInstanceMember _ False argumentTypes = Pure argumentTypes
-adjustArgumentsForInstanceMember _ _ (_ :: jvmArgumentTypes) = Pure jvmArgumentTypes
+adjustArgumentsForInstanceMember : {auto stateRef: Ref AsmState AsmState} -> Name -> (isInstance: Bool) -> List InferredType -> Core (List InferredType)
+adjustArgumentsForInstanceMember _ False argumentTypes = pure argumentTypes
+adjustArgumentsForInstanceMember _ _ (_ :: jvmArgumentTypes) = pure jvmArgumentTypes
 adjustArgumentsForInstanceMember idrisName _ _ =
   asmCrash ("Expected first argument to be a reference type for instance member in " ++ show idrisName)
 
 export
-createAccessorName : String -> String -> Asm String
+createAccessorName : {auto stateRef: Ref AsmState AsmState} -> String -> String -> Core String
 createAccessorName pfix fieldName = case strM fieldName of
-   StrNil => asmCrash "Field name cannot be empty"
-   StrCons firstLetter rest => Pure (pfix ++ strCons (toUpper firstLetter) rest)
+   StrNil => asmCrash "field name cannot be empty"
+   StrCons firstLetter rest => pure (pfix ++ strCons (toUpper firstLetter) rest)
 
 export
-createGetter : ClassExport -> FieldExport -> Asm ()
+createGetter : {auto stateRef: Ref AsmState AsmState} -> ClassExport -> FieldExport -> Core ()
 createGetter classExport fieldExport = do
   let fieldName = fieldExport.name
   getterName <- createAccessorName "get" fieldName
@@ -501,17 +500,17 @@ createGetter classExport fieldExport = do
   let isStatic = elem Static fieldExport.modifiers
   let getterModifiers = Public :: (if isStatic then [Static] else [])
   let className = classExport.name
-  CreateMethod getterModifiers "generated.idr" className getterName getterType Nothing Nothing [] []
-  MethodCodeStart
-  when (not isStatic) $ Aload 0
+  createMethod getterModifiers "generated.idr" className getterName getterType Nothing Nothing [] []
+  methodCodeStart
+  when (not isStatic) $ aload 0
   let instructionType = if isStatic then GetStatic else GetField
-  Field instructionType className fieldName (getJvmTypeDescriptor fieldType)
+  field instructionType className fieldName (getJvmTypeDescriptor fieldType)
   asmReturn fieldType
-  MaxStackAndLocal (-1) (-1)
-  MethodCodeEnd
+  maxStackAndLocal (-1) (-1)
+  methodCodeEnd
 
 export
-createSetter : ClassExport -> FieldExport -> Asm ()
+createSetter : {auto stateRef: Ref AsmState AsmState} -> ClassExport -> FieldExport -> Core ()
 createSetter classExport fieldExport = do
   let fieldName = fieldExport.name
   setterName <- createAccessorName "set" fieldName
@@ -522,46 +521,46 @@ createSetter classExport fieldExport = do
   let signature = Just $ getMethodSignature setterType
   let setterModifiers = Public :: (if isStatic then [Static] else [])
   let className = classExport.name
-  CreateMethod setterModifiers "generated.idr" className setterName descriptor signature Nothing [] []
-  MethodCodeStart
-  CreateLabel methodStartLabel
-  CreateLabel methodEndLabel
-  LabelStart methodStartLabel
-  when (not isStatic) $ Aload 0
+  createMethod setterModifiers "generated.idr" className setterName descriptor signature Nothing [] []
+  methodCodeStart
+  createLabel methodStartLabel
+  createLabel methodEndLabel
+  labelStart methodStartLabel
+  when (not isStatic) $ aload 0
   let arity = the Int $ if isStatic then 1 else 2
   let parameterTypes = if isStatic then [fieldType] else [iref className [], fieldType]
-  jvmArgumentTypesByIndex <- LiftIo $ Map.fromList $ zip [0 .. arity - 1] parameterTypes
+  jvmArgumentTypesByIndex <- coreLift $ Map.fromList $ zip [0 .. arity - 1] parameterTypes
   let varIndex = the Int $ if isStatic then 0 else 1
   loadVar jvmArgumentTypesByIndex fieldType fieldType varIndex
   let instructionType = if isStatic then PutStatic else PutField
-  Field instructionType className fieldName (getJvmTypeDescriptor fieldType)
-  Return
-  LabelStart methodEndLabel
+  field instructionType className fieldName (getJvmTypeDescriptor fieldType)
+  return
+  labelStart methodEndLabel
   let classDescriptor = getJvmTypeDescriptor $ iref classExport.name []
-  LocalVariable "this" classDescriptor Nothing methodStartLabel methodEndLabel 0
+  localVariable "this" classDescriptor Nothing methodStartLabel methodEndLabel 0
   let signature = Just $ getSignature fieldType
-  LocalVariable fieldName (getJvmTypeDescriptor fieldType) signature methodStartLabel methodEndLabel 1
-  MaxStackAndLocal (-1) (-1)
-  MethodCodeEnd
+  localVariable fieldName (getJvmTypeDescriptor fieldType) signature methodStartLabel methodEndLabel 1
+  maxStackAndLocal (-1) (-1)
+  methodCodeEnd
 
 mutual
-  getSuperCallExprList : List NamedCExp -> Asm (Maybe NamedCExp)
-  getSuperCallExprList [] = Pure Nothing
-  getSuperCallExprList (expr :: rest) = Pure (!(getSuperCallExpr expr) <|> !(getSuperCallExprList rest))
+  getSuperCallExprList : {auto stateRef: Ref AsmState AsmState} -> List NamedCExp -> Core (Maybe NamedCExp)
+  getSuperCallExprList [] = pure Nothing
+  getSuperCallExprList (expr :: rest) = pure (!(getSuperCallExpr expr) <|> !(getSuperCallExprList rest))
 
-  getSuperCallExprVect : Vect n NamedCExp -> Asm (Maybe NamedCExp)
-  getSuperCallExprVect [] = Pure Nothing
-  getSuperCallExprVect (expr :: rest) = Pure (!(getSuperCallExpr expr) <|> !(getSuperCallExprVect rest))
+  getSuperCallExprVect : {auto stateRef: Ref AsmState AsmState} -> Vect n NamedCExp -> Core (Maybe NamedCExp)
+  getSuperCallExprVect [] = pure Nothing
+  getSuperCallExprVect (expr :: rest) = pure (!(getSuperCallExpr expr) <|> !(getSuperCallExprVect rest))
 
   export
-  getSuperCallExpr : NamedCExp -> Asm (Maybe NamedCExp)
-  getSuperCallExpr expr@(NmExtPrim _ (NS _ n) args) = if isSuper n then Pure (Just expr) else getSuperCallExprList args
+  getSuperCallExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Maybe NamedCExp)
+  getSuperCallExpr expr@(NmExtPrim _ (NS _ n) args) = if isSuper n then pure (Just expr) else getSuperCallExprList args
   getSuperCallExpr (NmLam _ _ expr) = getSuperCallExpr expr
-  getSuperCallExpr (NmLet _ _ value expr) = Pure (!(getSuperCallExpr value) <|> !(getSuperCallExpr expr))
+  getSuperCallExpr (NmLet _ _ value expr) = pure (!(getSuperCallExpr value) <|> !(getSuperCallExpr expr))
   getSuperCallExpr (NmApp _ (NmRef _ name) args) = do
     (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
       | _ => getSuperCallExprList args
-    Pure (!(getSuperCallExpr def) <|> !(getSuperCallExprList args))
+    pure (!(getSuperCallExpr def) <|> !(getSuperCallExprList args))
   getSuperCallExpr (NmOp _ _ args) = getSuperCallExprVect args
   getSuperCallExpr (NmForce _ _ expr) = getSuperCallExpr expr
   getSuperCallExpr (NmDelay _ _ expr) = getSuperCallExpr expr
@@ -569,7 +568,7 @@ mutual
     getSuperCallCaseExpr (expr :: (getSuperCallConAltExpr <$> alts)) deflt
   getSuperCallExpr (NmConstCase _ expr alts deflt) =
     getSuperCallCaseExpr (expr :: (getSuperCallConstAltExpr <$> alts)) deflt
-  getSuperCallExpr _ = Pure Nothing
+  getSuperCallExpr _ = pure Nothing
 
   getSuperCallConAltExpr : NamedConAlt -> NamedCExp
   getSuperCallConAltExpr (MkNConAlt _ _ _ _ expr) = expr
@@ -577,9 +576,9 @@ mutual
   getSuperCallConstAltExpr : NamedConstAlt -> NamedCExp
   getSuperCallConstAltExpr (MkNConstAlt _ expr) = expr
 
-  getSuperCallCaseExpr : List NamedCExp -> Maybe NamedCExp -> Asm (Maybe NamedCExp)
+  getSuperCallCaseExpr : {auto stateRef: Ref AsmState AsmState} -> List NamedCExp -> Maybe NamedCExp -> Core (Maybe NamedCExp)
   getSuperCallCaseExpr alts Nothing = getSuperCallExprList alts
-  getSuperCallCaseExpr alts (Just deflt) = Pure (!(getSuperCallExprList alts) <|> !(getSuperCallExpr deflt))
+  getSuperCallCaseExpr alts (Just deflt) = pure (!(getSuperCallExprList alts) <|> !(getSuperCallExpr deflt))
 
 substituteTypeName : SortedMap String String -> String -> String
 substituteTypeName imports type = fromMaybe type $ SortedMap.lookup type imports
@@ -699,7 +698,7 @@ parseExportDescriptors globalState descriptors = do
     go acc [] = pure acc
     go (imports, descriptors) ((idrisName, descriptor) :: rest) = do
       asmState <- createAsmState globalState idrisName
-      (exportDescriptors, _) <- asm asmState (parseExportDescriptor idrisName descriptor)
+      exportDescriptors <- runAsm asmState (\stateRef => parseExportDescriptor idrisName descriptor)
       case exportDescriptors of
         [MkImportDescriptor name currentImports] =>
           let newImports = SortedMap.merge imports (SortedMap.singleton (getNamespace name) currentImports)
@@ -751,58 +750,58 @@ isIdrisJvmAnnotation : Annotation -> Bool
 isIdrisJvmAnnotation (MkAnnotation name _) = name `elem` knownAnnotations
 
 export
-exportClass : ClassExport -> Asm ()
+exportClass : {auto stateRef: Ref AsmState AsmState} -> ClassExport -> Core ()
 exportClass (MkClassExport name _ extends implements modifiers annotations) = do
-  CreateClass [ComputeMaxs, ComputeFrames]
+  createClass [ComputeMaxs, ComputeFrames]
   let annotations = filter (not . isIdrisJvmAnnotation) annotations
   let signature = getSignature extends ++ concat (getSignature <$> implements)
   extendsTypeName <- getJvmReferenceTypeName extends
   implementsTypeNames <- traverse getJvmReferenceTypeName implements
   let asmAnnotations = asmAnnotation <$> annotations
-  ClassCodeStart javaClassFileVersion modifiers name (Just signature) extendsTypeName implementsTypeNames asmAnnotations
+  classCodeStart javaClassFileVersion modifiers name (Just signature) extendsTypeName implementsTypeNames asmAnnotations
 
 export
-exportField : FieldExport -> Asm ()
+exportField : {auto stateRef: Ref AsmState AsmState} -> FieldExport -> Core ()
 exportField (MkFieldExport fieldName type encloser modifiers annotations) = do
   let jvmClassName = encloser.name
   let asmAnnotations = asmAnnotation <$> annotations
-  CreateField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing asmAnnotations
-  FieldEnd
+  createField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing asmAnnotations
+  fieldEnd
 
 export
-exportType : String -> Asm ()
+exportType : {auto stateRef: Ref AsmState AsmState} -> String -> Core ()
 exportType name = do
   exportClass (MkClassExport name (UN $ Basic name) inferredObjectType [] [Public] [])
-  CreateField [Private, Final] "Unknown.idr" name "idrisValue" (getJvmTypeDescriptor inferredObjectType)
+  createField [Private, Final] "Unknown.idr" name "idrisValue" (getJvmTypeDescriptor inferredObjectType)
     Nothing Nothing []
-  FieldEnd
+  fieldEnd
 
-  CreateMethod [Private] "Unknown.idr" name "<init>" "(Ljava/lang/Object;)V" Nothing Nothing [] []
-  MethodCodeStart
-  Aload 0
-  InvokeMethod InvokeSpecial "java/lang/Object" "<init>" "()V" False
-  Aload 0
-  Aload 1
-  Field PutField name "idrisValue" "Ljava/lang/Object;"
-  Return
-  MaxStackAndLocal (-1) (-1)
-  MethodCodeEnd
+  createMethod [Private] "Unknown.idr" name "<init>" "(Ljava/lang/Object;)V" Nothing Nothing [] []
+  methodCodeStart
+  aload 0
+  invokeMethod InvokeSpecial "java/lang/Object" "<init>" "()V" False
+  aload 0
+  aload 1
+  field PutField name "idrisValue" "Ljava/lang/Object;"
+  return
+  maxStackAndLocal (-1) (-1)
+  methodCodeEnd
 
   let toJavaDescriptor = getMethodDescriptor $ MkInferredFunctionType (IRef name Class []) [inferredObjectType]
-  CreateMethod [Public, Static] "Unknown.idr" name "toJava" toJavaDescriptor Nothing Nothing [] []
-  MethodCodeStart
-  New name
-  Dup
-  Aload 0
-  InvokeMethod InvokeSpecial name "<init>" "(Ljava/lang/Object;)V" False
-  Areturn
-  MaxStackAndLocal (-1) (-1)
-  MethodCodeEnd
+  createMethod [Public, Static] "Unknown.idr" name "toJava" toJavaDescriptor Nothing Nothing [] []
+  methodCodeStart
+  new name
+  dup
+  aload 0
+  invokeMethod InvokeSpecial name "<init>" "(Ljava/lang/Object;)V" False
+  areturn
+  maxStackAndLocal (-1) (-1)
+  methodCodeEnd
 
-  CreateMethod [Public] "Unknown.idr" name "toIdris" "()Ljava/lang/Object;" Nothing Nothing [] []
-  MethodCodeStart
-  Aload 0
-  Field GetField name "idrisValue" "Ljava/lang/Object;"
-  Areturn
-  MaxStackAndLocal (-1) (-1)
-  MethodCodeEnd
+  createMethod [Public] "Unknown.idr" name "toIdris" "()Ljava/lang/Object;" Nothing Nothing [] []
+  methodCodeStart
+  aload 0
+  field GetField name "idrisValue" "Ljava/lang/Object;"
+  areturn
+  maxStackAndLocal (-1) (-1)
+  methodCodeEnd

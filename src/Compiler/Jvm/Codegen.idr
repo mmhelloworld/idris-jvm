@@ -21,13 +21,6 @@ import Data.Vect
 
 import Debug.Trace
 
-import Core.Env
-
-import Idris.Pretty.Annotations
-import Idris.Syntax
-import Idris.Resugar
-import Idris.Doc.String
-
 import Libraries.Data.NameMap
 import Libraries.Data.SortedMap
 import Libraries.Utils.Path
@@ -56,14 +49,6 @@ import Idris.Syntax
 %hide Core.Context.Context.Constructor.arity
 %hide Core.Name.Scoped.Scope
 %hide System.FFI.runtimeClass
-
-getType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> Name -> Core (Maybe (Term []))
-getType name = do
-  defs <- get Ctxt
-  Just gdef <- lookupCtxtExact name (gamma defs)
-    | Nothing => pure Nothing
-  ty <- normaliseHoles defs [] gdef.type
-  Just <$> toFullNames ty
 
 addScopeLocalVariables : {auto stateRef: Ref AsmState AsmState} -> Scope -> Core ()
 addScopeLocalVariables scope = do
@@ -227,7 +212,8 @@ getSwitchCasesWithEndLabel switchCases labelStarts = go $ zip switchCases (drop 
 labelHashCodeAlt : {auto stateRef: Ref AsmState AsmState} -> (Int, a) -> Core (String, Int, a)
 labelHashCodeAlt (hash, expressions) = pure (!newLabel, hash, expressions)
 
-getHashCodeCasesWithLabels : {auto stateRef: Ref AsmState AsmState} -> SortedMap Int (List (Int, a)) -> Core (List (String, Int, List (Int, a)))
+getHashCodeCasesWithLabels : {auto stateRef: Ref AsmState AsmState} -> SortedMap Int (List (Int, a))
+                           -> Core (List (String, Int, List (Int, a)))
 getHashCodeCasesWithLabels positionAndAltsByHash = traverse labelHashCodeAlt $ SortedMap.toList positionAndAltsByHash
 
 toUnsignedInt : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
@@ -325,7 +311,8 @@ intToBigInteger = do
   invokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
 
 mutual
-    assembleExpr : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> NamedCExp -> Core ()
+    assembleExpr : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool)
+                 -> InferredType -> NamedCExp -> Core ()
     assembleExpr isTailCall returnType (NmDelay _ _ expr) =
         assembleSubMethodWithScope isTailCall returnType Nothing Nothing expr
     assembleExpr isTailCall returnType (NmLocal _ loc) = do
@@ -432,8 +419,7 @@ mutual
       assembleCons isTailCall returnType head tail
     assembleExpr isTailCall returnType expr@(NmCon fc _ CONS _ _) = throw $ GenericMsg fc "Invalid CONS constructor"
 
-    assembleExpr isTailCall returnType expr@(NmCon fc name conInfo tag args) =
-        assembleCon isTailCall returnType fc name tag args
+    assembleExpr isTailCall returnType expr@(NmCon fc name conInfo tag args) = assembleCon isTailCall returnType fc name tag args
 
     assembleExpr isTailCall returnType (NmOp fc fn args) = do
         assembleExprOp returnType fc fn args
@@ -506,17 +492,21 @@ mutual
         when isTailCall $ asmReturn returnType
     assembleExpr _ _ expr = throw $ GenericMsg (getFC expr) $ "Cannot compile " ++ show expr ++ " yet"
 
-    castInt : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core () -> NamedCExp -> Core ()
+    castInt : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core ()
+            -> NamedCExp -> Core ()
     castInt returnType conversionOp expr = jassembleCast returnType IInt IInt conversionOp expr
 
-    jassembleCast : {auto stateRef: Ref AsmState AsmState} -> InferredType -> InferredType -> InferredType -> Core ()
+    jassembleCast : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType
+                  -> InferredType -> InferredType -> Core ()
                   -> NamedCExp -> Core ()
     jassembleCast returnType from to conversionOp expr = do
         assembleExpr False from expr
         conversionOp
         asmCast to returnType
 
-    assembleNmAppNilArity : {auto stateRef: Ref AsmState AsmState} -> (isTailCall : Bool) -> InferredType -> Name -> Core ()
+    assembleNmAppNilArity : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                          -> {auto stateRef: Ref AsmState AsmState} -> (isTailCall : Bool)
+                          -> InferredType -> Name -> Core ()
     assembleNmAppNilArity isTailCall returnType idrisName = do
         let jname = jvmName idrisName
         let functionName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
@@ -540,7 +530,8 @@ mutual
       invokeMethod InvokeVirtual "java/math/BigInteger" "intValue" "()I" False
       op
 
-    assembleCon : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> FC -> Name -> (tag : Maybe Int) -> List NamedCExp -> Core ()
+    assembleCon : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool)
+                -> InferredType -> FC -> Name -> (tag : Maybe Int) -> List NamedCExp -> Core ()
     assembleCon isTailCall returnType fc name tag args = do
         let fileName = fst $ getSourceLocationFromFc fc
         let constructorClassName = getIdrisConstructorClassName (jvmSimpleName name)
@@ -563,7 +554,8 @@ mutual
         asmCast idrisObjectType returnType
         when isTailCall $ asmReturn returnType
 
-    assembleCons : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> NamedCExp -> NamedCExp -> Core ()
+    assembleCons : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool)
+                 -> InferredType -> NamedCExp -> NamedCExp -> Core ()
     assembleCons isTailCall returnType head tail = do
         new idrisConsClass
         dup
@@ -573,7 +565,8 @@ mutual
         asmCast idrisObjectType returnType
         when isTailCall $ asmReturn returnType
 
-    assembleJust : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> NamedCExp -> Core ()
+    assembleJust : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool)
+                 -> InferredType -> NamedCExp -> Core ()
     assembleJust isTailCall returnType value = do
         new idrisJustClass
         dup
@@ -582,7 +575,8 @@ mutual
         asmCast idrisObjectType returnType
         when isTailCall $ asmReturn returnType
 
-    assembleConstructorSwitchExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core Int
+    assembleConstructorSwitchExpr : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                                  -> NamedCExp -> Core Int
     assembleConstructorSwitchExpr (NmLocal _ loc) = getVariableIndex $ jvmSimpleName loc
     assembleConstructorSwitchExpr sc = do
         idrisObjectVariableIndex <- getVariableIndex $ "constructorSwitchValue" ++ show !newDynamicVariableIndex
@@ -590,7 +584,9 @@ mutual
         storeVar idrisObjectType idrisObjectType idrisObjectVariableIndex
         pure idrisObjectVariableIndex
 
-    assembleExprBinaryOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> InferredType -> Core ()
+    assembleExprBinaryOp : {auto c : Ref Ctxt Defs}
+                         -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType
+                         -> InferredType -> Core ()
                          -> NamedCExp -> NamedCExp -> Core ()
     assembleExprBinaryOp returnType exprType operator expr1 expr2 = do
         assembleExpr False exprType expr1
@@ -598,8 +594,8 @@ mutual
         operator
         asmCast exprType returnType
 
-    assembleExprBinaryBoolOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> InferredType
-                             -> (String -> Core ()) -> NamedCExp -> NamedCExp -> Core ()
+    assembleExprBinaryBoolOp : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType
+                             -> InferredType -> (String -> Core ()) -> NamedCExp -> NamedCExp -> Core ()
     assembleExprBinaryBoolOp returnType exprType operator expr1 expr2 = do
         assembleExpr False exprType expr1
         assembleExpr False exprType expr2
@@ -618,8 +614,9 @@ mutual
         labelStart endLabel
         asmCast IInt returnType
 
-    assembleExprComparableBinaryBoolOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> String -> (String -> Core ()) ->
-        NamedCExp -> NamedCExp -> Core ()
+    assembleExprComparableBinaryBoolOp : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                                       -> InferredType -> String -> (String -> Core ())
+                                       -> NamedCExp -> NamedCExp -> Core ()
     assembleExprComparableBinaryBoolOp returnType className operator expr1 expr2 = do
         let exprType = IRef className Class []
         assembleExpr False exprType expr1
@@ -640,13 +637,15 @@ mutual
         labelStart endLabel
         asmCast IInt returnType
 
-    assembleExprUnaryOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> InferredType -> Core () -> NamedCExp -> Core ()
+    assembleExprUnaryOp : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType
+                        -> InferredType -> Core () -> NamedCExp -> Core ()
     assembleExprUnaryOp returnType exprType operator expr = do
         assembleExpr False exprType expr
         operator
         asmCast exprType returnType
 
-    assembleStrCons : {auto stateRef: Ref AsmState AsmState} -> InferredType -> (char: NamedCExp) -> (str: NamedCExp) -> Core ()
+    assembleStrCons : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType
+                    -> (char: NamedCExp) -> (str: NamedCExp) -> Core ()
     assembleStrCons returnType char str = do
         new "java/lang/StringBuilder"
         dup
@@ -659,7 +658,8 @@ mutual
         invokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
         asmCast inferredStringType returnType
 
-    assembleStrReverse : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> Core ()
+    assembleStrReverse : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType
+                       -> NamedCExp -> Core ()
     assembleStrReverse returnType str = do
         new "java/lang/StringBuilder"
         dup
@@ -678,7 +678,8 @@ mutual
     compareSignedLong : {auto stateRef: Ref AsmState AsmState} -> (String -> Core ()) -> String -> Core ()
     compareSignedLong op label = do lcmp; op label
 
-    assembleCast : {auto stateRef: Ref AsmState AsmState} -> InferredType -> FC -> PrimType -> PrimType -> NamedCExp -> Core ()
+    assembleCast : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType -> FC
+                 -> PrimType -> PrimType -> NamedCExp -> Core ()
     assembleCast returnType fc from to x =
       jassembleCast returnType (getInferredType from) (getInferredType to) (getCastAsmOp from to) x
 
@@ -922,7 +923,8 @@ mutual
         invokeMethod InvokeStatic "java/lang/Integer" "toString" "(I)Ljava/lang/String;" False
     getCastAsmOp _ _ = pure ()
 
-    assembleExprOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> FC -> PrimFn arity -> Vect arity NamedCExp -> Core ()
+    assembleExprOp : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType -> FC
+                   -> PrimFn arity -> Vect arity NamedCExp -> Core ()
     assembleExprOp returnType fc (Neg Bits64Type) [x] = assembleExprUnaryOp returnType ILong lneg x
     assembleExprOp returnType fc (ShiftR Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong (do l2i; lushr) x y
     assembleExprOp returnType fc (BAnd Bits64Type) [x, y] = assembleExprBinaryOp returnType ILong land x y
@@ -1144,10 +1146,11 @@ mutual
 
     assembleExprOp returnType fc op _ = throw $ GenericMsg fc ("Unsupported operator " ++ show op)
 
-    assembleParameter : {auto stateRef: Ref AsmState AsmState} -> (NamedCExp, InferredType) -> Core ()
+    assembleParameter : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                      -> (NamedCExp, InferredType) -> Core ()
     assembleParameter (param, ty) = assembleExpr False ty param
 
-    storeParameter : {auto stateRef: Ref AsmState AsmState} -> Map Int InferredType
+    storeParameter : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> Map Int InferredType
                    -> (Int, NamedCExp, InferredType) -> Core Int
     storeParameter variableTypes (var, (NmLocal _ loc), ty) = do
         let valueVariableName = jvmSimpleName loc
@@ -1166,7 +1169,8 @@ mutual
         storeVar ty ty targetVariableIndex
         pure targetVariableIndex
 
-    createMethodReference : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> (arity: Nat) -> Name -> Core ()
+    createMethodReference : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                          -> (isTailCall: Bool) -> (arity: Nat) -> Name -> Core ()
     createMethodReference isTailCall arity name = do
         let jname = jvmName name
         functionType <- case !(findFunctionType jname) of
@@ -1185,13 +1189,15 @@ mutual
           invokeMethod InvokeStatic functionsClass "curry" methodDescriptor False
         when isTailCall $ asmReturn inferredLambdaType
 
-    assembleSubMethodWithScope1 : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType
+    assembleSubMethodWithScope1 : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                                -> (isTailCall: Bool) -> InferredType
                                 -> (parameterName : Maybe Name) -> NamedCExp -> Core ()
     assembleSubMethodWithScope1 isTailCall returnType parameterName body = do
         parentScope <- getScope !getCurrentScopeIndex
         withScope $ assembleSubMethod isTailCall returnType Nothing parameterName parentScope body
 
-    assembleMethodReference : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType
+    assembleMethodReference : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                            -> (isTailCall: Bool) -> InferredType
                             -> (isMethodReference : Bool) -> (arity: Nat) -> (functionName: Name)
                             -> (parameterName : Maybe Name) -> NamedCExp -> Core ()
     assembleMethodReference isTailCall returnType isMethodReference arity functionName parameterName body =
@@ -1199,7 +1205,9 @@ mutual
         then createMethodReference isTailCall arity functionName
         else assembleSubMethodWithScope1 isTailCall returnType parameterName body
 
-    assembleSubMethodWithScope : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType
+    assembleSubMethodWithScope : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                               -> {auto stateRef: Ref AsmState AsmState}
+                               -> (isTailCall: Bool) -> InferredType
                                -> (parameterValue: Maybe NamedCExp) -> (parameterName : Maybe Name)
                                -> NamedCExp -> Core ()
     assembleSubMethodWithScope isTailCall returnType (Just value) (Just name) body = do
@@ -1218,52 +1226,36 @@ mutual
           assembleValue enclosingScope variableName = do
             lambdaScopeIndex <- getCurrentScopeIndex
             updateCurrentScopeIndex (index enclosingScope)
-            assembleExpr False !(getVariableType variableName) value
+            assembleExpr False !(getVariableTypeAtScope lambdaScopeIndex variableName) value
             updateCurrentScopeIndex lambdaScopeIndex
 
     assembleSubMethodWithScope isTailCall returnType _ p0
       body@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmLam _ p4 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1,
-        NmLocal _ arg2, NmLocal _ arg3, NmLocal _ arg4]))))) = assembleMethodReference
-            isTailCall returnType
-            (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2 && p3 == arg3 && p4 == arg4)
-            5 name p0 body
+        NmLocal _ arg2, NmLocal _ arg3, NmLocal _ arg4]))))) = do
+          isMethodReference <- canUseMethodReference name [arg0, arg1, arg2, arg3, arg4] p0 [p1, p2, p3, p4]
+          assembleMethodReference isTailCall returnType isMethodReference 5 name p0 body
     assembleSubMethodWithScope isTailCall returnType _ p0
       body@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2,
-        NmLocal _ arg3])))) = assembleMethodReference isTailCall returnType
-          (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2 && p3 == arg3) 4 name p0 body
+        NmLocal _ arg3])))) = do
+          isMethodReference <- canUseMethodReference name [arg0, arg1, arg2, arg3] p0 [p1, p2, p3]
+          assembleMethodReference isTailCall returnType isMethodReference 4 name p0 body
     assembleSubMethodWithScope isTailCall returnType _ p0
-      body@(NmLam _ p1 (NmLam _ p2 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2]))) =
-        assembleMethodReference isTailCall returnType (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2)
-          3 name p0 body
+      body@(NmLam _ p1 (NmLam _ p2 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2]))) = do
+        isMethodReference <- canUseMethodReference name [arg0, arg1, arg2] p0 [p1, p2]
+        assembleMethodReference isTailCall returnType isMethodReference 3 name p0 body
     assembleSubMethodWithScope isTailCall returnType _ p0
-      body@(NmLam _ p1 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1])) =
-        assembleMethodReference isTailCall returnType (maybe False ((==) arg0) p0 && p1 == arg1)
-          2 name p0 body
-    assembleSubMethodWithScope isTailCall returnType _ p0 body@(NmApp _ (NmRef _ name) [NmLocal _ arg0]) =
-      assembleMethodReference isTailCall returnType (maybe False ((==) arg0) p0) 1 name p0 body
+      body@(NmLam _ p1 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1])) = do
+        isMethodReference <- canUseMethodReference name [arg0, arg1] p0 [p1]
+        assembleMethodReference isTailCall returnType isMethodReference 2 name p0 body
+    assembleSubMethodWithScope isTailCall returnType _ p0 body@(NmApp _ (NmRef _ name) [NmLocal _ arg0]) = do
+      isMethodReference <- canUseMethodReference name [arg0] p0 []
+      assembleMethodReference isTailCall returnType isMethodReference 1 name p0 body
 
-    assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLam _ c (NmLam _ a (NmLocal _ b))) =
-      let hasParameter = isJust parameterName
-      in if hasParameter && c == b
-          then assembleConstant1Lambda isTailCall
-          else if hasParameter && a == b
-            then assembleIdentity2Lambda isTailCall
-            else assembleSubMethodWithScope1 isTailCall returnType parameterName body
-    assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLam _ a (NmLocal _ b)) =
-      if maybe False ((==) b) parameterName
-        then assembleConstantLambda isTailCall
-        else if isJust parameterName && a == b
-          then assembleIdentity1Lambda isTailCall
-          else assembleSubMethodWithScope1 isTailCall returnType parameterName body
-    assembleSubMethodWithScope isTailCall returnType _ parameterName body@(NmLocal _ b) =
-      if maybe False ((==) b) parameterName
-        then assembleIdentityLambda isTailCall
-        else assembleSubMethodWithScope1 isTailCall returnType parameterName body
     assembleSubMethodWithScope isTailCall returnType _ parameterName body =
       assembleSubMethodWithScope1 isTailCall returnType parameterName body
 
-    assembleSubMethod : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType
-                      -> (parameterValueExpr: (Maybe (Core ()))) -> (parameterName: Maybe Name) -> Scope
+    assembleSubMethod : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool)
+                      -> InferredType -> (parameterValueExpr: (Maybe (Core ()))) -> (parameterName: Maybe Name) -> Scope
                       -> NamedCExp -> Core ()
     assembleSubMethod isTailCall lambdaReturnType parameterValueExpr parameterName declaringScope expr = do
             scope <- getScope !getCurrentScopeIndex
@@ -1392,9 +1384,9 @@ mutual
         defaultValue returnType
         asmReturn returnType
 
-    assembleConstantSwitch : {auto stateRef: Ref AsmState AsmState} -> (returnType: InferredType)
-                           -> (switchExprType: InferredType) -> FC -> NamedCExp -> List NamedConstAlt
-                           -> Maybe NamedCExp -> Core ()
+    assembleConstantSwitch : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                           -> (returnType: InferredType) -> (switchExprType: InferredType) -> FC -> NamedCExp
+                           -> List NamedConstAlt -> Maybe NamedCExp -> Core ()
     assembleConstantSwitch _ _ fc _ [] _ = throw $ GenericMsg fc "Empty cases"
 
     assembleConstantSwitch returnType IInt fc sc alts def = do
@@ -1529,7 +1521,9 @@ mutual
                         switchBody label nextLabel position alt
                         go nextLabel positionAndAlts
 
-    assembleConCase : {auto stateRef: Ref AsmState AsmState} -> InferredType -> FC -> (sc : NamedCExp) -> List NamedConAlt -> Maybe NamedCExp -> Core ()
+    assembleConCase : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                    -> {auto stateRef: Ref AsmState AsmState}
+                    -> InferredType -> FC -> (sc : NamedCExp) -> List NamedConAlt -> Maybe NamedCExp -> Core ()
     assembleConCase returnType fc sc alts def = do
         idrisObjectVariableIndex <- assembleConstructorSwitchExpr sc
         let hasTypeCase = any isTypeCase alts
@@ -1537,8 +1531,10 @@ mutual
         variableTypes <- getVariableTypes
         optTy <- coreLift $ Map.get variableTypes idrisObjectVariableIndex
         let idrisObjectVariableType = fromMaybe IUnknown $ nullableToMaybe optTy
-        loadVar variableTypes idrisObjectVariableType idrisObjectType idrisObjectVariableIndex
-        when (idrisObjectVariableType /= idrisObjectType) $ do
+        let isIdrisObject = idrisObjectVariableType /= IUnknown && idrisObjectVariableType /= inferredObjectType
+        let targetType = if (not isIdrisObject) then idrisObjectType else idrisObjectVariableType
+        loadVar variableTypes idrisObjectVariableType targetType idrisObjectVariableIndex
+        when (not isIdrisObject) $ do
             storeVar idrisObjectType idrisObjectType idrisObjectVariableIndex
             loadVar !getVariableTypes idrisObjectType idrisObjectType idrisObjectVariableIndex
         let constructorGetter = if hasTypeCase then "getStringConstructorId" else "getConstructorId"
@@ -1547,7 +1543,8 @@ mutual
             then assembleStringConstructorSwitch returnType fc idrisObjectVariableIndex alts def
             else assembleConstructorSwitch returnType fc idrisObjectVariableIndex alts def
 
-    assembleConCaseExpr : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Int -> List Name -> NamedCExp -> Core ()
+    assembleConCaseExpr : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType -> Int
+                        -> List Name -> NamedCExp -> Core ()
     assembleConCaseExpr returnType idrisObjectVariableIndex args expr = do
             variableTypes <- getVariableTypes
             optTy <- coreLift $ Map.get variableTypes idrisObjectVariableIndex
@@ -1567,7 +1564,8 @@ mutual
                     storeVar inferredObjectType !(getVariableType variableName) variableIndex
                 bindArg idrisObjectVariableType variableTypes (index + 1) vars
 
-    assembleConstructorSwitch : {auto stateRef: Ref AsmState AsmState} -> InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()
+    assembleConstructorSwitch : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType
+                              -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()
     assembleConstructorSwitch returnType fc idrisObjectVariableIndex alts def = do
             switchCases <- getCasesWithLabels alts
             let labels = fst <$> switchCases
@@ -1613,7 +1611,8 @@ mutual
             assembleExprConAlt (labelStart, _, (MkNConAlt _ _ _ args expr), labelEnd) =
                 assembleCaseWithScope labelStart labelEnd args expr
 
-    assembleStringConstructorSwitch : {auto stateRef: Ref AsmState AsmState} -> InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()
+    assembleStringConstructorSwitch : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                                    -> InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()
     assembleStringConstructorSwitch returnType fc idrisObjectVariableIndex alts def = do
         constantExprVariableSuffixIndex <- newDynamicVariableIndex
         let constantExprVariableName = "constructorCaseExpr" ++ show constantExprVariableSuffixIndex
@@ -1691,14 +1690,14 @@ mutual
                     switchBody label nextLabel position alt
                     go nextLabel positionAndAlts
 
-    asmJavaLambda : {auto stateRef: Ref AsmState AsmState} -> FC -> InferredType -> NamedCExp -> NamedCExp -> NamedCExp -> Core ()
+    asmJavaLambda : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                  -> FC -> InferredType -> NamedCExp -> NamedCExp -> NamedCExp -> Core ()
     asmJavaLambda fc returnType functionType javaInterfaceType lambda = do
         assembleExpr False inferredLambdaType lambda
         lambdaType <- getJavaLambdaType fc [functionType, javaInterfaceType, lambda]
         let samType =
           if isIoAction then {parameterTypes $= dropWorldType} lambdaType.methodType else lambdaType.methodType
-        let lambdaImplementationType = lambdaType.implementationType
-        let lambdaImplementationType = updateImplementationType samType.returnType lambdaImplementationType
+        let lambdaImplementationType = updateImplementationType samType.returnType lambdaType.implementationType
         let invokeDynamicType = MkInferredFunctionType lambdaType.javaInterface [inferredLambdaType]
         let invokeDynamicDescriptor = getMethodDescriptor invokeDynamicType
         let implementationParameterTypes = lambdaImplementationType.parameterTypes
@@ -1764,7 +1763,8 @@ mutual
           when (rest /= [] || isIoAction) $ asmCast inferredObjectType inferredLambdaType
           applyParameters typesByIndex (index + 1) returnType rest
 
-    jvmExtPrim : {auto stateRef: Ref AsmState AsmState} -> FC -> InferredType -> ExtPrim -> List NamedCExp -> Core ()
+    jvmExtPrim : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+               -> FC -> InferredType -> ExtPrim -> List NamedCExp -> Core ()
     jvmExtPrim fc returnType JvmInstanceMethodCall [ret, NmApp _ _ [functionNamePrimVal], fargs, world] =
       jvmExtPrim fc returnType JvmInstanceMethodCall [ret, functionNamePrimVal, fargs, world]
     jvmExtPrim _ returnType JvmInstanceMethodCall [ret, NmPrimVal fc (Str fn), fargs, world] = do
@@ -1793,7 +1793,7 @@ mutual
         else aconstnull
     jvmExtPrim fc returnType JvmStaticMethodCall [ret, NmApp _ _ [functionNamePrimVal], fargs, world] =
       jvmExtPrim fc returnType JvmStaticMethodCall [ret, functionNamePrimVal, fargs, world]
-    jvmExtPrim _ returnType JvmStaticMethodCall [ret, NmPrimVal fc (Str fn), fargs, world] = do
+    jvmExtPrim _ returnType JvmStaticMethodCall [ret, NmPrimVal fc (Str fn), fargs, _] = do
         args <- getFArgs fargs
         argTypes <- traverse tySpec (map fst args)
         let (cname, mnameWithDot) = break (== '.') fn
@@ -1812,7 +1812,7 @@ mutual
         let mname = if isSuper then "<init>" else mname
         invokeMethod invocationType cname mname methodDescriptor False
         asmCast methodReturnType returnType
-    jvmExtPrim _ returnType SetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
+    jvmExtPrim _ returnType SetInstanceField [ret, NmPrimVal fc (Str fn), fargs, _] = do
         (obj :: value :: []) <- getFArgs fargs
             | _ => asmCrash ("Setting an instance field should have two arguments for " ++ fn)
         fieldType <- tySpec (fst value)
@@ -1823,7 +1823,7 @@ mutual
         field PutField cname fieldName (getJvmTypeDescriptor fieldType)
         aconstnull
         asmCast inferredObjectType returnType
-    jvmExtPrim _ returnType SetStaticField [ret, NmPrimVal fc (Str fn), fargs, world] = do
+    jvmExtPrim _ returnType SetStaticField [ret, NmPrimVal fc (Str fn), fargs, _] = do
         (value :: []) <- getFArgs fargs
             | _ => asmCrash ("Setting a static field should have one argument for " ++ fn)
         fieldType <- tySpec (fst value)
@@ -1833,7 +1833,7 @@ mutual
         field PutStatic cname fieldName (getJvmTypeDescriptor fieldType)
         aconstnull
         asmCast inferredObjectType returnType
-    jvmExtPrim _ returnType GetInstanceField [ret, NmPrimVal fc (Str fn), fargs, world] = do
+    jvmExtPrim _ returnType GetInstanceField [ret, NmPrimVal fc (Str fn), fargs, _] = do
         (obj :: []) <- getFArgs fargs
             | _ => asmCrash ("Getting an instance field should have one argument for " ++ fn)
         fieldType <- tySpec ret
@@ -1842,34 +1842,34 @@ mutual
         let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
         field GetField cname fieldName (getJvmTypeDescriptor fieldType)
         asmCast fieldType returnType
-    jvmExtPrim _ returnType GetStaticField [ret, NmPrimVal fc (Str fn), fargs, world] = do
+    jvmExtPrim _ returnType GetStaticField [ret, NmPrimVal fc (Str fn), fargs, _] = do
         fieldType <- tySpec ret
         let (cname, fnameWithDot) = break (== '.') fn
         let (_, fieldName) = break (\c => c /= '.' && c /= '#') fnameWithDot
         field GetStatic cname fieldName (getJvmTypeDescriptor fieldType)
         asmCast fieldType returnType
-    jvmExtPrim _ returnType NewArray [_, size, val, world] = do
+    jvmExtPrim _ returnType NewArray [_, size, val, _] = do
         assembleExpr False IInt size
         assembleExpr False IUnknown val
         invokeMethod InvokeStatic arraysClass "create" "(ILjava/lang/Object;)Ljava/util/ArrayList;" False
         asmCast arrayListType returnType
-    jvmExtPrim _ returnType ArrayGet [_, arr, pos, world] = do
+    jvmExtPrim _ returnType ArrayGet [_, arr, pos, _] = do
         assembleExpr False arrayListType arr
         assembleExpr False IInt pos
         invokeMethod InvokeVirtual arrayListClass "get" "(I)Ljava/lang/Object;" False
         asmCast inferredObjectType returnType
-    jvmExtPrim _ returnType ArraySet [_, arr, pos, val, world] = do
+    jvmExtPrim _ returnType ArraySet [_, arr, pos, val, _] = do
         assembleExpr False arrayListType arr
         assembleExpr False IInt pos
         assembleExpr False IUnknown val
         invokeMethod InvokeVirtual arrayListClass "set" "(ILjava/lang/Object;)Ljava/lang/Object;" False
         asmCast inferredObjectType returnType
-    jvmExtPrim _ returnType JvmNewArray [tyExpr, size, world] = do
+    jvmExtPrim _ returnType JvmNewArray [tyExpr, size, _] = do
         assembleExpr False IInt size
         elemTy <- tySpec tyExpr
         assembleArray elemTy
         asmCast (IArray elemTy) returnType
-    jvmExtPrim _ returnType JvmSetArray [tyExpr, index, val, arr, world] = do
+    jvmExtPrim _ returnType JvmSetArray [tyExpr, index, val, arr, _] = do
         elemTy <- tySpec tyExpr
         assembleExpr False (IArray elemTy) arr
         assembleExpr False IInt index
@@ -1877,7 +1877,7 @@ mutual
         storeArray elemTy
         aconstnull
         asmCast inferredObjectType returnType
-    jvmExtPrim _ returnType JvmGetArray [tyExpr, index, arr, world] = do
+    jvmExtPrim _ returnType JvmGetArray [tyExpr, index, arr, _] = do
         elemTy <- tySpec tyExpr
         assembleExpr False (IArray elemTy) arr
         assembleExpr False IInt index
@@ -1888,17 +1888,17 @@ mutual
         assembleExpr False (IArray elemTy) arr
         arraylength
         asmCast IInt returnType
-    jvmExtPrim _ returnType NewIORef [_, val, world] = do
+    jvmExtPrim _ returnType NewIORef [_, val, _] = do
         new refClass
         dup
         assembleExpr False IUnknown val
         invokeMethod InvokeSpecial refClass "<init>" "(Ljava/lang/Object;)V" False
         asmCast refType returnType
-    jvmExtPrim _ returnType ReadIORef [_, ref, world] = do
+    jvmExtPrim _ returnType ReadIORef [_, ref, _] = do
         assembleExpr False refType ref
         invokeMethod InvokeVirtual refClass "getValue" "()Ljava/lang/Object;" False
         asmCast inferredObjectType returnType
-    jvmExtPrim _ returnType WriteIORef [_, ref, val, world] = do
+    jvmExtPrim _ returnType WriteIORef [_, ref, val, _] = do
         assembleExpr False refType ref
         assembleExpr False IUnknown val
         invokeMethod InvokeVirtual refClass "setValue" "(Ljava/lang/Object;)V" False
@@ -1945,7 +1945,8 @@ initializeFunctionState = do
       lineNumberLabels := lineNumberLabels }
   updateCurrentFunction $ { dynamicVariableCounter := 0 }
 
-assembleDefinition : {auto stateRef: Ref AsmState AsmState} -> Name -> FC -> Core ()
+assembleDefinition : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                   -> Name -> FC -> Core ()
 assembleDefinition idrisName fc = do
     let jname = jvmName idrisName
     resetScope
@@ -1959,8 +1960,10 @@ assembleDefinition idrisName fc = do
     let methodReturnType = returnType functionType
     initializeFunctionState
     let optimizedExpr = optimizedBody function
-    when (shouldDebugFunction jname) $ logAsm $ "Assembling " ++ declaringClassName ++ "." ++ methodName ++ "\n" ++
-      showNamedCExp 0 optimizedExpr
+    when (shouldDebugFunction jname) $
+      logAsm $ "Assembling " ++ declaringClassName ++ "." ++ methodName ++
+        ": " ++ show functionType ++ "\n" ++
+        showNamedCExp 0 optimizedExpr
     let fileName = fst $ getSourceLocationFromFc fc
     let descriptor = getMethodDescriptor functionType
     -- Cache only top level nil arity functions. Don't cache extracted function results.
@@ -2010,31 +2013,23 @@ createMainMethod programName mainFunctionName = do
     maxStackAndLocal (-1) (-1)
     methodCodeEnd
 
-assemble : AsmGlobalState -> Map String (FC, NamedDef) -> Name -> IO ()
-assemble globalState fcAndDefinitionsByName name = do
-    fcDef <- Map.get {value=(FC, NamedDef)} fcAndDefinitionsByName (jvmSimpleName name)
-    case nullableToMaybe fcDef of
-        Just (fc, def) => do
-            programName <- AsmGlobalState.getProgramName globalState
-            asmState <- createAsmState globalState name
-            ignore $ runAsm asmState $ \stateRef => do
-                inferDef programName name fc def
-                assembleDefinition name fc
-                scopes <- coreLift $ ArrayList.new {elemTy=Scope}
-                updateCurrentFunction $ { scopes := (subtyping scopes), optimizedBody := emptyFunction }
-        Nothing => pure ()
+assemble : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+         -> {auto stateRef: Ref AsmState AsmState} -> Name -> FC -> Core ()
+assemble name fc = do
+  inferDef name fc
+  assembleDefinition name fc
+  scopes <- coreLift $ ArrayList.new {elemTy=Scope}
+  updateCurrentFunction $ { scopes := (subtyping scopes), optimizedBody := emptyFunction }
 
 getNameStrFcDef : (Name, FC, NamedDef) -> (String, FC, NamedDef)
 getNameStrFcDef (name, fc, def) = (jvmSimpleName name, fc, def)
-
-getNameStrDef : (String, FC, NamedDef) -> (String, NamedDef)
-getNameStrDef (name, fc, def) = (name, def)
 
 isForeignDef : (Name, FC, NamedDef) -> Bool
 isForeignDef (_, _, MkNmForeign _ _ _) = True
 isForeignDef _ = False
 
-exportConstructor : {auto stateRef: Ref AsmState AsmState} -> SortedMap Namespace (List String) -> Map Int InferredType
+exportConstructor : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                  -> SortedMap Namespace (List String) -> Map Int InferredType
                   -> InferredType -> Int -> Jname -> Name -> InferredFunctionType -> Core ()
 exportConstructor typeExports jvmArgumentTypesByIndex jvmReturnType arity jvmIdrisName idrisName idrisFunctionType = do
   function <- getCurrentFunction
@@ -2067,7 +2062,8 @@ exportConstructor typeExports jvmArgumentTypesByIndex jvmReturnType arity jvmIdr
   maxStackAndLocal (-1) (-1)
   methodCodeEnd
 
-exportFunction : {auto stateRef: Ref AsmState AsmState} -> SortedMap Namespace (List String) -> MethodExport -> Core ()
+exportFunction : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+               -> SortedMap Namespace (List String) -> MethodExport -> Core ()
 exportFunction typeExports (MkMethodExport jvmFunctionName idrisName type shouldPerformIO encloser
   modifiers annotations parameterAnnotations) = do
     let jvmClassName = encloser.name
@@ -2376,8 +2372,9 @@ generateDataClass descriptorsByEncloser classExport = do
   generateEquals descriptorsByEncloser classExport
   generateToString descriptorsByEncloser classExport
 
-exportMemberIo : AsmGlobalState -> SortedMap Namespace (List String) ->
-                   SortedMap ClassExport (List ExportDescriptor) -> ExportDescriptor -> IO ()
+exportMemberIo : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+               -> AsmGlobalState -> SortedMap Namespace (List String)
+               -> SortedMap ClassExport (List ExportDescriptor) -> ExportDescriptor -> IO ()
 exportMemberIo globalState typeExports descriptorsByEncloser (MkMethodExportDescriptor desc) =
   if desc.name == "<init>"
     then do
@@ -2388,12 +2385,12 @@ exportMemberIo globalState typeExports descriptorsByEncloser (MkMethodExportDesc
             let jname = jvmName desc.idrisName
             let dottedClassName = replace (className jname) '/' '.'
             let constructorIdrisName = NS (mkNamespace desc.encloser.name) (UN $ Basic (methodName jname ++ "<init>"))
-            programName <- AsmGlobalState.getProgramName globalState
             asmState <- createAsmStateJavaName globalState desc.encloser.name
             ignore $ runAsm asmState $ \stateRef => do
               Just superCallExpr <- getSuperCallExpr expr
                 | Nothing => asmCrash ("Constructor export for " ++ show idrisName ++ " should call 'super'")
-              inferDef programName constructorIdrisName fc (MkNmFun args superCallExpr)
+              inferFunctionType (constructorIdrisName, fc, (MkNmFun args superCallExpr))
+              inferDef constructorIdrisName fc
               resetScope
               loadFunction $ jvmName constructorIdrisName
               exportFunction typeExports desc
@@ -2469,7 +2466,8 @@ exportTypeIo globalState name = do
 exportTypes : AsmGlobalState -> SortedMap Namespace (List String) -> IO ()
 exportTypes globalState typeExports = traverse_ (exportTypeIo globalState) $ concat $ values typeExports
 
-exportDefs : AsmGlobalState -> List (Name, String) -> IO ()
+exportDefs : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+           -> AsmGlobalState -> List (Name, String) -> IO ()
 exportDefs globalState nameAndDescriptors = do
   (typeExports, descriptors) <- parseExportDescriptors globalState nameAndDescriptors
   let descriptorsByEncloser = groupByEncloser descriptors
@@ -2493,20 +2491,31 @@ compileToJvmBytecode outputDirectory outputFile term = do
     let programName = if outputFile == "" then "repl" else outputFile
     let mainFunctionName = idrisMainFunctionName programName
     let allDefs = (mainFunctionName, emptyFC, MkNmFun [] idrisMainBody) :: ndefs
-    let nameFcDefs = optimize programName allDefs ++ filter isForeignDef allDefs
+    let nameFcDefs = filter isForeignDef allDefs ++ optimize programName allDefs
     let nameStrFcDefs = getNameStrFcDef <$> nameFcDefs
     fcAndDefinitionsByName <- coreLift $ Map.fromList nameStrFcDefs
-    let nameStrDefs = getNameStrDef <$> nameStrFcDefs
-    definitionsByName <- coreLift $ Map.fromList nameStrDefs
     globalState <- coreLift $ newAsmGlobalState programName fcAndDefinitionsByName
-    let names = fst <$> nameFcDefs
+    nameFcStateRefs <- inferFunctionTypes globalState nameFcDefs
+    ignore $ traverse (\(name, fc, stateRef) => assemble {stateRef=stateRef} name fc) nameFcStateRefs
     coreLift $ do
-        traverse_ (assemble globalState fcAndDefinitionsByName) names
-        exportDefs globalState $ mapMaybe (getExport noMangleMap) (fst <$> allDefs)
+        exportDefs globalState $ mapMaybe (getExport noMangleMap . fst) allDefs
         mainAsmState <- createAsmState globalState mainFunctionName
         let mainFunctionJname = jvmName mainFunctionName
-        _ <- runAsm mainAsmState $ \stateRef => createMainMethod programName mainFunctionJname
+        ignore $ runAsm mainAsmState $ \stateRef => createMainMethod programName mainFunctionJname
         classCodeEnd globalState outputDirectory outputFile (className mainFunctionJname)
+
+  where
+    inferFunctionTypes : AsmGlobalState -> List (Name, FC, NamedDef)
+                       -> Core (List (Name, FC, Ref AsmState AsmState))
+    inferFunctionTypes globalState nameFcDefs = go [] nameFcDefs where
+      go : List (Name, FC, (Ref AsmState AsmState)) -> List (Name, FC, NamedDef)
+         -> Core (List (Name, FC, (Ref AsmState AsmState)))
+      go acc [] = pure acc
+      go acc (nameFcDef@(name, fc, def) :: rest) = do
+        asmState <- coreLift $ createAsmState globalState name
+        asmStateRef <- newRef AsmState asmState
+        ignore $ inferFunctionType nameFcDef
+        go ((name, fc, asmStateRef) :: acc) rest
 
 ||| JVM bytecode implementation of the `compileExpr` interface.
 compileExprJvm : Ref Ctxt Defs

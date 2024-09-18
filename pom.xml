@@ -25,7 +25,7 @@
     </developers>
 
     <properties>
-        <asm.version>9.4</asm.version>
+        <asm.version>9.7.1</asm.version>
         <assertj.version>3.16.1</assertj.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.scm.id>github</project.scm.id>

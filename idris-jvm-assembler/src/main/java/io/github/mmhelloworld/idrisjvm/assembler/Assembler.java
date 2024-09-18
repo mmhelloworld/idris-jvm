@@ -9,7 +9,6 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
-import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,10 +20,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.jar.Attributes;
-import java.util.jar.JarEntry;
-import java.util.jar.JarOutputStream;
-import java.util.jar.Manifest;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -33,12 +28,8 @@ import static io.github.mmhelloworld.idrisjvm.runtime.IdrisSystem.getOsName;
 import static java.lang.String.format;
 import static java.lang.System.lineSeparator;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.nio.file.Files.newInputStream;
-import static java.nio.file.Files.newOutputStream;
 import static java.nio.file.Files.setPosixFilePermissions;
 import static java.util.Objects.requireNonNull;
-import static java.util.jar.Attributes.Name.MAIN_CLASS;
-import static java.util.jar.Attributes.Name.MANIFEST_VERSION;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
@@ -206,17 +197,6 @@ public final class Assembler {
         this.env = new HashMap<>();
     }
 
-    public static void createJar(String directory, String fileName, String mainClass) throws IOException {
-        String jarFileName = fileName + ".jar";
-        File jarFile = new File(directory, jarFileName);
-        jarFile.delete();
-        try (JarOutputStream target =
-                 new JarOutputStream(newOutputStream(jarFile.toPath()), createManifest(mainClass))) {
-            File sourceDirectory = new File(directory);
-            add(sourceDirectory, target, jarFile, sourceDirectory);
-        }
-    }
-
     public static void createExecutable(String directoryName, String fileName, String mainClass) throws IOException {
         String javaOptsProp = System.getProperty("JAVA_OPTS", System.getenv("JAVA_OPTS"));
         String javaOpts = javaOptsProp == null ? "-Xss8m -Xms2g -Xmx3g" : javaOptsProp;
@@ -255,74 +235,6 @@ public final class Assembler {
 
     private static byte[] createExecutableFileContent(String... lines) {
         return String.join(lineSeparator(), lines).getBytes(UTF_8);
-    }
-
-    private static Manifest createManifest(String mainClass) {
-        Manifest manifest = new Manifest();
-        Attributes manifestAttributes = manifest.getMainAttributes();
-        manifestAttributes.put(MANIFEST_VERSION, "1.0");
-        manifestAttributes.put(MAIN_CLASS, mainClass);
-        return manifest;
-    }
-
-    private static void add(File source, JarOutputStream target, File jarFile, File rootDirectory) throws IOException {
-        if (source.isDirectory()) {
-            addDirectory(source, target, jarFile, rootDirectory);
-        } else {
-            addFile(source, target, jarFile, rootDirectory);
-        }
-        if (source.isDirectory() || !source.getName().endsWith(".jar")) {
-            source.delete();
-        }
-    }
-
-    private static void addFile(File source, JarOutputStream jarOutputStream, File jarFile, File rootDirectory)
-        throws IOException {
-        if (source.equals(jarFile)) {
-            return;
-        }
-        JarEntry entry = new JarEntry(getJarEntryName(source, rootDirectory));
-        entry.setTime(source.lastModified());
-        jarOutputStream.putNextEntry(entry);
-        try (BufferedInputStream in = new BufferedInputStream(newInputStream(source.toPath()))) {
-            byte[] buffer = new byte[BUFFER_SIZE];
-            while (true) {
-                int count = in.read(buffer);
-                if (count == -1) {
-                    break;
-                }
-                jarOutputStream.write(buffer, 0, count);
-            }
-            jarOutputStream.closeEntry();
-        }
-    }
-
-    private static void addDirectory(File source, JarOutputStream jarOutputStream, File jarFile, File rootDirectory)
-        throws IOException {
-        String name = getJarEntryName(source, rootDirectory);
-        if (!name.isEmpty()) {
-            createDirectory(name, source.lastModified(), jarOutputStream);
-        }
-        File[] files = requireNonNull(source.listFiles(), "Unable to get files from directory " + source);
-        for (File file : files) {
-            add(file, jarOutputStream, jarFile, rootDirectory);
-        }
-    }
-
-    private static String getJarEntryName(File source, File rootDirectory) {
-        String name = source.getPath().replace(rootDirectory.getPath(), "").replace("\\", "/");
-        return !name.startsWith("/") ? name : name.substring(1);
-    }
-
-    private static void createDirectory(String name, long lastModified, JarOutputStream jarOutputStream)
-        throws IOException {
-        if (!name.endsWith("/")) {
-            name += "/";
-        }
-        JarEntry entry = new JarEntry(name);
-        entry.setTime(lastModified);
-        jarOutputStream.putNextEntry(entry);
-        jarOutputStream.closeEntry();
     }
 
     private static Type getType(String typeDescriptor) {

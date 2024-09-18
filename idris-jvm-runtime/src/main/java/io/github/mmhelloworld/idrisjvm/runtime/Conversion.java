@@ -23,8 +23,6 @@ public final class Conversion {
             return 0;
         } else if (that instanceof Integer) {
             return (int) that;
-        } else if (that instanceof Thunk) {
-            return ((Thunk) that).getInt();
         } else if (that instanceof BigInteger) {
             return ((BigInteger) that).intValue();
         } else if (that instanceof Long) {

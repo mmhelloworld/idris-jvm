@@ -131,12 +131,14 @@ asmCast IChar IChar     = pure ()
 asmCast IShort IShort   = pure ()
 asmCast IInt IBool      = pure ()
 asmCast IInt IInt       = pure ()
+asmCast IChar IInt      = pure ()
 asmCast ILong ILong     = pure ()
 asmCast IFloat IFloat   = pure ()
 asmCast IDouble IDouble = pure ()
 asmCast (IArray _) (IArray _) = pure ()
 
 asmCast IBool IInt = boolToInt
+asmCast IVoid IInt = iconst 0 -- for primitive functions returning void, Idris return type will be int
 asmCast IInt IChar = i2c
 asmCast IInt IByte = i2b
 asmCast IInt IShort = i2s
@@ -183,7 +185,6 @@ asmCast (IRef _ _ _) arr@(IArray _) = checkcast $ getJvmTypeDescriptor arr
 asmCast (IArray _) (IRef clazz _ _) = checkcast clazz
 
 asmCast _ IVoid = pure ()
-asmCast IVoid IVoid = pure ()
 asmCast IVoid (IRef _ _ _) = aconstnull
 asmCast IVoid IUnknown = aconstnull
 asmCast ty IUnknown = pure ()
@@ -295,6 +296,9 @@ loadVar sourceLocTys ty IInt var = loadAndUnboxInt ty sourceLocTys var
 loadVar sourceLocTys ty ILong var =
     let loadInstr = \index => do aload index; objToLong
     in opWithWordSize sourceLocTys loadInstr var
+
+loadVar sourceLocTys (IRef "java/math/BigInteger" _ _) (IRef "java/math/BigInteger" _ _) var =
+  opWithWordSize sourceLocTys aload var
 
 loadVar sourceLocTys _ (IRef "java/math/BigInteger" _ _) var =
     let loadInstr = \index => do

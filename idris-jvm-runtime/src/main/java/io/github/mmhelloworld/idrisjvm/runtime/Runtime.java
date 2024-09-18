@@ -1,5 +1,7 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
 import java.nio.channels.Channels;
 import java.util.List;
@@ -116,6 +118,18 @@ public final class Runtime {
 
     public static String getErrorMessage(int errorNumber) {
         return "Error code: " + errorNumber;
+    }
+
+    public static String getStackTraceString() {
+        StackTraceElement[] trace = new Throwable().getStackTrace();
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter, true);
+        for (int index = 1; index < trace.length; index++) {
+            StackTraceElement traceElement = trace[index];
+            printWriter.println("\tat " + traceElement);
+        }
+        printWriter.flush();
+        return stringWriter.toString();
     }
 
     public static void free(Object object) {

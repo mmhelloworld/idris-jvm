@@ -166,39 +166,48 @@ getJvmType (_, _, jvmType) = jvmType
 shouldPassToForeign : (CFType, Nat, Bool, InferredType) -> Bool
 shouldPassToForeign (_, _, shouldPass, _) = shouldPass
 
-getArgumentNameAndTypes : {auto stateRef: Ref AsmState AsmState} -> FC -> List InferredType -> List (Nat, Bool, InferredType) -> Core (List (String, InferredType))
+getArgumentNameAndTypes : {auto stateRef: Ref AsmState AsmState} -> FC -> List InferredType
+                        -> List (Nat, Bool, InferredType) -> Core (List (String, InferredType))
 getArgumentNameAndTypes fc descriptorTypes params = reverse <$> go [] descriptorTypes params where
-  go : List (String, InferredType) -> List InferredType -> List (Nat, Bool, InferredType) -> Core (List (String, InferredType))
+  go : List (String, InferredType) -> List InferredType -> List (Nat, Bool, InferredType)
+     -> Core (List (String, InferredType))
   go acc [] _ = pure acc -- Ignore any additional arguments from Idris
   go acc _ [] = throw $ GenericMsg fc "Foreign descriptor and Idris types do not match"
   go acc (descriptorType :: descriptorTypes) ((index, _, _) :: rest) =
     go (("arg" ++ show index, descriptorType) :: acc) descriptorTypes rest
 
 export
-inferForeign : {auto stateRef: Ref AsmState AsmState} -> String -> Name -> FC -> List String -> List CFType -> CFType -> Core ()
-inferForeign programName idrisName fc foreignDescriptors argumentTypes returnType = do
+isForeign : NamedCExp -> Bool
+isForeign (NmDelay _ LLazy expr) = isForeign expr
+isForeign (NmExtPrim _ (NS ns (UN (Basic name))) _) =
+  ns == mkNamespace "" &&
+    (name `elem` the (List String) ["prim__jvmInstance", "prim__setInstanceField", "prim__setStaticField",
+      "prim__getInstanceField", "prim__getStaticField", "prim__jvmStatic"])
+isForeign _ = False
+
+export
+inferForeign : {auto stateRef: Ref AsmState AsmState} -> Name -> FC -> List String -> List CFType -> CFType -> Core ()
+inferForeign idrisName fc foreignDescriptors argumentTypes returnType = do
     resetScope
     let jname = jvmName idrisName
-    let jvmClassAndMethodName = getIdrisFunctionName programName (className jname) (methodName jname)
+    let jvmClassAndMethodName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
     idrisJvmParameters <- getIdrisJvmParameters fc argumentTypes
     let validIdrisTypes = map fst $ filter shouldPassToForeign $ zip argumentTypes idrisJvmParameters
     let idrisArgumentTypes = getJvmType <$> idrisJvmParameters
     let jvmArguments = filter (fst . snd) idrisJvmParameters
     let jvmArgumentTypes = getJvmType <$> jvmArguments
-    let arityNat = length argumentTypes
-    let isNilArity = arityNat == 0
     jvmDescriptor <- findJvmDescriptor fc idrisName foreignDescriptors
     jvmReturnType <- parse fc returnType
     (foreignFunctionClassName, foreignFunctionName, jvmReturnType, jvmArgumentTypesFromDescriptor) <-
         parseForeignFunctionDescriptor fc jvmDescriptor jvmArgumentTypes jvmReturnType
 
     scopeIndex <- newScopeIndex
-    let arity = the Int $ cast arityNat
-    let argumentNames =
-       if isNilArity then [] else (\argumentIndex => "arg" ++ show argumentIndex) <$> [0 .. arity - 1]
     argumentNameAndTypes <- getArgumentNameAndTypes fc jvmArgumentTypesFromDescriptor jvmArguments
-    let methodReturnType = if isNilArity then delayedType else inferredObjectType
-    let inferredFunctionType = MkInferredFunctionType methodReturnType (replicate arityNat inferredObjectType)
+    let arityNat = length idrisArgumentTypes
+    let isNilArity = arityNat == 0
+    let methodReturnType = if isNilArity then delayedType else jvmReturnType
+    let argumentTypes = snd <$> argumentNameAndTypes
+
     scopes <- coreLift $ ArrayList.new {elemTy=Scope}
     let extPrimName = NS (mkNamespace "") $ UN $ Basic $
       getPrimMethodName (length argumentNameAndTypes) foreignFunctionName
@@ -209,18 +218,22 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
            getJvmExtPrimArguments $ zip validIdrisTypes argumentNameAndTypes,
            NmPrimVal fc WorldVal]
     let functionBody = if isNilArity then NmDelay fc LLazy externalFunctionBody else externalFunctionBody
+    let idrisReturnType = if methodReturnType == IVoid then IInt else methodReturnType
+    let inferredFunctionType = MkInferredFunctionType idrisReturnType idrisArgumentTypes
     let function = MkFunction jname inferredFunctionType (subtyping scopes) 0 jvmClassAndMethodName functionBody
     setCurrentFunction function
-    coreLift $ AsmGlobalState.addFunction !getGlobalState jname function
-    let parameterTypes = parameterTypes inferredFunctionType
+    coreLift $ addFunction !getGlobalState jname function
+    let arity = the Int $ cast arityNat
+    let argumentNames =
+      if isNilArity then [] else (\argumentIndex => "arg" ++ show argumentIndex) <$> [0 .. arity - 1]
     argumentTypesByIndex <- coreLift $
         if isNilArity
             then Map.newTreeMap {key=Int} {value=InferredType}
-            else Map.fromList $ zip [0 .. arity - 1] parameterTypes
-    argumentTypesByName <- coreLift $ Map.fromList $ zip argumentNames parameterTypes
+            else Map.fromList $ zip [0 .. arity - 1] idrisArgumentTypes
+    argumentTypesByName <- coreLift $ Map.fromList $ zip argumentNames idrisArgumentTypes
     argIndices <- coreLift $ getArgumentIndices arity argumentNames
     let functionScope = MkScope scopeIndex Nothing argumentTypesByName argumentTypesByIndex argIndices argIndices
-                            methodReturnType arity (0, 0) ("", "") []
+                            idrisReturnType arity (0, 0) ("", "") []
     saveScope functionScope
     when isNilArity $ do
         let parentScopeIndex = scopeIndex
@@ -233,7 +246,7 @@ inferForeign programName idrisName fc foreignDescriptors argumentTypes returnTyp
             MkScope scopeIndex (Just parentScopeIndex) variableTypes allVariableTypes
                 variableIndices allVariableIndices IUnknown 0 (0, 0) ("", "") []
         saveScope delayLambdaScope
-    updateScopeVariableTypes arityNat
+    updateScopeVariableTypes
   where
     getJvmExtPrimArguments : List (CFType, String, InferredType) -> NamedCExp
     getJvmExtPrimArguments [] = NmCon fc (UN $ Basic "emptyForeignArg") DATACON (Just 0) []

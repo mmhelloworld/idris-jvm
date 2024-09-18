@@ -71,7 +71,7 @@ mutual
   export
   Show InferredFunctionType where
     show (MkInferredFunctionType returnType argumentTypes) =
-      assert_total $ showSep "⟶" (show <$> (argumentTypes ++ [returnType]))
+      assert_total $ showSep " -> " (show <$> (argumentTypes ++ [returnType]))
 
   export
   Show JavaLambdaType where

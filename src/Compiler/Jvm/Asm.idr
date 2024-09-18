@@ -451,31 +451,6 @@ namespace AsmGlobalState
     addFunction : HasIO io => AsmGlobalState -> Jname -> Function -> io ()
     addFunction globalState name function = jaddFunction globalState (getSimpleName name) function
 
-    export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".isUntypedFunction"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "boolean"
-    prim_jisUntypedFunction : AsmGlobalState -> String -> PrimIO Bool
-
-    jisUntypedFunction : HasIO io => AsmGlobalState -> String -> io Bool
-    jisUntypedFunction state name = primIO $ prim_jisUntypedFunction state name
-
-    public export
-    isUntypedFunction : HasIO io => AsmGlobalState -> Jname -> io Bool
-    isUntypedFunction globalState name = jisUntypedFunction globalState (getSimpleName name)
-
-    public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".addUntypedFunction"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "void"
-    prim_jaddUntypedFunction : AsmGlobalState -> String -> PrimIO ()
-
-    public export
-    jaddUntypedFunction : HasIO io => AsmGlobalState -> String -> io ()
-    jaddUntypedFunction state name = primIO $ prim_jaddUntypedFunction state name
-
-    public export
-    addUntypedFunction : HasIO io => AsmGlobalState -> Jname -> io ()
-    addUntypedFunction globalState name = jaddUntypedFunction globalState (getSimpleName name)
-
     public export
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".classCodeEnd"
                 "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String String String" "void"
@@ -638,6 +613,7 @@ Show Scope where
         ("index", show $ index scope),
         ("parentIndex", show $ parentIndex scope),
         ("nextVariableIndex", show $ nextVariableIndex scope),
+        ("variableTypes", show $ unsafePerformIO $ Map.toList $ variableTypes scope),
         ("lineNumbers", show $ lineNumbers scope),
         ("variableIndices", toString $ variableIndices scope),
         ("returnType", show $ returnType scope),
@@ -680,10 +656,17 @@ public export
 %foreign "jvm:crash(String java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 crash : String -> Object
 
+public export
+%foreign "jvm:getStackTraceString(String),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
+getStackTraceString : PrimIO String
+
 export
 asmCrash : String -> Core a
-asmCrash message = throw (InternalError message)
+asmCrash message = do
+  stackTrace <- coreLift $ primIO getStackTraceString
+  throw (InternalError $ message ++ "\n" ++ stackTrace)
 
+export
 isBoolTySpec : Name -> Bool
 isBoolTySpec name = name == basics "Bool" || name == (NS preludeNS (UN $ Basic "Bool"))
 
@@ -729,14 +712,6 @@ structName = NS (mkNamespace "System.FFI") (UN $ Basic "Struct")
 export
 arrayName : Name
 arrayName = NS (mkNamespace "Java.Lang") (UN $ Basic "Array")
-
-getIdrisConstructorType : ConInfo -> (tag: Maybe Int) -> Nat -> Name -> InferredType
-getIdrisConstructorType conInfo tag arity name =
-  if isBoolTySpec name then IBool
-  else if name == basics "List" then idrisListType
-  else if name == preludetypes "Maybe" then idrisMaybeType
-  else if name == preludetypes "Nat" then inferredBigIntegerType
-  else inferredObjectType
 
 parseName : String -> Maybe InferredType
 parseName name =
@@ -2321,14 +2296,6 @@ getFcAndDefinition : {auto stateRef: Ref AsmState AsmState} -> String -> Core (F
 getFcAndDefinition name = coreLift $ AsmGlobalState.getFcAndDefinition !getGlobalState name
 
 export
-isUntypedFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core Bool
-isUntypedFunction name = coreLift $ AsmGlobalState.isUntypedFunction !getGlobalState name
-
-export
-addUntypedFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core ()
-addUntypedFunction name = coreLift $ AsmGlobalState.addUntypedFunction !getGlobalState name
-
-export
 setCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Function -> Core ()
 setCurrentFunction function = updateState $ { currentIdrisFunction := function }
 
@@ -2546,7 +2513,19 @@ retrieveVariableIndicesByName scopeIndex = do
         go1 scopeIndex = do
             scope <- getScope scopeIndex
             coreLift $ updateVariableIndices acc (variableIndices scope)
-            maybe (pure ()) go1 (parentIndex scope)
+            let Just nextScopeIndex = parentIndex scope
+                  | Nothing => pure ()
+            go1 nextScopeIndex
+
+isParameter : {auto stateRef: Ref AsmState AsmState} -> String -> Core Bool
+isParameter name = do
+  scope <- getScope 0
+  optIndex <- coreLift $ Map.get {value=Int} (variableIndices scope) name
+  case nullableToMaybe optIndex of
+    Nothing => pure False
+    Just index => do
+      function <- getCurrentFunction
+      pure (index < cast (length (parameterTypes (inferredFunctionType function))))
 
 export
 retrieveVariables : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (List String)
@@ -2649,21 +2628,14 @@ export
 getVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> Core InferredType
 getVariableType name = getVariableTypeAtScope !getCurrentScopeIndex name
 
-updateArgumentsForUntyped : Map Int InferredType -> Nat -> IO ()
-updateArgumentsForUntyped _ Z = pure ()
-updateArgumentsForUntyped types (S n) = do
-  ignore $ Map.put types (cast {to=Int} n) inferredObjectType
-  updateArgumentsForUntyped types n
-
 export
-updateScopeVariableTypes : {auto stateRef: Ref AsmState AsmState} -> Nat -> Core ()
-updateScopeVariableTypes arity = go (scopeCounter !getState - 1) where
+updateScopeVariableTypes : {auto stateRef: Ref AsmState AsmState} -> Core ()
+updateScopeVariableTypes = go (scopeCounter !getState - 1) where
     go : Int -> Core ()
     go scopeIndex =
         if scopeIndex < 0 then pure ()
         else do
             variableTypes <- retrieveVariableTypesAtScope scopeIndex
-            when (scopeIndex == 0) $ coreLift $ updateArgumentsForUntyped variableTypes arity
             variableIndices <- retrieveVariableIndicesByName scopeIndex
             scope <- getScope scopeIndex
             saveScope $ {allVariableTypes := variableTypes, allVariableIndices := variableIndices} scope
@@ -2679,18 +2651,23 @@ getVariableScope name = go !getCurrentScopeIndex where
             Just _ => pure scope
             Nothing => case parentIndex scope of
                 Just parentScopeIndex => go parentScopeIndex
-                Nothing => asmCrash ("Unknown variable " ++ name)
+                Nothing => do
+                  let functionName = idrisName !getCurrentFunction
+                  asmCrash ("Unknown variable \{name} in function \{show functionName}")
 
 export
-addVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> InferredType -> Core InferredType
-addVariableType var IUnknown = pure IUnknown
-addVariableType var ty = do
+addVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> InferredType -> Core ()
+addVariableType _ IUnknown = pure ()
+addVariableType var ty = when (not !(isParameter var)) $ do
     scope <- getVariableScope var
-    let scopeIndex = index scope
-    existingTy <- retrieveVariableTypeAtScope scopeIndex var
-    let newTy = existingTy <+> ty
-    _ <- coreLift $ Map.put (variableTypes scope) var newTy
-    pure newTy
+    ignore $ coreLift $ Map.put (variableTypes scope) var ty
+
+export
+retrieveVariableType : {auto stateRef: Ref AsmState AsmState} -> String -> Core InferredType
+retrieveVariableType var = do
+  scope <- getVariableScope var
+  let scopeIndex = index scope
+  retrieveVariableTypeAtScope scopeIndex var
 
 %inline
 export
@@ -2733,9 +2710,18 @@ mutual
       then pure $ parseName namePartsStr
       else pure Nothing
   parseJvmReferenceType (NmCon _ name conInfo tag args) =
-    if name == primio "IORes" then
-      maybe (asmCrash "Expected an argument for IORes") (\res => pure $ Just !(tySpec res)) (head' args)
-    else pure $ Just $ getIdrisConstructorType conInfo tag (length args) name
+      if name == primio "IORes" then
+        maybe (asmCrash "Expected an argument for IORes") (\res => pure $ Just !(tySpec res)) (head' args)
+      else pure $ Just $ getIdrisConstructorType name
+    where
+      getIdrisConstructorType : Name -> InferredType
+      getIdrisConstructorType name =
+        if isBoolTySpec name then IBool
+        else if name == basics "List" then idrisListType
+        else if name == preludetypes "Maybe" then idrisMaybeType
+        else if name == preludetypes "Nat" then inferredBigIntegerType
+        else inferredObjectType
+
   parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do
     (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
       | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++
@@ -2767,7 +2753,6 @@ mutual
   tySpec expr = do
     ty <- tryParse expr
     pure $ fromMaybe inferredObjectType ty
-
 
 export
 asmReturn : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core ()

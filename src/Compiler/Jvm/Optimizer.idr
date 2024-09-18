@@ -1,5 +1,6 @@
 module Compiler.Jvm.Optimizer
 
+import Algebra
 import Compiler.Common
 import Compiler.CompileExpr
 import Compiler.Inline
@@ -11,10 +12,17 @@ import Control.Monad.State
 import Compiler.Common
 import Core.CompileExpr
 import Core.Context
+import Core.Core
 import Core.Name
 import Core.Reflect
 import Core.TT
 import Core.TT.Primitive
+import Core.Env
+
+import Idris.Pretty.Annotations
+import Idris.Syntax
+import Idris.Resugar
+import Idris.Doc.String
 
 import Libraries.Data.SortedMap
 import Libraries.Data.SortedSet
@@ -35,6 +43,7 @@ import Compiler.Jvm.ShowUtil
 %hide Core.Context.Context.Constructor.arity
 %hide Compiler.TailRec.Function.fc
 %hide Compiler.TailRec.TcFunction.fc
+%hide Libraries.Text.PrettyPrint.Prettyprinter.Util.words
 
 namespace InferredPrimType
   export
@@ -450,6 +459,15 @@ Eq LambdaType where
     _ == _ = False
 
 export
+Show LambdaType where
+  show DelayedLambda = "DelayedLambda"
+  show FunctionLambda = "FunctionLambda"
+  show Function2Lambda = "Function2Lambda"
+  show Function3Lambda = "Function3Lambda"
+  show Function4Lambda = "Function4Lambda"
+  show Function5Lambda = "Function5Lambda"
+
+export
 getLambdaTypeByParameter : (parameterName: Maybe Name) -> LambdaType
 getLambdaTypeByParameter Nothing = DelayedLambda
 getLambdaTypeByParameter _ = FunctionLambda
@@ -548,7 +566,16 @@ combineSwitchTypes defaultTy altTypes@(altTy :: rest) = maybe (go altTy rest) (f
 createNewVariable : {auto stateRef: Ref AsmState AsmState} -> (variablePrefix: String) -> InferredType -> Core ()
 createNewVariable variablePrefix ty = do
     variable <- generateVariable variablePrefix
-    ignore $ addVariableType variable ty
+    addVariableType variable ty
+
+export
+canUseMethodReference : {auto stateRef: Ref AsmState AsmState} -> Name -> List Name -> Maybe Name -> List Name
+                      -> Core Bool
+canUseMethodReference _ _ Nothing _ = pure False
+canUseMethodReference functionName args (Just p0) params = do
+  Just (MkInferredFunctionType returnType parameterTypes) <- findFunctionType (jvmName functionName)
+    | Nothing => throw (GenericMsg emptyFC ("Unable to find function \{show functionName}"))
+  pure $ not (any isPrimitive (returnType :: parameterTypes)) && all (uncurry (==)) (zip args (p0 :: params))
 
 export
 isIoAction : NamedCExp -> Bool
@@ -560,6 +587,10 @@ isIoAction expr = False
 
 voidTypeExpr : NamedCExp
 voidTypeExpr = NmCon emptyFC (UN (Basic "void")) TYCON Nothing []
+
+tailRecLoopFunctionName : Name
+tailRecLoopFunctionName =
+  NS (mkNamespace "io.github.mmhelloworld.idrisjvm.runtime.Runtime") (UN $ Basic "tailRec")
 
 export
 getJavaLambdaType : {auto stateRef: Ref AsmState AsmState} -> FC -> List NamedCExp -> Core JavaLambdaType
@@ -620,55 +651,55 @@ getJavaLambdaType fc [functionType, javaInterfaceType, _] =
 getJavaLambdaType fc exprs = asmCrash ("Invalid Java lambda at " ++ show fc ++ ": " ++ show exprs)
 
 mutual
-    inferExpr : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> Core InferredType
-    inferExpr exprTy (NmDelay _ _ expr) = inferExprLam AppliedLambdaUnknown Nothing Nothing expr
-    inferExpr exprTy expr@(NmLocal _ var) = addVariableType (jvmSimpleName var) exprTy
-    inferExpr exprTy (NmRef _ name) = pure exprTy
-    inferExpr exprTy app@(NmApp _ (NmRef _ name) args) = inferExprApp exprTy app
-    inferExpr _ (NmApp fc (NmLam _ var body) [expr]) =
+    inferExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
+    inferExpr (NmDelay _ _ expr) = inferExprLam AppliedLambdaUnknown Nothing Nothing expr
+    inferExpr expr@(NmLocal _ var) = retrieveVariableType (jvmSimpleName var)
+    inferExpr (NmRef _ name) = pure IUnknown
+    inferExpr app@(NmApp _ (NmRef _ name) args) = inferExprApp app
+    inferExpr (NmApp fc (NmLam _ var body) [expr]) =
         inferExprLam (getAppliedLambdaType fc) (Just expr) (Just var) body
-    inferExpr _ (NmLam _ var body) = inferExprLam AppliedLambdaUnknown Nothing (Just var) body
-    inferExpr exprTy (NmLet fc var value expr) = inferExprLet fc exprTy var value expr
-    inferExpr exprTy app@(NmApp _ _ _) = inferExprApp exprTy app
-    inferExpr exprTy expr@(NmCon fc name _ tag args) =
-        inferExprCon exprTy (fst $ getSourceLocation expr) name args
-    inferExpr exprTy (NmOp _ fn args) = inferExprOp fn args
-    inferExpr exprTy (NmExtPrim fc fn args) = inferExtPrim fc exprTy (toPrim fn) args
-    inferExpr exprTy (NmForce _ _ expr) = do
-        ignore $ inferExpr delayedType expr
+    inferExpr (NmLam _ var body) = inferExprLam AppliedLambdaUnknown Nothing (Just var) body
+    inferExpr (NmLet fc var value expr) = inferExprLet fc var value expr
+    inferExpr app@(NmApp _ _ _) = inferExprApp app
+    inferExpr expr@(NmCon fc name _ tag args) =
+        inferExprCon (fst $ getSourceLocation expr) name args
+    inferExpr (NmOp _ fn args) = inferExprOp fn args
+    inferExpr (NmExtPrim fc fn args) = inferExtPrim fc (toPrim fn) args
+    inferExpr (NmForce _ _ expr) = do
+        ignore $ inferExpr expr
         pure inferredObjectType
 
-    inferExpr exprTy (NmConCase _ sc [] Nothing) = pure IUnknown
-    inferExpr exprTy (NmConCase _ sc [] (Just def)) = do
+    inferExpr (NmConCase _ sc [] Nothing) = pure IUnknown
+    inferExpr (NmConCase _ sc [] (Just def)) = do
         inferConstructorSwitchExpr sc
-        inferExpr exprTy def
-    inferExpr exprTy (NmConCase _ sc [MkNConAlt _ _ _ args expr] Nothing) = do
+        inferExpr def
+    inferExpr (NmConCase _ sc [MkNConAlt _ _ _ args expr] Nothing) = do
         inferConstructorSwitchExpr sc
-        inferConCaseExpr exprTy args expr
-    inferExpr exprTy (NmConCase _ sc alts def) = do
+        inferConCaseExpr args expr
+    inferExpr (NmConCase _ sc alts def) = do
         inferConstructorSwitchExpr sc
         let hasTypeCase = any isTypeCase alts
         when hasTypeCase $ do
             createNewVariable "constructorCaseExpr" inferredStringType
             createNewVariable "hashCodePosition" IInt
         let sortedAlts = if hasTypeCase then alts else sortConCases alts
-        altTypes <- traverse (inferExprConAlt exprTy) sortedAlts
-        defaultTy <- traverseOpt (inferExprWithNewScope exprTy) def
+        altTypes <- traverse inferExprConAlt sortedAlts
+        defaultTy <- traverseOpt inferExprWithNewScope def
         pure $ combineSwitchTypes defaultTy altTypes
 
-    inferExpr exprTy (NmConstCase fc sc [] Nothing) = pure IUnknown
-    inferExpr exprTy (NmConstCase fc sc [] (Just expr)) = inferExpr exprTy expr
-    inferExpr exprTy (NmConstCase fc sc alts def) = do
+    inferExpr (NmConstCase fc sc [] Nothing) = pure IUnknown
+    inferExpr (NmConstCase fc sc [] (Just expr)) = inferExpr expr
+    inferExpr (NmConstCase fc sc alts def) = do
         constantType <- getConstantType alts
-        ignore $ inferExpr constantType sc
+        ignore $ inferExpr sc
         when (constantType /= IInt) $ do
             constantExprVariable <- generateVariable "constantCaseExpr"
-            ignore $ addVariableType constantExprVariable constantType
+            addVariableType constantExprVariable constantType
             hashCodePositionVariable <- generateVariable "hashCodePosition"
-            ignore $ addVariableType hashCodePositionVariable IInt
+            addVariableType hashCodePositionVariable IInt
         sortedAlts <- sortConstCases constantType alts
-        altTypes <- traverse (inferExprConstAlt exprTy) sortedAlts
-        defaultTy <- traverseOpt (inferExprWithNewScope exprTy) def
+        altTypes <- traverse inferExprConstAlt sortedAlts
+        defaultTy <- traverseOpt inferExprWithNewScope def
         pure $ combineSwitchTypes defaultTy altTypes
       where
         getConstant : NamedConstAlt -> Primitive.Constant
@@ -680,201 +711,182 @@ mutual
             pure $ fst <$> (sortBy (comparing snd) $ zip alts constValues)
         sortConstCases _ alts = pure alts
 
-    inferExpr _ (NmPrimVal fc (I _)) = pure IInt
-    inferExpr _ (NmPrimVal fc (I8 _)) = pure IInt
-    inferExpr _ (NmPrimVal fc (I16 _)) = pure IInt
-    inferExpr _ (NmPrimVal fc (I32 _)) = pure IInt
-    inferExpr _ (NmPrimVal fc (I64 _)) = pure ILong
-    inferExpr _ (NmPrimVal fc (B8 _)) = pure IInt
-    inferExpr _ (NmPrimVal fc (B16 _)) = pure IInt
-    inferExpr _ (NmPrimVal fc (B32 _)) = pure IInt
-    inferExpr _ (NmPrimVal fc (B64 _)) = pure ILong
-    inferExpr _ (NmPrimVal fc (BI _)) = pure inferredBigIntegerType
-    inferExpr _ (NmPrimVal fc (Str _)) = pure inferredStringType
-    inferExpr _ (NmPrimVal fc (Ch _)) = pure IChar
-    inferExpr _ (NmPrimVal fc (Db _)) = pure IDouble
-    inferExpr _ (NmPrimVal fc _) = pure IInt
-    inferExpr exprTy (NmErased fc) = pure exprTy
-    inferExpr exprTy (NmCrash fc msg) = pure exprTy
+    inferExpr (NmPrimVal fc (I _)) = pure IInt
+    inferExpr (NmPrimVal fc (I8 _)) = pure IInt
+    inferExpr (NmPrimVal fc (I16 _)) = pure IInt
+    inferExpr (NmPrimVal fc (I32 _)) = pure IInt
+    inferExpr (NmPrimVal fc (I64 _)) = pure ILong
+    inferExpr (NmPrimVal fc (B8 _)) = pure IInt
+    inferExpr (NmPrimVal fc (B16 _)) = pure IInt
+    inferExpr (NmPrimVal fc (B32 _)) = pure IInt
+    inferExpr (NmPrimVal fc (B64 _)) = pure ILong
+    inferExpr (NmPrimVal fc (BI _)) = pure inferredBigIntegerType
+    inferExpr (NmPrimVal fc (Str _)) = pure inferredStringType
+    inferExpr (NmPrimVal fc (Ch _)) = pure IChar
+    inferExpr (NmPrimVal fc (Db _)) = pure IDouble
+    inferExpr (NmPrimVal fc _) = pure IInt
+    inferExpr (NmErased fc) = pure IUnknown
+    inferExpr (NmCrash fc msg) = pure IUnknown
 
     inferConstructorSwitchExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core ()
     inferConstructorSwitchExpr (NmLocal _ var) = do
         let idrisObjectVariable = jvmSimpleName var
-        ignore $ addVariableType idrisObjectVariable idrisObjectType
+        addVariableType idrisObjectVariable idrisObjectType
     inferConstructorSwitchExpr sc = do
         idrisObjectVariable <- generateVariable "constructorSwitchValue"
-        ignore $ inferExpr idrisObjectType sc
-        ignore $ addVariableType idrisObjectVariable idrisObjectType
+        ignore $ inferExpr sc
+        addVariableType idrisObjectVariable idrisObjectType
 
-    inferExprConstAlt : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedConstAlt -> Core InferredType
-    inferExprConstAlt returnType (MkNConstAlt _ expr) = inferExprWithNewScope returnType expr
+    inferExprConstAlt : {auto stateRef: Ref AsmState AsmState} -> NamedConstAlt -> Core InferredType
+    inferExprConstAlt (MkNConstAlt _ expr) = inferExprWithNewScope expr
 
-    inferExprWithNewScope : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> Core InferredType
-    inferExprWithNewScope returnType expr = do
+    inferExprWithNewScope : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
+    inferExprWithNewScope expr = do
          let fc = getFC expr
          let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
-         withInferenceScope lineStart lineEnd $ inferExpr returnType expr
+         withInferenceScope lineStart lineEnd $ inferExpr expr
 
-    inferConCaseExpr : {auto stateRef: Ref AsmState AsmState} -> InferredType -> List Name -> NamedCExp -> Core InferredType
-    inferConCaseExpr exprTy args expr = do
+    inferConCaseExpr : {auto stateRef: Ref AsmState AsmState} -> List Name -> NamedCExp -> Core InferredType
+    inferConCaseExpr args expr = do
             traverse_ inferArg args
-            inferExpr exprTy expr
+            inferExpr expr
         where
             inferArg : Name -> Core ()
             inferArg var =
                 let variableName = jvmSimpleName var
                 in when (used variableName expr) $ createVariable variableName
 
-    inferExprConAlt : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedConAlt -> Core InferredType
-    inferExprConAlt exprTy (MkNConAlt _ _ _ args expr) = do
+    inferExprConAlt : {auto stateRef: Ref AsmState AsmState} -> NamedConAlt -> Core InferredType
+    inferExprConAlt (MkNConAlt _ _ _ args expr) = do
       let fc = getFC expr
       let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
-      withInferenceScope lineStart lineEnd $ inferConCaseExpr exprTy args expr
-
-    inferParameter : {auto stateRef: Ref AsmState AsmState} -> (NamedCExp, InferredType) -> Core InferredType
-    inferParameter (param, ty) = inferExpr ty param
+      withInferenceScope lineStart lineEnd $ inferConCaseExpr args expr
 
     inferBinaryOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> NamedCExp -> Core InferredType
     inferBinaryOp ty x y = do
-        ignore $ inferExpr ty x
-        ignore $ inferExpr ty y
+        ignore $ inferExpr x
+        ignore $ inferExpr y
         pure ty
 
-    inferBoolOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> NamedCExp -> Core InferredType
-    inferBoolOp ty x y = do
-        ignore $ inferExpr ty x
-        ignore $ inferExpr ty y
+    inferBoolOp : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> NamedCExp -> Core InferredType
+    inferBoolOp x y = do
+        ignore $ inferExpr x
+        ignore $ inferExpr y
         pure IBool
 
     inferUnaryOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> Core InferredType
     inferUnaryOp ty x = do
-      ignore $ inferExpr ty x
+      ignore $ inferExpr x
       pure ty
 
-    inferExtPrimArg : {auto stateRef: Ref AsmState AsmState} -> (NamedCExp, InferredType) -> Core InferredType
-    inferExtPrimArg (arg, ty) = inferExpr ty arg
-
-    inferExtPrim : {auto stateRef: Ref AsmState AsmState} -> FC -> InferredType -> ExtPrim -> List NamedCExp -> Core InferredType
-    inferExtPrim fc returnType GetStaticField descriptors = inferExtPrim fc returnType JvmStaticMethodCall descriptors
-    inferExtPrim fc returnType SetStaticField descriptors = inferExtPrim fc returnType JvmStaticMethodCall descriptors
-    inferExtPrim fc returnType GetInstanceField descriptors = inferExtPrim fc returnType JvmStaticMethodCall descriptors
-    inferExtPrim fc returnType SetInstanceField descriptors = inferExtPrim fc returnType JvmStaticMethodCall descriptors
-    inferExtPrim fc returnType JvmInstanceMethodCall descriptors =
-      inferExtPrim fc returnType JvmStaticMethodCall descriptors
-    inferExtPrim fc returnType JvmStaticMethodCall [ret, NmApp _ _ [functionNamePrimVal], fargs, world] =
-      inferExtPrim fc returnType JvmStaticMethodCall [ret, functionNamePrimVal, fargs, world]
-    inferExtPrim _ returnType JvmStaticMethodCall [ret, _, fargs, _]
+    inferExtPrim : {auto stateRef: Ref AsmState AsmState} -> FC -> ExtPrim -> List NamedCExp -> Core InferredType
+    inferExtPrim fc GetStaticField descriptors = inferExtPrim fc JvmStaticMethodCall descriptors
+    inferExtPrim fc SetStaticField descriptors = inferExtPrim fc JvmStaticMethodCall descriptors
+    inferExtPrim fc GetInstanceField descriptors = inferExtPrim fc JvmStaticMethodCall descriptors
+    inferExtPrim fc SetInstanceField descriptors = inferExtPrim fc JvmStaticMethodCall descriptors
+    inferExtPrim fc JvmInstanceMethodCall descriptors =
+      inferExtPrim fc JvmStaticMethodCall descriptors
+    inferExtPrim fc JvmStaticMethodCall [ret, NmApp _ _ [functionNamePrimVal], fargs, world] =
+      inferExtPrim fc JvmStaticMethodCall [ret, functionNamePrimVal, fargs, world]
+    inferExtPrim _ JvmStaticMethodCall [ret, _, fargs, _]
       = do args <- getFArgs fargs
-           argTypes <- traverse tySpec (map fst args)
            methodReturnType <- tySpec ret
-           traverse_ inferExtPrimArg $ zip (map snd args) argTypes
+           traverse_ inferExpr $ map snd args
            pure $ if methodReturnType == IVoid then inferredObjectType else methodReturnType
-    inferExtPrim fc returnType JvmSuper [clazz, fargs, world] = do
+    inferExtPrim fc JvmSuper [clazz, fargs, world] = do
       rootMethodName <- getRootMethodName
       if (endsWith (methodName rootMethodName) "$ltinit$gt")
-        then inferExtPrim fc returnType JvmStaticMethodCall [voidTypeExpr, NmErased fc, fargs, world]
+        then inferExtPrim fc JvmStaticMethodCall [voidTypeExpr, NmErased fc, fargs, world]
         else pure IUnknown
-    inferExtPrim _ returnType NewArray [_, size, val, world] = do
-        ignore $ inferExpr IInt size
-        ignore $ inferExpr IUnknown val
+    inferExtPrim _ NewArray [_, size, val, world] = do
+        ignore $ inferExpr size
+        ignore $ inferExpr val
         pure arrayListType
-    inferExtPrim _ returnType ArrayGet [_, arr, pos, world] = do
-        ignore $ inferExpr arrayListType arr
-        ignore $ inferExpr IInt pos
+    inferExtPrim _ ArrayGet [_, arr, pos, world] = do
+        ignore $ inferExpr arr
+        ignore $ inferExpr pos
         pure IUnknown
-    inferExtPrim _ returnType ArraySet [_, arr, pos, val, world] = do
-        ignore $ inferExpr arrayListType arr
-        ignore $ inferExpr IInt pos
-        ignore $ inferExpr IUnknown val
+    inferExtPrim _ ArraySet [_, arr, pos, val, world] = do
+        ignore $ inferExpr arr
+        ignore $ inferExpr pos
+        ignore $ inferExpr val
         pure inferredObjectType
-    inferExtPrim _ returnType JvmNewArray [tyExpr, size, world] = do
-        ignore $ inferExpr IInt size
+    inferExtPrim _ JvmNewArray [tyExpr, size, world] = do
+        ignore $ inferExpr size
         elemTy <- tySpec tyExpr
         pure $ IArray elemTy
-    inferExtPrim _ returnType JvmSetArray [tyExpr, index, val, arr, world] = do
+    inferExtPrim _ JvmSetArray [tyExpr, index, val, arr, world] = do
         elemTy <- tySpec tyExpr
-        ignore $ inferExpr (IArray elemTy) arr
-        ignore $ inferExpr IInt index
-        ignore $ inferExpr elemTy val
+        ignore $ inferExpr arr
+        ignore $ inferExpr index
+        ignore $ inferExpr val
         pure inferredObjectType
-    inferExtPrim _ returnType JvmGetArray [tyExpr, index, arr, world] = do
+    inferExtPrim _ JvmGetArray [tyExpr, index, arr, world] = do
         elemTy <- tySpec tyExpr
-        ignore $ inferExpr (IArray elemTy) arr
-        ignore $ inferExpr IInt index
+        ignore $ inferExpr arr
+        ignore $ inferExpr index
         pure elemTy
-    inferExtPrim _ returnType JvmArrayLength [tyExpr, arr] = do
+    inferExtPrim _ JvmArrayLength [tyExpr, arr] = do
         elemTy <- tySpec tyExpr
-        ignore $ inferExpr (IArray elemTy) arr
+        ignore $ inferExpr arr
         pure IInt
-    inferExtPrim _ returnType NewIORef [_, val, world] = do
-        ignore $ inferExpr IUnknown val
+    inferExtPrim _ NewIORef [_, val, world] = do
+        ignore $ inferExpr val
         pure refType
-    inferExtPrim _ returnType ReadIORef [_, ref, world] = do
-        ignore $ inferExpr refType ref
+    inferExtPrim _ ReadIORef [_, ref, world] = do
+        ignore $ inferExpr ref
         pure IUnknown
-    inferExtPrim _ returnType WriteIORef [_, ref, val, world] = do
-        ignore $ inferExpr refType ref
-        ignore $ inferExpr IUnknown val
+    inferExtPrim _ WriteIORef [_, ref, val, world] = do
+        ignore $ inferExpr ref
+        ignore $ inferExpr val
         pure inferredObjectType
-    inferExtPrim _ returnType SysOS [] = pure inferredStringType
-    inferExtPrim _ returnType SysCodegen [] = pure inferredStringType
-    inferExtPrim _ returnType VoidElim _ = pure inferredObjectType
-    inferExtPrim _ returnType JvmClassLiteral [_] = pure $ IRef "java/lang/Class" Class []
-    inferExtPrim _ returnType JvmInstanceOf [_, obj, _] = do
-      ignore $ inferExpr IUnknown obj
+    inferExtPrim _ SysOS [] = pure inferredStringType
+    inferExtPrim _ SysCodegen [] = pure inferredStringType
+    inferExtPrim _ VoidElim _ = pure inferredObjectType
+    inferExtPrim _ JvmClassLiteral [_] = pure $ IRef "java/lang/Class" Class []
+    inferExtPrim _ JvmInstanceOf [_, obj, _] = do
+      ignore $ inferExpr obj
       pure IBool
-    inferExtPrim _ returnType JvmRefEq [_, _, x, y] = inferBoolOp IUnknown x y
-    inferExtPrim fc returnType JavaLambda [functionType, javaInterfaceType, lambda] = do
-      ignore $ inferExpr IUnknown lambda
+    inferExtPrim _ JvmRefEq [_, _, x, y] = inferBoolOp x y
+    inferExtPrim fc JavaLambda [functionType, javaInterfaceType, lambda] = do
+      ignore $ inferExpr lambda
       IFunction <$> getJavaLambdaType fc [functionType, javaInterfaceType, lambda]
-    inferExtPrim _ returnType MakeFuture [_, action] = do
-        ignore $ inferExpr delayedType action
+    inferExtPrim _ MakeFuture [_, action] = do
+        ignore $ inferExpr action
         pure inferredForkJoinTaskType
-    inferExtPrim _ returnType (Unknown name) _ = asmCrash $ "Can't compile unknown external directive " ++ show name
-    inferExtPrim fc _ prim args = throw $ GenericMsg fc $ "Unsupported external function " ++ show prim ++ "(" ++
+    inferExtPrim _ (Unknown name) _ = asmCrash $ "Can't compile unknown external directive " ++ show name
+    inferExtPrim fc prim args = throw $ GenericMsg fc $ "Unsupported external function " ++ show prim ++ "(" ++
         (show $ showNamedCExp 0 <$> args) ++ ")"
 
-    inferExprLamWithParameterType : {auto stateRef: Ref AsmState AsmState} -> Maybe (Name, InferredType)
-                                  -> (parameterValueExpr: Maybe (Core ())) -> NamedCExp -> Core InferredType
-    inferExprLamWithParameterType parameterNameAndType parameterValueExpr expr = do
+    inferExprLamWithParameterType : {auto stateRef: Ref AsmState AsmState} -> Maybe Name
+                                  -> (parameterValueExpr: Maybe (Core InferredType)) -> NamedCExp -> Core InferredType
+    inferExprLamWithParameterType parameterName parameterValueExpr expr = do
         let hasParameterValue = isJust parameterValueExpr
         let (_, lineStart, lineEnd) = getSourceLocation expr
-        let jvmParameterNameAndType = (\(name, ty) => (jvmSimpleName name, ty)) <$> parameterNameAndType
-        let lambdaType = getLambdaTypeByParameter (fst <$> parameterNameAndType)
-        lambdaBodyReturnType <- withInferenceLambdaScope lineStart lineEnd (fst <$> parameterNameAndType) expr $ do
-            ignore $ traverseOpt createAndAddVariable jvmParameterNameAndType
-            maybe (pure ()) id parameterValueExpr
-            lambdaBodyReturnType <- inferExpr IUnknown expr
+        let jvmParameterName = jvmSimpleName <$> parameterName
+        let lambdaType = getLambdaTypeByParameter parameterName
+        lambdaBodyReturnType <- withInferenceLambdaScope lineStart lineEnd parameterName expr $ do
+            jname <- getRootMethodName
+            scopeIndex <- getCurrentScopeIndex
+            ignore $ traverseOpt createVariable jvmParameterName
+            valueType <- maybe (pure IUnknown) id parameterValueExpr
+            ignore $ traverseOpt (flip addVariableType valueType) jvmParameterName
+            lambdaBodyReturnType <- inferExpr expr
             currentScope <- getScope !getCurrentScopeIndex
             saveScope $ { returnType := lambdaBodyReturnType } currentScope
             pure lambdaBodyReturnType
         pure $ if hasParameterValue
             then lambdaBodyReturnType
             else getLambdaInterfaceType lambdaType
-      where
-        createAndAddVariable : (String, InferredType) -> Core ()
-        createAndAddVariable (name, ty) = do
-            createVariable name
-            ignore $ addVariableType name ty
 
-    inferExprLamWithParameterType1 : {auto stateRef: Ref AsmState AsmState} -> (isCached : Bool) -> Maybe Name
+    inferExprLamWithParameterType1 : {auto stateRef: Ref AsmState AsmState} -> (isMethodReference : Bool) -> Maybe Name
                                    -> NamedCExp -> Core InferredType
     inferExprLamWithParameterType1 True _ _ = pure inferredLambdaType
-    inferExprLamWithParameterType1 False parameterName expr =
-      inferExprLamWithParameterType ((\name => (name, inferredObjectType)) <$> parameterName) Nothing expr
+    inferExprLamWithParameterType1 False parameterName expr = inferExprLamWithParameterType parameterName Nothing expr
 
     inferExprLam : {auto stateRef: Ref AsmState AsmState} -> AppliedLambdaType -> (parameterValue: Maybe NamedCExp)
                  -> (parameterName : Maybe Name) -> NamedCExp -> Core InferredType
     inferExprLam appliedLambdaType parameterValue@(Just value) (Just parameterName) lambdaBody = do
-        valueType <-
-            if appliedLambdaType == AppliedLambdaSwitch
-                then case lambdaBody of
-                    (NmConstCase _ _ alts _) => getConstantType alts
-                    (NmConCase _ _ _ _) => pure idrisObjectType
-                    _ => pure IUnknown
-                else if appliedLambdaType == AppliedLambdaLet
-                        then pure inferredObjectType
-                        else pure IUnknown
         let shouldGenerateVariable = parameterName == extractedMethodArgumentName
         generatedJvmVariableName <-
             if shouldGenerateVariable
@@ -886,65 +898,60 @@ mutual
                 else parameterName
         let valueExpr = NmLocal (getFC lambdaBody) generatedVariableName
         parentScope <- getScope !getCurrentScopeIndex
-        inferExprLamWithParameterType (Just (generatedVariableName, valueType))
-            (Just (inferValue parentScope shouldGenerateVariable generatedJvmVariableName valueType))
+        inferExprLamWithParameterType (Just generatedVariableName)
+            (Just (inferValue parentScope shouldGenerateVariable generatedJvmVariableName))
             (if appliedLambdaType == AppliedLambdaSwitch || appliedLambdaType == AppliedLambdaLet
                 then substituteVariableSubMethodBody valueExpr lambdaBody
                 else lambdaBody)
       where
-        inferValue : Scope -> Bool -> String -> InferredType -> Core ()
-        inferValue enclosingScope shouldGenerateVariable variableName valueType = do
+        inferValue : Scope -> Bool -> String -> Core InferredType
+        inferValue enclosingScope shouldGenerateVariable variableName = do
             lambdaScopeIndex <- getCurrentScopeIndex
             updateCurrentScopeIndex (index enclosingScope)
-            when shouldGenerateVariable $ createVariable variableName
-            ignore $ inferExpr valueType value
-            ignore $ addVariableType variableName valueType
+            valueType <- inferExpr value
             updateCurrentScopeIndex lambdaScopeIndex
+            pure valueType
     inferExprLam _ _ p0 expr@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmLam _ p4 (NmApp _ (NmRef _ name)
-      [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2, NmLocal _ arg3, NmLocal _ arg4]))))) =
-        inferExprLamWithParameterType1
-          (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2 && p3 == arg3 && p4 == arg4) p0 expr
+      [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2, NmLocal _ arg3, NmLocal _ arg4]))))) = do
+        isMethodReference <- canUseMethodReference name [arg0, arg1, arg2, arg3, arg4] p0 [p1, p2, p3, p4]
+        inferExprLamWithParameterType1 isMethodReference p0 expr
     inferExprLam _ _ p0 expr@(NmLam _ p1 (NmLam _ p2 (NmLam _ p3 (NmApp _ (NmRef _ name)
-      [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2, NmLocal _ arg3])))) =
-        inferExprLamWithParameterType1
-          (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2 && p3 == arg3) p0 expr
+      [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2, NmLocal _ arg3])))) = do
+        isMethodReference <- canUseMethodReference name [arg0, arg1, arg2, arg3] p0 [p1, p2, p3]
+        inferExprLamWithParameterType1 isMethodReference p0 expr
     inferExprLam _ _ p0 expr@(NmLam _ p1 (NmLam _ p2 (NmApp _ (NmRef _ name)
-      [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2]))) =
-        inferExprLamWithParameterType1 (maybe False ((==) arg0) p0 && p1 == arg1 && p2 == arg2) p0 expr
-    inferExprLam _ _ p0 expr@(NmLam _ p1 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1])) =
-        inferExprLamWithParameterType1 (maybe False ((==) arg0) p0 && p1 == arg1) p0 expr
-    inferExprLam _ _ p0 expr@(NmApp _ (NmRef _ _) [NmLocal _ b]) =
-      inferExprLamWithParameterType1 (maybe False ((==) b) p0) p0 expr
-    inferExprLam _ _ p0 expr@(NmLam _ c (NmLam _ a (NmLocal _ b))) =
-      inferExprLamWithParameterType1 (isJust p0 && (c == b || a == b)) p0 expr
-    inferExprLam _ _ p0 expr@(NmLam _ a (NmLocal _ b)) =
-      inferExprLamWithParameterType1 (maybe False ((==) b) p0 || (isJust p0 && a == b)) p0 expr
-    inferExprLam _ _ p0 expr@(NmLocal _ b) =
-      inferExprLamWithParameterType1 (maybe False ((==) b) p0) p0 expr
+      [NmLocal _ arg0, NmLocal _ arg1, NmLocal _ arg2]))) = do
+        isMethodReference <- canUseMethodReference name [arg0, arg1, arg2] p0 [p1, p2]
+        inferExprLamWithParameterType1 isMethodReference p0 expr
+    inferExprLam _ _ p0 expr@(NmLam _ p1 (NmApp _ (NmRef _ name) [NmLocal _ arg0, NmLocal _ arg1])) = do
+      isMethodReference <- canUseMethodReference name [arg0, arg1] p0 [p1]
+      inferExprLamWithParameterType1 isMethodReference p0 expr
+    inferExprLam _ _ p0 expr@(NmApp _ (NmRef _ name) [NmLocal _ arg0]) = do
+      isMethodReference <- canUseMethodReference name [arg0] p0 []
+      inferExprLamWithParameterType1 isMethodReference p0 expr
     inferExprLam _ _ p0 expr = inferExprLamWithParameterType1 False p0 expr
 
-    inferExprLet : {auto stateRef: Ref AsmState AsmState} -> FC -> InferredType -> (x : Name) -> NamedCExp -> NamedCExp -> Core InferredType
-    inferExprLet fc exprTy var value expr = do
+    inferExprLet : {auto stateRef: Ref AsmState AsmState} -> FC -> (x : Name) -> NamedCExp -> NamedCExp -> Core InferredType
+    inferExprLet fc var value expr = do
         let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
         let varName = jvmSimpleName var
         createVariable varName
         let (_, lineStart, lineEnd) = getSourceLocation value
-        valueTy <- withInferenceScope lineStart lineEnd $ inferExpr IUnknown value
-        ignore $ addVariableType varName valueTy
+        valueTy <- withInferenceScope lineStart lineEnd $ inferExpr value
+        addVariableType varName valueTy
         let (_, lineStart, lineEnd) = getSourceLocation expr
-        withInferenceScope lineStart lineEnd $ inferExpr exprTy expr
+        withInferenceScope lineStart lineEnd $ inferExpr expr
 
-    inferSelfTailCallParameter : {auto stateRef: Ref AsmState AsmState} -> Map Int InferredType -> Map Int String -> (NamedCExp, Int) -> Core ()
-    inferSelfTailCallParameter types argumentNameByIndices (arg, index) = do
-        optTy <- coreLift $ Map.get types index
-        let variableType = fromMaybe IUnknown $ nullableToMaybe optTy
-        ty <- inferExpr variableType arg
+    inferSelfTailCallParameter : {auto stateRef: Ref AsmState AsmState} -> Map Int String
+                              -> (NamedCExp, Int) -> Core ()
+    inferSelfTailCallParameter argumentNameByIndices (arg, index) = do
+        ty <- inferExpr arg
         optName <- coreLift $ Map.get {value=String} argumentNameByIndices index
         maybe (pure ()) (doAddVariableType ty) $ nullableToMaybe optName
       where
         doAddVariableType : InferredType -> String -> Core ()
         doAddVariableType ty name = do
-            ignore $ addVariableType name ty
+            addVariableType name ty
             case arg of
                 NmLocal _ loc => do
                     let valueVariableName = jvmSimpleName loc
@@ -952,40 +959,38 @@ mutual
                     when (index /= valueVariableIndex) $ createNewVariable "tailRecArg" ty
                 _ => createNewVariable "tailRecArg" ty
 
-    inferExprApp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> Core InferredType
-    inferExprApp exprTy app@(NmApp _ (NmRef _ (UN (Basic "$idrisTailRec"))) args) =
+    inferExprApp : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
+    inferExprApp app@(NmApp _ (NmRef _ (UN (Basic "$idrisTailRec"))) args) =
         case args of
-            [] => pure exprTy
+            [] => pure IUnknown -- The type will not be used as it is in tail call position
             args@(_ :: argsTail) => do
-                types <- retrieveVariableTypesAtScope !getCurrentScopeIndex
                 argumentNameByIndices <- coreLift $ Map.transpose $ variableIndices !(getScope 0)
-                traverse_ (inferSelfTailCallParameter types argumentNameByIndices) $
-                    zip args [0 .. the Int $ cast $ length argsTail]
-                pure exprTy
-    inferExprApp exprTy (NmApp _ (NmRef _ idrisName) args) = do
+                traverse_ (inferSelfTailCallParameter argumentNameByIndices) $
+                  zip args [0 .. the Int $ cast $ length argsTail]
+                pure IUnknown -- The type will not be used as it is in tail call position
+    inferExprApp (NmApp fc (NmRef _ idrisName) args) = do
         let functionName = jvmName idrisName
-        functionType <- case !(findFunctionType functionName) of
-            Just ty => pure ty
-            Nothing => pure $ MkInferredFunctionType inferredObjectType $ replicate (length args) inferredObjectType
-        let argsWithTypes = zip args (parameterTypes functionType)
-        traverse_ inferParameter argsWithTypes
-        pure $ returnType functionType
-    inferExprApp exprTy (NmApp _ lambdaVariable args) = do
-        ignore $ inferExpr inferredLambdaType lambdaVariable
-        let argsWithTypes = zip args (replicate (length args) IUnknown)
-        traverse_ inferParameter argsWithTypes
+        retType <- case !(findFunctionType functionName) of
+            Just functionType => pure $ returnType functionType
+            Nothing => if idrisName == tailRecLoopFunctionName
+                         then pure inferredObjectType
+                         else throw $ GenericMsg fc "Unknown type for function \{show functionName}"
+        traverse_ inferExpr args
+        pure retType
+    inferExprApp (NmApp _ lambdaVariable args) = do
+        ignore $ inferExpr lambdaVariable
+        traverse_ inferExpr args
         pure IUnknown
-    inferExprApp _ _ = throw $ GenericMsg emptyFC "Not a function application"
+    inferExprApp _ = throw $ GenericMsg emptyFC "Not a function application"
 
-    inferExprCon : {auto stateRef: Ref AsmState AsmState} -> InferredType -> String -> Name -> List NamedCExp -> Core InferredType
-    inferExprCon exprTy fileName name args = do
-        let argsWithTypes = zip args (replicate (length args) inferredObjectType)
-        traverse_ inferParameter argsWithTypes
+    inferExprCon : {auto stateRef: Ref AsmState AsmState} -> String -> Name -> List NamedCExp -> Core InferredType
+    inferExprCon fileName name args = do
+        traverse_ inferExpr args
         pure idrisObjectType
 
-    inferExprCast : {auto stateRef: Ref AsmState AsmState} -> InferredType -> InferredType -> NamedCExp -> Core InferredType
-    inferExprCast sourceType targetType expr = do
-        ignore $ inferExpr sourceType expr
+    inferExprCast : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> Core InferredType
+    inferExprCast targetType expr = do
+        ignore $ inferExpr expr
         pure targetType
 
     inferExprOp : {auto stateRef: Ref AsmState AsmState} -> PrimFn arity -> Vect arity NamedCExp -> Core InferredType
@@ -1000,37 +1005,37 @@ mutual
     inferExprOp (BAnd ty) [x, y] = inferBinaryOp (getInferredType ty) x y
     inferExprOp (BOr ty) [x, y] = inferBinaryOp (getInferredType ty) x y
     inferExprOp (BXOr ty) [x, y] = inferBinaryOp (getInferredType ty) x y
-    inferExprOp (LT ty) [x, y] = inferBoolOp (getInferredType ty) x y
-    inferExprOp (LTE ty) [x, y] = inferBoolOp (getInferredType ty) x y
-    inferExprOp (EQ ty) [x, y] = inferBoolOp (getInferredType ty) x y
-    inferExprOp (GT ty) [x, y] = inferBoolOp (getInferredType ty) x y
-    inferExprOp (GTE ty) [x, y] = inferBoolOp (getInferredType ty) x y
+    inferExprOp (LT ty) [x, y] = inferBoolOp x y
+    inferExprOp (LTE ty) [x, y] = inferBoolOp x y
+    inferExprOp (EQ ty) [x, y] = inferBoolOp x y
+    inferExprOp (GT ty) [x, y] = inferBoolOp x y
+    inferExprOp (GTE ty) [x, y] = inferBoolOp x y
 
     inferExprOp StrLength [x] = do
-        ignore $ inferExpr inferredStringType x
+        ignore $ inferExpr x
         pure IInt
     inferExprOp StrHead [x] = do
-        ignore $ inferExpr inferredStringType x
+        ignore $ inferExpr x
         pure IChar
     inferExprOp StrTail [x] = do
-        ignore $ inferExpr inferredStringType x
+        ignore $ inferExpr x
         pure inferredStringType
     inferExprOp StrIndex [x, i] = do
-        ignore $ inferExpr inferredStringType x
-        ignore $ inferExpr IInt i
+        ignore $ inferExpr x
+        ignore $ inferExpr i
         pure IChar
     inferExprOp StrCons [x, y] = do
-        ignore $ inferExpr IChar x
-        ignore $ inferExpr inferredStringType y
+        ignore $ inferExpr x
+        ignore $ inferExpr y
         pure inferredStringType
     inferExprOp StrAppend [x, y] = inferBinaryOp inferredStringType x y
     inferExprOp StrReverse [x] = do
-        ignore $ inferExpr inferredStringType x
+        ignore $ inferExpr x
         pure inferredStringType
     inferExprOp StrSubstr [offset, len, str] = do
-        ignore $ inferExpr IInt offset
-        ignore $ inferExpr IInt len
-        ignore $ inferExpr inferredStringType str
+        ignore $ inferExpr offset
+        ignore $ inferExpr len
+        ignore $ inferExpr str
         pure inferredStringType
     inferExprOp DoubleExp [x] = inferUnaryOp IDouble x
     inferExprOp DoubleLog [x] = inferUnaryOp IDouble x
@@ -1045,15 +1050,15 @@ mutual
     inferExprOp DoubleFloor [x] = inferUnaryOp IDouble x
     inferExprOp DoubleCeiling [x] = inferUnaryOp IDouble x
 
-    inferExprOp (Cast ty1 ty2) [x] = inferExprCast (getInferredType ty1) (getInferredType ty2) x
+    inferExprOp (Cast ty1 ty2) [x] = inferExprCast (getInferredType ty2) x
 
     inferExprOp BelieveMe [a, b, x] = do
-      ignore $ inferExpr IUnknown a
-      ignore $ inferExpr IUnknown b
-      ignore $ inferExpr IUnknown x
+      ignore $ inferExpr a
+      ignore $ inferExpr b
+      ignore $ inferExpr x
       pure IUnknown
     inferExprOp Crash [_, msg] = do
-      ignore $ inferExpr inferredStringType msg
+      ignore $ inferExpr msg
       pure IUnknown
     inferExprOp op _ = throw $ GenericMsg emptyFC ("Unsupported primitive function " ++ show op)
 
@@ -1068,10 +1073,6 @@ showScopes n = do
     logAsm $ show scope
     when (n > 0) $ showScopes (n - 1)
 
-tailRecLoopFunctionName : Name
-tailRecLoopFunctionName =
-  NS (mkNamespace "io.github.mmhelloworld.idrisjvm.runtime.Runtime") (UN $ Basic "tailRec")
-
 delayNilArityExpr : FC -> (args: List Name) -> NamedCExp -> NamedCExp
 delayNilArityExpr fc [] expr = NmDelay fc LLazy expr
 delayNilArityExpr _ _ expr = expr
@@ -1084,6 +1085,102 @@ logFunction logPrefix name args expr result =
   if shouldDebugFunction name
     then log (logPrefix ++ " " ++ show name ++ ": " ++ show args ++ "\n" ++ showNamedCExp 0 expr) result
     else result
+
+namespace TermType
+  getConstantType : Primitive.Constant -> InferredType
+  getConstantType (I _) = IInt
+  getConstantType WorldVal = IInt
+  getConstantType (I8 _) = IInt
+  getConstantType (I16 _) = IInt
+  getConstantType (I32 _) = IInt
+  getConstantType (I64 _) = ILong
+  getConstantType (B8 _) = IInt
+  getConstantType (B16 _) = IInt
+  getConstantType (B32 _) = IInt
+  getConstantType (B64 _) = ILong
+  getConstantType (Ch _ ) = IInt
+  getConstantType (Str _) = inferredStringType
+  getConstantType (BI _) = inferredBigIntegerType
+  getConstantType (Db _) = IDouble
+  getConstantType (PrT IntType    ) = IInt
+  getConstantType (PrT IntegerType) = inferredBigIntegerType
+  getConstantType (PrT Int8Type   ) = IInt
+  getConstantType (PrT Int16Type  ) = IInt
+  getConstantType (PrT Int32Type  ) = IInt
+  getConstantType (PrT Int64Type  ) = ILong
+  getConstantType (PrT Bits8Type  ) = IInt
+  getConstantType (PrT Bits16Type ) = IInt
+  getConstantType (PrT Bits32Type ) = IInt
+  getConstantType (PrT Bits64Type ) = ILong
+  getConstantType (PrT StringType ) = inferredStringType
+  getConstantType (PrT CharType   ) = IInt
+  getConstantType (PrT DoubleType ) = IDouble
+  getConstantType (PrT WorldType  ) = IInt
+
+  getTypeTerm : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> Name -> Core (Maybe (Term []))
+  getTypeTerm name = do
+    defs <- get Ctxt
+    Just gdef <- lookupCtxtExact name (gamma defs)
+      | Nothing => pure Nothing
+    ty <- normaliseSizeLimit defs 50 [] gdef.type
+    Just <$> toFullNames ty
+
+  showConType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> ConInfo -> Name -> Core ()
+  showConType conInfo name = do
+    Just ty <- getTypeTerm name
+      | Nothing => coreLift $ printLn $ "Missing type for " ++ show name
+    coreLift $ printLn $ show name ++ "(" ++ show conInfo ++ ")" ++ ": " ++ show ty
+
+  export
+  getTermJvmType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> Name -> Core (Maybe InferredFunctionType)
+  getTermJvmType name = do
+      Just term <- getTypeTerm name
+        | Nothing => pure Nothing
+      let (ret ::: args) = go [] term
+      pure $ Just $ MkInferredFunctionType ret (reverse args)
+    where
+
+      log : Show a => Lazy a -> b -> b
+      log value b = if show name == "Prelude.Show.protectEsc" then trace (show value) b else b
+
+      getPrimVal : List (Term vars) -> Maybe Primitive.Constant
+      getPrimVal [PrimVal _ c] = Just c
+      getPrimVal args = Nothing
+
+      getConstructorType : Name -> InferredType
+      getConstructorType name =
+        if isBoolTySpec name then IInt
+        else if name == basics "List" then idrisListType
+        else if name == preludetypes "Maybe" then idrisMaybeType
+        else if name == preludetypes "Nat" then inferredBigIntegerType
+        else inferredObjectType
+
+      mutual
+        getFnType : {vars : _} -> List InferredType -> Term vars -> List (Term vars) -> List1 InferredType
+        getFnType types (Ref _ _ tyName) args = getConstructorType tyName ::: types
+        getFnType types (PrimVal _ c) [] = getConstantType c ::: types
+        getFnType types (Bind _ x (Pi _ count _ ty) sc) [] =
+          if count == plusNeutral then go (toList types) sc
+          else case go [] ty of
+            (jvmType ::: []) => go (toList (jvmType ::: types)) sc
+            xs => go (inferredLambdaType :: toList types) sc
+        getFnType types term _ = (inferredObjectType ::: types)
+
+        go : {vars : _} -> List InferredType -> Term vars -> List1 InferredType
+        go types term =
+          let (fn, args) = getFnArgs term
+          in getFnType types fn args
+
+  export
+  showType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> Name -> Core ()
+  showType name = do
+    let nameString = show name
+    Just ty <- getTypeTerm name
+      | Nothing => coreLift $ printLn $ "Missing type for " ++ nameString
+    coreLift $ printLn $ "\{nameString}: \{show ty}"
+    Just termJvmType <- getTermJvmType name
+      | Nothing => coreLift $ printLn $ "Missing JVM type for " ++ nameString
+    coreLift $ printLn $ "\{nameString}: \{show termJvmType}"
 
 optimizeTailRecursion : String -> (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
 optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
@@ -1105,64 +1202,64 @@ optimize programName allDefs =
       tailCallOptimizedDefs = TailRec.functions tailRecLoopFunctionName tailRecOptimizedDefs
   in toNameFcDef <$> tailCallOptimizedDefs
 
+getArity : InferredFunctionType -> Nat
+getArity (MkInferredFunctionType _ args) = length args
+
 export
-inferDef : {auto stateRef: Ref AsmState AsmState} -> String -> Name -> FC -> NamedDef -> Core ()
-inferDef programName idrisName fc (MkNmFun args expr) = do
+inferFunctionType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                  -> (Name, FC, NamedDef) -> Core ()
+inferFunctionType (idrisName, _, MkNmFun args expr) = do
+  let jname = jvmName idrisName
+  let arity = length args
+  let runtimeInitialFunctionType = MkInferredFunctionType inferredObjectType (replicate arity inferredObjectType)
+  maybeFunctionType <- getTermJvmType idrisName
+  let termInitialFunctionType = fromMaybe runtimeInitialFunctionType maybeFunctionType
+  let termTypeArity = getArity termInitialFunctionType
+  let initialFunctionType = if arity == termTypeArity then termInitialFunctionType else runtimeInitialFunctionType
+  let jvmClassAndMethodName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
+  scopes <- coreLift $ ArrayList.new {elemTy=Scope}
+  let function = MkFunction jname initialFunctionType (subtyping scopes) 0 jvmClassAndMethodName expr
+  setCurrentFunction function
+  coreLift $ addFunction !getGlobalState jname function
+  resetScope
+  scopeIndex <- newScopeIndex
+  let (_, lineStart, lineEnd) = getSourceLocation expr
+  allVariableTypes <- coreLift $ Map.newTreeMap {key=Int} {value=InferredType}
+  allVariableIndices <- coreLift $ Map.newTreeMap {key=String} {value=Int}
+  let arity = length args
+  let arityInt = the Int $ cast arity
+  let argumentNames = jvmSimpleName <$> args
+  argIndices <- coreLift $ getArgumentIndices arityInt argumentNames
+  argumentTypesByName <- coreLift $ Map.fromList $ zip argumentNames (parameterTypes initialFunctionType)
+  let retType = returnType initialFunctionType
+  let functionScope =
+      MkScope scopeIndex Nothing argumentTypesByName allVariableTypes argIndices
+          allVariableIndices retType arityInt (lineStart, lineEnd) ("", "") []
+  saveScope functionScope
+  when (shouldDebugFunction jname) $ showScopes 0
+
+inferFunctionType (idrisName, fc, MkNmForeign foreignDescriptors argumentTypes returnType) =
+  inferForeign idrisName fc foreignDescriptors argumentTypes returnType
+inferFunctionType (idrisName, fc, MkNmError expr) = inferFunctionType (idrisName, fc, MkNmFun [] expr)
+inferFunctionType _ = pure ()
+
+export
+inferDef : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+         -> Name -> FC -> Core ()
+inferDef idrisName fc = do
     let jname = jvmName idrisName
-    let jvmClassAndMethodName = getIdrisFunctionName programName (className jname) (methodName jname)
-    let argumentNames = jvmSimpleName <$> args
-    let arity = length args
-    let arityInt = the Int $ cast arity
-    argIndices <- coreLift $ getArgumentIndices arityInt argumentNames
-    let initialArgumentTypes = replicate arity inferredObjectType
-    let inferredFunctionType = MkInferredFunctionType inferredObjectType initialArgumentTypes
-    argumentTypesByName <- coreLift $ Map.fromList $ zip argumentNames initialArgumentTypes
-    scopes <- coreLift $ ArrayList.new {elemTy=Scope}
-    let function = MkFunction jname inferredFunctionType (subtyping scopes) 0 jvmClassAndMethodName emptyFunction
-    setCurrentFunction function
-    coreLift $ AsmGlobalState.addFunction !getGlobalState jname function
-    updateCurrentFunction $ { optimizedBody := expr }
-
-    resetScope
-    scopeIndex <- newScopeIndex
-    let (_, lineStart, lineEnd) = getSourceLocation expr
-    allVariableTypes <- coreLift $ Map.newTreeMap {key=Int} {value=InferredType}
-    allVariableIndices <- coreLift $ Map.newTreeMap {key=String} {value=Int}
-    let functionScope =
-        MkScope scopeIndex Nothing argumentTypesByName allVariableTypes argIndices
-            allVariableIndices IUnknown arityInt (lineStart, lineEnd) ("", "") []
-
-    saveScope functionScope
-    retTy <- inferExpr IUnknown expr
-    updateScopeVariableTypes arity
-    updateCurrentFunction $ { inferredFunctionType := inferredFunctionType }
-    when (shouldDebugFunction jname) $ showScopes (scopeCounter !getState - 1)
-  where
-    getArgumentTypes : List String -> Core (List InferredType)
-    getArgumentTypes argumentNames = do
-        argumentIndicesByName <- getVariableIndicesByName 0
-        argumentTypesByIndex <- getVariableTypesAtScope 0
-        coreLift $ go argumentIndicesByName argumentTypesByIndex argumentNames
-      where
-        go : Map String Int -> Map Int InferredType -> List String -> IO (List InferredType)
-        go argumentIndicesByName argumentTypesByIndex argumentNames = do
-            types <- go1 [] argumentNames
-            pure $ reverse types
-          where
-            go1 : List InferredType -> List String -> IO (List InferredType)
-            go1 acc [] = pure acc
-            go1 acc (arg :: args) = do
-                optIndex <- Map.get {value=Int} argumentIndicesByName arg
-                ty <- case nullableToMaybe optIndex of
-                    Just index => do
-                        optTy <- Map.get argumentTypesByIndex index
-                        pure $ fromMaybe IUnknown $ nullableToMaybe optTy
-                    Nothing => pure IUnknown
-                go1 (ty :: acc) args
-
-inferDef programName n fc (MkNmError expr) = inferDef programName n fc (MkNmFun [] expr)
-
-inferDef programName idrisName fc def@(MkNmForeign foreignDescriptors argumentTypes returnType) =
-    inferForeign programName idrisName fc foreignDescriptors argumentTypes returnType
-
-inferDef _ _ _ _ = pure ()
+    globalState <- getGlobalState
+    Just function <- coreLift $ findFunction globalState jname
+      | Nothing => throw (GenericMsg fc ("Unable to find function \{show jname}"))
+    let expr = optimizedBody function
+    if isForeign expr
+      then pure ()
+      else do
+        when (shouldDebugFunction jname) $ coreLift $ printLn "Optimized: \{showNamedCExp 0 expr}"
+        setCurrentFunction function
+        resetScope
+        size <- coreLift $ Collection.size {elemTy=Scope, obj=Collection Scope} $ believe_me (scopes function)
+        setScopeCounter size
+        ignore $ inferExpr expr
+        updateScopeVariableTypes
+        when (shouldDebugFunction jname) $ showScopes (scopeCounter !getState - 1)

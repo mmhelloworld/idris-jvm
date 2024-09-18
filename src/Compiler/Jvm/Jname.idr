@@ -39,15 +39,15 @@ getSimpleName : Jname -> String
 getSimpleName = getSimpleNameWithSep "/"
 
 export
-implementation Eq Jname where
+Eq Jname where
     name1 == name2 = getSimpleName name1 == getSimpleName name2
 
 export
-implementation Ord Jname where
+Ord Jname where
   compare name1 name2 = compare (getSimpleName name1) (getSimpleName name2)
 
 export
-implementation Show Jname where
+Show Jname where
     show = getSimpleName
 
 export

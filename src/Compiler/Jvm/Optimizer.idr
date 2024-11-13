@@ -725,7 +725,7 @@ mutual
     inferExpr (NmPrimVal fc (Ch _)) = pure IChar
     inferExpr (NmPrimVal fc (Db _)) = pure IDouble
     inferExpr (NmPrimVal fc _) = pure IInt
-    inferExpr (NmErased fc) = pure IUnknown
+    inferExpr (NmErased fc) = pure IInt
     inferExpr (NmCrash fc msg) = pure IUnknown
 
     inferConstructorSwitchExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core ()
@@ -798,30 +798,30 @@ mutual
       if (endsWith (methodName rootMethodName) "$ltinit$gt")
         then inferExtPrim fc JvmStaticMethodCall [voidTypeExpr, NmErased fc, fargs, world]
         else pure IUnknown
-    inferExtPrim _ NewArray [_, size, val, world] = do
+    inferExtPrim _ NewArray [_, size, val, _] = do
         ignore $ inferExpr size
         ignore $ inferExpr val
         pure arrayListType
-    inferExtPrim _ ArrayGet [_, arr, pos, world] = do
+    inferExtPrim _ ArrayGet [_, arr, pos, _] = do
         ignore $ inferExpr arr
         ignore $ inferExpr pos
         pure IUnknown
-    inferExtPrim _ ArraySet [_, arr, pos, val, world] = do
+    inferExtPrim _ ArraySet [_, arr, pos, val, _] = do
         ignore $ inferExpr arr
         ignore $ inferExpr pos
         ignore $ inferExpr val
         pure inferredObjectType
-    inferExtPrim _ JvmNewArray [tyExpr, size, world] = do
+    inferExtPrim _ JvmNewArray [tyExpr, size, _] = do
         ignore $ inferExpr size
         elemTy <- tySpec tyExpr
         pure $ IArray elemTy
-    inferExtPrim _ JvmSetArray [tyExpr, index, val, arr, world] = do
+    inferExtPrim _ JvmSetArray [tyExpr, index, val, arr, _] = do
         elemTy <- tySpec tyExpr
         ignore $ inferExpr arr
         ignore $ inferExpr index
         ignore $ inferExpr val
         pure inferredObjectType
-    inferExtPrim _ JvmGetArray [tyExpr, index, arr, world] = do
+    inferExtPrim _ JvmGetArray [tyExpr, index, arr, _] = do
         elemTy <- tySpec tyExpr
         ignore $ inferExpr arr
         ignore $ inferExpr index

@@ -132,13 +132,13 @@ asmCast IShort IShort   = pure ()
 asmCast IInt IBool      = pure ()
 asmCast IInt IInt       = pure ()
 asmCast IChar IInt      = pure ()
+asmCast IBool IInt      = boolToInt
+asmCast IVoid IInt      = iconst 0 -- for primitive functions returning void, Idris return type will be int
 asmCast ILong ILong     = pure ()
 asmCast IFloat IFloat   = pure ()
 asmCast IDouble IDouble = pure ()
 asmCast (IArray _) (IArray _) = pure ()
 
-asmCast IBool IInt = boolToInt
-asmCast IVoid IInt = iconst 0 -- for primitive functions returning void, Idris return type will be int
 asmCast IInt IChar = i2c
 asmCast IInt IByte = i2b
 asmCast IInt IShort = i2s

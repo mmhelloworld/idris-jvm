@@ -1,7 +1,5 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
-import static io.github.mmhelloworld.idrisjvm.runtime.Runtime.unwrap;
-
 public final class MemoizedDelayed implements Delayed {
     private boolean initialized;
     private Delayed delayed;
@@ -10,7 +8,7 @@ public final class MemoizedDelayed implements Delayed {
         this.delayed = () -> {
             synchronized (this) {
                 if (!initialized) {
-                    Object value = unwrap(delayed.evaluate());
+                    Object value = delayed.evaluate();
                     this.delayed = () -> value;
                     initialized = true;
                 }

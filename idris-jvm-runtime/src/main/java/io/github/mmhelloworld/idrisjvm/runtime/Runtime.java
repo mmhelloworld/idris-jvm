@@ -27,7 +27,6 @@ public final class Runtime {
     private static IdrisList programArgsList;
     private static Exception exception;
 
-
     private Runtime() {
     }
 
@@ -135,82 +134,14 @@ public final class Runtime {
     public static void free(Object object) {
     }
 
-    public static IntThunk unboxToIntThunk(Thunk value) {
-        return () -> value;
-    }
-
-    public static DoubleThunk unboxToDoubleThunk(Thunk value) {
-        return () -> value;
-    }
-
-    public static IntThunk createThunk(int value) {
-        return new IntThunkResult(value);
-    }
-
-    public static LongThunk createThunk(long value) {
-        return new LongThunkResult(value);
-    }
-
-    public static DoubleThunk createThunk(double value) {
-        return new DoubleThunkResult(value);
-    }
-
-    public static Thunk createThunk(Object value) {
-        return value instanceof Thunk ? (Thunk) value : new ObjectThunkResult(value);
-    }
-
-    public static Object unwrap(Object possibleThunk) {
-        if (possibleThunk instanceof Thunk) {
-            Thunk thunk = (Thunk) possibleThunk;
-            while (thunk != null && thunk.isRedex()) {
-                thunk = thunk.evaluate();
-            }
-            return thunk == null ? null : thunk.getObject();
-        } else {
-            return possibleThunk;
-        }
-    }
-
     public static Object force(Object delayed) {
-        return unwrap(((Delayed) unwrap(delayed)).evaluate());
-    }
-
-    public static int unwrapIntThunk(Object possibleThunk) {
-        if (possibleThunk instanceof Thunk) {
-            return ((Thunk) possibleThunk).getInt();
-        } else {
-            return Conversion.toInt(possibleThunk);
-        }
-    }
-
-    public static char unwrapIntThunkToChar(Object possibleThunk) {
-        if (possibleThunk instanceof Thunk) {
-            return (char) ((Thunk) possibleThunk).getInt();
-        } else {
-            return (char) possibleThunk;
-        }
-    }
-
-    public static long unwrapLongThunk(Object possibleThunk) {
-        if (possibleThunk instanceof Thunk) {
-            return ((Thunk) possibleThunk).getLong();
-        } else {
-            return (long) possibleThunk;
-        }
-    }
-
-    public static double unwrapDoubleThunk(Object possibleThunk) {
-        if (possibleThunk instanceof Thunk) {
-            return ((Thunk) possibleThunk).getDouble();
-        } else {
-            return (double) possibleThunk;
-        }
+        return ((Delayed)delayed).evaluate();
     }
 
     public static ForkJoinTask<?> fork(Function<Object, Object> action) {
         return FORK_JOIN_POOL.submit(() -> {
             try {
-                unwrap(action.apply(0));
+                action.apply(0);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -218,7 +149,7 @@ public final class Runtime {
     }
 
     public static ForkJoinTask<?> fork(Delayed action) {
-        return FORK_JOIN_POOL.submit(() -> unwrap(action.evaluate()));
+        return FORK_JOIN_POOL.submit(action::evaluate);
     }
 
     public static void await(ForkJoinTask<?> task) {

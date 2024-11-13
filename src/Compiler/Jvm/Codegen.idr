@@ -243,6 +243,12 @@ isInterfaceInvocation : InferredType -> Bool
 isInterfaceInvocation (IRef _ Interface _) = True
 isInterfaceInvocation _ = False
 
+assembleZero : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> Core ()
+assembleZero isTailCall returnType = do
+    iconst 0
+    asmCast IInt returnType
+    when isTailCall $ asmReturn returnType
+
 assembleNil : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> Core ()
 assembleNil isTailCall returnType = do
     field GetStatic idrisNilClass "INSTANCE" "Lio/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil;"
@@ -477,15 +483,9 @@ mutual
         ldc $ DoubleConst value
         asmCast IDouble returnType
         when isTailCall $ asmReturn returnType
-    assembleExpr isTailCall returnType (NmPrimVal fc _) = do
-        iconst 0
-        asmCast IInt returnType
-        when isTailCall $ asmReturn returnType
-    assembleExpr isTailCall IInt (NmErased fc) = do iconst 0; when isTailCall $ asmReturn IInt
-    assembleExpr isTailCall IChar (NmErased fc) = do iconst 0; when isTailCall $ asmReturn IChar
-    assembleExpr isTailCall IDouble (NmErased fc) =  do ldc $ DoubleConst 0; when isTailCall $ asmReturn IDouble
-    assembleExpr isTailCall returnType (NmErased fc) = do aconstnull; when isTailCall $ asmReturn returnType
-    assembleExpr isTailCall returnType (NmCrash fc msg) = do
+    assembleExpr isTailCall returnType (NmPrimVal _ _) = assembleZero isTailCall returnType
+    assembleExpr isTailCall returnType (NmErased _) = assembleZero isTailCall returnType
+    assembleExpr isTailCall returnType (NmCrash _ msg) = do
         ldc $ StringConst msg
         invokeMethod InvokeStatic runtimeClass "crash" "(Ljava/lang/String;)Ljava/lang/Object;" False
         asmCast inferredObjectType returnType

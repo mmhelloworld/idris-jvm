@@ -19,39 +19,21 @@ public final class Conversion {
     }
 
     public static int toInt(Object that) {
-        if (that == null) {
-            return 0;
-        } else if (that instanceof Integer) {
-            return (int) that;
-        } else if (that instanceof BigInteger) {
-            return ((BigInteger) that).intValue();
-        } else if (that instanceof Long) {
-            return (int) (long) that;
+        if (that instanceof Number) {
+            return ((Number) that).intValue();
         } else if (that instanceof Character) {
             return (char) that;
         } else if (that instanceof Boolean) {
             return boolToInt1((boolean) that);
-        } else if (that instanceof Byte) {
-            return (byte) that;
-        } else if (that instanceof Short) {
-            return (short) that;
         } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to int",
+            throw new NumberFormatException(format("Unable to convert value %s of type %s to int",
                 that, that.getClass()));
         }
     }
 
-    public static int toInt1(Object that) {
-        return toInt(that);
-    }
-
     public static char toChar(Object that) {
-        if (that == null) {
-            return 0;
-        } else if (that instanceof Character) {
+        if (that instanceof Character) {
             return (char) that;
-        } else if (that instanceof Thunk) {
-            return (char) ((Thunk) that).getInt();
         } else if (that instanceof Integer) {
             return (char) (int) (Integer) that;
         } else {
@@ -61,12 +43,8 @@ public final class Conversion {
     }
 
     public static boolean toBoolean(Object that) {
-        if (that == null) {
-            return false;
-        } else if (that instanceof Boolean) {
+        if (that instanceof Boolean) {
             return (Boolean) that;
-        } else if (that instanceof Thunk) {
-            return intToBoolean1(((Thunk) that).getInt());
         } else if (that instanceof Integer) {
             return intToBoolean1((Integer) that);
         } else {
@@ -80,55 +58,19 @@ public final class Conversion {
     }
 
     public static long toLong(Object value) {
-        if (value instanceof Long) {
-            return (long) value;
-        } else if (value instanceof Integer) {
-            return (int) value;
-        } else if (value instanceof BigInteger) {
-            return ((BigInteger) value).longValue();
-        } else if (value instanceof LongThunk) {
-            return ((Thunk) value).getLong();
-        } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to long",
-                value, value.getClass()));
-        }
+        return ((Number) value).longValue();
     }
 
     public static double toDouble(Object that) {
-        if (that instanceof Double) {
-            return (double) that;
-        } else if (that instanceof Integer) {
-            return (int) that;
-        } else if (that instanceof Thunk) {
-            return ((Thunk) that).getDouble();
-        } else if (that instanceof Float) {
-            return (float) that;
-        } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to double",
-                that, that.getClass()));
-        }
+        return ((Number) that).doubleValue();
     }
 
     public static byte toByte(Object that) {
-        if (that instanceof Integer) {
-            return ((Integer) that).byteValue();
-        } else if (that instanceof Byte) {
-            return (byte) that;
-        } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to byte",
-                that, that.getClass()));
-        }
+        return ((Number) that).byteValue();
     }
 
     public static short toShort(Object that) {
-        if (that instanceof Integer) {
-            return ((Integer) that).shortValue();
-        } else if (that instanceof Short) {
-            return (short) that;
-        } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to short",
-                that, that.getClass()));
-        }
+        return ((Number) that).shortValue();
     }
 
     public static float toFloat(Object that) {

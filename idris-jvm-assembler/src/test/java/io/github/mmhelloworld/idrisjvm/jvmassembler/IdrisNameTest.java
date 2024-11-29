@@ -14,26 +14,25 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 public final class IdrisNameTest {
 
-    static Stream<Arguments> getFunctionName() {
+    static Stream<Arguments> getIdrisFunctionName() {
         return Stream.of(
-            arguments("Data/List", "take", IdrisList.fromIterable(asList("M_Data/List", "take"))),
-            arguments("Main", "bar", IdrisList.fromIterable(asList("main/Main", "bar"))),
-            arguments("Foo", "bar", IdrisList.fromIterable(asList("main/Foo", "bar"))),
-            arguments("Main/Foo", "bar", IdrisList.fromIterable(asList("M_Main/Foo", "bar"))),
-            arguments("Main/Foo/Bar/Baz", "bar", IdrisList.fromIterable(asList("M_Main/M_Foo/M_Bar/Baz", "bar"))));
+            arguments("Data/List", "take", IdrisList.fromIterable(asList("Data/List", "take"))),
+            arguments("Main", "bar", IdrisList.fromIterable(asList("Main/Main", "bar"))),
+            arguments("Foo", "bar", IdrisList.fromIterable(asList("Main/Foo", "bar"))),
+            arguments("Main/Foo", "bar", IdrisList.fromIterable(asList("Main/Foo", "bar"))),
+            arguments("Main/Foo/Bar/Baz", "bar", IdrisList.fromIterable(asList("Main/Foo/Bar/Baz", "bar"))));
     }
 
     static Stream<Arguments> getConstructorClassName() {
         return Stream.of(
-            arguments("Data/List/Take", "M_Data/M_List/Take"),
-            arguments("Prelude/Foo", "M_Prelude/Foo"),
-            arguments("Prelude", "main/Prelude")
-        );
+            arguments("Data/List/Take", "Data/List/Take"),
+            arguments("Prelude/Foo", "Prelude/Foo"),
+            arguments("Prelude", "Main/Prelude"));
     }
 
     @ParameterizedTest
     @MethodSource
-    void getFunctionName(String moduleName, String functionName, IdrisList idrisClassFunctionName) {
+    void getIdrisFunctionName(String moduleName, String functionName, IdrisList idrisClassFunctionName) {
         assertThat(IdrisName.getIdrisFunctionName("main", moduleName, functionName))
             .isEqualTo(idrisClassFunctionName);
     }
@@ -41,7 +40,7 @@ public final class IdrisNameTest {
     @ParameterizedTest
     @MethodSource
     void getConstructorClassName(String idrisConstructorName, String transformedConstructorName) {
-        assertThat(IdrisName.getIdrisConstructorClassName(idrisConstructorName))
+        assertThat(IdrisName.getIdrisConstructorClassName("main", idrisConstructorName))
             .isEqualTo(transformedConstructorName);
     }
 }

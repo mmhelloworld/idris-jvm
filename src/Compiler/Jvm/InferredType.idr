@@ -303,10 +303,8 @@ public export
 endsWith : String -> String -> Bool
 
 export
-%foreign
-    jvm' "io/github/mmhelloworld/idrisjvm/assembler/IdrisName" "getIdrisConstructorClassName"
-        "String" "String"
-getIdrisConstructorClassName : String -> String
+%foreign "jvm:getIdrisConstructorClassName(String String String),io/github/mmhelloworld/idrisjvm/assembler/IdrisName"
+getIdrisConstructorClassName : String -> String -> String
 
 data GenericTypeToken = Ident String | TypeParamStart | TypeParamEnd
 

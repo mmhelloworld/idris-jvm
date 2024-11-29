@@ -29,6 +29,19 @@ namespace BiFunction
     apply : HasIO io => {a, b, c: Type} -> (a -> b -> PrimIO c) -> (x: a) -> (y: b) -> io c
     apply {a} {b} {c} f x y = primIO $ prim_apply (jlambda f) x y
 
+namespace ToIntFunction
+
+    public export %inline
+    ToIntFunction : Type -> Type
+    ToIntFunction a = (Struct "java/util/function/ToIntFunction applyAsInt" [("<>", a)], Object -> PrimIO Int)
+
+    %foreign "jvm:.applyAsInt"
+    prim_applyAsInt : ToIntFunction a -> a -> PrimIO Int
+
+    public export %inline
+    applyAsInt : HasIO io => ToIntFunction a -> a -> io Int
+    applyAsInt f a = primIO $ prim_applyAsInt f a
+
 namespace Predicate
 
     public export %inline
@@ -41,6 +54,19 @@ namespace Predicate
     public export
     test : HasIO io => Predicate a -> a -> io Bool
     test f a = primIO $ prim_test f a
+
+namespace BiPredicate
+
+    public export %inline
+    BiPredicate : Type -> Type -> Type
+    BiPredicate a b = (Struct "java/util/function/BiPredicate test" [("<>", a), ("<>", b)], Object -> Object -> PrimIO Bool)
+
+    %foreign "jvm:.test"
+    prim_test : BiPredicate a b -> a -> b -> PrimIO Bool
+
+    public export %inline
+    test : HasIO io => BiPredicate a b -> a -> b -> io Bool
+    test f a b = primIO $ prim_test f a b
 
 namespace Supplier
 

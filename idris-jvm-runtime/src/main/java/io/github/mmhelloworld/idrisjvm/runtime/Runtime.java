@@ -134,8 +134,13 @@ public final class Runtime {
     public static void free(Object object) {
     }
 
+    public static Object unwrap(Object possibleThunk) {
+        // Method to be removed in next version
+        return possibleThunk;
+    }
+
     public static Object force(Object delayed) {
-        return ((Delayed)delayed).evaluate();
+        return ((Delayed) delayed).evaluate();
     }
 
     public static ForkJoinTask<?> fork(Function<Object, Object> action) {

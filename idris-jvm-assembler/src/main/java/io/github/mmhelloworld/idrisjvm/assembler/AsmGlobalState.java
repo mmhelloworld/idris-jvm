@@ -14,8 +14,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,9 +22,6 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
@@ -35,7 +31,6 @@ import static java.lang.Thread.currentThread;
 import static java.nio.file.Files.createTempDirectory;
 import static java.nio.file.Files.newOutputStream;
 import static java.util.Arrays.asList;
-import static java.util.Collections.synchronizedSet;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.stream.Collectors.toList;
 
@@ -54,7 +49,6 @@ public final class AsmGlobalState {
     }
 
     private final Map<String, Object> functions;
-    private final Set<String> untypedFunctions;
     private final Set<String> constructors;
     private final String programName;
     private final Map<String, Object> fcAndDefinitionsByName;
@@ -63,19 +57,10 @@ public final class AsmGlobalState {
     public <T> AsmGlobalState(String programName,
                               Map<String, Object> fcAndDefinitionsByName) {
         this.programName = programName;
-        functions = new ConcurrentHashMap<>();
-        untypedFunctions = synchronizedSet(new HashSet<>());
-        constructors = synchronizedSet(new HashSet<>());
-        assemblers = new ConcurrentHashMap<>();
+        functions = new HashMap<>();
+        constructors = new HashSet<>();
+        assemblers = new HashMap<>();
         this.fcAndDefinitionsByName = fcAndDefinitionsByName;
-    }
-
-    public static void copyRuntimeJar(String directory) {
-        String runtimeJarFile = Arrays.stream(System.getProperty("java.class.path").split(pathSeparator))
-            .filter(name -> name.contains(RUNTIME_JAR_NAME))
-            .findAny()
-            .orElseThrow(() -> new RuntimeException("Unable to find idris runtime jar"));
-        copyRuntimeClasses(new File(runtimeJarFile), directory);
     }
 
     private static void copyRuntimeClasses(String outputDirectory) {
@@ -99,27 +84,6 @@ public final class AsmGlobalState {
             copy(inputStream, outputStream);
         } catch (IOException exception) {
             throw new RuntimeException(exception);
-        }
-    }
-
-    private static void copyRuntimeClasses(File file, String directory) {
-        try (JarFile jarFile = new JarFile(file)) {
-            Collections.list(jarFile.entries()).stream()
-                .filter(jarEntry -> !jarEntry.isDirectory() && jarEntry.getName().endsWith(".class"))
-                .forEach(jarEntry -> copy(jarFile, jarEntry, directory));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static void copy(JarFile jarFile, JarEntry jarEntry, String directory) {
-        Path outputPath = Paths.get(directory, jarEntry.getName());
-        outputPath.getParent().toFile().mkdirs();
-        try (InputStream inputStream = new BufferedInputStream(jarFile.getInputStream(jarEntry));
-             OutputStream outputStream = new BufferedOutputStream(newOutputStream(outputPath))) {
-            copy(inputStream, outputStream);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -155,14 +119,6 @@ public final class AsmGlobalState {
 
     public synchronized Object getFunction(String name) {
         return functions.get(name);
-    }
-
-    public synchronized void addUntypedFunction(String name) {
-        untypedFunctions.add(name);
-    }
-
-    public synchronized boolean isUntypedFunction(String name) {
-        return untypedFunctions.contains(name);
     }
 
     public synchronized Assembler getAssembler(String name) {

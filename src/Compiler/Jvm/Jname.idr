@@ -7,16 +7,6 @@ public export
 data Jname = Jqualified String String
            | Jsimple String
 
-export
-className : Jname -> String
-className (Jqualified cname _) = cname
-className (Jsimple _) = "main/Main"
-
-export
-methodName : Jname -> String
-methodName (Jqualified _ mname) = mname
-methodName (Jsimple mname) = mname
-
 %inline
 export
 assemblerClass : String -> String
@@ -73,4 +63,18 @@ jvmIdrisMainMethodName = "jvm$idrisMain"
 
 export
 idrisMainFunctionName : String -> Name
-idrisMainFunctionName rootPackage = NS (mkNamespace $ rootPackage ++ ".Main") (UN $ Basic jvmIdrisMainMethodName)
+idrisMainFunctionName rootPackage =
+  let mainClass = case strUncons rootPackage of
+                    Just (firstChar, rest) => strCons (toUpper firstChar) rest ++ ".Main"
+                    Nothing => "Main"
+  in NS (mkNamespace mainClass) (UN $ Basic jvmIdrisMainMethodName)
+
+export
+className : Jname -> String
+className (Jqualified cname _) = cname
+className name = "Main" -- For Idris functions like `csegen`
+
+export
+methodName : Jname -> String
+methodName (Jqualified _ mname) = mname
+methodName (Jsimple mname) = mname

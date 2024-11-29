@@ -2,24 +2,20 @@ package io.github.mmhelloworld.idrisjvm.assembler;
 
 import io.github.mmhelloworld.idrisjvm.runtime.IdrisList;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
+import static java.lang.Character.toUpperCase;
 import static java.util.Arrays.asList;
-import static java.util.stream.Collectors.toCollection;
 
 public final class IdrisName {
 
-    public static final String CLASS_NAME_FUNCTION_NAME_SEPARATOR = ",";
     private static final Map<Character, String> REPLACEMENTS = new HashMap<>();
+
+    private IdrisName() {
+    }
 
     static {
         REPLACEMENTS.put(' ', "$s");
@@ -55,26 +51,23 @@ public final class IdrisName {
         REPLACEMENTS.put(']', "$rsqr");
     }
 
-    private IdrisName() {
-    }
-
     public static IdrisList getIdrisFunctionName(String programName, String idrisNamespace, String idrisFunctionName) {
-        return getIdrisName(programName, idrisNamespace, idrisFunctionName);
+        return getIdrisName(getRootModuleName(programName), idrisNamespace, idrisFunctionName);
     }
 
-    public static String getIdrisConstructorClassName(String idrisName) {
-        return String.join("/", addModulePrefix("main", asList(idrisName.split("/"))));
+    public static String getIdrisConstructorClassName(String programName, String idrisName) {
+        return addModulePrefix(getRootModuleName(programName), idrisName);
     }
 
     public static String transformCharacters(String value) {
-        return value
-            .chars()
-            .flatMap(c -> REPLACEMENTS.getOrDefault((char) c, String.valueOf((char) c)).chars())
-            .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
-            .toString();
+        StringBuilder builder = new StringBuilder();
+        for (char c: value.toCharArray()) {
+            builder.append(transformCharacter(c));
+        }
+        return builder.toString();
     }
 
-    public static String transformCharacter(char c) {
+    private static String transformCharacter(char c) {
         return REPLACEMENTS.getOrDefault(c, String.valueOf(c));
     }
 
@@ -83,8 +76,8 @@ public final class IdrisName {
         return IdrisList.fromIterable(asList(classAndMemberName.getKey(), classAndMemberName.getValue()));
     }
 
-    private static String join(String value1, String value2) {
-        return value1 + CLASS_NAME_FUNCTION_NAME_SEPARATOR + value2;
+    private static String getRootModuleName(String programName) {
+        return toUpperCase(programName.charAt(0)) + programName.substring(1);
     }
 
     private static Entry<String, String> getClassAndMemberName(String programName, String idrisNamespace,
@@ -99,44 +92,15 @@ public final class IdrisName {
         } else if (idrisNamespace.startsWith("nomangle:")) {
             return idrisNamespace.substring("nomangle:".length());
         } else {
-            LinkedList<String> moduleParts =
-                Stream.of(idrisNamespace.split("/")).collect(toCollection(LinkedList::new));
-            return String.join("/", addModulePrefix(programName, moduleParts));
+            return addModulePrefix(programName, idrisNamespace);
         }
     }
 
-    private static List<String> addModulePrefix(String programName, List<String> nameParts) {
-        int size = nameParts.size();
-        if (size > 1) {
-            List<String> packageNameParts = nameParts.subList(1, size - 1);
-            LinkedList<String> prefixedPackagedNames = packageNameParts.stream()
-                .map(packageName -> "M_" + packageName)
-                .collect(toCollection(LinkedList::new));
-            String rootPackage = nameParts.get(0);
-            prefixedPackagedNames.add(0, rootPackage.equals(programName) ? rootPackage : "M_" + rootPackage);
-            String className = nameParts.get(size - 1);
-            prefixedPackagedNames.add(className);
-            return prefixedPackagedNames;
+    private static String addModulePrefix(String programName, String name) {
+        if (name.indexOf('/') < 0) {
+            return programName + "/" + name;
         } else {
-            return asList(programName, nameParts.get(0));
+            return name;
         }
     }
-
-    private static <T> LinkedList<T> add(LinkedList<T> items, T item) {
-        items.add(item);
-        return items;
-    }
-
-    private static <T> LinkedList<T> tail(LinkedList<T> items) {
-        return new LinkedList<>(items.subList(1, items.size()));
-    }
-
-    private static Stream<String> getIdrisModuleNameFromFileName(String fileName) {
-        Path path = Paths.get(fileName.replaceAll("^\\.+|\\.idr$", ""));
-        Path module = path.normalize();
-        return IntStream.range(0, module.getNameCount())
-            .mapToObj(module::getName)
-            .map(Path::toString);
-    }
-
 }

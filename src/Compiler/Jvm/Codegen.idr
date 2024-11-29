@@ -243,12 +243,6 @@ isInterfaceInvocation : InferredType -> Bool
 isInterfaceInvocation (IRef _ Interface _) = True
 isInterfaceInvocation _ = False
 
-assembleZero : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> Core ()
-assembleZero isTailCall returnType = do
-    iconst 0
-    asmCast IInt returnType
-    when isTailCall $ asmReturn returnType
-
 assembleNil : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> Core ()
 assembleNil isTailCall returnType = do
     field GetStatic idrisNilClass "INSTANCE" "Lio/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil;"
@@ -483,8 +477,8 @@ mutual
         ldc $ DoubleConst value
         asmCast IDouble returnType
         when isTailCall $ asmReturn returnType
-    assembleExpr isTailCall returnType (NmPrimVal _ _) = assembleZero isTailCall returnType
-    assembleExpr isTailCall returnType (NmErased _) = assembleZero isTailCall returnType
+    assembleExpr isTailCall returnType (NmPrimVal _ _) = assembleInt isTailCall returnType 0
+    assembleExpr isTailCall returnType (NmErased _) = assembleInt isTailCall returnType 0
     assembleExpr isTailCall returnType (NmCrash _ msg) = do
         ldc $ StringConst msg
         invokeMethod InvokeStatic runtimeClass "crash" "(Ljava/lang/String;)Ljava/lang/Object;" False
@@ -534,7 +528,7 @@ mutual
                 -> InferredType -> FC -> Name -> (tag : Maybe Int) -> List NamedCExp -> Core ()
     assembleCon isTailCall returnType fc name tag args = do
         let fileName = fst $ getSourceLocationFromFc fc
-        let constructorClassName = getIdrisConstructorClassName (jvmSimpleName name)
+        let constructorClassName = getIdrisConstructorClassName !getProgramName (jvmSimpleName name)
         let constructorType = maybe inferredStringType (const IInt) tag
         new constructorClassName
         dup
@@ -1651,7 +1645,7 @@ mutual
       where
         conAltHashCodeExpr : FC -> (Int, NamedConAlt) -> Core (Int, Int, NamedConAlt)
         conAltHashCodeExpr fc positionAndAlt@(position, MkNConAlt name _ _ _ _) =
-            case hashCode (Str $ getIdrisConstructorClassName (jvmSimpleName name)) of
+            case hashCode (Str $ getIdrisConstructorClassName !getProgramName (jvmSimpleName name)) of
                 Just hashCodeValue => pure (hashCodeValue, position, snd positionAndAlt)
                 Nothing => asmCrash ("Constructor " ++ show name ++ " cannot be compiled to 'Switch'.")
 
@@ -1675,7 +1669,7 @@ mutual
                   labelStart label
                   addLineNumber lineNumberStart label
                   loadVar !getVariableTypes inferredStringType inferredStringType constantExprVariableIndex
-                  ldc $ StringConst $ getIdrisConstructorClassName (jvmSimpleName name)
+                  ldc $ StringConst $ getIdrisConstructorClassName !getProgramName (jvmSimpleName name)
                   invokeMethod InvokeVirtual constantClass "equals" "(Ljava/lang/Object;)Z" False
                   ifeq nextLabel
                   iconst position
@@ -1742,7 +1736,6 @@ mutual
         applyParameter typesByIndex isIoApplication index parameterType = do
           loadArgument
           invokeMethod InvokeInterface "java/util/function/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" True
-          invokeMethod InvokeStatic runtimeClass "unwrap" "(Ljava/lang/Object;)Ljava/lang/Object;" False
          where
           loadArgument : Core ()
           loadArgument =

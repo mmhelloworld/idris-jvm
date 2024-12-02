@@ -27,6 +27,7 @@ import Idris.Doc.String
 import Libraries.Data.SortedMap
 import Libraries.Data.SortedSet
 import Data.List
+import Data.List.Lazy
 import Data.Maybe
 import Data.String
 import Data.Vect
@@ -1196,11 +1197,11 @@ optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
 optimizeTailRecursion _ nameFcDef = [nameFcDef]
 
 export
-optimize : String -> List (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
+optimize : String -> LazyList (Name, FC, NamedDef) -> LazyList (Name, FC, NamedDef)
 optimize programName allDefs =
-  let tailRecOptimizedDefs = concatMap (optimizeTailRecursion programName) allDefs
-      tailCallOptimizedDefs = TailRec.functions tailRecLoopFunctionName tailRecOptimizedDefs
-  in toNameFcDef <$> tailCallOptimizedDefs
+  let tailRecOptimizedDefs = concatMap (Lazy.fromList . optimizeTailRecursion programName) allDefs
+      tailCallOptimizedDefs = TailRec.functions tailRecLoopFunctionName $ toList tailRecOptimizedDefs
+  in toNameFcDef <$> fromList tailCallOptimizedDefs
 
 getArity : InferredFunctionType -> Nat
 getArity (MkInferredFunctionType _ args) = length args

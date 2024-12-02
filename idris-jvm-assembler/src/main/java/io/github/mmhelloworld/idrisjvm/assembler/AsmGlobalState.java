@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -19,7 +20,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -66,24 +66,39 @@ public final class AsmGlobalState {
     private static void copyRuntimeClasses(String outputDirectory) {
         String packageName = Runtime.class.getPackage().getName();
         String packagePath = packageName.replaceAll("[.]", "/");
+        copyPackage(outputDirectory, packagePath);
+    }
+
+    private static void copyPackage(String outputDirectory, String packagePath) {
         ClassLoader classLoader = getSystemClassLoader();
-        InputStream stream = classLoader.getResourceAsStream(packagePath);
-        BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
-        reader.lines()
-            .filter(className -> className.endsWith(".class"))
-            .forEach(className -> copyRuntimeClass(classLoader, className, packagePath, outputDirectory));
+        try (InputStream stream = classLoader.getResourceAsStream(packagePath);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
+            String className;
+            while ((className = reader.readLine()) != null) {
+                if (className.endsWith(".class")) {
+                    copyRuntimeClass(classLoader, className, packagePath, outputDirectory);
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static void copyRuntimeClass(ClassLoader classLoader, String className, String packagePath,
                                          String outputDirectory) {
         Path outputPath = Paths.get(outputDirectory, packagePath, className);
         outputPath.getParent().toFile().mkdirs();
-        try (InputStream inputStream = new BufferedInputStream(classLoader
-            .getResourceAsStream("runtimeclasses/" + packagePath + "/" + className));
+        String qualifiedClassName = packagePath + "/" + className;
+        InputStream classStream = classLoader.getResourceAsStream("runtimeclasses/" + qualifiedClassName);
+        if (classStream == null) {
+            return;
+        }
+        try (InputStream inputStream = new BufferedInputStream(classStream);
              OutputStream outputStream = new BufferedOutputStream(newOutputStream(outputPath))) {
             copy(inputStream, outputStream);
         } catch (IOException exception) {
-            throw new RuntimeException(exception);
+            throw new RuntimeException(
+                "Unable to copy runtime class " + qualifiedClassName + " into " + outputDirectory, exception);
         }
     }
 
@@ -188,7 +203,6 @@ public final class AsmGlobalState {
     }
 
     public Object getFcAndDefinition(String name) {
-        return Optional.ofNullable(fcAndDefinitionsByName.get(name))
-            .orElseThrow(() -> new IdrisJvmException("Unable to find function " + name));
+        return fcAndDefinitionsByName.get(name);
     }
 }

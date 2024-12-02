@@ -14,6 +14,7 @@ import Core.TT
 import Core.TT.Primitive
 
 import Data.List
+import Data.List.Lazy
 import Data.List1
 import Data.Maybe
 import Data.String
@@ -2460,7 +2461,7 @@ exportTypes : AsmGlobalState -> SortedMap Namespace (List String) -> IO ()
 exportTypes globalState typeExports = traverse_ (exportTypeIo globalState) $ concat $ values typeExports
 
 exportDefs : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
-           -> AsmGlobalState -> List (Name, String) -> IO ()
+           -> AsmGlobalState -> LazyList (Name, String) -> IO ()
 exportDefs globalState nameAndDescriptors = do
   (typeExports, descriptors) <- parseExportDescriptors globalState nameAndDescriptors
   let descriptorsByEncloser = groupByEncloser descriptors
@@ -2470,6 +2471,13 @@ exportDefs globalState nameAndDescriptors = do
 export
 getExport : NoMangleMap -> Name -> Maybe (Name, String)
 getExport noMangleMap name = (\descriptor => (name, descriptor)) <$> isNoMangle noMangleMap name
+
+assembleNameFcStateRefs : {auto c : Ref Ctxt Defs}
+                        -> {auto s : Ref Syn SyntaxInfo} -> LazyList (Name, FC, Ref AsmState AsmState) -> Core ()
+assembleNameFcStateRefs [] = pure ()
+assembleNameFcStateRefs ((name, fc, stateRef) :: rest) = do
+  assemble {stateRef=stateRef} name fc
+  assembleNameFcStateRefs rest
 
 ||| Compile a TT expression to JVM bytecode
 compileToJvmBytecode : {auto c : Ref Ctxt Defs}
@@ -2483,26 +2491,25 @@ compileToJvmBytecode outputDirectory outputFile term = do
     let idrisMainBody = forget (mainExpr cdata)
     let programName = if outputFile == "" then "repl" else outputFile
     let mainFunctionName = idrisMainFunctionName programName
-    let allDefs = (mainFunctionName, emptyFC, MkNmFun [] idrisMainBody) :: ndefs
+    let allDefs = the (LazyList _) $ (mainFunctionName, emptyFC, MkNmFun [] idrisMainBody) :: fromList ndefs
     let nameFcDefs = filter isForeignDef allDefs ++ optimize programName allDefs
     let nameStrFcDefs = getNameStrFcDef <$> nameFcDefs
-    fcAndDefinitionsByName <- coreLift $ Map.fromList nameStrFcDefs
+    fcAndDefinitionsByName <- coreLift $ Map.fromLazyList nameStrFcDefs
     globalState <- coreLift $ newAsmGlobalState programName fcAndDefinitionsByName
     nameFcStateRefs <- inferFunctionTypes globalState nameFcDefs
-    ignore $ traverse (\(name, fc, stateRef) => assemble {stateRef=stateRef} name fc) nameFcStateRefs
+    assembleNameFcStateRefs nameFcStateRefs
     coreLift $ do
         exportDefs globalState $ mapMaybe (getExport noMangleMap . fst) allDefs
         mainAsmState <- createAsmState globalState mainFunctionName
         let mainFunctionJname = jvmName mainFunctionName
         ignore $ runAsm mainAsmState $ \stateRef => createMainMethod programName mainFunctionJname
         classCodeEnd globalState outputDirectory outputFile (className mainFunctionJname)
-
   where
-    inferFunctionTypes : AsmGlobalState -> List (Name, FC, NamedDef)
-                       -> Core (List (Name, FC, Ref AsmState AsmState))
+    inferFunctionTypes : AsmGlobalState -> LazyList (Name, FC, NamedDef)
+                       -> Core (LazyList (Name, FC, Ref AsmState AsmState))
     inferFunctionTypes globalState nameFcDefs = go [] nameFcDefs where
-      go : List (Name, FC, (Ref AsmState AsmState)) -> List (Name, FC, NamedDef)
-         -> Core (List (Name, FC, (Ref AsmState AsmState)))
+      go : LazyList (Name, FC, (Ref AsmState AsmState)) -> LazyList (Name, FC, NamedDef)
+         -> Core (LazyList (Name, FC, (Ref AsmState AsmState)))
       go acc [] = pure acc
       go acc (nameFcDef@(name, fc, def) :: rest) = do
         asmState <- coreLift $ createAsmState globalState name

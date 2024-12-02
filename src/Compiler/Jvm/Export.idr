@@ -17,6 +17,7 @@ import Core.Name.Namespace
 import Core.Options
 import Core.TT
 import Data.List
+import Data.List.Lazy
 import Data.List1
 import Data.Maybe
 import Data.String
@@ -679,7 +680,7 @@ getExportsMap descriptors = go SortedMap.empty (descriptors >>= toTypeDescriptor
   toTypeDescriptor _ = []
 
 export
-parseExportDescriptors : AsmGlobalState -> List (Name, String) ->
+parseExportDescriptors : AsmGlobalState -> LazyList (Name, String) ->
                            IO (SortedMap Namespace (List String), List ExportDescriptor)
 parseExportDescriptors globalState descriptors = do
     (imports, exportDescriptors) <- go (SortedMap.empty, []) descriptors
@@ -694,7 +695,7 @@ parseExportDescriptors globalState descriptors = do
     memberTypeOrder _ = 4
 
     go : (SortedMap Namespace (SortedMap String String), List ExportDescriptor) ->
-            List (Name, String) -> IO (SortedMap Namespace (SortedMap String String), List ExportDescriptor)
+            LazyList (Name, String) -> IO (SortedMap Namespace (SortedMap String String), List ExportDescriptor)
     go acc [] = pure acc
     go (imports, descriptors) ((idrisName, descriptor) :: rest) = do
       asmState <- createAsmState globalState idrisName

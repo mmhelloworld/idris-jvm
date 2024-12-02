@@ -11,6 +11,7 @@ import Core.Reflect
 import Core.TT
 
 import Data.List
+import Data.List.Lazy
 import Data.List1
 import Data.Maybe
 import Data.String
@@ -263,18 +264,31 @@ namespace Map
   newTreeMap : HasIO io => io (Map key value)
   newTreeMap = primIO prim_newTreeMap
 
-  goFromList : HasIO io => Map key value -> List (key, value) -> io ()
-  goFromList _ [] = pure ()
-  goFromList m ((k, v) :: rest) = do
-    _ <- Map.put m k v
-    goFromList m rest
-
   export
   fromList : HasIO io => List (key, value) -> io (Map key value)
   fromList keyValues = do
       m <- Map.newTreeMap {key=key} {value=value}
-      goFromList m keyValues
+      go m keyValues
       pure m
+    where
+      go : Map key value -> List (key, value) -> io ()
+      go _ [] = pure ()
+      go m ((k, v) :: rest) = do
+        ignore $ Map.put m k v
+        go m rest
+
+  export
+  fromLazyList : HasIO io => LazyList (key, value) -> io (Map key value)
+  fromLazyList keyValues = do
+      m <- Map.newTreeMap {key=key} {value=value}
+      go m keyValues
+      pure m
+    where
+      go : Map key value -> LazyList (key, value) -> io ()
+      go _ [] = pure ()
+      go m ((k, v) :: rest) = do
+        ignore $ Map.put m k v
+        go m rest
 
   %foreign jvm' "java/util/Map" ".containsKey" "i:java/util/Map java/lang/Object" "boolean"
   prim_containsKey : Map key value -> key -> PrimIO Bool

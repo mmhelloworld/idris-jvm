@@ -174,8 +174,8 @@ public final class Assembler {
     public static final int CLOSE_CURLY_BRACE = 125;
     public static final int ICONST_MAX = 5;
     public static final int BUFFER_SIZE = 1024;
-    private static final boolean SHOULD_DEBUG;
     public static final int JAVA_VERSION = V1_8;
+    private static final boolean SHOULD_DEBUG;
 
     static {
         String shouldDebug = System.getProperty("IDRIS_JVM_DEBUG", System.getenv("IDRIS_JVM_DEBUG"));
@@ -766,7 +766,7 @@ public final class Assembler {
     }
 
     public void gotoLabel(String labelName) {
-        Label label = (Label) env.get(labelName);
+        Label label = getLabel(labelName);
         if (label == null) {
             throw new NullPointerException(format("Label %s cannot be null. Current method: %s, Environment: %s",
                 labelName, methodName, env));
@@ -843,63 +843,63 @@ public final class Assembler {
     }
 
     public void ifeq(String label) {
-        mv.visitJumpInsn(IFEQ, (Label) env.get(label));
+        mv.visitJumpInsn(IFEQ, getLabel(label));
     }
 
     public void ifge(String label) {
-        mv.visitJumpInsn(IFGE, (Label) env.get(label));
+        mv.visitJumpInsn(IFGE, getLabel(label));
     }
 
     public void ifgt(String label) {
-        mv.visitJumpInsn(IFGT, (Label) env.get(label));
+        mv.visitJumpInsn(IFGT, getLabel(label));
     }
 
     public void ificmpge(String label) {
-        mv.visitJumpInsn(IF_ICMPGE, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPGE, getLabel(label));
     }
 
     public void ificmpgt(String label) {
-        mv.visitJumpInsn(IF_ICMPGT, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPGT, getLabel(label));
     }
 
     public void ificmple(String label) {
-        mv.visitJumpInsn(IF_ICMPLE, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPLE, getLabel(label));
     }
 
     public void ificmplt(String label) {
-        mv.visitJumpInsn(IF_ICMPLT, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPLT, getLabel(label));
     }
 
     public void ifacmpne(String label) {
-        mv.visitJumpInsn(IF_ACMPNE, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ACMPNE, getLabel(label));
     }
 
     public void ificmpne(String label) {
-        mv.visitJumpInsn(IF_ICMPNE, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPNE, getLabel(label));
     }
 
     public void ificmpeq(String label) {
-        mv.visitJumpInsn(IF_ICMPEQ, (Label) env.get(label));
+        mv.visitJumpInsn(IF_ICMPEQ, getLabel(label));
     }
 
     public void ifle(String label) {
-        mv.visitJumpInsn(IFLE, (Label) env.get(label));
+        mv.visitJumpInsn(IFLE, getLabel(label));
     }
 
     public void iflt(String label) {
-        mv.visitJumpInsn(IFLT, (Label) env.get(label));
+        mv.visitJumpInsn(IFLT, getLabel(label));
     }
 
     public void ifne(String label) {
-        mv.visitJumpInsn(IFNE, (Label) env.get(label));
+        mv.visitJumpInsn(IFNE, getLabel(label));
     }
 
     public void ifnonnull(String label) {
-        mv.visitJumpInsn(IFNONNULL, (Label) env.get(label));
+        mv.visitJumpInsn(IFNONNULL, getLabel(label));
     }
 
     public void ifnull(String label) {
-        mv.visitJumpInsn(IFNULL, (Label) env.get(label));
+        mv.visitJumpInsn(IFNULL, getLabel(label));
     }
 
     public void iload(int n) {
@@ -1086,19 +1086,23 @@ public final class Assembler {
         mv.visitInsn(LNEG);
     }
 
-    public void lookupSwitch(String defaultLabel, Object caseLabels, Object cases) {
-        lookupSwitch(defaultLabel, (List) caseLabels, (List) cases);
+    public void lookupSwitch(String defaultLabelName, List<String> caseLabelNames, List<Integer> cases) {
+        int[] casesArr = cases.stream().mapToInt(n -> n).toArray();
+        mv.visitLookupSwitchInsn(getLabel(defaultLabelName), casesArr, getLabels(caseLabelNames));
     }
 
-    public void lookupSwitch(String defaultLabel, List<String> caseLabels, List<Integer> cases) {
-        int[] casesArr = cases.stream().mapToInt(n -> n).toArray();
-        mv.visitLookupSwitchInsn(
-            (Label) env.get(defaultLabel),
-            casesArr,
-            caseLabels.stream()
-                .map(s -> (Label) env.get(s))
-                .toArray(Label[]::new)
-        );
+    private Label[] getLabels(List<String> caseLabelNames) {
+        return caseLabelNames.stream()
+            .map(this::getLabel)
+            .toArray(Label[]::new);
+    }
+
+    private Label getLabel(String name) {
+        return (Label) env.get(name);
+    }
+
+    public void tableSwitch(int min, int max, String defaultLabelName, List<String> caseLabelNames) {
+        mv.visitTableSwitchInsn(min, max, getLabel(defaultLabelName), getLabels(caseLabelNames));
     }
 
     public void lshl() {
@@ -1188,16 +1192,16 @@ public final class Assembler {
     }
 
     public void lineNumber(int lineNumber, String label) {
-        mv.visitLineNumber(lineNumber, (Label) env.get(label));
+        mv.visitLineNumber(lineNumber, getLabel(label));
     }
 
     public void localVariable(String name, String typeDescriptor, String signature, String lineNumberStartLabel,
                               String lineNumberEndLabel, int index) {
-        Label start = (Label) env.get(lineNumberStartLabel);
+        Label start = getLabel(lineNumberStartLabel);
         requireNonNull(start,
             format("Line number start label '%s' for variable %s at index %d must not be null for method %s/%s",
                 lineNumberStartLabel, name, index, className, methodName));
-        Label end = (Label) env.get(lineNumberEndLabel);
+        Label end = getLabel(lineNumberEndLabel);
         requireNonNull(end,
             format("Line number end label '%s' for variable %s at index %d must not be null for method %s/%s",
                 lineNumberEndLabel, name, index, className, methodName));

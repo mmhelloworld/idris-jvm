@@ -1175,8 +1175,11 @@ asmFrame : Assembler -> Int -> Int -> (signatures: JList String) -> Int -> (sign
 asmLocalVariable : Assembler -> (name: String) -> (descriptor: String) -> (signature: String) -> (startLabel: String)
                  -> (endLabel: String) -> (index: Int) -> PrimIO ()
 
-%foreign "jvm:.lookupSwitch"
+%foreign "jvm:.lookupSwitch(io/github/mmhelloworld/idrisjvm/assembler/Assembler String java/util/List java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 asmLookupSwitch : Assembler -> (defaultLabel: String) -> (labels: JList String) -> (cases: JList Int) -> PrimIO ()
+
+%foreign "jvm:.tableSwitch(io/github/mmhelloworld/idrisjvm/assembler/Assembler int int String java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+asmTableSwitch : Assembler -> (min: Int) -> (max: Int) -> (defaultLabel: String) -> (labels: JList String) -> PrimIO ()
 
 %foreign "jvm:.maxStackAndLocal"
 asmMaxStackAndLocal : Assembler -> Int -> Int -> PrimIO ()
@@ -1651,7 +1654,7 @@ parameters {auto state: Ref AsmState AsmState}
 
   public export
   %inline
-  lookupSwitch : (defaultLabel: String) -> (labels: List String) -> (cases: List Int) -> Core ()
+  lookupSwitch : (defaultLabel: String) -> (labels: List1 String) -> (cases: List1 Int) -> Core ()
 
   public export
   %inline
@@ -1740,6 +1743,10 @@ parameters {auto state: Ref AsmState AsmState}
   public export
   %inline
   setState : AsmState -> Core ()
+
+  public export
+  %inline
+  tableSwitch : (min: Int) -> (max: Int) -> (defaultLabel: String) -> (labels: List1 String) -> Core ()
 
   aaload = do
     state <- getState
@@ -2164,12 +2171,12 @@ parameters {auto state: Ref AsmState AsmState}
   lneg = do
     state <- getState
     coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.lneg" [assembler state]
+
   lookupSwitch defaultLabel labels cases = do
     state <- get AsmState
-    coreLift $ do
-      let jcases = integerValueOf <$> cases
+    coreLift $
       primIO $ asmLookupSwitch
-        (assembler state) defaultLabel (the (JList String) $ believe_me labels) (the (JList Int) $ believe_me jcases)
+        (assembler state) defaultLabel (believe_me $ forget labels) (believe_me $ forget cases)
 
   localVariable name descriptor signature startLabel endLabel index = do
     state <- get AsmState
@@ -2234,6 +2241,11 @@ parameters {auto state: Ref AsmState AsmState}
   sourceInfo sourceFileName = do
     state <- getState
     coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.sourceInfo" [assembler state, sourceFileName]
+
+  tableSwitch min max defaultLabel labels = do
+    state <- get AsmState
+    coreLift $ do
+      primIO $ asmTableSwitch (assembler state) min max defaultLabel (believe_me $ forget labels)
 
   getState = get AsmState
   setState newState = put AsmState newState

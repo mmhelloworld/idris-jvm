@@ -87,6 +87,16 @@ withScope op = do
     op
     exitScope scopeIndex
 
+shouldUseTableSwitch : Int64 -> Int64 -> Int64 -> Bool
+shouldUseTableSwitch low high labelCount =
+  let tableSpaceCost = 4 + (high - low + 1)
+      tableTimeCost = 3
+      lookupSpaceCost = 3 + 2 * labelCount
+      lookupTimeCost = labelCount
+  in labelCount > 0 &&
+       tableSpaceCost + 3 * tableTimeCost <=
+           lookupSpaceCost + 3 * lookupTimeCost
+
 defaultValue : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core ()
 defaultValue IBool = iconst 0
 defaultValue IByte = iconst 0
@@ -203,12 +213,29 @@ createDefaultLabel = do
     createLabel label
     pure label
 
-getSwitchCasesWithEndLabel : List (String, Int, a) -> List String -> List (String, Int, a, String)
+getSwitchCasesWithEndLabel : List1 (String, Int, a) -> List1 String -> List (String, Int, a, String)
 getSwitchCasesWithEndLabel switchCases labelStarts = go $ zip switchCases (drop 1 labelStarts ++ [methodEndLabel])
     where
-        go : List ((String, Int, a), String) -> List (String, Int, a, String)
-        go (((labelStart, constExpr, body), labelEnd) :: xs) = (labelStart, constExpr, body, labelEnd) :: go xs
-        go [] = []
+        go : List1 ((String, Int, a), String) -> List1 (String, Int, a, String)
+        go (((labelStart, constExpr, body), labelEnd) :: xs) = (labelStart, constExpr, body, labelEnd) ::: toList go xs
+
+getCasesWithLabels : (mapper: a -> Core (String, Int, a)) -> (alts: List a) -> {auto 0 ok : NonEmpty alts}
+                   -> Core (List1 (String, Int, a))
+getCasesWithLabels alts = do
+    cases <- traverse mapper alts
+    let (casesHead :: casesTail) = sortBy (comparing second) cases
+    pure (casesHead ::: casesTail)
+
+assembleCaseWithScope : String -> String -> (body: Core ()) -> Core ()
+assembleCaseWithScope lblStart lblEnd body = withScope $ do
+    scopeIndex <- getCurrentScopeIndex
+    scope <- getScope scopeIndex
+    let (lineNumberStart, lineNumberEnd) = lineNumbers scope
+    labelStart lblStart
+    updateScopeStartLabel scopeIndex lblStart
+    addLineNumber lineNumberStart lblStart
+    updateScopeEndLabel scopeIndex lblEnd
+    body
 
 labelHashCodeAlt : {auto stateRef: Ref AsmState AsmState} -> (Int, a) -> Core (String, Int, a)
 labelHashCodeAlt (hash, expressions) = pure (!newLabel, hash, expressions)
@@ -311,8 +338,35 @@ intToBigInteger = do
   i2l
   invokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
 
+fillTableSwitchLabels : (defaultLabel: String) -> (labels: List1 String) -> (cases: List1 Int) -> List1 String
+fillTableSwitchLabels defaultLabel labels cases = reverse $ go (head cases) (zip cases labels) where
+
+  go1 : List1 String -> Int -> List (Int, String) -> List1 String
+  go1 acc _ [] = acc
+  go1 acc currentValue cases@((caseValue, label) :: rest) =
+    if currentValue == caseValue
+       then go1 (cons label acc) (currentValue + 1) rest
+       else go1 (cons defaultLabel acc) (currentValue + 1) cases
+
+  go : Int -> List1 (Int, String) -> List1 String
+  go currentValue cases@((caseValue, label) ::: rest) =
+    if currentValue == caseValue
+       then go1 (singleton label) (currentValue + 1) rest
+       else go1 (singleton defaultLabel) (currentValue + 1) (toList cases)
+
+assembleBranch : {auto stateRef: Ref AsmState AsmState} -> (defaultLabel: String) -> (labels: List1 String)
+               -> (cases: List1 Int) -> Core ()
+assembleBranch defaultLabel labels cases =
+  let min = head cases
+      max = last cases
+      isTableSwitch = shouldUseTableSwitch (cast min) (cast max) (cast $ length labels)
+  in if isTableSwitch
+        then tableSwitch min max defaultLabel $ fillTableSwitchLabels defaultLabel labels cases
+        else lookupSwitch defaultLabel labels cases
+
 mutual
-    assembleExpr : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool)
+    assembleExpr : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                 -> (isTailCall: Bool)
                  -> InferredType -> NamedCExp -> Core ()
     assembleExpr isTailCall returnType (NmDelay _ _ expr) =
         assembleSubMethodWithScope isTailCall returnType Nothing Nothing expr
@@ -486,6 +540,10 @@ mutual
         asmCast inferredObjectType returnType
         when isTailCall $ asmReturn returnType
     assembleExpr _ _ expr = throw $ GenericMsg (getFC expr) $ "Cannot compile " ++ show expr ++ " yet"
+
+    assembleDefault : String -> NamedCExp -> Core ()
+    assembleDefault defaultLabel expr =
+      assembleCaseWithScope defaultLabel methodEndLabel (assembleExpr True returnType expr)
 
     castInt : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core ()
             -> NamedCExp -> Core ()
@@ -1379,142 +1437,132 @@ mutual
         defaultValue returnType
         asmReturn returnType
 
+    assembleSwitch : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
+                   -> (returnType: InferredType) -> FC -> Maybe (Core ())
+                   -> (mapper: a -> Core (String, Int, a)) -> (caseAssembler: (String, Int, a, String) -> Core ())
+                   -> List a -> Maybe NamedCExp -> Core ()
+    assembleSwitch _ fc _ _ _ [] _ = throw $ GenericMsg fc "Empty cases"
+    assembleSwitch returnType fc exprAsm caseIntMapper caseAssembler alts def = do
+      fromMaybe (pure ()) exprAsm
+      switchCases <- getCasesWithLabels caseIntMapper alts
+      let labels = fst <$> switchCases
+      let exprs = second <$> switchCases
+      traverse_ createLabel labels
+      defaultLabel <- createDefaultLabel
+      assembleBranch defaultLabel labels exprs
+      let switchCasesWithEndLabel = getSwitchCasesWithEndLabel switchCases labels
+      traverse_ caseAssembler switchCasesWithEndLabel
+      maybe (assembleMissingDefault returnType fc defaultLabel) (assembleDefault defaultLabel) def
+
     assembleConstantSwitch : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
                            -> (returnType: InferredType) -> (switchExprType: InferredType) -> FC -> NamedCExp
                            -> List NamedConstAlt -> Maybe NamedCExp -> Core ()
     assembleConstantSwitch _ _ fc _ [] _ = throw $ GenericMsg fc "Empty cases"
-
     assembleConstantSwitch returnType IInt fc sc alts def = do
-        assembleExpr False IInt sc
-        switchCases <- getCasesWithLabels alts
-        let labels = fst <$> switchCases
-        let exprs = second <$> switchCases
-        traverse_ createLabel labels
-        defaultLabel <- createDefaultLabel
-        lookupSwitch defaultLabel labels exprs
-        let switchCasesWithEndLabel = getSwitchCasesWithEndLabel switchCases labels
-        traverse_ assembleExprConstAlt switchCasesWithEndLabel
-        maybe (assembleMissingDefault returnType fc defaultLabel) (assembleDefault defaultLabel) def
+        let switchExprAsm = Just $ assembleExpr False IInt sc
+        let caseIntMapper = constantAltIntExpr fc
+        assembleSwitch returnType fc switchExprAsm caseIntMapper assembleExprConstAlt alts def
       where
-        getCasesWithLabels : List NamedConstAlt -> Core (List (String, Int, NamedConstAlt))
-        getCasesWithLabels alts = do
-            caseExpressionsWithLabels <- traverse (constantAltIntExpr fc) alts
-            pure $ sortBy (comparing second) caseExpressionsWithLabels
-
-        assembleCaseWithScope : String -> String -> NamedCExp -> Core ()
-        assembleCaseWithScope lblStart lblEnd expr = withScope $ do
-            scopeIndex <- getCurrentScopeIndex
-            scope <- getScope scopeIndex
-            let (lineNumberStart, lineNumberEnd) = lineNumbers scope
-            labelStart lblStart
-            updateScopeStartLabel scopeIndex lblStart
-            addLineNumber lineNumberStart lblStart
-            updateScopeEndLabel scopeIndex lblEnd
-            assembleExpr True returnType expr
-
-        assembleDefault : String -> NamedCExp -> Core ()
-        assembleDefault defaultLabel expr = assembleCaseWithScope defaultLabel methodEndLabel expr
-
         assembleExprConstAlt : (String, Int, NamedConstAlt, String) -> Core ()
         assembleExprConstAlt (labelStart, _, (MkNConstAlt _ expr), labelEnd) =
-            assembleCaseWithScope labelStart labelEnd expr
+            assembleCaseWithScope labelStart labelEnd (assembleExpr True returnType expr)
 
     assembleConstantSwitch returnType constantType fc sc alts def = do
-            hashPositionAndAlts <- traverse (constantAltHashCodeExpr fc) $
-                zip [0 .. the Int $ cast $ length $ drop 1 alts] alts
-            let positionAndAltsByHash = multiValueMap fst snd hashPositionAndAlts
-            hashCodeSwitchCases <- getHashCodeCasesWithLabels positionAndAltsByHash
-            let labels = fst <$> hashCodeSwitchCases
-            let exprs = second <$> hashCodeSwitchCases
-            switchEndLabel <- newLabel
-            createLabel switchEndLabel
-            traverse_ createLabel labels
-            assembleExpr False constantType sc
-            constantExprVariableSuffixIndex <- newDynamicVariableIndex
-            let constantExprVariableName = "constantCaseExpr" ++ show constantExprVariableSuffixIndex
-            constantExprVariableIndex <- getVariableIndex constantExprVariableName
-            hashCodePositionVariableSuffixIndex <- newDynamicVariableIndex
-            let hashCodePositionVariableName = "hashCodePosition" ++ show hashCodePositionVariableSuffixIndex
-            hashCodePositionVariableIndex <- getVariableIndex hashCodePositionVariableName
-            storeVar constantType constantType constantExprVariableIndex
-            constantClass <- getHashCodeSwitchClass fc constantType
-            iconst (-1)
-            storeVar IInt IInt hashCodePositionVariableIndex
-            loadVar !getVariableTypes constantType constantType constantExprVariableIndex
-            let isLong = constantClass == "java/lang/Long"
-            let invocationType = if isLong then InvokeStatic else InvokeVirtual
-            let signature = if isLong then "(J)I" else "()I"
-            invokeMethod invocationType constantClass "hashCode" signature False
-            lookupSwitch switchEndLabel labels exprs
-            traverse_
-                (assembleHashCodeSwitchCases fc constantClass constantExprVariableIndex hashCodePositionVariableIndex
-                    switchEndLabel)
-                hashCodeSwitchCases
-            scope <- getScope !getCurrentScopeIndex
-            let lineNumberStart = fst $ lineNumbers scope
-            labelStart switchEndLabel
-            addLineNumber lineNumberStart switchEndLabel
-            assembleConstantSwitch returnType IInt fc (NmLocal fc $ UN $ Basic hashCodePositionVariableName)
-                (hashPositionSwitchAlts hashPositionAndAlts) def
-        where
-            constantAltHashCodeExpr : FC
-                                    -> (Int, NamedConstAlt) -> Core (Int, Int, NamedConstAlt)
-            constantAltHashCodeExpr fc positionAndAlt@(position, MkNConstAlt constant _) = case hashCode constant of
-                Just hashCodeValue => pure (hashCodeValue, position, snd positionAndAlt)
-                Nothing => asmCrash ("Constant " ++ show constant ++ " cannot be compiled to 'Switch'.")
+        hashPositionAndAlts <- traverse (constantAltHashCodeExpr fc) $
+            zip [0 .. the Int $ cast $ length $ drop 1 alts] alts
+        let positionAndAltsByHash = multiValueMap fst snd hashPositionAndAlts
+        hashCodeSwitchCases <- getHashCodeCasesWithLabels positionAndAltsByHash
+        let labels = fst <$> hashCodeSwitchCases
+        let exprs = second <$> hashCodeSwitchCases
+        switchEndLabel <- newLabel
+        createLabel switchEndLabel
+        traverse_ createLabel labels
+        assembleExpr False constantType sc
+        constantExprVariableSuffixIndex <- newDynamicVariableIndex
+        let constantExprVariableName = "constantCaseExpr" ++ show constantExprVariableSuffixIndex
+        constantExprVariableIndex <- getVariableIndex constantExprVariableName
+        hashCodePositionVariableSuffixIndex <- newDynamicVariableIndex
+        let hashCodePositionVariableName = "hashCodePosition" ++ show hashCodePositionVariableSuffixIndex
+        hashCodePositionVariableIndex <- getVariableIndex hashCodePositionVariableName
+        storeVar constantType constantType constantExprVariableIndex
+        constantClass <- getHashCodeSwitchClass fc constantType
+        iconst (-1)
+        storeVar IInt IInt hashCodePositionVariableIndex
+        loadVar !getVariableTypes constantType constantType constantExprVariableIndex
+        let isLong = constantClass == "java/lang/Long"
+        let invocationType = if isLong then InvokeStatic else InvokeVirtual
+        let signature = if isLong then "(J)I" else "()I"
+        invokeMethod invocationType constantClass "hashCode" signature False
+        lookupSwitch switchEndLabel labels exprs
+        traverse_
+            (assembleHashCodeSwitchCases fc constantClass constantExprVariableIndex hashCodePositionVariableIndex
+                switchEndLabel)
+            hashCodeSwitchCases
+        scope <- getScope !getCurrentScopeIndex
+        let lineNumberStart = fst $ lineNumbers scope
+        labelStart switchEndLabel
+        addLineNumber lineNumberStart switchEndLabel
+        assembleConstantSwitch returnType IInt fc (NmLocal fc $ UN $ Basic hashCodePositionVariableName)
+            (hashPositionSwitchAlts hashPositionAndAlts) def
+      where
+          constantAltHashCodeExpr : FC
+                                  -> (Int, NamedConstAlt) -> Core (Int, Int, NamedConstAlt)
+          constantAltHashCodeExpr fc positionAndAlt@(position, MkNConstAlt constant _) = case hashCode constant of
+              Just hashCodeValue => pure (hashCodeValue, position, snd positionAndAlt)
+              Nothing => asmCrash ("Constant " ++ show constant ++ " cannot be compiled to 'Switch'.")
 
-            hashPositionSwitchAlts : List (Int, Int, NamedConstAlt) -> List NamedConstAlt
-            hashPositionSwitchAlts exprPositionAlts = reverse $ go [] exprPositionAlts where
-                go : List NamedConstAlt -> List (Int, Int, NamedConstAlt) -> List NamedConstAlt
-                go acc [] = acc
-                go acc ((_, position, (MkNConstAlt _ expr)) :: alts) =
-                    go (MkNConstAlt (I position) expr :: acc) alts
+          hashPositionSwitchAlts : List (Int, Int, NamedConstAlt) -> List NamedConstAlt
+          hashPositionSwitchAlts exprPositionAlts = reverse $ go [] exprPositionAlts where
+              go : List NamedConstAlt -> List (Int, Int, NamedConstAlt) -> List NamedConstAlt
+              go acc [] = acc
+              go acc ((_, position, (MkNConstAlt _ expr)) :: alts) =
+                  go (MkNConstAlt (I position) expr :: acc) alts
 
-            assembleHashCodeSwitchCases : FC -> String -> Int -> Int
-                                        -> String -> (String, Int, List (Int, NamedConstAlt)) -> Core ()
-            assembleHashCodeSwitchCases fc _ _ _ _ (_, _, []) = throw $ GenericMsg fc "Empty cases"
-            assembleHashCodeSwitchCases fc constantClass constantExprVariableIndex hashCodePositionVariableIndex
-                switchEndLabel (label, _, positionAndAlts) = go label positionAndAlts where
+          assembleHashCodeSwitchCases : FC -> String -> Int -> Int
+                                      -> String -> (String, Int, List (Int, NamedConstAlt)) -> Core ()
+          assembleHashCodeSwitchCases fc _ _ _ _ (_, _, []) = throw $ GenericMsg fc "Empty cases"
+          assembleHashCodeSwitchCases fc constantClass constantExprVariableIndex hashCodePositionVariableIndex
+              switchEndLabel (label, _, positionAndAlts) = go label positionAndAlts where
 
-                    {-
-                    Returns whether the comparison is using comparator or "equals". Comparators return 0 when the
-                    values are equal but `equals` returns boolean (1 being true in bytecode) so the bytecode condition
-                    following the comparison should be `ifne` for comparator but `ifeq` for `equals`.
-                    Currently only for `long`, comparator is used. For String and BigInteger, `equals` is used.
-                    -}
-                    isComparator : String -> Bool
-                    isComparator constantClass = constantClass == "java/lang/Long"
+                  {-
+                  Returns whether the comparison is using comparator or "equals". Comparators return 0 when the
+                  values are equal but `equals` returns boolean (1 being true in bytecode) so the bytecode condition
+                  following the comparison should be `ifne` for comparator but `ifeq` for `equals`.
+                  Currently only for `long`, comparator is used. For String and BigInteger, `equals` is used.
+                  -}
+                  isComparator : String -> Bool
+                  isComparator constantClass = constantClass == "java/lang/Long"
 
-                    compareConstant : String -> Core ()
-                    compareConstant "java/lang/Long" = lcmp
-                    compareConstant "java/lang/String" =
-                      invokeMethod InvokeVirtual stringClass "equals" "(Ljava/lang/Object;)Z" False
-                    compareConstant "java/math/BigInteger" =
-                      invokeMethod InvokeVirtual bigIntegerClass "equals" "(Ljava/lang/Object;)Z" False
-                    compareConstant clazz = asmCrash ("Unknown constant class " ++ clazz ++ " for switch")
+                  compareConstant : String -> Core ()
+                  compareConstant "java/lang/Long" = lcmp
+                  compareConstant "java/lang/String" =
+                    invokeMethod InvokeVirtual stringClass "equals" "(Ljava/lang/Object;)Z" False
+                  compareConstant "java/math/BigInteger" =
+                    invokeMethod InvokeVirtual bigIntegerClass "equals" "(Ljava/lang/Object;)Z" False
+                  compareConstant clazz = asmCrash ("Unknown constant class " ++ clazz ++ " for switch")
 
-                    switchBody : String -> String -> Int -> NamedConstAlt -> Core ()
-                    switchBody label nextLabel position (MkNConstAlt constant _) = do
-                      scope <- getScope !getCurrentScopeIndex
-                      let lineNumberStart = fst $ lineNumbers scope
-                      labelStart label
-                      addLineNumber lineNumberStart label
-                      loadVar !getVariableTypes constantType constantType constantExprVariableIndex
-                      assembleHashCodeSwitchConstant fc constant
-                      compareConstant constantClass
-                      let condition = if isComparator constantClass then ifne else ifeq
-                      condition nextLabel
-                      iconst position
-                      storeVar IInt IInt hashCodePositionVariableIndex
-                      goto switchEndLabel
+                  switchBody : String -> String -> Int -> NamedConstAlt -> Core ()
+                  switchBody label nextLabel position (MkNConstAlt constant _) = do
+                    scope <- getScope !getCurrentScopeIndex
+                    let lineNumberStart = fst $ lineNumbers scope
+                    labelStart label
+                    addLineNumber lineNumberStart label
+                    loadVar !getVariableTypes constantType constantType constantExprVariableIndex
+                    assembleHashCodeSwitchConstant fc constant
+                    compareConstant constantClass
+                    let condition = if isComparator constantClass then ifne else ifeq
+                    condition nextLabel
+                    iconst position
+                    storeVar IInt IInt hashCodePositionVariableIndex
+                    goto switchEndLabel
 
-                    go : String -> List (Int, NamedConstAlt) -> Core ()
-                    go _ [] = pure ()
-                    go label ((position, alt) :: []) = switchBody label switchEndLabel position alt
-                    go label ((position, alt) :: positionAndAlts) = do
-                        nextLabel <- newLabel
-                        switchBody label nextLabel position alt
-                        go nextLabel positionAndAlts
+                  go : String -> List (Int, NamedConstAlt) -> Core ()
+                  go _ [] = pure ()
+                  go label ((position, alt) :: []) = switchBody label switchEndLabel position alt
+                  go label ((position, alt) :: positionAndAlts) = do
+                      nextLabel <- newLabel
+                      switchBody label nextLabel position alt
+                      go nextLabel positionAndAlts
 
     assembleConCase : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
                     -> {auto stateRef: Ref AsmState AsmState}
@@ -1559,52 +1607,17 @@ mutual
                     storeVar inferredObjectType !(getVariableType variableName) variableIndex
                 bindArg idrisObjectVariableType variableTypes (index + 1) vars
 
-    assembleConstructorSwitch : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> InferredType
+    assembleConstructorSwitch : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                              -> {auto stateRef: Ref AsmState AsmState} -> InferredType
                               -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()
+    assembleConstructorSwitch _ fc _ [] _ = throw $ GenericMsg fc "Empty cases"
     assembleConstructorSwitch returnType fc idrisObjectVariableIndex alts def = do
-            switchCases <- getCasesWithLabels alts
-            let labels = fst <$> switchCases
-            let switchCasesWithEndLabel = getSwitchCasesWithEndLabel switchCases labels
-            let exprs = caseExpression <$> switchCases
-            traverse_ createLabel labels
-            defaultLabel <- createDefaultLabel
-            lookupSwitch defaultLabel labels exprs
-            traverse_ assembleExprConAlt switchCasesWithEndLabel
-            maybe (assembleMissingDefault returnType fc defaultLabel) (assembleDefault defaultLabel) def
-        where
-            caseExpression : (String, Int, NamedConAlt) -> Int
-            caseExpression (_, expr, _) = expr
-
-            getCasesWithLabels : List NamedConAlt -> Core (List (String, Int, NamedConAlt))
-            getCasesWithLabels alts = do
-                caseExpressionsWithLabels <- traverse conAltIntExpr alts
-                pure $ sortBy (comparing caseExpression) caseExpressionsWithLabels
-
-            assembleDefault : String -> NamedCExp -> Core ()
-            assembleDefault lblStart expr = withScope $ do
-                scopeIndex <- getCurrentScopeIndex
-                scope <- getScope scopeIndex
-                let (lineNumberStart, lineNumberEnd) = lineNumbers scope
-                labelStart lblStart
-                addLineNumber lineNumberStart lblStart
-                updateScopeStartLabel scopeIndex lblStart
-                updateScopeEndLabel scopeIndex methodEndLabel
-                assembleExpr True returnType expr
-
-            assembleCaseWithScope : String -> String -> List Name -> NamedCExp -> Core ()
-            assembleCaseWithScope lblStart lblEnd args expr = withScope $ do
-                scopeIndex <- getCurrentScopeIndex
-                scope <- getScope scopeIndex
-                let (lineNumberStart, lineNumberEnd) = lineNumbers scope
-                labelStart lblStart
-                addLineNumber lineNumberStart lblStart
-                updateScopeStartLabel scopeIndex lblStart
-                updateScopeEndLabel scopeIndex lblEnd
-                assembleConCaseExpr returnType idrisObjectVariableIndex args expr
-
-            assembleExprConAlt : (String, Int, NamedConAlt, String) -> Core ()
-            assembleExprConAlt (labelStart, _, (MkNConAlt _ _ _ args expr), labelEnd) =
-                assembleCaseWithScope labelStart labelEnd args expr
+        assembleSwitch returnType fc Nothing conAltIntExpr assembleExprConAlt alts def
+      where
+        assembleExprConAlt : (String, Int, NamedConAlt, String) -> Core ()
+        assembleExprConAlt (labelStart, _, (MkNConAlt _ _ _ args expr), labelEnd) =
+            assembleCaseWithScope labelStart labelEnd
+              (assembleConCaseExpr returnType idrisObjectVariableIndex args expr)
 
     assembleStringConstructorSwitch : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
                                     -> InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()

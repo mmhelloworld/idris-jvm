@@ -140,6 +140,9 @@ namespace Long
   export
   valueOf : Int64 -> Long
 
+  %foreign "jvm:hashCode,java/lang/Long"
+  hashCode : Int64 -> Int
+
 namespace Array
     %inline
     public export

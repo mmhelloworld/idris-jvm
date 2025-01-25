@@ -5,6 +5,8 @@ Idris 2 for JVM
 [Idris 2](https://idris-lang.org/) is a purely functional programming language
 with first class types. This repository provides Idris 2 compiler targeting JVM bytecode so that Idris 2 compiler and Idris 2 programs can run on the JVM.
 
+![Alt](https://repobeats.axiom.co/api/embed/ac64c0b18c12514f8bdd3d0b6768437187ea4d88.svg "Repobeats analytics image")
+
 ## Install
 
 * Download the latest Idris 2 JVM release from [releases page](https://github.com/mmhelloworld/idris-jvm/releases/latest).

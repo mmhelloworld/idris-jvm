@@ -518,6 +518,16 @@ getConstantType ((MkNConstAlt constant _) :: _) = case constant of
     BI _ => pure inferredBigIntegerType
     unsupportedConstant => throw $ GenericMsg emptyFC ("Unsupported constant switch " ++ show unsupportedConstant)
 
+public export
+%inline
+constructorSwitchObjectVariableName : String
+constructorSwitchObjectVariableName = "constructorSwitchObject"
+
+public export
+%inline
+conditionValueVariableName : String
+conditionValueVariableName = "conditionValue"
+
 export
 getIntConstantValue : {auto stateRef: Ref AsmState AsmState} -> FC -> Primitive.Constant -> Core Int
 getIntConstantValue _ (I i) = pure i
@@ -651,6 +661,12 @@ getJavaLambdaType fc [functionType, javaInterfaceType, _] =
 
 getJavaLambdaType fc exprs = asmCrash ("Invalid Java lambda at " ++ show fc ++ ": " ++ show exprs)
 
+export
+shouldStoreVariable : List1 a -> Bool
+shouldStoreVariable (_ ::: _ :: []) = True
+shouldStoreVariable (_ ::: _ :: _ :: []) = True
+shouldStoreVariable _ = False
+
 mutual
     inferExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
     inferExpr (NmDelay _ _ expr) = inferExprLam AppliedLambdaUnknown Nothing Nothing expr
@@ -672,14 +688,15 @@ mutual
 
     inferExpr (NmConCase _ sc [] Nothing) = pure IUnknown
     inferExpr (NmConCase _ sc [] (Just def)) = do
-        inferConstructorSwitchExpr sc
+        inferConstructorSwitchExpr False sc
         inferExpr def
     inferExpr (NmConCase _ sc [MkNConAlt _ _ _ args expr] Nothing) = do
-        inferConstructorSwitchExpr sc
+        inferConstructorSwitchExpr False sc
         inferConCaseExpr args expr
     inferExpr (NmConCase _ sc alts def) = do
-        inferConstructorSwitchExpr sc
         let hasTypeCase = any isTypeCase alts
+        let needValueVariable = not hasTypeCase && maybe False shouldStoreVariable (fromList alts)
+        inferConstructorSwitchExpr needValueVariable sc
         when hasTypeCase $ do
             createNewVariable "constructorCaseExpr" inferredStringType
             createNewVariable "hashCodePosition" IInt
@@ -693,11 +710,14 @@ mutual
     inferExpr (NmConstCase fc sc alts def) = do
         constantType <- getConstantType alts
         ignore $ inferExpr sc
-        when (constantType /= IInt) $ do
+        let isIntCase = constantType == IInt
+        when (not isIntCase) $ do
             constantExprVariable <- generateVariable "constantCaseExpr"
             addVariableType constantExprVariable constantType
             hashCodePositionVariable <- generateVariable "hashCodePosition"
             addVariableType hashCodePositionVariable IInt
+        let needValueVariable = isIntCase && maybe False shouldStoreVariable (fromList alts)
+        when needValueVariable generateConstructorSwitchValueVariable
         sortedAlts <- sortConstCases constantType alts
         altTypes <- traverse inferExprConstAlt sortedAlts
         defaultTy <- traverseOpt inferExprWithNewScope def
@@ -729,14 +749,19 @@ mutual
     inferExpr (NmErased fc) = pure IInt
     inferExpr (NmCrash fc msg) = pure IUnknown
 
-    inferConstructorSwitchExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core ()
-    inferConstructorSwitchExpr (NmLocal _ var) = do
+    generateConstructorSwitchValueVariable : {auto stateRef: Ref AsmState AsmState} -> Core ()
+    generateConstructorSwitchValueVariable = createNewVariable conditionValueVariableName idrisObjectType
+
+    inferConstructorSwitchExpr : {auto stateRef: Ref AsmState AsmState} -> (needValueVariable: Bool)
+                               -> NamedCExp -> Core ()
+    inferConstructorSwitchExpr needValueVariable (NmLocal _ var) = do
         let idrisObjectVariable = jvmSimpleName var
         addVariableType idrisObjectVariable idrisObjectType
-    inferConstructorSwitchExpr sc = do
-        idrisObjectVariable <- generateVariable "constructorSwitchValue"
+        when needValueVariable generateConstructorSwitchValueVariable
+    inferConstructorSwitchExpr needValueVariable sc = do
+        createNewVariable constructorSwitchObjectVariableName idrisObjectType
+        when needValueVariable generateConstructorSwitchValueVariable
         ignore $ inferExpr sc
-        addVariableType idrisObjectVariable idrisObjectType
 
     inferExprConstAlt : {auto stateRef: Ref AsmState AsmState} -> NamedConstAlt -> Core InferredType
     inferExprConstAlt (MkNConstAlt _ expr) = inferExprWithNewScope expr

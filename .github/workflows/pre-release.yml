@@ -44,7 +44,7 @@ jobs:
           echo "$HOME/bin/idris2-$PREVIOUS_VERSION/exec" >> "$GITHUB_PATH"
 
       - name: Publish to Maven Central
-        run: mvn -B -Prelease deploy
+        run: mvn -X -B -Prelease deploy
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}

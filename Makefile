@@ -66,10 +66,6 @@ export SCHEME
 
 .PHONY: all idris2-exec libdocs testenv testenv-clean clean FORCE
 
-maven-property:
-	mkdir -p ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes
-	echo idris.version=${IDRIS2_VERSION} > ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes/config.properties
-
 all:
 	${MAKE} ${TARGET}
 	${MAKE} libs
@@ -269,3 +265,7 @@ distclean: clean bootstrap-clean
 	@find . -type f -name '*.ttc' -exec rm -f {} \;
 	@find . -type f -name '*.ttm' -exec rm -f {} \;
 	@find . -type f -name '*.ibc' -exec rm -f {} \;
+
+maven-property:
+	mkdir -p ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes
+	echo idris.version=${IDRIS2_VERSION} > ${IDRIS2_CURDIR}/idris-jvm-compiler/target/classes/config.properties

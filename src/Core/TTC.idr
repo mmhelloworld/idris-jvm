@@ -909,7 +909,7 @@ TTC CG where
   toBuf Javascript = tag 6
   toBuf RefC = tag 7
   toBuf VMCodeInterp = tag 8
-  toBuf b Jvm = tag 9
+  toBuf Jvm = tag 9
 
   fromBuf
       = case !getTag of

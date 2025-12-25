@@ -31,6 +31,7 @@ import System.FFI
 %hide Core.Name.Scoped.Scope
 %hide Debug.Trace.toString
 %hide Core.TT.Primitive.Constant
+%hide LabelledValue.value
 
 public export
 Assembler : Type

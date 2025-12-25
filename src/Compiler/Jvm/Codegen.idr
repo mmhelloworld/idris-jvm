@@ -47,7 +47,6 @@ import Idris.Syntax
 
 %default covering
 
-%hide Core.Context.Context.Constructor.arity
 %hide Core.Name.Scoped.Scope
 %hide System.FFI.runtimeClass
 
@@ -2172,25 +2171,27 @@ generateRequiredArgsConstructor descriptorsByEncloser classExport props = do
                                getMatchingAnnotationProperty "parameterAnnotations" props
   generateConstructor descriptorsByEncloser classExport requiredFields annotations parameterAnnotations
 
+getExcludedAnnotationValues : List AnnotationProperty -> Maybe AnnotationValue
+getExcludedAnnotationValues props = snd <$> (find (\(name, _) => name == "exclude") props)
+
 generateAllArgsConstructor : {auto stateRef: Ref AsmState AsmState} -> SortedMap ClassExport (List ExportDescriptor) -> ClassExport -> Core ()
 generateAllArgsConstructor descriptorsByEncloser classExport = do
   let Just (MkAnnotation _ props) = findAllArgsConstructor classExport
-        | _ => pure ()
+      | _ => pure ()
   let fields = getFields $ fromMaybe [] $ SortedMap.lookup classExport descriptorsByEncloser
-  let excludedFields = getStringAnnotationValues $ snd $ fromMaybe ("exclude", AnnArray []) $
-                        (find (\(name, value) => name == "exclude") props)
+  let excludedAnnotationValues = getExcludedAnnotationValues props
+  let excludedFields = getStringAnnotationValues $ fromMaybe (AnnArray []) excludedAnnotationValues
   let constructorFields = filter (\fieldExport => not $ elem fieldExport.name excludedFields) fields
   let annotations = getAnnotationValues $ fromMaybe (AnnArray []) $ getMatchingAnnotationProperty "annotations" props
-  let parameterAnnotations = getParameterAnnotationValues $ fromMaybe (AnnArray []) $
-                               getMatchingAnnotationProperty "parameterAnnotations" props
+  let parameterAnnotations = getParameterAnnotationValues $ fromMaybe (AnnArray []) $ getMatchingAnnotationProperty "parameterAnnotations" props
   generateConstructor descriptorsByEncloser classExport constructorFields annotations parameterAnnotations
 
 generateNoArgsConstructor : {auto stateRef: Ref AsmState AsmState} -> SortedMap ClassExport (List ExportDescriptor) -> ClassExport -> Core ()
 generateNoArgsConstructor descriptorsByEncloser classExport = do
   let Just (MkAnnotation _ props) = findNoArgsConstructor classExport
         | _ => pure ()
-  let annotations = getAnnotationValues $ snd $ fromMaybe ("annotations", AnnArray []) $
-                        (find (\(name, value) => name == "annotations") props)
+  let annotations = getAnnotationValues $ fromMaybe (AnnArray []) $
+                        (snd {b=AnnotationValue} <$> find (\(name, _) => name == "annotations") props)
   createMethod [Public] "generated.idr" classExport.name "<init>" "()V" Nothing Nothing [] []
   methodCodeStart
   aload 0

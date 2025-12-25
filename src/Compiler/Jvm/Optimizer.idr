@@ -41,7 +41,6 @@ import Compiler.Jvm.Jname
 import Compiler.Jvm.ShowUtil
 
 %hide Core.Name.Scoped.Scope
-%hide Core.Context.Context.Constructor.arity
 %hide Compiler.TailRec.Function.fc
 %hide Compiler.TailRec.TcFunction.fc
 %hide Libraries.Text.PrettyPrint.Prettyprinter.Util.words

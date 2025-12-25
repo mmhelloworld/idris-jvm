@@ -13,6 +13,7 @@ import public Core.TT
 
 import Libraries.Utils.Binary
 import Libraries.Utils.Path
+import Libraries.Utils.Scheme
 import Libraries.Text.PrettyPrint.Prettyprinter
 
 import Idris.Syntax.Pragmas

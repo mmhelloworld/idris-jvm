@@ -145,10 +145,6 @@
                             <skip>${skipIdrisCompile}</skip>
                             <executable>make</executable>
                             <workingDirectory>${project.parent.basedir}</workingDirectory>
-                            <arguments>
-                                <argument>support</argument>
-                                <argument>idris2-exec</argument>
-                            </arguments>
                             <environmentVariables>
                                 <JAVA_OPTS>-Xss92m -Xms3g -Xmx3g</JAVA_OPTS>
                                 <IDRIS2_CG>jvm</IDRIS2_CG>

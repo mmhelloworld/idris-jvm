@@ -1970,17 +1970,18 @@ assembleDefinition idrisName fc = do
             withScope $ assembleExpr False delayedType optimizedExpr
             field PutStatic declaringClassName methodName "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
 
-createMainMethod : {auto stateRef: Ref AsmState AsmState} -> String -> Jname -> Core ()
-createMainMethod programName mainFunctionName = do
+createMainMethod : {auto stateRef: Ref AsmState AsmState} -> String -> Jname -> String -> Core ()
+createMainMethod programName mainFunctionName javaMainClassName = do
     function <- getFunction mainFunctionName
-    let idrisMainClassMethodName = jvmClassMethodName function
-    let mainClassName = className idrisMainClassMethodName
-    createMethod [Public, Static] "Main.idr" mainClassName "main" "([Ljava/lang/String;)V" Nothing Nothing [] []
+    logAsm ("generating main function in " ++ javaMainClassName)
+    createMethod [Public, Static] "Main.idr" javaMainClassName "main" "([Ljava/lang/String;)V" Nothing Nothing [] []
     methodCodeStart
     ldc $ StringConst programName
     aload 0
     invokeMethod InvokeStatic runtimeClass "setProgramArgs" "(Ljava/lang/String;[Ljava/lang/String;)V" False
-    field GetStatic mainClassName (methodName idrisMainClassMethodName) "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
+    let idrisMainClassMethodName = jvmClassMethodName function
+    let idrisMainClassName = className idrisMainClassMethodName
+    field GetStatic idrisMainClassName (methodName idrisMainClassMethodName) "Lio/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed;"
     invokeMethod InvokeVirtual "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "evaluate"
         "()Ljava/lang/Object;" False
     return
@@ -2482,8 +2483,9 @@ compileToJvmBytecode outputDirectory outputFile term = do
         exportDefs globalState $ mapMaybe (getExport noMangleMap . fst) allDefs
         mainAsmState <- createAsmState globalState mainFunctionName
         let mainFunctionJname = jvmName mainFunctionName
-        ignore $ runAsm mainAsmState $ \stateRef => createMainMethod programName mainFunctionJname
-        classCodeEnd globalState outputDirectory outputFile (className mainFunctionJname)
+        let javaMainClassName = programName ++ "/JvmMain"
+        ignore $ runAsm mainAsmState $ \stateRef => createMainMethod programName mainFunctionJname javaMainClassName
+        classCodeEnd globalState outputDirectory outputFile (programName ++ ".JvmMain")
   where
     inferFunctionTypes : AsmGlobalState -> LazyList (Name, FC, NamedDef)
                        -> Core (LazyList (Name, FC, Ref AsmState AsmState))

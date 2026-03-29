@@ -63,11 +63,7 @@ jvmIdrisMainMethodName = "jvm$idrisMain"
 
 export
 idrisMainFunctionName : String -> Name
-idrisMainFunctionName rootPackage =
-  let mainClass = case strUncons rootPackage of
-                    Just (firstChar, rest) => strCons (toUpper firstChar) rest ++ ".Main"
-                    Nothing => "Main"
-  in NS (mkNamespace mainClass) (UN $ Basic jvmIdrisMainMethodName)
+idrisMainFunctionName rootPackage = NS (mkNamespace $ rootPackage ++ ".Main") (UN $ Basic jvmIdrisMainMethodName)
 
 export
 className : Jname -> String

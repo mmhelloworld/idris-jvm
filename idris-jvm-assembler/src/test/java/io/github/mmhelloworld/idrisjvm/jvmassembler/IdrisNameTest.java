@@ -15,19 +15,19 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 public final class IdrisNameTest {
 
     static Stream<Arguments> getIdrisFunctionName() {
-        return Stream.of(
-            arguments("Data/List", "take", IdrisList.fromIterable(asList("Data/List", "take"))),
-            arguments("Main", "bar", IdrisList.fromIterable(asList("Main/Main", "bar"))),
-            arguments("Foo", "bar", IdrisList.fromIterable(asList("Main/Foo", "bar"))),
-            arguments("Main/Foo", "bar", IdrisList.fromIterable(asList("Main/Foo", "bar"))),
-            arguments("Main/Foo/Bar/Baz", "bar", IdrisList.fromIterable(asList("Main/Foo/Bar/Baz", "bar"))));
+      return Stream.of(
+        arguments("Core/Name/Namespace/ModuleIdent", "toPath", IdrisList.fromIterable(asList(
+          "M_Core/M_Name/M_Namespace/M_ModuleIdent", "toPath"))),
+        arguments("Foo", "bar", IdrisList.fromIterable(asList("main/Foo", "bar"))),
+        arguments("Main/Foo", "bar", IdrisList.fromIterable(asList("M_Main/M_Foo", "bar"))),
+        arguments("Main/Foo/Bar/Baz", "bar", IdrisList.fromIterable(asList("M_Main/M_Foo/M_Bar/M_Baz", "bar"))));
     }
 
     static Stream<Arguments> getConstructorClassName() {
-        return Stream.of(
-            arguments("Data/List/Take", "Data/List/Take"),
-            arguments("Prelude/Foo", "Prelude/Foo"),
-            arguments("Prelude", "Main/Prelude"));
+      return Stream.of(
+        arguments("Core/Name/Namespace/ModuleIdent", "M_Core/M_Name/M_Namespace/ModuleIdent"),
+        arguments("Prelude/Foo", "M_Prelude/Foo"),
+        arguments("Prelude", "main/Prelude"));
     }
 
     @ParameterizedTest

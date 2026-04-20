@@ -27,10 +27,10 @@ jobs:
         with:
           token: ${{ secrets.GH_PAT }}
 
-      - name: Set up JDK 8 to prepare release
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '8'
+          java-version: '21'
           distribution: 'adopt'
           cache: 'maven'
           server-id: github
@@ -59,10 +59,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
-      - name: Set up JDK 8 to perform release
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '8'
+          java-version: '21'
           distribution: 'adopt'
           cache: 'maven'
           server-id: central

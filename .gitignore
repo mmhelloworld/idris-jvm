@@ -64,3 +64,5 @@ classes/**
 
 # macOS
 .DS_Store
+
+.claude/settings.local.json

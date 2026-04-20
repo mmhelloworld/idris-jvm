@@ -61,7 +61,7 @@ export
 prim__idrnet_sockaddr_ipv4 : (sockaddr : AnyPtr) -> PrimIO String
 
 %foreign "C:idrnet_sockaddr_unix, libidris2_support, idris_net.h"
-         jvm' idrisSocketClass "getIpv4Address" "java/net/SocketAddress" "java/lang/String"
+         jvm' idrisSocketClass "getUnixSocketAddress" "java/lang/Object" "java/lang/String"
 export
 prim__idrnet_sockaddr_unix : (sockaddr : AnyPtr) -> PrimIO String
 

@@ -195,7 +195,6 @@ public final class Conversion {
 
     public static long toLong(double value) {
         return BigDecimal.valueOf(value)
-            .setScale(0, DOWN)
             .toBigInteger()
             .longValue();
     }

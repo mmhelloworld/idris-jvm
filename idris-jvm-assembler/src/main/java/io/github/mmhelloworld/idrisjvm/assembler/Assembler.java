@@ -1,5 +1,6 @@
 package io.github.mmhelloworld.idrisjvm.assembler;
 
+import io.github.mmhelloworld.idrisjvm.runtime.IdrisSystem;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.FieldVisitor;
@@ -168,13 +169,31 @@ import static org.objectweb.asm.Opcodes.T_FLOAT;
 import static org.objectweb.asm.Opcodes.T_INT;
 import static org.objectweb.asm.Opcodes.T_LONG;
 import static org.objectweb.asm.Opcodes.T_SHORT;
+import static org.objectweb.asm.Opcodes.V10;
+import static org.objectweb.asm.Opcodes.V11;
+import static org.objectweb.asm.Opcodes.V12;
+import static org.objectweb.asm.Opcodes.V13;
+import static org.objectweb.asm.Opcodes.V14;
+import static org.objectweb.asm.Opcodes.V15;
+import static org.objectweb.asm.Opcodes.V16;
+import static org.objectweb.asm.Opcodes.V17;
+import static org.objectweb.asm.Opcodes.V18;
+import static org.objectweb.asm.Opcodes.V19;
 import static org.objectweb.asm.Opcodes.V1_8;
+import static org.objectweb.asm.Opcodes.V20;
+import static org.objectweb.asm.Opcodes.V21;
+import static org.objectweb.asm.Opcodes.V22;
+import static org.objectweb.asm.Opcodes.V23;
+import static org.objectweb.asm.Opcodes.V24;
+import static org.objectweb.asm.Opcodes.V9;
 
 public final class Assembler {
     public static final int CLOSE_CURLY_BRACE = 125;
     public static final int ICONST_MAX = 5;
     public static final int BUFFER_SIZE = 1024;
-    public static final int JAVA_VERSION = V1_8;
+    public static final int JAVA_VERSION =
+      getClassVersion(Integer.parseInt(IdrisSystem.getEnv("IDRIS_JVM_VERSION",
+        Integer.toString(Runtime.version().feature()))));
     private static final boolean SHOULD_DEBUG;
 
     static {
@@ -202,6 +221,28 @@ public final class Assembler {
         String javaOpts = javaOptsProp == null ? "-Xss8m -Xms2g -Xmx3g" : javaOptsProp;
         createPosixExecutable(directoryName, fileName, mainClass, javaOpts);
         createWindowsExecutable(directoryName, fileName, mainClass, javaOpts);
+    }
+
+    private static int getClassVersion(int javaVersion) {
+      return switch (javaVersion) {
+        case 9 -> V9;
+        case 10 -> V10;
+        case 11 -> V11;
+        case 12 -> V12;
+        case 13 -> V13;
+        case 14 -> V14;
+        case 15 -> V15;
+        case 16 -> V16;
+        case 17 -> V17;
+        case 18 -> V18;
+        case 19 -> V19;
+        case 20 -> V20;
+        case 21 -> V21;
+        case 22 -> V22;
+        case 23 -> V23;
+        case 24 -> V24;
+        default -> V1_8;
+      };
     }
 
     private static void createWindowsExecutable(String directoryName, String fileName, String mainClass,

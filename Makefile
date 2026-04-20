@@ -131,7 +131,7 @@ ${TEST_IDRIS2_SUPPORT_DIR}/${IDRIS2_SUPPORT}:
 
 test-support: ${TEST_IDRIS2_SUPPORT_DIR}/${IDRIS2_SUPPORT}
 
-testenv: test-support
+testenv:
 	mkdir -p ${TEST_PREFIX}/${NAME_VERSION}
 	@${MAKE} ${TEST_PREFIX}/${NAME_VERSION}
 	@${MAKE} -C tests testbin IDRIS2=${TARGET} IDRIS2_PREFIX=${TEST_PREFIX}

@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 
 final class ClientSocketReaderState {
     private final ResettableCountDownLatch doneSignal;
-    private ByteBuffer buffer;
+    private final ByteBuffer buffer;
     private int bytesRead;
 
     ClientSocketReaderState(ByteBuffer buffer, ResettableCountDownLatch doneSignal) {

@@ -70,6 +70,11 @@ public final class IdrisSystem {
         return System.getProperty(name, System.getenv(name));
     }
 
+    public static String getEnv(String name, String def) {
+      String value = getEnv(name);
+      return value != null ? value : def;
+    }
+
     public static int clearEnv(String name) {
         System.clearProperty(name);
         return 0;

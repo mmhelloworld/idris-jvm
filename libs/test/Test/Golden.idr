@@ -393,6 +393,10 @@ Gambit : Requirement
 Gambit = MkReq "gambit" (checkRequirement ReqGambit)
 
 export
+Jvm : Requirement
+Jvm = MkReq "jvm" (checkRequirement ReqJvm)
+
+export
 findCG : IO (Maybe String)
 findCG
   = do Nothing <- getEnv "IDRIS2_TESTS_CG" | p => pure p

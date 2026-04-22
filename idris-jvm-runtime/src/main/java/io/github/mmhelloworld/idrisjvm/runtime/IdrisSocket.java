@@ -248,7 +248,7 @@ public final class IdrisSocket implements Closeable {
       if (socketFamily == AF_INET || socketFamily == AF_INET6) {
         ((Object[]) address)[0] = client.socket().getRemoteSocketAddress();
       } else {
-        ((Object[]) address)[0]  = client.getLocalAddress();
+        ((Object[]) address)[0] = client.getLocalAddress();
       }
       return new IdrisSocket(socketFamily, socketType, client);
     });
@@ -314,67 +314,88 @@ public final class IdrisSocket implements Closeable {
   public ResultPayload<String> receive(int length) {
     SocketChannel socketChannel = (SocketChannel) this.channel;
     ResultPayload<String> resultPayload = withExceptionHandling(() -> {
-      ClientSocketReaderState state = Server.getReaderState(socketChannel);
-      if (state != null) {
-        state.getDoneSignal().await();
-        ByteBuffer readBuffer = state.getBuffer();
-        readBuffer.flip();
-        String data = UTF_8.decode(readBuffer).toString();
-        readBuffer.clear();
-        state.getDoneSignal().reset();
-        return new ResultPayload<>(data.length(), data, socketChannel.getRemoteAddress());
-      }
-      ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
-      do {
-        buffer.rewind();
-      } while (socketChannel.read(buffer) <= 0);
-      StringBuilder builder = new StringBuilder(length);
-      int read;
-      do {
-        buffer.flip();
-        builder.append(UTF_8.decode(buffer));
-        buffer.rewind();
-        read = socketChannel.read(buffer);
-      } while (read > 0 && builder.length() < length);
-      return new ResultPayload<>(builder.length(), builder.toString(), socketChannel.getRemoteAddress());
+      var state = Server.getReaderState(socketChannel);
+      return state != null ? readFromBuffer(state, socketChannel) : readFromChannel(length, socketChannel);
     });
     return resultPayload != null ? resultPayload : new ResultPayload<>(Runtime.getErrorNumber(), null, null);
+  }
+
+  private static ResultPayload<String> readFromChannel(int length, SocketChannel socketChannel)
+    throws IOException {
+    ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
+    do {
+      buffer.rewind();
+    } while (socketChannel.read(buffer) <= 0);
+    StringBuilder builder = new StringBuilder(length);
+    int read;
+    do {
+      buffer.flip();
+      builder.append(UTF_8.decode(buffer));
+      buffer.rewind();
+      read = socketChannel.read(buffer);
+    } while (read > 0 && builder.length() < length);
+    return new ResultPayload<>(builder.length(), builder.toString(), socketChannel.getRemoteAddress());
+  }
+
+  private static ResultPayload<String> readFromBuffer(ClientSocketReaderState state,
+                                                      SocketChannel socketChannel)
+    throws InterruptedException, IOException {
+    // getting remote address before resetting done signal at which point channel could be closed
+    var remoteAddress = socketChannel.getRemoteAddress();
+    state.getDoneSignal().await();
+    ByteBuffer readBuffer = state.getBuffer();
+    readBuffer.flip();
+    String data = UTF_8.decode(readBuffer).toString();
+    readBuffer.clear();
+    state.getDoneSignal().reset();
+    return new ResultPayload<>(data.length(), data, remoteAddress);
   }
 
   public ResultPayload<byte[]> receive(Object arrayObject, int length) {
     ResultPayload<byte[]> resultPayload = withExceptionHandling(() -> {
       SocketChannel socketChannel = (SocketChannel) this.channel;
       ClientSocketReaderState state = Server.getReaderState(socketChannel);
-      if (state != null) {
-        state.getDoneSignal().await();
-        ByteBuffer readBuffer = state.getBuffer();
-        readBuffer.flip();
-        byte[] array = (byte[]) arrayObject;
-        int bytesToCopy = Math.min(readBuffer.limit(), array.length);
-        readBuffer.get(array, 0, bytesToCopy);
-        readBuffer.clear();
-        state.getDoneSignal().reset();
-        return new ResultPayload<>(0, array, socketChannel.getRemoteAddress());
-      }
-      ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
-      do {
-        buffer.rewind();
-      } while (socketChannel.read(buffer) <= 0);
-      int read;
-      int size = 0;
-      byte[] array = (byte[]) arrayObject;
-      do {
-        buffer.flip();
-        System.arraycopy(buffer.array(), 0, array, size, Math.min(buffer.limit(), array.length));
-        buffer.rewind();
-        read = socketChannel.read(buffer);
-        if (read > 0) {
-          size += read;
-        }
-      } while (read > 0 && size < length);
-      return new ResultPayload<>(0, array, socketChannel.getRemoteAddress());
+      return state != null ? readFromBuffer((byte[]) arrayObject, state, socketChannel) :
+        readFromChannel((byte[]) arrayObject, length, socketChannel);
     });
     return resultPayload != null ? resultPayload : new ResultPayload<>(Runtime.getErrorNumber(), null, null);
+  }
+
+  private static ResultPayload<byte[]> readFromChannel(byte[] arrayObject, int length, SocketChannel socketChannel)
+    throws IOException {
+    ByteBuffer buffer = ByteBuffer.allocate(length * Character.BYTES);
+    do {
+      buffer.rewind();
+    } while (socketChannel.read(buffer) <= 0);
+    int read;
+    int size = 0;
+    byte[] array = arrayObject;
+    do {
+      buffer.flip();
+      System.arraycopy(buffer.array(), 0, array, size, Math.min(buffer.limit(), array.length));
+      buffer.rewind();
+      read = socketChannel.read(buffer);
+      if (read > 0) {
+        size += read;
+      }
+    } while (read > 0 && size < length);
+    return new ResultPayload<>(0, array, socketChannel.getRemoteAddress());
+  }
+
+  private static ResultPayload<byte[]> readFromBuffer(byte[] arrayObject, ClientSocketReaderState state,
+                                                        SocketChannel socketChannel)
+    throws InterruptedException, IOException {
+    // getting remote address before resetting done signal at which point channel could be closed
+    var remoteAddress = socketChannel.getRemoteAddress();
+    state.getDoneSignal().await();
+    ByteBuffer readBuffer = state.getBuffer();
+    readBuffer.flip();
+    byte[] array = arrayObject;
+    int bytesToCopy = Math.min(readBuffer.limit(), array.length);
+    readBuffer.get(array, 0, bytesToCopy);
+    readBuffer.clear();
+    state.getDoneSignal().reset();
+    return new ResultPayload<>(0, array, remoteAddress);
   }
 
   public <T> T getPayload(ResultPayload<T> resultPayload) {

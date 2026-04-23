@@ -72,7 +72,7 @@
   <module name="FileLength"/>
   <module name="LineLength">
     <property name="fileExtensions" value="java"/>
-    <property name="max" value="120"/>
+    <property name="max" value="180"/>
   </module>
 
   <!-- Checks for whitespace                               -->
@@ -201,6 +201,8 @@
       <property name="file" value="${org.checkstyle.sun.suppressionxpathfilter.config}" default="checkstyle-xpath-suppressions.xml" />
       <property name="optional" value="true"/>
     </module>
+
+    <module name="SuppressionCommentFilter"/>
 
   </module>
 

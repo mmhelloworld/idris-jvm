@@ -192,8 +192,8 @@ import static org.objectweb.asm.Opcodes.V9;
 public final class Assembler {
   private static final int CLOSE_CURLY_BRACE = 125;
   private static final int ICONST_MAX = 5;
-  private static final int JAVA_VERSION = getClassVersion(Integer.parseInt(IdrisSystem.getEnv("IDRIS_JVM_TARGET_VERSION", Integer.toString(Runtime.version().feature()))));
   private static final boolean SHOULD_DEBUG;
+  public static final int JAVA_VERSION = getClassVersion(Integer.parseInt(IdrisSystem.getEnv("IDRIS_JVM_TARGET_VERSION", Integer.toString(Runtime.version().feature()))));
 
   static {
     String shouldDebug = System.getProperty("IDRIS_JVM_DEBUG", System.getenv("IDRIS_JVM_DEBUG"));

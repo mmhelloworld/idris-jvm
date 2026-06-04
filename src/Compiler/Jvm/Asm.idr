@@ -671,10 +671,6 @@ public export
 %foreign "jvm:crash(String java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
 crash : String -> Object
 
-public export
-%foreign "jvm:getStackTraceString(String),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
-getStackTraceString : PrimIO String
-
 export
 asmCrash : String -> Core a
 asmCrash message = do

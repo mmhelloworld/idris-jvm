@@ -1,0 +1,189 @@
+# JMH version: 1.37
+# VM version: JDK 25, OpenJDK 64-Bit Server VM, 25+36-3489
+# VM invoker: /Users/marimuthu/.sdkman/candidates/java/25-open/bin/java
+# VM options: <none>
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Throughput, ops/time
+# Benchmark: main.BenchmarkMain.matMul
+
+# Run progress: 0.00% complete, ETA 00:00:40
+# Fork: 1 of 1
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/marimuthu/project/idris-jvm/benchmark/jmh/target/benchmark.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: 746.094 ops/s
+# Warmup Iteration   2: 775.154 ops/s
+# Warmup Iteration   3: 768.191 ops/s
+# Warmup Iteration   4: 752.669 ops/s
+# Warmup Iteration   5: 773.382 ops/s
+Iteration   1: 718.037 ops/s
+                 gc.alloc.rate:      7178.818 MB/sec
+                 gc.alloc.rate.norm: 10484908.849 B/op
+                 gc.count:           45.000 counts
+                 gc.time:            29.000 ms
+
+Iteration   2: 776.689 ops/s
+                 gc.alloc.rate:      7765.723 MB/sec
+                 gc.alloc.rate.norm: 10484908.493 B/op
+                 gc.count:           48.000 counts
+                 gc.time:            30.000 ms
+
+Iteration   3: 782.135 ops/s
+                 gc.alloc.rate:      7820.140 MB/sec
+                 gc.alloc.rate.norm: 10484908.441 B/op
+                 gc.count:           49.000 counts
+                 gc.time:            30.000 ms
+
+Iteration   4: 785.717 ops/s
+                 gc.alloc.rate:      7855.785 MB/sec
+                 gc.alloc.rate.norm: 10484908.462 B/op
+                 gc.count:           49.000 counts
+                 gc.time:            31.000 ms
+
+Iteration   5: 778.681 ops/s
+                 gc.alloc.rate:      7785.598 MB/sec
+                 gc.alloc.rate.norm: 10484908.481 B/op
+                 gc.count:           49.000 counts
+                 gc.time:            30.000 ms
+
+
+
+Result "main.BenchmarkMain.matMul":
+  768.252 ±(99.9%) 108.900 ops/s [Average]
+  (min, avg, max) = (718.037, 768.252, 785.717), stdev = 28.281
+  CI (99.9%): [659.351, 877.152] (assumes normal distribution)
+
+Secondary result "main.BenchmarkMain.matMul:gc.alloc.rate":
+  7681.213 ±(99.9%) 1089.492 MB/sec [Average]
+  (min, avg, max) = (7178.818, 7681.213, 7855.785), stdev = 282.937
+  CI (99.9%): [6591.721, 8770.704] (assumes normal distribution)
+
+Secondary result "main.BenchmarkMain.matMul:gc.alloc.rate.norm":
+  10484908.545 ±(99.9%) 0.658 B/op [Average]
+  (min, avg, max) = (10484908.441, 10484908.545, 10484908.849), stdev = 0.171
+  CI (99.9%): [10484907.887, 10484909.203] (assumes normal distribution)
+
+Secondary result "main.BenchmarkMain.matMul:gc.count":
+  240.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (45.000, 48.000, 49.000), stdev = 1.732
+  CI (99.9%): [240.000, 240.000] (assumes normal distribution)
+
+Secondary result "main.BenchmarkMain.matMul:gc.time":
+  150.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (29.000, 30.000, 31.000), stdev = 0.707
+  CI (99.9%): [150.000, 150.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25, OpenJDK 64-Bit Server VM, 25+36-3489
+# VM invoker: /Users/marimuthu/.sdkman/candidates/java/25-open/bin/java
+# VM options: <none>
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Throughput, ops/time
+# Benchmark: main.BenchmarkMain.sievePrimes
+
+# Run progress: 50.00% complete, ETA 00:00:20
+# Fork: 1 of 1
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/marimuthu/project/idris-jvm/benchmark/jmh/target/benchmark.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: 647.020 ops/s
+# Warmup Iteration   2: 704.747 ops/s
+# Warmup Iteration   3: 707.972 ops/s
+# Warmup Iteration   4: 705.201 ops/s
+# Warmup Iteration   5: 707.855 ops/s
+Iteration   1: 709.121 ops/s
+                 gc.alloc.rate:      5749.310 MB/sec
+                 gc.alloc.rate.norm: 8502004.923 B/op
+                 gc.count:           41.000 counts
+                 gc.time:            23.000 ms
+
+Iteration   2: 707.643 ops/s
+                 gc.alloc.rate:      5737.329 MB/sec
+                 gc.alloc.rate.norm: 8502004.911 B/op
+                 gc.count:           41.000 counts
+                 gc.time:            24.000 ms
+
+Iteration   3: 706.468 ops/s
+                 gc.alloc.rate:      5727.764 MB/sec
+                 gc.alloc.rate.norm: 8502004.940 B/op
+                 gc.count:           41.000 counts
+                 gc.time:            22.000 ms
+
+Iteration   4: 706.906 ops/s
+                 gc.alloc.rate:      5731.343 MB/sec
+                 gc.alloc.rate.norm: 8502004.914 B/op
+                 gc.count:           41.000 counts
+                 gc.time:            23.000 ms
+
+Iteration   5: 706.405 ops/s
+                 gc.alloc.rate:      5727.115 MB/sec
+                 gc.alloc.rate.norm: 8502004.940 B/op
+                 gc.count:           40.000 counts
+                 gc.time:            23.000 ms
+
+
+
+Result "main.BenchmarkMain.sievePrimes":
+  707.309 ±(99.9%) 4.341 ops/s [Average]
+  (min, avg, max) = (706.405, 707.309, 709.121), stdev = 1.127
+  CI (99.9%): [702.967, 711.650] (assumes normal distribution)
+
+Secondary result "main.BenchmarkMain.sievePrimes:gc.alloc.rate":
+  5734.572 ±(99.9%) 35.354 MB/sec [Average]
+  (min, avg, max) = (5727.115, 5734.572, 5749.310), stdev = 9.181
+  CI (99.9%): [5699.218, 5769.926] (assumes normal distribution)
+
+Secondary result "main.BenchmarkMain.sievePrimes:gc.alloc.rate.norm":
+  8502004.925 ±(99.9%) 0.054 B/op [Average]
+  (min, avg, max) = (8502004.911, 8502004.925, 8502004.940), stdev = 0.014
+  CI (99.9%): [8502004.871, 8502004.979] (assumes normal distribution)
+
+Secondary result "main.BenchmarkMain.sievePrimes:gc.count":
+  204.000 ±(99.9%) 0.001 counts [Sum]
+  (min, avg, max) = (40.000, 40.800, 41.000), stdev = 0.447
+  CI (99.9%): [204.000, 204.000] (assumes normal distribution)
+
+Secondary result "main.BenchmarkMain.sievePrimes:gc.time":
+  115.000 ±(99.9%) 0.001 ms [Sum]
+  (min, avg, max) = (22.000, 23.000, 24.000), stdev = 0.707
+  CI (99.9%): [115.000, 115.000] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:00:40
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+NOTE: Current JVM experimentally supports Compiler Blackholes, and they are in use. Please exercise
+extra caution when trusting the results, look into the generated code to check the benchmark still
+works, and factor in a small probability of new VM bugs. Additionally, while comparisons between
+different JVMs are already problematic, the performance difference caused by different Blackhole
+modes can be very significant. Please make sure you use the consistent Blackhole mode for comparisons.
+
+Benchmark                                      Mode  Cnt         Score      Error   Units
+BenchmarkMain.matMul                          thrpt    5       768.252 ±  108.900   ops/s
+BenchmarkMain.matMul:gc.alloc.rate            thrpt    5      7681.213 ± 1089.492  MB/sec
+BenchmarkMain.matMul:gc.alloc.rate.norm       thrpt    5  10484908.545 ±    0.658    B/op
+BenchmarkMain.matMul:gc.count                 thrpt    5       240.000             counts
+BenchmarkMain.matMul:gc.time                  thrpt    5       150.000                 ms
+BenchmarkMain.sievePrimes                     thrpt    5       707.309 ±    4.341   ops/s
+BenchmarkMain.sievePrimes:gc.alloc.rate       thrpt    5      5734.572 ±   35.354  MB/sec
+BenchmarkMain.sievePrimes:gc.alloc.rate.norm  thrpt    5   8502004.925 ±    0.054    B/op
+BenchmarkMain.sievePrimes:gc.count            thrpt    5       204.000             counts
+BenchmarkMain.sievePrimes:gc.time             thrpt    5       115.000                 ms
+
+Benchmark result is saved to results/baseline.json

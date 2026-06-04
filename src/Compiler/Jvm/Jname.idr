@@ -20,6 +20,10 @@ export
 %foreign "jvm:.replace,java/lang/String"
 replace : String -> Char -> Char -> String
 
+export
+%foreign "jvm:getStackTraceString(String),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
+getStackTraceString : PrimIO String
+
 getSimpleNameWithSep : String -> Jname -> String
 getSimpleNameWithSep _ (Jsimple n) = n
 getSimpleNameWithSep sep (Jqualified q n) = q ++ sep ++ n

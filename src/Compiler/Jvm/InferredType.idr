@@ -349,8 +349,10 @@ mutual
     parseGenericType : String -> Maybe InferredType
     parseGenericType descriptor = fst $ goParseGenericType $ tokenize descriptor
 
+export
 throwInvalidDescriptor : String -> a
-throwInvalidDescriptor desc = assert_total $ idris_crash ("Invalid type descriptor: " ++ desc)
+throwInvalidDescriptor desc =
+  assert_total $ idris_crash ("Invalid type descriptor: " ++ desc ++ "at: " ++ unsafePerformIO (primIO getStackTraceString))
 
 export
 parse : String -> InferredType

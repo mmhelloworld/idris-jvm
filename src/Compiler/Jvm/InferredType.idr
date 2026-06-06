@@ -48,7 +48,6 @@ mutual
       (MkJavaLambdaType intf2 method2 methodType2 implementationType2) = intf1 == intf2 && method1 == method2 &&
         methodType1 == methodType2 && implementationType1 == implementationType2
 
-
   export
   Eq InferredType where
     IBool == IBool = True
@@ -154,55 +153,6 @@ idrisSystemClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisSystem"
 
 %inline
 public export
-idrisListClass : String
-idrisListClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList"
-
-export
-idrisListType : InferredType
-idrisListType = IRef idrisListClass Class []
-
-%inline
-public export
-idrisNilClass : String
-idrisNilClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList$Nil"
-
-export
-idrisNilType : InferredType
-idrisNilType = IRef idrisNilClass Class []
-
-%inline
-public export
-idrisConsClass : String
-idrisConsClass = "io/github/mmhelloworld/idrisjvm/runtime/IdrisList$Cons"
-
-export
-idrisConsType : InferredType
-idrisConsType = IRef idrisConsClass Class []
-
-%inline
-public export
-idrisNothingClass : String
-idrisNothingClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Nothing"
-
-export
-idrisNothingType : InferredType
-idrisNothingType = IRef idrisNothingClass Class []
-
-%inline
-public export
-idrisJustClass : String
-idrisJustClass = "io/github/mmhelloworld/idrisjvm/runtime/Maybe$Just"
-
-export
-idrisJustType : InferredType
-idrisJustType = IRef idrisJustClass Class []
-
-export
-idrisMaybeType : InferredType
-idrisMaybeType = IRef "io/github/mmhelloworld/idrisjvm/runtime/Maybe" Class []
-
-%inline
-public export
 functionsClass : String
 functionsClass = "io/github/mmhelloworld/idrisjvm/runtime/Functions"
 
@@ -217,6 +167,10 @@ isPrimitive ILong = True
 isPrimitive IFloat = True
 isPrimitive IDouble = True
 isPrimitive _ = False
+
+export
+hasPrimitiveType : InferredFunctionType -> Bool
+hasPrimitiveType (MkInferredFunctionType returnType parameterTypes) = isPrimitive returnType || any isPrimitive parameterTypes
 
 %inline
 public export
@@ -377,7 +331,7 @@ parse desc =
 mutual
   createExtPrimTypeSpecFn : InferredFunctionType -> String
   createExtPrimTypeSpecFn (MkInferredFunctionType returnType parameterTypes) =
-    showSep "⟶" (createExtPrimTypeSpec <$> parameterTypes) ++ "⟶" ++ createExtPrimTypeSpec returnType
+    showSep "->" (createExtPrimTypeSpec <$> parameterTypes) ++ "->" ++ createExtPrimTypeSpec returnType
 
   createTypeParamsSpec : List InferredType -> String
   createTypeParamsSpec [] = ""

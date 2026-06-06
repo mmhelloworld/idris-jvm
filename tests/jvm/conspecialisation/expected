@@ -1,0 +1,8 @@
+Spec class MkT$I$I$I: PRESENT
+Spec fields: TYPED
+Spec <init>: (IIII)V
+Typed accessors: getInt0 + getInt1 + getInt2
+Construction: spec ctor, primitive args
+IdrisList$Cons still present: OK
+21
+127

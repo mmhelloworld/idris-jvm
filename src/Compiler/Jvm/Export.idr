@@ -92,7 +92,7 @@ getNamespace : Name -> Namespace
 getNamespace (NS n _) = n
 getNamespace n = emptyNS
 
-findByNamespace : SortedMap Namespace value -> Name -> Maybe value
+findByNamespace : SortedMap Namespace v -> Name -> Maybe v
 findByNamespace functionImports name = go (sortBy comparingNamespaceLength parents) where
 
     parents : List Namespace
@@ -101,7 +101,7 @@ findByNamespace functionImports name = go (sortBy comparingNamespaceLength paren
     comparingNamespaceLength : Namespace -> Namespace -> Ordering
     comparingNamespaceLength = comparing (negate . cast {to=Int} . String.length . show)
 
-    go : List Namespace -> Maybe value
+    go : List Namespace -> Maybe v
     go [] = Nothing
     go (ns :: rest) = maybe (go rest) Just $ SortedMap.lookup ns functionImports
 
@@ -333,8 +333,7 @@ parseMethodExport : {auto stateRef: Ref AsmState AsmState} -> Name -> (javaName:
 parseMethodExport idrisName javaName parts descriptor annotations = do
     let argumentsJson = fromMaybe (JArray []) $ lookup "arguments" descriptor
     arguments <- parseArgumentsJson idrisName argumentsJson
-    let (jvmArgumentTypes, parameterAnnotations) =
-          unzip $ (\(MkExportArgument type annotations) => (type, annotations)) <$> arguments
+    let (jvmArgumentTypes, parameterAnnotations) = unzip $ (\(MkExportArgument type annotations) => (type, annotations)) <$> arguments
     let (modifiers, initialMethodName) = getModifiersAndName idrisName [] parts
     let shouldPerformIO = endsWith initialMethodName "!"
     let methodName = if shouldPerformIO then stripLastChar initialMethodName else initialMethodName
@@ -355,8 +354,7 @@ parseMethodExport idrisName javaName parts descriptor annotations = do
         enclosingTypeParts@(_ :: _) =>
           parseClassExport idrisName enclosingTypeParts SortedMap.empty []
       | _ => asmCrash ("Unexpected 'enclosingType' for " ++ show javaName)
-    pure $ MkMethodExport methodName idrisName functionType shouldPerformIO encloser adjustedModifiers annotations
-      adjustedParameterAnnotations
+    pure $ MkMethodExport methodName idrisName functionType shouldPerformIO encloser adjustedModifiers annotations adjustedParameterAnnotations
 
 parseFieldExport : {auto stateRef: Ref AsmState AsmState} -> Name -> (nameParts: List String)
                    -> SortedMap String JSON -> List Annotation -> Core (List ExportDescriptor)
@@ -454,7 +452,7 @@ parseImport line = case words line of
   (type :: alias :: []) => Just (alias, type)
   _ => Nothing
 
-parseImports : {auto stateRef: Ref AsmState AsmState} -> Name -> String -> Core ExportDescriptor
+parseImports : Name -> String -> Core ExportDescriptor
 parseImports functionName descriptor =
   case String.break isWhitespace descriptor of
     ("", _) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
@@ -486,13 +484,13 @@ adjustArgumentsForInstanceMember idrisName _ _ =
   asmCrash ("Expected first argument to be a reference type for instance member in " ++ show idrisName)
 
 export
-createAccessorName : {auto stateRef: Ref AsmState AsmState} -> String -> String -> Core String
+createAccessorName : String -> String -> IO String
 createAccessorName pfix fieldName = case strM fieldName of
-   StrNil => asmCrash "field name cannot be empty"
+   StrNil => throwIo $ InternalError "field name cannot be empty"
    StrCons firstLetter rest => pure (pfix ++ strCons (toUpper firstLetter) rest)
 
 export
-createGetter : {auto stateRef: Ref AsmState AsmState} -> ClassExport -> FieldExport -> Core ()
+createGetter : ClassExport -> FieldExport -> IO ()
 createGetter classExport fieldExport = do
   let fieldName = fieldExport.name
   getterName <- createAccessorName "get" fieldName
@@ -501,17 +499,19 @@ createGetter classExport fieldExport = do
   let isStatic = elem Static fieldExport.modifiers
   let getterModifiers = Public :: (if isStatic then [Static] else [])
   let className = classExport.name
-  createMethod getterModifiers "generated.idr" className getterName getterType Nothing Nothing [] []
-  methodCodeStart
-  when (not isStatic) $ aload 0
-  let instructionType = if isStatic then GetStatic else GetField
-  field instructionType className fieldName (getJvmTypeDescriptor fieldType)
-  asmReturn fieldType
-  maxStackAndLocal (-1) (-1)
-  methodCodeEnd
+  asmState <- AsmState.fromJavaName (Jqualified className getterName)
+  runAsm asmState $ \stateRef => do
+    createMethod getterModifiers "generated.idr" className getterName getterType Nothing Nothing [] []
+    methodCodeStart
+    when (not isStatic) $ aload 0
+    let instructionType = if isStatic then GetStatic else GetField
+    field instructionType className fieldName (getJvmTypeDescriptor fieldType)
+    asmReturn fieldType
+    maxStackAndLocal (-1) (-1)
+    methodCodeEnd
 
 export
-createSetter : {auto stateRef: Ref AsmState AsmState} -> ClassExport -> FieldExport -> Core ()
+createSetter : ClassExport -> FieldExport -> IO ()
 createSetter classExport fieldExport = do
   let fieldName = fieldExport.name
   setterName <- createAccessorName "set" fieldName
@@ -522,27 +522,29 @@ createSetter classExport fieldExport = do
   let signature = Just $ getMethodSignature setterType
   let setterModifiers = Public :: (if isStatic then [Static] else [])
   let className = classExport.name
-  createMethod setterModifiers "generated.idr" className setterName descriptor signature Nothing [] []
-  methodCodeStart
-  createLabel methodStartLabel
-  createLabel methodEndLabel
-  labelStart methodStartLabel
-  when (not isStatic) $ aload 0
-  let arity = the Int $ if isStatic then 1 else 2
-  let parameterTypes = if isStatic then [fieldType] else [iref className [], fieldType]
-  jvmArgumentTypesByIndex <- coreLift $ Map.fromList $ zip [0 .. arity - 1] parameterTypes
-  let varIndex = the Int $ if isStatic then 0 else 1
-  loadVar jvmArgumentTypesByIndex fieldType fieldType varIndex
-  let instructionType = if isStatic then PutStatic else PutField
-  field instructionType className fieldName (getJvmTypeDescriptor fieldType)
-  return
-  labelStart methodEndLabel
-  let classDescriptor = getJvmTypeDescriptor $ iref classExport.name []
-  localVariable "this" classDescriptor Nothing methodStartLabel methodEndLabel 0
-  let signature = Just $ getSignature fieldType
-  localVariable fieldName (getJvmTypeDescriptor fieldType) signature methodStartLabel methodEndLabel 1
-  maxStackAndLocal (-1) (-1)
-  methodCodeEnd
+  asmState <- AsmState.fromJavaName (Jqualified className setterName)
+  runAsm asmState $ \stateRef => do
+    createMethod setterModifiers "generated.idr" className setterName descriptor signature Nothing [] []
+    methodCodeStart
+    createLabel methodStartLabel
+    createLabel methodEndLabel
+    labelStart methodStartLabel
+    when (not isStatic) $ aload 0
+    let arity = the Int $ if isStatic then 1 else 2
+    let parameterTypes = if isStatic then [fieldType] else [iref className [], fieldType]
+    jvmArgumentTypesByIndex <- coreLift $ Map.fromList $ zip [0 .. arity - 1] parameterTypes
+    let varIndex = the Int $ if isStatic then 0 else 1
+    loadVar jvmArgumentTypesByIndex fieldType fieldType varIndex
+    let instructionType = if isStatic then PutStatic else PutField
+    field instructionType className fieldName (getJvmTypeDescriptor fieldType)
+    return
+    labelStart methodEndLabel
+    let classDescriptor = getJvmTypeDescriptor $ iref classExport.name []
+    localVariable "this" classDescriptor Nothing methodStartLabel methodEndLabel 0
+    let signature = Just $ getSignature fieldType
+    localVariable fieldName (getJvmTypeDescriptor fieldType) signature methodStartLabel methodEndLabel 1
+    maxStackAndLocal (-1) (-1)
+    methodCodeEnd
 
 mutual
   getSuperCallExprList : {auto stateRef: Ref AsmState AsmState} -> List NamedCExp -> Core (Maybe NamedCExp)
@@ -680,9 +682,9 @@ getExportsMap descriptors = go SortedMap.empty (descriptors >>= toTypeDescriptor
   toTypeDescriptor _ = []
 
 export
-parseExportDescriptors : AsmGlobalState -> LazyList (Name, String) ->
+parseExportDescriptors : LazyList (Name, String) ->
                            IO (SortedMap Namespace (List String), List ExportDescriptor)
-parseExportDescriptors globalState descriptors = do
+parseExportDescriptors descriptors = do
     (imports, exportDescriptors) <- go (SortedMap.empty, []) descriptors
     let substitutedDescriptors = substituteImports imports $ sortBy (comparing memberTypeOrder) exportDescriptors
     let (exports, others) = partition isTypeExportDescriptor substitutedDescriptors
@@ -694,11 +696,10 @@ parseExportDescriptors globalState descriptors = do
     memberTypeOrder (MkMethodExportDescriptor _) = 3
     memberTypeOrder _ = 4
 
-    go : (SortedMap Namespace (SortedMap String String), List ExportDescriptor) ->
-            LazyList (Name, String) -> IO (SortedMap Namespace (SortedMap String String), List ExportDescriptor)
+    go : (SortedMap Namespace (SortedMap String String), List ExportDescriptor) -> LazyList (Name, String) -> IO (SortedMap Namespace (SortedMap String String), List ExportDescriptor)
     go acc [] = pure acc
     go (imports, descriptors) ((idrisName, descriptor) :: rest) = do
-      asmState <- createAsmState globalState idrisName
+      asmState <- AsmState.fromIdrisName idrisName
       exportDescriptors <- runAsm asmState (\stateRef => parseExportDescriptor idrisName descriptor)
       case exportDescriptors of
         [MkImportDescriptor name currentImports] =>
@@ -751,28 +752,32 @@ isIdrisJvmAnnotation : Annotation -> Bool
 isIdrisJvmAnnotation (MkAnnotation name _) = name `elem` knownAnnotations
 
 export
-exportClass : {auto stateRef: Ref AsmState AsmState} -> ClassExport -> Core ()
+exportClass : ClassExport -> IO ()
 exportClass (MkClassExport name _ extends implements modifiers annotations) = do
-  createClass [ComputeMaxs, ComputeFrames]
-  let annotations = filter (not . isIdrisJvmAnnotation) annotations
-  let signature = getSignature extends ++ concat (getSignature <$> implements)
-  extendsTypeName <- getJvmReferenceTypeName extends
-  implementsTypeNames <- traverse getJvmReferenceTypeName implements
-  let asmAnnotations = asmAnnotation <$> annotations
-  classCodeStart javaClassFileVersion modifiers name (Just signature) extendsTypeName implementsTypeNames asmAnnotations
+  asmState <- AsmState.fromJavaName (Jqualified name "")
+  runAsm asmState $ \stateRef => do
+    createClass [ComputeMaxs, ComputeFrames]
+    let annotations = filter (not . isIdrisJvmAnnotation) annotations
+    let signature = getSignature extends ++ concat (getSignature <$> implements)
+    extendsTypeName <- getJvmReferenceTypeName extends
+    implementsTypeNames <- traverse getJvmReferenceTypeName implements
+    let asmAnnotations = asmAnnotation <$> annotations
+    classCodeStart javaClassFileVersion modifiers name (Just signature) extendsTypeName implementsTypeNames asmAnnotations
 
 export
-exportField : {auto stateRef: Ref AsmState AsmState} -> FieldExport -> Core ()
+exportField : FieldExport -> IO ()
 exportField (MkFieldExport fieldName type encloser modifiers annotations) = do
   let jvmClassName = encloser.name
   let asmAnnotations = asmAnnotation <$> annotations
-  createField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing asmAnnotations
-  fieldEnd
+  asmState <- AsmState.fromJavaName (Jqualified jvmClassName fieldName)
+  runAsm asmState $ \stateRef => do
+    createField modifiers "Unknown.idr" jvmClassName fieldName (getJvmTypeDescriptor type) Nothing Nothing asmAnnotations
+    fieldEnd
 
 export
 exportType : {auto stateRef: Ref AsmState AsmState} -> String -> Core ()
 exportType name = do
-  exportClass (MkClassExport name (UN $ Basic name) inferredObjectType [] [Public] [])
+  coreLift $ exportClass (MkClassExport name (UN $ Basic name) inferredObjectType [] [Public] [])
   createField [Private, Final] "Unknown.idr" name "idrisValue" (getJvmTypeDescriptor inferredObjectType)
     Nothing Nothing []
   fieldEnd

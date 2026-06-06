@@ -11,10 +11,11 @@ import Compiler.Jvm.Asm
 import Compiler.Jvm.Jname
 import Compiler.Jvm.Tree
 
+import Libraries.Data.SortedMap
 import Libraries.Data.SortedSet
 import Data.Vect
 
-parameters (defs: Map String NamedDef)
+parameters (defs: SortedMap String NamedDef)
     mutual
         buildFunctionTreeConAlt : List (Tree Name) -> SortedSet Name -> List NamedConAlt -> (SortedSet Name, List (Tree Name))
         buildFunctionTreeConAlt acc visited [] = (visited, acc)
@@ -42,6 +43,11 @@ parameters (defs: Map String NamedDef)
 
         buildFunctionTreeExp : List (Tree Name) -> SortedSet Name -> NamedCExp -> (SortedSet Name, List (Tree Name))
         buildFunctionTreeExp acc visited (NmLocal fc el) = (visited, acc)
+        buildFunctionTreeExp acc visited (NmRef fc f) =
+            if SortedSet.contains f visited then
+                (visited, acc)
+            else let (visited, child) = buildFunctionTree visited f
+                 in (visited, child :: acc)
         buildFunctionTreeExp acc visited (NmLam fc x sc) = buildFunctionTreeExp acc visited sc
         buildFunctionTreeExp acc visited (NmLet fc x val sc) =
             let (visited, valAcc) = buildFunctionTreeExp acc visited val
@@ -72,7 +78,6 @@ parameters (defs: Map String NamedDef)
         buildFunctionTreeExp acc visited (NmPrimVal fc c) = (visited, acc)
         buildFunctionTreeExp acc visited (NmErased fc) = (visited, acc)
         buildFunctionTreeExp acc visited (NmCrash fc msg) = (visited, acc)
-        buildFunctionTreeExp acc visited expr = (visited, acc)
 
         buildFunctionTreeDef : SortedSet Name -> Name -> NamedDef -> (SortedSet Name, List (Tree Name))
         buildFunctionTreeDef visited n (MkNmFun args exp) = buildFunctionTreeExp [] visited exp
@@ -83,7 +88,7 @@ parameters (defs: Map String NamedDef)
         findDef : Name -> Maybe NamedDef
         findDef name =
             let nameStr = jvmSimpleName name
-            in nullableToMaybe $ unsafePerformIO $ Map.get defs nameStr
+            in SortedMap.lookup nameStr defs
 
         buildFunctionTree : SortedSet Name -> Name -> (SortedSet Name, Tree Name)
         buildFunctionTree visitedSoFar name =
@@ -93,6 +98,20 @@ parameters (defs: Map String NamedDef)
                Just d => let (visited, children) = buildFunctionTreeDef visited name d
                     in (visited, Node name children)
 
+        buildFunctionForest : SortedSet Name -> List Name -> (SortedSet Name, List (Tree Name))
+        buildFunctionForest visited [] = (visited, [])
+        buildFunctionForest visited (name :: rest) =
+          if SortedSet.contains name visited
+            then buildFunctionForest visited rest
+            else
+              let (visited', tree) = buildFunctionTree visited name
+                  (visited'', trees) = buildFunctionForest visited' rest
+              in (visited'', tree :: trees)
+
 export
-buildFunctionTreeMain : Name -> Map String NamedDef -> Tree Name
+buildFunctionTreeMain : Name -> SortedMap String NamedDef -> Tree Name
 buildFunctionTreeMain mainFunctionName defs = snd $ buildFunctionTree defs SortedSet.empty mainFunctionName
+
+export
+buildFunctionForestMain : List Name -> SortedMap String NamedDef -> List (Tree Name)
+buildFunctionForestMain roots defs = snd $ buildFunctionForest defs SortedSet.empty roots

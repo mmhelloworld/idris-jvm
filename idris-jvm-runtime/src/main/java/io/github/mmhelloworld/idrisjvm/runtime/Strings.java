@@ -17,9 +17,13 @@ public final class Strings {
         return start > strLength ? "" : string.substring(start, end);
     }
 
-    public static String concat(IdrisList idrisList) {
+    public static String concat(IdrisList stringList) {
+        return concat((IdrisObject) stringList);
+    }
+
+    public static String concat(IdrisObject stringList) {
         StringBuilder builder = new StringBuilder();
-        IdrisObject current = (IdrisObject) idrisList;
+        IdrisObject current = stringList;
         while (current.getConstructorId() != 0) {
             builder.append(current.getProperty(0));
             current = (IdrisObject) current.getProperty(1);
@@ -27,17 +31,26 @@ public final class Strings {
         return builder.toString();
     }
 
-    public static String pack(IdrisList idrisCharacterList) {
-        Object[] objectArray = idrisCharacterList.toArray();
-        char[] chars = new char[objectArray.length];
-        for (int index = 0; index < objectArray.length; index++) {
-            chars[index] = Conversion.toChar(objectArray[index]);
+    public static String pack(IdrisList characterList) {
+        return pack((IdrisObject) characterList);
+    }
+
+    public static String pack(IdrisObject characterList) {
+        StringBuilder builder = new StringBuilder();
+        IdrisObject current = characterList;
+        while (current.getConstructorId() != 0) {
+            builder.append(Conversion.toChar(current.getProperty(0)));
+            current = (IdrisObject) current.getProperty(1);
         }
-        return String.valueOf(chars);
+        return builder.toString();
     }
 
     public static IdrisList unpack(String string) {
         return string == null ? IdrisList.Nil.INSTANCE : IdrisList.fromArray(string.toCharArray());
+    }
+
+    public static IdrisObject unpackObject(String string) {
+        return unpack(string);
     }
 
     public static int bytesLengthUtf8(String string) {

@@ -19,38 +19,29 @@ public final class Conversion {
     }
 
     public static int toInt(Object that) {
-        if (that instanceof Number) {
-            return ((Number) that).intValue();
-        } else if (that instanceof Character) {
-            return (char) that;
-        } else if (that instanceof Boolean) {
-            return boolToInt1((boolean) that);
-        } else {
-            throw new NumberFormatException(format("Unable to convert value %s of type %s to int",
-                that, that.getClass()));
-        }
+      return switch (that) {
+        case Number number -> number.intValue();
+        case Character c -> c;
+        case Boolean b -> boolToInt1(b);
+        default -> throw new NumberFormatException(format("Unable to convert value %s of type %s to int", that, that.getClass()));
+      };
     }
 
     public static char toChar(Object that) {
-        if (that instanceof Character) {
-            return (char) that;
-        } else if (that instanceof Integer) {
-            return (char) (int) (Integer) that;
-        } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to char",
-                that, that.getClass()));
-        }
+      return switch (that) {
+        case Character c -> c;
+        case Integer i -> (char) (int) i;
+        default -> throw new IllegalArgumentException(format("Unable to convert value %s of type %s to char", that, that.getClass()));
+      };
     }
 
     public static boolean toBoolean(Object that) {
-        if (that instanceof Boolean) {
-            return (Boolean) that;
-        } else if (that instanceof Integer) {
-            return intToBoolean1((Integer) that);
-        } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to boolean",
-                that, that.getClass()));
-        }
+      return switch (that) {
+        case Boolean b -> b;
+        case Integer i -> intToBoolean1(i);
+        default -> throw new IllegalArgumentException(format("Unable to convert value %s of type %s to boolean",
+          that, that.getClass()));
+      };
     }
 
     public static boolean toBoolean1(Object that) {
@@ -74,14 +65,12 @@ public final class Conversion {
     }
 
     public static float toFloat(Object that) {
-        if (that instanceof Double) {
-            return ((Double) that).floatValue();
-        } else if (that instanceof Float) {
-            return (float) that;
-        } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to float",
-                that, that.getClass()));
-        }
+      return switch (that) {
+        case Double v -> v.floatValue();
+        case Float v -> v;
+        default -> throw new IllegalArgumentException(format("Unable to convert value %s of type %s to float",
+          that, that.getClass()));
+      };
     }
 
     public static BigInteger toInteger(String value) {
@@ -96,16 +85,13 @@ public final class Conversion {
     }
 
     public static BigInteger toInteger(Object value) {
-        if (value instanceof BigInteger) {
-            return (BigInteger) value;
-        } else if (value instanceof Integer) {
-            return BigInteger.valueOf((Integer) value);
-        } else if (value instanceof Long) {
-            return BigInteger.valueOf((Long) value);
-        } else {
-            throw new IllegalArgumentException(format("Unable to convert value %s of type %s to BigInteger",
-                value, value.getClass()));
-        }
+      return switch (value) {
+        case BigInteger bigInteger -> bigInteger;
+        case Integer i -> BigInteger.valueOf(i);
+        case Long l -> BigInteger.valueOf(l);
+        default -> throw new IllegalArgumentException(format("Unable to convert value %s of type %s to BigInteger",
+          value, value.getClass()));
+      };
     }
 
     public static int toInt(String value) {

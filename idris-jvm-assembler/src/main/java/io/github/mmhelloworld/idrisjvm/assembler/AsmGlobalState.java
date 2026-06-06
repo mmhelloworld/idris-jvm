@@ -48,19 +48,21 @@ public final class AsmGlobalState {
         }
     }
 
-    private final Map<String, Object> functions;
-    private final Set<String> constructors;
-    private final String programName;
-    private final Map<String, Object> fcAndDefinitionsByName;
-    private final Map<String, Assembler> assemblers;
+    private static Map<String, Object> functions = new HashMap<>();
+    private static Set<String> constructors = new HashSet<>();
+    private static String programName;
+    private static Map<String, Object> fcAndDefinitionsByName;
+    private static Map<String, Assembler> assemblers = new HashMap<>();
 
-    public <T> AsmGlobalState(String programName,
-                              Map<String, Object> fcAndDefinitionsByName) {
-        this.programName = programName;
+    private AsmGlobalState() {
+    }
+
+    public static synchronized void init(String programName, Map<String, Object> fcAndDefinitionsByName) {
+        AsmGlobalState.programName = programName;
+        AsmGlobalState.fcAndDefinitionsByName = fcAndDefinitionsByName;
         functions = new HashMap<>();
         constructors = new HashSet<>();
         assemblers = new HashMap<>();
-        this.fcAndDefinitionsByName = fcAndDefinitionsByName;
     }
 
     private static void copyRuntimeClasses(String outputDirectory) {
@@ -128,31 +130,31 @@ public final class AsmGlobalState {
         return format("idris-jvm-runtime-%s.jar", properties.getProperty("project.version"));
     }
 
-    public synchronized void addFunction(String name, Object value) {
+    public static synchronized void addFunction(String name, Object value) {
         functions.put(name, value);
     }
 
-    public synchronized Object getFunction(String name) {
+    public static synchronized Object getFunction(String name) {
         return functions.get(name);
     }
 
-    public synchronized Assembler getAssembler(String name) {
+    public static synchronized Assembler getAssembler(String name) {
         return assemblers.computeIfAbsent(name, key -> new Assembler());
     }
 
-    public String getProgramName() {
+    public static String getProgramName() {
         return programName;
     }
 
-    public synchronized boolean hasConstructor(String name) {
+    public static synchronized boolean hasConstructor(String name) {
         return constructors.contains(name);
     }
 
-    public synchronized void addConstructor(String name) {
+    public static synchronized void addConstructor(String name) {
         constructors.add(name);
     }
 
-    public void classCodeEnd(String outputDirectory, String outputFile, String mainClass)
+    public static void classCodeEnd(String outputDirectory, String outputFile, String mainClass)
         throws IOException, InterruptedException {
         String normalizedOutputDirectory = outputDirectory.isEmpty()
             ? createTempDirectory("idris-jvm-repl").toString() : outputDirectory;
@@ -172,7 +174,7 @@ public final class AsmGlobalState {
         }
     }
 
-    public void interpret(String mainClass, String outputDirectory) throws IOException, InterruptedException {
+    public static void interpret(String mainClass, String outputDirectory) throws IOException, InterruptedException {
         String classpath = String.join(pathSeparator, outputDirectory,
             outputDirectory + File.separator + RUNTIME_JAR_NAME, System.getProperty("java.class.path"));
         List<String> command = Stream.concat(
@@ -186,7 +188,7 @@ public final class AsmGlobalState {
             .waitFor(IDRIS_REPL_TIMEOUT, SECONDS);
     }
 
-    public void writeClass(String className, ClassWriter classWriter, String outputClassFileDir) {
+    public static void writeClass(String className, ClassWriter classWriter, String outputClassFileDir) {
         File outFile = new File(outputClassFileDir, className + ".class");
         new File(outFile.getParent()).mkdirs();
         try (OutputStream out = newOutputStream(outFile.toPath())) {
@@ -196,13 +198,13 @@ public final class AsmGlobalState {
         }
     }
 
-    private Stream<Entry<String, ClassWriter>> getClassNameAndClassWriters() {
+    private static Stream<Entry<String, ClassWriter>> getClassNameAndClassWriters() {
         return assemblers.values().parallelStream()
             .map(Assembler::classInitEnd)
             .flatMap(assembler -> assembler.getClassWriters().entrySet().stream());
     }
 
-    public Object getFcAndDefinition(String name) {
+    public static Object getFcAndDefinition(String name) {
         return fcAndDefinitionsByName.get(name);
     }
 }

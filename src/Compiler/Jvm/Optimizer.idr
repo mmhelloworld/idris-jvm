@@ -153,7 +153,7 @@ export
 appendToJvmName : String -> Jname -> Name
 appendToJvmName suffix jname =
   let className = replace (className jname) '/' '.'
-  in NS (mkNamespace className) (UN $ Basic (show (methodName jname) ++ suffix))
+  in NS (mkNamespace className) (UN $ Basic (methodName jname ++ suffix))
 
 export
 extractedFunctionLabel : String
@@ -342,8 +342,7 @@ getFreeVariables boundVariables expr = doGetFreeVariables SortedSet.empty boundV
 mutual
     markTailRecursion : NamedCExp -> Reader (Jname, String) NamedCExp
     markTailRecursion expr@(NmApp fc (NmRef nameFc idrisName) args) =
-        let jname = jvmName idrisName
-            functionName = getIdrisFunctionName (snd !ask) (className jname) (methodName jname)
+        let functionName = jvmName (snd !ask) idrisName
         in if functionName == fst !ask
                then pure $ NmApp fc (NmRef nameFc idrisTailRecName) args
                else pure expr
@@ -539,6 +538,12 @@ getConstructorTag conInfo tag = case conInfo of
   CONS => 1
   _ => fromMaybe 0 tag
 
+export
+getConstructorType : String -> Name -> ConInfo -> InferredType
+getConstructorType programName name _ =
+  let constructorClassName = getIdrisConstructorClassName programName (jvmSimpleName name)
+  in IRef constructorClassName Class []
+
 sortConCases : List NamedConAlt -> List NamedConAlt
 sortConCases alts = sortBy (comparing getTag) alts where
     getTag : NamedConAlt -> Int
@@ -569,11 +574,10 @@ createNewVariable variablePrefix ty = do
     addVariableType variable ty
 
 export
-canUseMethodReference : {auto stateRef: Ref AsmState AsmState} -> Name -> List Name -> Maybe Name -> List Name
-                      -> Core Bool
+canUseMethodReference : {auto stateRef: Ref AsmState AsmState} -> Name -> List Name -> Maybe Name -> List Name -> Core Bool
 canUseMethodReference _ _ Nothing _ = pure False
 canUseMethodReference functionName args (Just p0) params = do
-  Just (MkInferredFunctionType returnType parameterTypes) <- findFunctionType (jvmName functionName)
+  Just (MkInferredFunctionType returnType parameterTypes) <- findFunctionType (jvmName !getProgramName functionName)
     | Nothing => throw (GenericMsg emptyFC ("Unable to find function \{show functionName}"))
   pure $ not (any isPrimitive (returnType :: parameterTypes)) && all (uncurry (==)) (zip args (p0 :: params))
 
@@ -661,8 +665,7 @@ mutual
     inferExpr (NmLam _ var body) = inferExprLam AppliedLambdaUnknown Nothing (Just var) body
     inferExpr (NmLet fc var value expr) = inferExprLet fc var value expr
     inferExpr app@(NmApp _ _ _) = inferExprApp app
-    inferExpr expr@(NmCon fc name _ tag args) =
-        inferExprCon (fst $ getSourceLocation expr) name args
+    inferExpr expr@(NmCon fc name conInfo tag args) = inferExprCon fc name conInfo tag args
     inferExpr (NmOp _ fn args) = inferExprOp fn args
     inferExpr (NmExtPrim fc fn args) = inferExtPrim fc (toPrim fn) args
     inferExpr (NmForce _ _ expr) = do
@@ -969,13 +972,14 @@ mutual
                   zip args [0 .. the Int $ cast $ length argsTail]
                 pure IUnknown -- The type will not be used as it is in tail call position
     inferExprApp (NmApp fc (NmRef _ idrisName) args) = do
-        let functionName = jvmName idrisName
+        let functionName = jvmName !getProgramName idrisName
         retType <- case !(findFunctionType functionName) of
             Just functionType => pure $ returnType functionType
             Nothing => if idrisName == tailRecLoopFunctionName
                          then pure inferredObjectType
                          else throw $ GenericMsg fc "Unknown type for function \{show functionName}"
-        traverse_ inferExpr args
+        inferredArgTypes <- traverse inferExpr args
+        updateState { callSiteLog $= ((fc, idrisName, MkInferredFunctionType retType inferredArgTypes) :: ) }
         pure retType
     inferExprApp (NmApp _ lambdaVariable args) = do
         ignore $ inferExpr lambdaVariable
@@ -983,10 +987,27 @@ mutual
         pure IUnknown
     inferExprApp _ = throw $ GenericMsg emptyFC "Not a function application"
 
-    inferExprCon : {auto stateRef: Ref AsmState AsmState} -> String -> Name -> List NamedCExp -> Core InferredType
-    inferExprCon fileName name args = do
-        traverse_ inferExpr args
-        pure idrisObjectType
+    inferExprCon : {auto stateRef: Ref AsmState AsmState} -> FC -> Name -> ConInfo -> Maybe Int -> List NamedCExp -> Core InferredType
+    inferExprCon fc name conInfo tag args = do
+      inferredArgTypes <- traverse inferExpr args
+      -- Log the constructor site so buildSpecialisationPlan can discover a
+      -- spec class for it.  Skip when no slot is primitive: an all-Object
+      -- (or all-ref) spec would be identical to the natural class and the
+      -- refinement guard would reject it anyway, but skipping here avoids
+      -- log noise.
+      when (any isPrimitive inferredArgTypes) $
+        updateState { conSiteLog $= ((fc, name, conInfo, tag, inferredArgTypes) :: ) }
+      -- The natural class returned by `getConstructorType` (e.g.
+      -- `M_TTImp/M_Unelab/NoSugar`) is unsafe to propagate as the inferred
+      -- type: every spec class is a sibling — not a subclass — of the
+      -- natural, and when every construction site is specialised the natural
+      -- class is never emitted.  Letting the natural name escape into local
+      -- variable types, lambda parameter descriptors, or invokedynamic
+      -- signatures causes JVM verification to fail (NoClassDefFoundError on
+      -- the natural class) or a runtime ClassCastException when the spec
+      -- instance is cast to the natural.  Erase to `IdrisObject` (the
+      -- interface both natural and spec implement) for every conInfo.
+      pure idrisObjectType
 
     inferExprCast : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> Core InferredType
     inferExprCast targetType expr = do
@@ -1087,6 +1108,7 @@ logFunction logPrefix name args expr result =
     else result
 
 namespace TermType
+  export
   getConstantType : Primitive.Constant -> InferredType
   getConstantType (I _) = IInt
   getConstantType WorldVal = IInt
@@ -1136,40 +1158,55 @@ namespace TermType
   getTermJvmType name = do
       Just term <- getTypeTerm name
         | Nothing => pure Nothing
-      let (ret ::: args) = go [] term
+      (ret ::: args) <- getFnType [] term
       pure $ Just $ MkInferredFunctionType ret (reverse args)
     where
-
-      log : Show a => Lazy a -> b -> b
-      log value b = if show name == "Prelude.Show.protectEsc" then trace (show value) b else b
 
       getPrimVal : List (Term vars) -> Maybe Primitive.Constant
       getPrimVal [PrimVal _ c] = Just c
       getPrimVal args = Nothing
 
-      getConstructorType : Name -> InferredType
+      getDataConstructorArity: Name -> Core Nat
+      getDataConstructorArity name = do
+        defs <- get Ctxt
+        case !(lookupDefExact name (gamma defs)) of
+           Just (DCon _ a _) => pure a
+           _ => throw $ GenericMsg emptyFC $ "Unknown data constructor: " ++ show name
+
+      getConstructorType : Name -> Core InferredType
       getConstructorType name =
-        if isBoolTySpec name then IInt
-        else if name == basics "List" then idrisListType
-        else if name == preludetypes "Maybe" then idrisMaybeType
-        else if name == preludetypes "Nat" then inferredBigIntegerType
-        else inferredObjectType
+        if isBoolTySpec name then pure IInt
+        else if name == preludetypes "Nat" then pure inferredBigIntegerType
+        else pure inferredObjectType
+        {-else do
+          defs <- get Ctxt
+          case !(lookupDefExact name (gamma defs)) of
+             Just (TCon 0 _ _ (MkTypeFlags _ False) _ (Just constructorNames) _) => do
+               arities <- traverse getDataConstructorArity constructorNames
+               if all (\arity => arity == 0) arities
+                 then pure IInt
+                 else pure inferredObjectType
+             _ => pure inferredObjectType-}
 
       mutual
-        getFnType : {vars : _} -> List InferredType -> Term vars -> List (Term vars) -> List1 InferredType
-        getFnType types (Ref _ _ tyName) args = getConstructorType tyName ::: types
-        getFnType types (PrimVal _ c) [] = getConstantType c ::: types
-        getFnType types (Bind _ x (Pi _ count _ ty) sc) [] =
-          if count == plusNeutral then go (toList types) sc
-          else case go [] ty of
-            (jvmType ::: []) => go (toList (jvmType ::: types)) sc
-            xs => go (inferredLambdaType :: toList types) sc
-        getFnType types term _ = (inferredObjectType ::: types)
+        getFnType' : {vars : _} -> List InferredType -> Term vars -> List (Term vars) -> Core (List1 InferredType)
+        getFnType' types (Ref _ _ tyName) args = do
+          constructorType <- getConstructorType tyName
+          pure (constructorType ::: types)
+        getFnType' types (PrimVal _ c) [] = pure (getConstantType c ::: types)
+        getFnType' types (Bind _ x (Pi _ count _ ty) sc) [] =
+          if count == plusNeutral then getFnType (toList types) sc
+          else do
+            lambdaTypes <- getFnType [] ty
+            case lambdaTypes of
+              (jvmType ::: []) => getFnType (toList (jvmType ::: types)) sc
+              xs => getFnType (inferredLambdaType :: toList types) sc
+        getFnType' types term _ = pure (inferredObjectType ::: types)
 
-        go : {vars : _} -> List InferredType -> Term vars -> List1 InferredType
-        go types term =
+        getFnType : {vars : _} -> List InferredType -> Term vars -> Core (List1 InferredType)
+        getFnType types term =
           let (fn, args) = getFnArgs term
-          in getFnType types fn args
+          in getFnType' types fn args
 
   export
   showType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> Name -> Core ()
@@ -1184,11 +1221,10 @@ namespace TermType
 
 optimizeTailRecursion : String -> (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
 optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
-  let jname = jvmName name
+  let jname = jvmName programName name
       nilArityHandledExpr = delayNilArityExpr fc args body
-      functionName = getIdrisFunctionName programName (className jname) (methodName jname)
       (splitExpr, extractedFunctions) = splitFunction jname args nilArityHandledExpr
-      tailRecOptimizedExpr = runReader (functionName, programName) $ markTailRecursion splitExpr
+      tailRecOptimizedExpr = runReader (jname, programName) $ markTailRecursion splitExpr
       tailRecOptimizedDef = (name, fc, MkNmFun args tailRecOptimizedExpr)
       extractedFunctionDefs = toNameFcDef <$> extractedFunctions
       optimizedDefs = tailRecOptimizedDef :: extractedFunctionDefs
@@ -1206,22 +1242,38 @@ getArity : InferredFunctionType -> Nat
 getArity (MkInferredFunctionType _ args) = length args
 
 export
-inferFunctionType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
-                  -> (Name, FC, NamedDef) -> Core ()
-inferFunctionType (idrisName, _, MkNmFun args expr) = do
-  let jname = jvmName idrisName
+padParams : Nat -> List InferredType -> List InferredType
+padParams arity paramTypes = paramTypes ++ replicate (arity `minus` length paramTypes) inferredObjectType
+
+export
+getInitialFunctionType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> Name -> NamedDef -> Core InferredFunctionType
+getInitialFunctionType idrisName (MkNmFun args expr) = do
   let arity = length args
-  let runtimeInitialFunctionType = MkInferredFunctionType inferredObjectType (replicate arity inferredObjectType)
-  maybeFunctionType <- getTermJvmType idrisName
-  let termInitialFunctionType = fromMaybe runtimeInitialFunctionType maybeFunctionType
-  let termTypeArity = getArity termInitialFunctionType
-  let initialFunctionType = if arity == termTypeArity then termInitialFunctionType else runtimeInitialFunctionType
-  let jvmClassAndMethodName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
+  let runtimeType = MkInferredFunctionType inferredObjectType (replicate arity inferredObjectType)
+  maybeTermType <- TermType.getTermJvmType idrisName
+  pure $ case maybeTermType of
+    Just termType =>
+      if arity == getArity termType then termType else runtimeType
+    Nothing => runtimeType
+getInitialFunctionType _ _ = do
+  name <- getRootMethodName
+  throw $ GenericMsg emptyFC "Not a function \{show name}"
+
+{-initialFunctionType could be either initial generic types based on arity or it was provided during specialization-}
+export
+inferFunctionType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> Maybe InferredFunctionType -> NamedDef -> Core ()
+inferFunctionType Nothing (MkNmFun _ _) = do
+  name <- getRootMethodName
+  throw $ GenericMsg emptyFC ("Missing function type for \{show name}")
+inferFunctionType (Just initialFunctionType) (MkNmFun args expr) = do
+  let arity = length args
   scopes <- coreLift $ ArrayList.new {elemTy=Scope}
-  let function = MkFunction jname initialFunctionType (subtyping scopes) 0 jvmClassAndMethodName expr
+  jname <- getRootMethodName
+  let function = MkFunction jname initialFunctionType (subtyping scopes) 0 expr
   setCurrentFunction function
-  coreLift $ addFunction !getGlobalState jname function
+  coreLift $ addFunction jname function
   resetScope
+  resetCallSiteLog
   scopeIndex <- newScopeIndex
   let (_, lineStart, lineEnd) = getSourceLocation expr
   allVariableTypes <- coreLift $ Map.newTreeMap {key=Int} {value=InferredType}
@@ -1238,19 +1290,58 @@ inferFunctionType (idrisName, _, MkNmFun args expr) = do
   saveScope functionScope
   when (shouldDebugFunction jname) $ showScopes 0
 
-inferFunctionType (idrisName, fc, MkNmForeign foreignDescriptors argumentTypes returnType) =
-  inferForeign idrisName fc foreignDescriptors argumentTypes returnType
-inferFunctionType (idrisName, fc, MkNmError expr) = inferFunctionType (idrisName, fc, MkNmFun [] expr)
-inferFunctionType _ = pure ()
+inferFunctionType _ (MkNmForeign foreignDescriptors argumentTypes returnType) =
+  inferForeign emptyFC foreignDescriptors argumentTypes returnType
+inferFunctionType _ (MkNmError expr) = inferFunctionType (Just $ MkInferredFunctionType inferredObjectType []) (MkNmFun [] expr)
+inferFunctionType _ _ = pure ()
+
+-- Rewrite each `NmApp (NmRef _ orig) args` in the body whose FC has a logged
+-- inferred type and whose `orig` has a matching $sp variant in the plan to
+-- `NmApp (NmRef _ spec) args'`.  Pure function: walks the tree, recursing into
+-- every subexpression and rebuilding it.  See callers in `inferDef`.
+rewriteSpecCalls : List (FC, Name, InferredFunctionType) -> SpecialisationPlan
+                -> NamedCExp -> NamedCExp
+rewriteSpecCalls log plan = go where
+  lookupSiteType : FC -> Maybe InferredFunctionType
+  lookupSiteType targetFc =
+    (\(_, _, ty) => ty) <$> find (\(fc, _, _) => fc == targetFc) log
+
+  mutual
+    go : NamedCExp -> NamedCExp
+    go (NmApp fc (NmRef nfc orig) args) =
+      let args'  = go <$> args
+          chosen = fromMaybe orig $ do
+                     fnType <- lookupSiteType fc
+                     specs  <- SortedMap.lookup orig plan
+                     spec   <- find (\s => s.type.parameterTypes == fnType.parameterTypes) specs
+                     pure spec.name
+      in NmApp fc (NmRef nfc chosen) args'
+    go (NmApp fc f args) = NmApp fc (go f) (go <$> args)
+    go (NmLam fc x body) = NmLam fc x (go body)
+    go (NmLet fc x val body) = NmLet fc x (go val) (go body)
+    go (NmCon fc n ci tag args) = NmCon fc n ci tag (go <$> args)
+    go (NmOp fc op args) = NmOp fc op (map go args)
+    go (NmExtPrim fc n args) = NmExtPrim fc n (go <$> args)
+    go (NmForce fc reason t) = NmForce fc reason (go t)
+    go (NmDelay fc reason t) = NmDelay fc reason (go t)
+    go (NmConCase fc sc alts def) =
+      NmConCase fc (go sc) (goConAlt <$> alts) (go <$> def)
+    go (NmConstCase fc sc alts def) =
+      NmConstCase fc (go sc) (goConstAlt <$> alts) (go <$> def)
+    go e = e
+
+    goConAlt : NamedConAlt -> NamedConAlt
+    goConAlt (MkNConAlt n ci tag args body) = MkNConAlt n ci tag args (go body)
+
+    goConstAlt : NamedConstAlt -> NamedConstAlt
+    goConstAlt (MkNConstAlt c body) = MkNConstAlt c (go body)
 
 export
-inferDef : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState}
-         -> Name -> FC -> Core ()
-inferDef idrisName fc = do
-    let jname = jvmName idrisName
-    globalState <- getGlobalState
-    Just function <- coreLift $ findFunction globalState jname
-      | Nothing => throw (GenericMsg fc ("Unable to find function \{show jname}"))
+inferDef : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> {auto stateRef: Ref AsmState AsmState} -> Core ()
+inferDef = do
+    jname <- getRootMethodName
+    Just function <- findFunction jname
+      | Nothing => throw (GenericMsg emptyFC ("Unable to find function \{show jname}"))
     let expr = optimizedBody function
     if isForeign expr
       then pure ()
@@ -1262,4 +1353,15 @@ inferDef idrisName fc = do
         setScopeCounter size
         ignore $ inferExpr expr
         updateScopeVariableTypes
+        -- Rewire any call site whose inferred argument types match a $sp
+        -- variant from the plan.  Persists the rewritten body BOTH on the
+        -- current AsmState AND in the global function map — assembleDefinition
+        -- calls `loadFunction` which re-reads from the global map, so updating
+        -- only the AsmState would be silently discarded.
+        log  <- callSiteLog <$> getState
+        plan <- getSpecialisationPlan
+        let rewritten = rewriteSpecCalls log plan expr
+        let function' = { optimizedBody := rewritten } function
+        setCurrentFunction function'
+        coreLift $ addFunction jname function'
         when (shouldDebugFunction jname) $ showScopes (scopeCounter !getState - 1)

@@ -23,7 +23,8 @@ displayTree show tree = unlines . reverse $ go [] [] 0 tree where
       let childrenWithLevel = ((\c => (level + 1, c)) <$> children)
       in assert_total $ go (showNodeData level d :: acc) (childrenWithLevel ++ stack) (level + 1) child
 
-implementation Show a => Show (Tree a) where
+export
+Show a => Show (Tree a) where
   show tree = displayTree show tree
 
 export
@@ -33,3 +34,8 @@ traverseDepthFirst tree = go [] [] tree where
   go acc [] (Node d []) = d :: acc
   go acc (next :: rest) (Node d []) = go (d :: acc) rest next
   go acc stack (Node d (child :: children)) = go acc (child :: stack) (Node d children)
+
+-- Post-order traversal: all children before their parent.
+export
+postOrder : Tree a -> List a
+postOrder (Node d children) = assert_total (concatMap postOrder children) ++ [d]

@@ -722,7 +722,7 @@ Ord a => Ord (SnocList a) where
   "scheme:string-concat"
   "RefC:fastConcat"
   "javascript:lambda:(xs)=>__prim_idris2js_array(xs).join('')"
-  "jvm:concat(io/github/mmhelloworld/idrisjvm/runtime/IdrisList java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Strings"
+  "jvm:concat(io/github/mmhelloworld/idrisjvm/runtime/IdrisObject java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 fastConcat : List String -> String
 
@@ -855,7 +855,7 @@ pack (x :: xs) = strCons x (pack xs)
     "scheme:string-pack"
     "RefC:fastPack"
     "javascript:lambda:(xs)=>__prim_idris2js_array(xs).join('')"
-    "jvm:pack(io/github/mmhelloworld/idrisjvm/runtime/IdrisList java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Strings"
+    "jvm:pack(io/github/mmhelloworld/idrisjvm/runtime/IdrisObject java/lang/String),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 fastPack : List Char -> String
 
@@ -883,7 +883,7 @@ unpack str = go [] (length str)
   "scheme:string-unpack"
   "RefC:fastUnpack"
   "javascript:lambda:(str)=>__prim_js2idris_array(Array.from(str))"
-  "jvm:unpack(java/lang/String io/github/mmhelloworld/idrisjvm/runtime/IdrisList),io/github/mmhelloworld/idrisjvm/runtime/Strings"
+  "jvm:unpackObject(java/lang/String io/github/mmhelloworld/idrisjvm/runtime/IdrisObject),io/github/mmhelloworld/idrisjvm/runtime/Strings"
 export
 fastUnpack : String -> List Char
 

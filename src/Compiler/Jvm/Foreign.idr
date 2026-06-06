@@ -122,15 +122,13 @@ parseForeignFunctionDescriptor fc (functionDescriptor :: descriptorParts) argume
     go acc (argument :: rest) = do
         let foreignType = parse argument
         go (foreignType :: acc) rest
-parseForeignFunctionDescriptor fc descriptors _ _ =
-    throw $ GenericMsg fc $ "Invalid foreign descriptor: " ++ show descriptors
+parseForeignFunctionDescriptor fc descriptors _ _ = throw $ GenericMsg fc $ "Invalid foreign descriptor: " ++ show descriptors
 
 export
-findJvmDescriptor : {auto stateRef: Ref AsmState AsmState} -> FC -> Name -> List String -> Core (List String)
+findJvmDescriptor : FC -> Name -> List String -> Core (List String)
 findJvmDescriptor fc name descriptors = case parseCC ["jvm"] descriptors of
     Just ("jvm", descriptorParts) => pure descriptorParts
-    _ => throw $ GenericMsg fc $ "Cannot compile foreign function " ++ show name ++
-            " to JVM as JVM foreign descriptor is missing"
+    _ => throw $ GenericMsg fc $ "Cannot compile foreign function \{show name} to JVM as JVM foreign descriptor is missing"
 
 export
 getArgumentIndices : (arity: Int) -> List String -> IO (Map String Int)
@@ -186,17 +184,15 @@ isForeign (NmExtPrim _ (NS ns (UN (Basic name))) _) =
 isForeign _ = False
 
 export
-inferForeign : {auto stateRef: Ref AsmState AsmState} -> Name -> FC -> List String -> List CFType -> CFType -> Core ()
-inferForeign idrisName fc foreignDescriptors argumentTypes returnType = do
+inferForeign : {auto stateRef: Ref AsmState AsmState} -> FC -> List String -> List CFType -> CFType -> Core ()
+inferForeign fc foreignDescriptors argumentTypes returnType = do
     resetScope
-    let jname = jvmName idrisName
-    let jvmClassAndMethodName = getIdrisFunctionName !getProgramName (className jname) (methodName jname)
     idrisJvmParameters <- getIdrisJvmParameters fc argumentTypes
     let validIdrisTypes = map fst $ filter shouldPassToForeign $ zip argumentTypes idrisJvmParameters
     let idrisArgumentTypes = getJvmType <$> idrisJvmParameters
     let jvmArguments = filter (fst . snd) idrisJvmParameters
     let jvmArgumentTypes = getJvmType <$> jvmArguments
-    jvmDescriptor <- findJvmDescriptor fc idrisName foreignDescriptors
+    jvmDescriptor <- findJvmDescriptor fc (getIdrisName !getRootMethodName) foreignDescriptors
     jvmReturnType <- parse fc returnType
     (foreignFunctionClassName, foreignFunctionName, jvmReturnType, jvmArgumentTypesFromDescriptor) <-
         parseForeignFunctionDescriptor fc jvmDescriptor jvmArgumentTypes jvmReturnType
@@ -220,9 +216,10 @@ inferForeign idrisName fc foreignDescriptors argumentTypes returnType = do
     let functionBody = if isNilArity then NmDelay fc LLazy externalFunctionBody else externalFunctionBody
     let idrisReturnType = if methodReturnType == IVoid then IInt else methodReturnType
     let inferredFunctionType = MkInferredFunctionType idrisReturnType idrisArgumentTypes
-    let function = MkFunction jname inferredFunctionType (subtyping scopes) 0 jvmClassAndMethodName functionBody
+    jname <- getRootMethodName
+    let function = MkFunction jname inferredFunctionType (subtyping scopes) 0 functionBody
     setCurrentFunction function
-    coreLift $ addFunction !getGlobalState jname function
+    coreLift $ addFunction jname function
     let arity = the Int $ cast arityNat
     let argumentNames =
       if isNilArity then [] else (\argumentIndex => "arg" ++ show argumentIndex) <$> [0 .. arity - 1]

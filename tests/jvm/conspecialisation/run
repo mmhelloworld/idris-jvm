@@ -1,0 +1,60 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o conspec Spec.idr > /dev/null 2>&1
+
+spec_class=$(find build/exec/conspec_app -name 'MkT$I$I$I.class' -print -quit 2>/dev/null)
+
+if [ -f "$spec_class" ]; then
+  echo "Spec class MkT\$I\$I\$I: PRESENT"
+else
+  echo "Spec class MkT\$I\$I\$I: MISSING"
+fi
+
+# 1. Typed primitive fields.
+if javap -p "$spec_class" 2>/dev/null | grep -qE 'int property0;' \
+   && javap -p "$spec_class" 2>/dev/null | grep -qE 'int property1;' \
+   && javap -p "$spec_class" 2>/dev/null | grep -qE 'int property2;'; then
+  echo "Spec fields: TYPED"
+else
+  echo "Spec fields: NOT TYPED"
+fi
+
+# 2. Constructor signature (int, int, int, int) — tag + 3 slots.
+if javap -p "$spec_class" 2>/dev/null | grep -qE 'MkT\$I\$I\$I\(int, int, int, int\)'; then
+  echo "Spec <init>: (IIII)V"
+else
+  echo "Spec <init>: WRONG SIGNATURE"
+fi
+
+# 3. Typed accessors.
+if javap -p "$spec_class" 2>/dev/null | grep -qE 'public int getInt0\(\)' \
+   && javap -p "$spec_class" 2>/dev/null | grep -qE 'public int getInt1\(\)' \
+   && javap -p "$spec_class" 2>/dev/null | grep -qE 'public int getInt2\(\)'; then
+  echo "Typed accessors: getInt0 + getInt1 + getInt2"
+else
+  echo "Typed accessors: MISSING"
+fi
+
+# 4. Main constructs the spec without boxing.
+main_class=$(find build/exec/conspec_app -path '*conspec/Main.class' -print -quit)
+main_dis=$(javap -c -p "$main_class" 2>/dev/null)
+
+if echo "$main_dis" | grep -q 'new.*MkT\$I\$I\$I'; then
+  if echo "$main_dis" | grep -A 6 'new.*MkT\$I\$I\$I' | head -8 | grep -qE 'bipush'; then
+    echo "Construction: spec ctor, primitive args"
+  else
+    echo "Construction: spec ctor (arg shape unclear)"
+  fi
+else
+  echo "Construction: STILL USES NATURAL"
+fi
+
+# 5. Bootstrap-compat smoke test: IdrisList$Cons still ships.
+if find build/exec/conspec_app -name 'IdrisList$Cons.class' -print -quit 2>/dev/null | grep -q .; then
+  echo "IdrisList\$Cons still present: OK"
+else
+  echo "IdrisList\$Cons MISSING (broke bootstrap compat)"
+fi
+
+# 6. Runtime output.
+./build/exec/conspec${IDRIS_EXEC_EXT}

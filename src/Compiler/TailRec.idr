@@ -261,16 +261,13 @@ appendToName suffix n =
 -- will be used as the arguments for the next function.
 conAlt : TcGroup -> TcFunction -> (NamedConAlt, Function)
 conAlt (MkTcGroup tcIx funs) (MkTcFunction n ix args exp fc) =
-  let name = tcConstructorName tcIx ix
+  let name = tcContinueName (length args)
       localArgs = (NmLocal emptyFC) <$> args
       functionApplication = NmApp emptyFC (NmRef emptyFC newName) localArgs
       tailRecOptimizedFunction = MkFunction newName fc args (toTc exp)
    in (MkNConAlt name DATACON (Just ix) args functionApplication, tailRecOptimizedFunction)
 
    where
-     tcConstructorName : (groupIndex : Int) -> (functionIndex : Int) -> Name
-     tcConstructorName gi fi = UN (Basic $ "TcConstructor_" ++ show gi ++ "_" ++ show fi)
-
      newName : Name
      newName = appendToName ("$tc" ++ show ix) n
 

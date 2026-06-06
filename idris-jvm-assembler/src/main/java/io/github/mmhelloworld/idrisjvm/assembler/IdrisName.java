@@ -45,6 +45,7 @@ public final class IdrisName {
     REPLACEMENTS.put('[', "$lsqr");
     REPLACEMENTS.put(']', "$rsqr");
   }
+
   private IdrisName() {
   }
 

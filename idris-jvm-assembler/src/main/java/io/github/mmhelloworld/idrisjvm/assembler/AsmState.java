@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import static java.util.Map.Entry.comparingByValue;
-import static java.util.stream.Collectors.toList;
 
 public final class AsmState {
 
@@ -21,6 +20,6 @@ public final class AsmState {
         return indicesByName.entrySet().stream()
             .sorted(comparingByValue())
             .map(Entry::getKey)
-            .collect(toList());
+            .toList();
     }
 }

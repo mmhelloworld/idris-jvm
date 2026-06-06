@@ -121,6 +121,7 @@ import static org.objectweb.asm.Opcodes.IMUL;
 import static org.objectweb.asm.Opcodes.INEG;
 import static org.objectweb.asm.Opcodes.INSTANCEOF;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
+import static org.objectweb.asm.Opcodes.INVOKESTATIC;
 import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
 import static org.objectweb.asm.Opcodes.IOR;
 import static org.objectweb.asm.Opcodes.IREM;
@@ -220,6 +221,12 @@ public final class Assembler {
     String javaOpts = javaOptsProp == null ? "-Xss8m -Xms2g -Xmx3g" : javaOptsProp;
     createPosixExecutable(directoryName, fileName, mainClass, javaOpts);
     createWindowsExecutable(directoryName, fileName, mainClass, javaOpts);
+  }
+
+  // replace it with IdrisSystem.getEnv when 0.8.0 Idris JVM runtime is used
+  public static String getEnv(String name, String def) {
+    var value = IdrisSystem.getEnv(name);
+    return value != null ? value : def;
   }
 
   private static int getClassVersion(int javaVersion) {
@@ -654,6 +661,250 @@ public final class Assembler {
 
       newClassWriter.visitEnd();
       cws.put(newClassName, newClassWriter);
+    }
+  }
+
+  // FFI entry-point for `createIdrisConstructorClassTyped` — variant with the
+  // boolean boxed as Object (Idris `Bool` -> `Object`) and the field
+  // descriptors passed as a java.util.List<String>.
+  public void createIdrisConstructorClassTyped(String newClassName, Object isStringConstructor,
+                                                List<String> fieldDescriptors) {
+    createIdrisConstructorClassTyped(newClassName, intToBoolean((int) isStringConstructor), fieldDescriptors);
+  }
+
+  // Emit a specialised constructor class whose `property<N>` fields carry the
+  // JVM descriptors in `fieldDescriptors` (instead of the all-`Object` shape
+  // produced by `createIdrisConstructorClass`).  Slot layout, per-slot typed
+  // accessors, and the `<init>` signature all derive from the descriptor list.
+  //
+  // The class still implements `IdrisObject` (so case-match dispatch on
+  // `getConstructorId` keeps working) but its `getProperty(I)Object`
+  // throws `UnsupportedOperationException` — destructuring always uses the
+  // typed accessors via the spec class's static type.
+  public void createIdrisConstructorClassTyped(String newClassName, boolean isStringConstructor,
+                                                List<String> fieldDescriptors) {
+    if (cws.containsKey(newClassName)) {
+      return;
+    }
+    ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_SUPER, newClassName, null, "java/lang/Object",
+      new String[]{"io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"});
+    cw.visitSource(format("IdrisGenerated$%s.idr", newClassName.replaceAll("/", "\\$")), null);
+
+    String idDescriptor = isStringConstructor ? "Ljava/lang/String;" : "I";
+    cw.visitField(ACC_PRIVATE + ACC_FINAL, "constructorId", idDescriptor, null, null).visitEnd();
+
+    for (int i = 0; i < fieldDescriptors.size(); i++) {
+      cw.visitField(ACC_PRIVATE + ACC_FINAL, "property" + i, fieldDescriptors.get(i), null, null).visitEnd();
+    }
+
+    // <init>(idDescriptor, fieldDescriptors...)V
+    StringBuilder ctorSig = new StringBuilder("(").append(idDescriptor);
+    for (String d : fieldDescriptors) {
+      ctorSig.append(d);
+    }
+    ctorSig.append(")V");
+
+    MethodVisitor ctor = cw.visitMethod(ACC_PUBLIC, "<init>", ctorSig.toString(), null, null);
+    ctor.visitCode();
+    // super()
+    ctor.visitVarInsn(ALOAD, 0);
+    ctor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+    // this.constructorId = arg0
+    ctor.visitVarInsn(ALOAD, 0);
+    ctor.visitVarInsn(isStringConstructor ? ALOAD : ILOAD, 1);
+    ctor.visitFieldInsn(PUTFIELD, newClassName, "constructorId", idDescriptor);
+    // assign each property — local index widens by 2 for long/double
+    int localIdx = 2;
+    for (int i = 0; i < fieldDescriptors.size(); i++) {
+      String d = fieldDescriptors.get(i);
+      ctor.visitVarInsn(ALOAD, 0);
+      ctor.visitVarInsn(loadOpcodeFor(d), localIdx);
+      ctor.visitFieldInsn(PUTFIELD, newClassName, "property" + i, d);
+      localIdx += slotWidthFor(d);
+    }
+    ctor.visitInsn(RETURN);
+    ctor.visitMaxs(-1, -1);
+    ctor.visitEnd();
+
+    // getConstructorId / getStringConstructorId — same as the untyped variant
+    String constructorGetter = isStringConstructor ? "getStringConstructorId" : "getConstructorId";
+    MethodVisitor getId = cw.visitMethod(ACC_PUBLIC, constructorGetter,
+      format("()%s", idDescriptor), null, null);
+    getId.visitCode();
+    getId.visitVarInsn(ALOAD, 0);
+    getId.visitFieldInsn(GETFIELD, newClassName, "constructorId", idDescriptor);
+    getId.visitInsn(isStringConstructor ? ARETURN : IRETURN);
+    getId.visitMaxs(-1, -1);
+    getId.visitEnd();
+
+    // Typed per-slot accessors: getInt0()I, getLong1()J, getRef2()Ljava/lang/Object;, etc.
+    for (int i = 0; i < fieldDescriptors.size(); i++) {
+      String d = fieldDescriptors.get(i);
+      String accessor = accessorNameFor(d, i);
+      MethodVisitor get = cw.visitMethod(ACC_PUBLIC, accessor, "()" + d, null, null);
+      get.visitCode();
+      get.visitVarInsn(ALOAD, 0);
+      get.visitFieldInsn(GETFIELD, newClassName, "property" + i, d);
+      get.visitInsn(returnOpcodeFor(d));
+      get.visitMaxs(-1, -1);
+      get.visitEnd();
+    }
+
+    // IdrisObject conformance: getProperty(I)Object boxes primitive slots so
+    // generic code that reaches the spec via `IdrisObject` (e.g. a function
+    // receiving the value through an `Object` parameter, before any future
+    // function-level monomorphization tracks the spec class) keeps working.
+    // The typed accessors above remain the fast path when the spec class is
+    // statically known at the call site.
+    if (!fieldDescriptors.isEmpty()) {
+      MethodVisitor gp = cw.visitMethod(ACC_PUBLIC, "getProperty", "(I)Ljava/lang/Object;", null, null);
+      gp.visitCode();
+      gp.visitVarInsn(ILOAD, 1);
+      int n = fieldDescriptors.size();
+      Label[] caseLabels = new Label[n];
+      for (int i = 0; i < n; i++) caseLabels[i] = new Label();
+      Label defaultLabel = new Label();
+      int[] keys = new int[n];
+      for (int i = 0; i < n; i++) keys[i] = i;
+      gp.visitLookupSwitchInsn(defaultLabel, keys, caseLabels);
+      for (int i = 0; i < n; i++) {
+        String d = fieldDescriptors.get(i);
+        gp.visitLabel(caseLabels[i]);
+        gp.visitVarInsn(ALOAD, 0);
+        gp.visitFieldInsn(GETFIELD, newClassName, "property" + i, d);
+        boxPrimitive(gp, d);
+        gp.visitInsn(ARETURN);
+      }
+      gp.visitLabel(defaultLabel);
+      gp.visitInsn(ACONST_NULL);
+      gp.visitInsn(ARETURN);
+      gp.visitMaxs(-1, -1);
+      gp.visitEnd();
+    }
+
+    // toString — appends each typed field with the matching StringBuilder.append signature.
+    MethodVisitor ts = cw.visitMethod(ACC_PUBLIC, "toString", "()Ljava/lang/String;", null, null);
+    ts.visitCode();
+    ts.visitTypeInsn(NEW, "java/lang/StringBuilder");
+    ts.visitInsn(DUP);
+    ts.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
+    ts.visitLdcInsn(format("%s{constructorId=", newClassName));
+    ts.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+      "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+    ts.visitVarInsn(ALOAD, 0);
+    ts.visitFieldInsn(GETFIELD, newClassName, "constructorId", idDescriptor);
+    ts.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+      format("(%s)Ljava/lang/StringBuilder;", appendSigFor(idDescriptor)), false);
+    for (int i = 0; i < fieldDescriptors.size(); i++) {
+      String d = fieldDescriptors.get(i);
+      ts.visitLdcInsn(format(", property%d=", i));
+      ts.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+        "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+      ts.visitVarInsn(ALOAD, 0);
+      ts.visitFieldInsn(GETFIELD, newClassName, "property" + i, d);
+      ts.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+        format("(%s)Ljava/lang/StringBuilder;", appendSigFor(d)), false);
+    }
+    ts.visitIntInsn(BIPUSH, CLOSE_CURLY_BRACE);
+    ts.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+      "(C)Ljava/lang/StringBuilder;", false);
+    ts.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "toString",
+      "()Ljava/lang/String;", false);
+    ts.visitInsn(ARETURN);
+    ts.visitMaxs(-1, -1);
+    ts.visitEnd();
+
+    cw.visitEnd();
+    cws.put(newClassName, cw);
+  }
+
+  private static int loadOpcodeFor(String descriptor) {
+    switch (descriptor.charAt(0)) {
+      case 'Z': case 'B': case 'C': case 'S': case 'I': return ILOAD;
+      case 'J': return LLOAD;
+      case 'F': return FLOAD;
+      case 'D': return DLOAD;
+      default:  return ALOAD;
+    }
+  }
+
+  private static int returnOpcodeFor(String descriptor) {
+    switch (descriptor.charAt(0)) {
+      case 'Z': case 'B': case 'C': case 'S': case 'I': return IRETURN;
+      case 'J': return LRETURN;
+      case 'F': return FRETURN;
+      case 'D': return DRETURN;
+      default:  return ARETURN;
+    }
+  }
+
+  private static int slotWidthFor(String descriptor) {
+    char c = descriptor.charAt(0);
+    return (c == 'J' || c == 'D') ? 2 : 1;
+  }
+
+  private static String accessorNameFor(String descriptor, int index) {
+    switch (descriptor.charAt(0)) {
+      case 'Z': return "getBool"   + index;
+      case 'B': return "getByte"   + index;
+      case 'C': return "getChar"   + index;
+      case 'S': return "getShort"  + index;
+      case 'I': return "getInt"    + index;
+      case 'J': return "getLong"   + index;
+      case 'F': return "getFloat"  + index;
+      case 'D': return "getDouble" + index;
+      default:  return "getRef"    + index;
+    }
+  }
+
+  // Box a primitive on the stack via the matching java.lang.<Wrapper>.valueOf
+  // static method; reference values are already boxed.
+  private static void boxPrimitive(MethodVisitor mv, String descriptor) {
+    switch (descriptor.charAt(0)) {
+      case 'Z':
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean",   "valueOf", "(Z)Ljava/lang/Boolean;",   false);
+        break;
+      case 'B':
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Byte",      "valueOf", "(B)Ljava/lang/Byte;",      false);
+        break;
+      case 'C':
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;", false);
+        break;
+      case 'S':
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Short",     "valueOf", "(S)Ljava/lang/Short;",     false);
+        break;
+      case 'I':
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Integer",   "valueOf", "(I)Ljava/lang/Integer;",   false);
+        break;
+      case 'J':
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Long",      "valueOf", "(J)Ljava/lang/Long;",      false);
+        break;
+      case 'F':
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Float",     "valueOf", "(F)Ljava/lang/Float;",     false);
+        break;
+      case 'D':
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double",    "valueOf", "(D)Ljava/lang/Double;",    false);
+        break;
+      default:
+        // reference type: already an Object — nothing to do
+        break;
+    }
+  }
+
+  // StringBuilder.append has overloads only for primitive types plus Object;
+  // bytes/shorts widen to int.  This maps a field descriptor to the matching
+  // append-signature descriptor.
+  private static String appendSigFor(String descriptor) {
+    switch (descriptor.charAt(0)) {
+      case 'B': case 'S': return "I";
+      case 'Z': return "Z";
+      case 'C': return "C";
+      case 'I': return "I";
+      case 'J': return "J";
+      case 'F': return "F";
+      case 'D': return "D";
+      default:  return "Ljava/lang/Object;";
     }
   }
 
@@ -1176,7 +1427,7 @@ public final class Assembler {
   public void maxStackAndLocal(int maxStack, int maxLocal) {
     try {
       mv.visitMaxs(maxStack, maxLocal);
-    } catch (ArrayIndexOutOfBoundsException exception) {
+    } catch (RuntimeException exception) {
       System.err.println("Unable to calculate max stack and local for " + methodName);
       throw exception;
     }

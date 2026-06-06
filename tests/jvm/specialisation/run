@@ -1,0 +1,38 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o spec Spec.idr > /dev/null 2>&1
+
+# 1. Verify each user-declared primitive-typed function is emitted with a
+#    primitive-typed JVM signature (e.g. `mulInts(int, int)`).  Because the
+#    natural inferred type already carries the primitives, no duplicate
+#    `$sp` variant should be emitted in this class.
+# 2. Verify main directly invokestatic'd the primitive-typed method (no boxing
+#    via Integer.valueOf at the call site).
+methods=$(javap -p build/exec/spec_app/spec/Main.class 2>/dev/null)
+main_body=$(javap -c -p build/exec/spec_app/spec/Main.class 2>/dev/null \
+  | awk '/public static java.lang.Object main\(/,/^}/')
+for fn in mulInts addInts squareInt; do
+  has_method=0
+  is_called=0
+  has_dup=0
+  if echo "$methods" | grep -qE "^[[:space:]]+public static int ${fn}\(.*int.*\);"; then
+    has_method=1
+  fi
+  if echo "$methods" | grep -qE "${fn}\\\$sp[0-9]+\("; then
+    has_dup=1
+  fi
+  if echo "$main_body" | grep -qE "invokestatic.*${fn}:"; then
+    is_called=1
+  fi
+  if [ "$has_method" = 1 ] && [ "$is_called" = 1 ] && [ "$has_dup" = 0 ]; then
+    echo "Specialisation for ${fn}: OK"
+  elif [ "$has_dup" = 1 ]; then
+    echo "Specialisation for ${fn}: REDUNDANT \$sp DUPLICATE EMITTED"
+  elif [ "$has_method" = 1 ]; then
+    echo "Specialisation for ${fn}: EMITTED BUT MAIN STILL BOXES"
+  else
+    echo "Specialisation for ${fn}: MISSING"
+  fi
+done
+
+./build/exec/spec${IDRIS_EXEC_EXT}

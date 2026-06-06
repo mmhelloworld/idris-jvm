@@ -15,6 +15,7 @@ import Data.List.Lazy
 import Data.List1
 import Data.Maybe
 import Data.String
+import Libraries.Data.SortedMap
 import Libraries.Data.SortedSet
 import Libraries.Data.String.Extra
 import Data.Vect
@@ -146,7 +147,10 @@ namespace JList
     data JList : Type -> Type where [external]
 
     %foreign jvm' "java/util/List" ".add" "i:java/util/List int java/lang/Object" "void"
-    prim_add : JList a -> Int -> a -> PrimIO ()
+    prim_addAt : JList a -> Int -> a -> PrimIO ()
+
+    %foreign jvm' "java/util/List" ".add" "i:java/util/List java/lang/Object" "boolean"
+    prim_add : JList a -> a -> PrimIO Bool
 
     %foreign jvm' "java/util/List" ".addAll" "i:java/util/List java/util/Collection" "boolean"
     prim_addAll : JList a -> Collection a -> PrimIO Bool
@@ -155,8 +159,12 @@ namespace JList
     prim_set : JList a -> Int -> a -> PrimIO a
 
     export
-    add : HasIO io => JList a -> Int -> a -> io ()
-    add list index value = primIO $ prim_add list index value
+    addAt : HasIO io => JList a -> Int -> a -> io ()
+    addAt list index value = primIO $ prim_addAt list index value
+
+    export
+    add : HasIO io => JList a -> a -> io Bool
+    add list value = primIO $ prim_add list value
 
     export
     addAll : (HasIO io, Inherits obj (Collection a)) => JList a -> obj -> io Bool
@@ -191,6 +199,9 @@ public export
 Inherits (JList a) (Iterable a) where
 
 public export
+Inherits (JList a) (Collection a) where
+
+public export
 Inherits (List a) (JList a) where
 
 namespace ArrayList
@@ -204,8 +215,24 @@ namespace ArrayList
     new : HasIO io => io (ArrayList elemTy)
     new = primIO prim_new
 
+    export
+    fromList : HasIO io => List elemTy -> io (ArrayList elemTy)
+    fromList values = do
+        list <- ArrayList.new {elemTy=elemTy}
+        go (believe_me list) (fromMaybe [] $ nullableToMaybe values)
+        pure list
+      where
+        go : JList elemTy -> List elemTy -> io ()
+        go _ [] = pure ()
+        go list (v :: rest) = do
+          ignore $ JList.add list v
+          go list rest
+
 public export
 Inherits (ArrayList a) (JList a) where
+
+toJList : List a -> JList a
+toJList xs = subtyping $ unsafePerformIO $ ArrayList.fromList xs
 
 namespace Entry
     export
@@ -373,121 +400,170 @@ record Scope where
 public export
 record Function where
     constructor MkFunction
-    idrisName : Jname
+    name : Jname
     inferredFunctionType : InferredFunctionType
     scopes : JList Scope
     dynamicVariableCounter : Int
-    jvmClassMethodName : Jname
     optimizedBody : NamedCExp
 
 namespace AsmGlobalState
     public export
-    data AsmGlobalState : Type where [external]
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "init"
+                "String java/util/Map" "void"
+    prim_initAsmGlobalState : String -> Map String (FC, NamedDef) -> PrimIO ()
 
     public export
-    %foreign
-        "jvm:<init>(String java/util/Map io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
-    prim_newAsmGlobalState : String -> Map String (FC, NamedDef) -> PrimIO AsmGlobalState
+    initAsmGlobalState : HasIO io => String -> Map String (FC, NamedDef) -> io ()
+    initAsmGlobalState programName fcAndDefinitionsByName =
+      primIO $ prim_initAsmGlobalState programName fcAndDefinitionsByName
 
     public export
-    newAsmGlobalState : HasIO io => String -> Map String (FC, NamedDef) -> io AsmGlobalState
-    newAsmGlobalState programName fcAndDefinitionsByName =
-      primIO $ prim_newAsmGlobalState programName fcAndDefinitionsByName
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "getAssembler"
+                "String" "io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+    prim_getAssembler : String -> PrimIO Assembler
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getAssembler"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String"
-                "io/github/mmhelloworld/idrisjvm/assembler/Assembler"
-    prim_getAssembler : AsmGlobalState -> String -> PrimIO Assembler
+    getAssembler : HasIO io => String -> io Assembler
+    getAssembler className = primIO $ prim_getAssembler className
 
     public export
-    getAssembler : HasIO io => AsmGlobalState -> String -> io Assembler
-    getAssembler state name = primIO $ prim_getAssembler state name
+    %foreign "jvm:getProgramName(java/lang/Object java/lang/String),io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState"
+    prim_getProgramName : PrimIO String
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getProgramName"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "String"
-    prim_getProgramName : AsmGlobalState -> PrimIO String
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "getFcAndDefinition" "String" "java/lang/Object"
+    prim_getFcAndDefinition : String -> PrimIO (FC, NamedDef)
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getFcAndDefinition"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "java/lang/Object"
-    prim_getFcAndDefinition : AsmGlobalState -> String -> PrimIO (FC, NamedDef)
+    getProgramName : HasIO io => io String
+    getProgramName = primIO prim_getProgramName
 
     public export
-    getProgramName : HasIO io => AsmGlobalState -> io String
-    getProgramName = primIO . prim_getProgramName
+    getFcAndDefinition : HasIO io => String -> io (FC, NamedDef)
+    getFcAndDefinition name = primIO $ prim_getFcAndDefinition name
 
     public export
-    getFcAndDefinition : HasIO io => AsmGlobalState -> String -> io (FC, NamedDef)
-    getFcAndDefinition state name = primIO $ prim_getFcAndDefinition state name
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "addConstructor" "String" "void"
+    prim_addConstructor : String -> PrimIO ()
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".addConstructor"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "void"
-    prim_addConstructor : AsmGlobalState -> String -> PrimIO ()
+    addConstructor : HasIO io => String -> io ()
+    addConstructor name = primIO $ prim_addConstructor name
 
     public export
-    addConstructor : HasIO io => AsmGlobalState -> String -> io ()
-    addConstructor state name = primIO $ prim_addConstructor state name
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "hasConstructor" "String" "boolean"
+    prim_hasConstructor : String -> PrimIO Bool
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".hasConstructor"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "boolean"
-    prim_hasConstructor : AsmGlobalState -> String -> PrimIO Bool
+    hasConstructor : HasIO io => String -> io Bool
+    hasConstructor name = primIO $ prim_hasConstructor name
 
     public export
-    hasConstructor : HasIO io => AsmGlobalState -> String -> io Bool
-    hasConstructor state name = primIO $ prim_hasConstructor state name
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "getFunction" "String" "java/lang/Object"
+    prim_getFunction : String -> PrimIO Object
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".getFunction"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String" "java/lang/Object"
-    prim_getFunction : AsmGlobalState -> String -> PrimIO Object
+    getFunction : HasIO io => String -> io (Maybe Function)
+    getFunction name = (believe_me . nullableToMaybe) <$> (primIO $ prim_getFunction name)
 
     public export
-    getFunction : HasIO io => AsmGlobalState -> String -> io (Maybe Function)
-    getFunction state name = (believe_me . nullableToMaybe) <$> (primIO $ prim_getFunction state name)
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "addFunction" "String java/lang/Object" "void"
+    prim_jaddFunction : String -> Object -> PrimIO ()
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".addFunction"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String java/lang/Object" "void"
-    prim_jaddFunction : AsmGlobalState -> String -> Object -> PrimIO ()
+    jaddFunction : HasIO io => String -> Function -> io ()
+    jaddFunction name function = primIO $ prim_jaddFunction name (believe_me function)
 
     public export
-    jaddFunction : HasIO io => AsmGlobalState -> String -> Function -> io ()
-    jaddFunction state name function = primIO $ prim_jaddFunction state name (believe_me function)
+    findFunction : HasIO io => Jname -> io (Maybe Function)
+    findFunction name = getFunction (getSimpleName name)
 
     public export
-    findFunction : HasIO io => AsmGlobalState -> Jname -> io (Maybe Function)
-    findFunction globalState name = getFunction globalState (getSimpleName name)
+    addFunction : HasIO io => Jname -> Function -> io ()
+    addFunction name function = jaddFunction (getSimpleName name) function
 
     public export
-    addFunction : HasIO io => AsmGlobalState -> Jname -> Function -> io ()
-    addFunction globalState name function = jaddFunction globalState (getSimpleName name) function
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" "classCodeEnd"
+                "String String String" "void"
+    prim_classCodeEnd : String -> String -> String -> PrimIO ()
 
     public export
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState" ".classCodeEnd"
-                "io/github/mmhelloworld/idrisjvm/assembler/AsmGlobalState String String String" "void"
-    prim_classCodeEnd : AsmGlobalState -> String -> String -> String -> PrimIO ()
+    classCodeEnd : HasIO io => String -> String -> String -> io ()
+    classCodeEnd outputDirectory outputFile mainClass =
+        primIO $ prim_classCodeEnd outputDirectory outputFile mainClass
 
-    public export
-    classCodeEnd : HasIO io => AsmGlobalState -> String -> String -> String -> io ()
-    classCodeEnd state outputDirectory outputFile mainClass =
-        primIO $ prim_classCodeEnd state outputDirectory outputFile mainClass
+public export
+record SpecialisedSignature where
+  constructor MkSpecialisedSig
+  name : Name
+  def : NamedDef
+  type    : InferredFunctionType
+
+public export
+Show SpecialisedSignature where
+  show (MkSpecialisedSig name _ type) = show name ++ " : " ++ showSep " -> " (show <$> (type.parameterTypes ++ [type.returnType]))
+
+-- A function may need more than one specialisation (e.g. called with Int at one
+-- site and Long at another).  The list holds one entry per unique param-type
+-- combination; entries are named $sp0, $sp1, … in discovery order.
+public export
+SpecialisationPlan : Type
+SpecialisationPlan = SortedMap Name (List SpecialisedSignature)
+
+-- A specialised constructor class, parallel to SpecialisedSignature for
+-- functions.  When `Cons` is applied with `(int, int)` we synthesise a class
+-- `<base>$I$I` whose fields are stored as primitives (instead of boxed
+-- Object).  paramTypes holds one entry per constructor slot; specClassName
+-- is the synthesised JVM class name (see mkConSpecClassName).
+public export
+record SpecialisedConstructor where
+  constructor MkSpecialisedCon
+  originalName  : Name
+  conInfo       : ConInfo
+  tag           : Maybe Int
+  paramTypes    : List InferredType
+  specClassName : String
+
+public export
+Show SpecialisedConstructor where
+  show (MkSpecialisedCon name _ _ paramTypes specClassName) =
+    show name ++ " -> " ++ specClassName ++ " (" ++ showSep ", " (show <$> paramTypes) ++ ")"
+
+public export
+ConSpecialisationPlan : Type
+ConSpecialisationPlan = SortedMap Name (List SpecialisedConstructor)
 
 public export
 record AsmState where
     constructor MkAsmState
-    globalState : AsmGlobalState
     currentIdrisFunction : Function
-    currentMethodName : Jname
+    specialisationPlan : SpecialisationPlan
+    specialisedConstructorPlan : ConSpecialisationPlan
     currentScopeIndex : Int
     scopeCounter : Int
     labelCounter : Int
     lambdaCounter : Int
     lineNumberLabels : Map Int String
     assembler : Assembler
+    callSiteLog : List (FC, Name, InferredFunctionType)
+    conSiteLog : List (FC, Name, ConInfo, Maybe Int, List InferredType)
+
+namespace AsmState
+  export
+  fromJavaName : Jname -> IO AsmState
+  fromJavaName name = do
+    assembler <- getAssembler (className name)
+    scopes <- ArrayList.new {elemTy=Scope}
+    lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
+    let function = MkFunction name (MkInferredFunctionType IUnknown []) (subtyping scopes) 0 (NmCrash emptyFC "uninitialized function")
+    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] []
+
+  export
+  fromIdrisName : Name -> IO AsmState
+  fromIdrisName name = do
+      programName <- AsmGlobalState.getProgramName
+      let jname = jvmName programName name
+      fromJavaName jname
 
 public export
 data Access = Private | Public | Protected | Static | Synthetic | Final | Interface | Abstract | Transient
@@ -640,9 +716,8 @@ export
 Show Function where
     show function =
         showType "Function" [
-            ("idrisName", show $ idrisName function),
             ("inferredFunctionType", show $ inferredFunctionType function),
-            ("jvmClassMethodName", show $ jvmClassMethodName function),
+            ("name", show function.name),
             ("optimizedBody", show $ optimizedBody function)
         ]
 
@@ -650,22 +725,11 @@ export
 Show AsmState where
     show asmState = showType "AsmState" [
         ("currentIdrisFunction", show $ currentIdrisFunction asmState),
-        ("currentMethodName", show $ currentMethodName asmState),
         ("currentScopeIndex", show $ currentScopeIndex asmState),
         ("scopeCounter", show $ scopeCounter asmState),
         ("labelCounter", show $ labelCounter asmState),
         ("lambdaCounter", show $ lambdaCounter asmState)
     ]
-
-public export
-newAsmState : HasIO io => AsmGlobalState -> Assembler -> io AsmState
-newAsmState globalState assembler = do
-    let defaultName = Jqualified "" ""
-    scopes <- ArrayList.new {elemTy=Scope}
-    lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
-    let function = MkFunction defaultName (MkInferredFunctionType IUnknown []) (believe_me scopes)
-                    0 defaultName (NmCrash emptyFC "uninitialized function")
-    pure $ MkAsmState globalState function defaultName 0 0 0 0 lineNumberLabels assembler
 
 public export
 %foreign "jvm:crash(String java/lang/Object),io/github/mmhelloworld/idrisjvm/runtime/Runtime"
@@ -681,9 +745,16 @@ export
 isBoolTySpec : Name -> Bool
 isBoolTySpec name = name == basics "Bool" || name == (NS preludeNS (UN $ Basic "Bool"))
 
+split : String -> String -> List String
+split p xs = reverse $ go [] [] (unpack xs) where
+  go : List String -> List Char -> List Char -> List String
+  go acc curr [] = pack curr :: acc
+  go acc curr ('-' :: '>' :: rest) = go (pack (reverse curr) :: acc) [] rest
+  go acc curr (c :: rest) = go acc (c :: curr) rest
+
 mutual
   tySpecFn : String -> InferredFunctionType
-  tySpecFn desc = case reverse $ toList $ String.split (== '⟶') desc of
+  tySpecFn desc = case reverse $ Asm.split "->" desc of
     [] => assert_total $ idris_crash ("Invalid function type descriptor: " ++ desc)
     (returnTypeStr :: argsReversed) =>
       MkInferredFunctionType (tySpecStr returnTypeStr) (reverse $ (tySpecStr <$> argsReversed))
@@ -748,8 +819,54 @@ getJvmTypeDescriptor (IFunction lambdaType) = getJvmTypeDescriptor (lambdaType.j
 getJvmTypeDescriptor IUnknown            = getJvmTypeDescriptor inferredObjectType
 getJvmTypeDescriptor (TypeParam name) = getJvmTypeDescriptor inferredObjectType
 
+-- Single-letter encoding used in constructor-spec class names.  Primitive
+-- types take their JVM descriptor letter; every reference-typed slot
+-- collapses to "L" so the slot count (and thus the constructor arity) is
+-- preserved in the name without leaking class names.  See mkConSpecClassName.
 export
-getJvmReferenceTypeName : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core String
+specConDescriptorChar : InferredType -> String
+specConDescriptorChar IBool   = "Z"
+specConDescriptorChar IByte   = "B"
+specConDescriptorChar IChar   = "C"
+specConDescriptorChar IShort  = "S"
+specConDescriptorChar IInt    = "I"
+specConDescriptorChar ILong   = "J"
+specConDescriptorChar IFloat  = "F"
+specConDescriptorChar IDouble = "D"
+specConDescriptorChar _       = "L"
+
+-- Build a specialised constructor class name from the original (natural)
+-- class name plus the per-slot inferred parameter types.  Joins with "$".
+-- Example: ("M_Prelude/M_Basics/Cons", [IInt, IInt]) -> "M_Prelude/M_Basics/Cons$I$I".
+export
+mkConSpecClassName : (originalClassName : String) -> (paramTypes : List InferredType) -> String
+mkConSpecClassName base [] = base
+mkConSpecClassName base params =
+  base ++ "$" ++ joinSlotChars (specConDescriptorChar <$> params)
+  where
+    joinSlotChars : List String -> String
+    joinSlotChars [] = ""
+    joinSlotChars [x] = x
+    joinSlotChars (x :: xs) = x ++ "$" ++ joinSlotChars xs
+
+-- Java method name for a typed slot accessor on a specialised constructor
+-- class.  Primitive slots get the type keyword ("getInt0", "getLong1", etc.);
+-- reference slots use "getRef".  Mirrors the names emitted by the Java-side
+-- typed createIdrisConstructorClass overload.
+export
+specConAccessorName : InferredType -> Int -> String
+specConAccessorName IBool   i = "getBool"   ++ show i
+specConAccessorName IByte   i = "getByte"   ++ show i
+specConAccessorName IChar   i = "getChar"   ++ show i
+specConAccessorName IShort  i = "getShort"  ++ show i
+specConAccessorName IInt    i = "getInt"    ++ show i
+specConAccessorName ILong   i = "getLong"   ++ show i
+specConAccessorName IFloat  i = "getFloat"  ++ show i
+specConAccessorName IDouble i = "getDouble" ++ show i
+specConAccessorName _       i = "getRef"    ++ show i
+
+export
+getJvmReferenceTypeName : InferredType -> Core String
 getJvmReferenceTypeName (IRef ty _ _) = pure ty
 getJvmReferenceTypeName (IArray (IRef ty _ _)) = pure ("[L" ++ ty ++ ";")
 getJvmReferenceTypeName (IArray ty) = pure ("[" ++ !(getJvmReferenceTypeName ty))
@@ -956,7 +1073,7 @@ mutual
         jAnn <- toJAnnotation n
         believe_me <$> primIO (prim_newJAnnAnnotation jAnn)
     toJAnnotationValue (AnnArray values) =
-        believe_me <$> primIO (prim_newJAnnArray $ subtyping !(traverse toJAnnotationValue values))
+        believe_me <$> primIO (prim_newJAnnArray $ toJList !(traverse toJAnnotationValue values))
 
     toJAnnotationProperty : HasIO io => Asm.AnnotationProperty -> io JAnnotationProperty
     toJAnnotationProperty (name, annValue) = do
@@ -1004,18 +1121,6 @@ getMethodSignature (MkInferredFunctionType retTy argTypes) =
         retTyDesc = getSignature retTy
     in "(" ++ (the String $ concat argDescs) ++ ")" ++ retTyDesc
 
-%foreign
-    jvm' "io/github/mmhelloworld/idrisjvm/assembler/IdrisName" "getIdrisFunctionName"
-        "String String String" "io/github/mmhelloworld/idrisjvm/runtime/IdrisList"
-jgetIdrisFunctionName : String -> String -> String -> List String
-
-export
-getIdrisFunctionName : String -> String -> String -> Jname
-getIdrisFunctionName programName moduleName idrisFunctionName =
-    case jgetIdrisFunctionName programName moduleName idrisFunctionName of
-        (className :: functionName :: _) => Jqualified className functionName
-        _ => Jqualified moduleName idrisFunctionName
-
 %inline
 metafactoryDesc : String
 metafactoryDesc =
@@ -1062,25 +1167,6 @@ prim_getCurrentThreadName : PrimIO String
 export
 getCurrentThreadName : HasIO io => io String
 getCurrentThreadName = primIO prim_getCurrentThreadName
-
-export
-getJvmClassMethodName : String -> Name -> Jname
-getJvmClassMethodName programName name =
-    let jname = jvmName name
-    in getIdrisFunctionName programName (className jname) (methodName jname)
-
-export
-createAsmStateJavaName : AsmGlobalState -> String -> IO AsmState
-createAsmStateJavaName globalState name = do
-  assembler <- getAssembler globalState name
-  newAsmState globalState assembler
-
-export
-createAsmState : AsmGlobalState -> Name -> IO AsmState
-createAsmState globalState name = do
-    programName <- AsmGlobalState.getProgramName globalState
-    let jvmClassMethodName = getJvmClassMethodName programName name
-    createAsmStateJavaName globalState (className jvmClassMethodName)
 
 %foreign jvm' "io/github/mmhelloworld/idrisjvm/runtime/Runtime" "waitForFuturesToComplete" "java/util/List" "void"
 prim_waitForFuturesToComplete : List ThreadID -> PrimIO ()
@@ -1162,11 +1248,14 @@ asmCreateMethod : Assembler -> (access: Int) -> (sourceFileName: String) -> (cla
 %foreign "jvm:.createIdrisConstructorClass(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean int void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 asmCreateIdrisConstructorClass : Assembler -> String -> Bool -> Int -> PrimIO ()
 
+%foreign "jvm:.createIdrisConstructorClassTyped(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+asmCreateIdrisConstructorClassTyped : Assembler -> String -> Bool -> JList String -> PrimIO ()
+
 %foreign "jvm:.field"
 asmField : Assembler -> Int -> (className: String) -> (fieldName: String) -> (descriptor: String) -> PrimIO ()
 
 %foreign "jvm:.frame"
-asmFrame : Assembler -> Int -> Int -> (signatures: JList String) -> Int -> (signatures: JList String) -> PrimIO ()
+asmFrame : Assembler -> Int -> Int -> (localSignatures: JList String) -> Int -> (stackSignatures: JList String) -> PrimIO ()
 
 %foreign "jvm:.localVariable"
 asmLocalVariable : Assembler -> (name: String) -> (descriptor: String) -> (signature: String) -> (startLabel: String)
@@ -1298,6 +1387,10 @@ parameters {auto state: Ref AsmState AsmState}
 
   public export
   %inline
+  createIdrisConstructorClassTyped : String -> Bool -> List String -> Core ()
+
+  public export
+  %inline
   d2i : Core ()
 
   public export
@@ -1402,7 +1495,7 @@ parameters {auto state: Ref AsmState AsmState}
 
   public export
   %inline
-  frame : FrameType -> Int -> (signatures: List String) -> Int -> (signatures: List String) -> Core ()
+  frame : FrameType -> Int -> (localSignatures: List String) -> Int -> (stackSignatures: List String) -> Core ()
 
   public export
   %inline
@@ -1825,12 +1918,11 @@ parameters {auto state: Ref AsmState AsmState}
     coreLift $
       jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.checkcast" [assembler state, desc]
 
-  classCodeStart version access className sig parent intf anns = do
+  classCodeStart version access className sig parent interfaces anns = do
     state <- get AsmState
     coreLift $ do
-      janns <- sequence $ toJAnnotation <$> anns
-      primIO $ asmClassCodeStart (assembler state) version (sum $ accessNum <$> access) className (maybeToNullable sig) parent
-            (the (JList String) $ believe_me intf) (the (JList JAnnotation) $ believe_me janns)
+      janns <- toJList <$> (traverse toJAnnotation anns)
+      primIO $ asmClassCodeStart (assembler state) version (sum $ accessNum <$> access) className (maybeToNullable sig) parent (toJList interfaces) janns
 
   createClass opts = do
     state <- getState
@@ -1840,32 +1932,30 @@ parameters {auto state: Ref AsmState AsmState}
     state <- get AsmState
     coreLift $ do
       let jaccs = sum $ accessNum <$> accs
-      janns <- sequence $ toJAnnotation <$> anns
+      janns <- toJList <$> (traverse toJAnnotation anns)
       primIO $ asmCreateField
         (assembler state) jaccs sourceFileName className fieldName desc (maybeToNullable sig)
-            (maybeToNullable (toJFieldInitialValue <$> fieldInitialValue)) (the (JList JAnnotation) $ believe_me janns)
+            (maybeToNullable (toJFieldInitialValue <$> fieldInitialValue)) (the (JList JAnnotation) $ subtyping janns)
 
   createLabel label = do
     state <- getState
-    coreLift $
-      jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createLabel" [assembler state, label]
+    coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.createLabel" [assembler state, label]
 
   createMethod accs sourceFileName className methodName desc sig exceptions anns paramAnns = do
       state <- get AsmState
-      put AsmState ({ currentMethodName := Jqualified className methodName } state)
       coreLift $ do
         let jaccs = sum $ accessNum <$> accs
-        janns <- sequence $ toJAnnotation <$> anns
-        jparamAnns <- sequence $ (\paramAnn => sequence $ toJAnnotation <$> paramAnn) <$> paramAnns
-        primIO $ asmCreateMethod
-            (assembler state) jaccs sourceFileName className methodName desc (maybeToNullable sig)
-                (the (JList String) $ believe_me $ maybeToNullable exceptions)
-                (the (JList JAnnotation) $ believe_me janns) (the (JList (JList JAnnotation)) $ believe_me jparamAnns)
+        janns <- toJList <$> (traverse toJAnnotation anns)
+        jparamAnns <- toJList <$> (traverse (\paramAnn => toJList <$> (traverse toJAnnotation paramAnn)) paramAnns)
+        primIO $ asmCreateMethod (assembler state) jaccs sourceFileName className methodName desc (maybeToNullable sig) (toJList $ maybeToNullable exceptions) janns jparamAnns
 
   createIdrisConstructorClass className isStringConstructor constructorParameterCount = do
     state <- getState
-    coreLift $ primIO $ asmCreateIdrisConstructorClass (assembler state) className isStringConstructor
-      constructorParameterCount
+    coreLift $ primIO $ asmCreateIdrisConstructorClass (assembler state) className isStringConstructor constructorParameterCount
+
+  createIdrisConstructorClassTyped className isStringConstructor fieldDescriptors = do
+    state <- getState
+    coreLift $ primIO $ asmCreateIdrisConstructorClassTyped (assembler state) className isStringConstructor (toJList fieldDescriptors)
 
   d2i = do
     state <- getState
@@ -1899,8 +1989,7 @@ parameters {auto state: Ref AsmState AsmState}
     coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.ddiv" [assembler state]
   debug message = do
     state <- getState
-    coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.debug"
-      [assembler state, message]
+    coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.debug" [assembler state, message]
   dload n = do
     state <- getState
     coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.dload" [assembler state, n]
@@ -1955,9 +2044,7 @@ parameters {auto state: Ref AsmState AsmState}
     state <- get AsmState
     coreLift $ do
       let ftypeNum = frameTypeNum frameType
-      primIO $ asmFrame
-        (assembler state) ftypeNum nLocal (the (JList String) $ believe_me localSigs) nStack
-            (the (JList String) $ believe_me stackSigs)
+      primIO $ asmFrame (assembler state) ftypeNum nLocal (toJList localSigs) nStack (toJList stackSigs)
 
   freturn = do
     state <- getState
@@ -2083,7 +2170,7 @@ parameters {auto state: Ref AsmState AsmState}
       jbsmArgsList <- sequence $ toJbsmArg <$> bsmArgs
       jhandle <- toJHandle handle
       jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.invokeDynamic"
-        [assembler state, mname, desc, jhandle, the (JList JBsmArg) $ believe_me jbsmArgsList]
+        [assembler state, mname, desc, jhandle, toJList jbsmArgsList]
 
   irem = do
     state <- getState
@@ -2173,7 +2260,7 @@ parameters {auto state: Ref AsmState AsmState}
     state <- get AsmState
     coreLift $
       primIO $ asmLookupSwitch
-        (assembler state) defaultLabel (believe_me $ forget labels) (believe_me $ forget cases)
+        (assembler state) defaultLabel (toJList $ forget labels) (toJList $ forget cases)
 
   localVariable name descriptor signature startLabel endLabel index = do
     state <- get AsmState
@@ -2242,7 +2329,7 @@ parameters {auto state: Ref AsmState AsmState}
   tableSwitch min max defaultLabel labels = do
     state <- get AsmState
     coreLift $ do
-      primIO $ asmTableSwitch (assembler state) min max defaultLabel (believe_me $ forget labels)
+      primIO $ asmTableSwitch (assembler state) min max defaultLabel (toJList $ forget labels)
 
   getState = get AsmState
   setState newState = put AsmState newState
@@ -2295,40 +2382,68 @@ newBigInteger i = do
     invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export
-getGlobalState : {auto stateRef: Ref AsmState AsmState} -> Core AsmGlobalState
-getGlobalState = pure $ globalState !getState
+findFunction : Jname -> Core (Maybe Function)
+findFunction name = coreLift $ AsmGlobalState.findFunction name
 
 export
-findFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (Maybe Function)
-findFunction name = coreLift $ AsmGlobalState.findFunction !getGlobalState name
-
-export
-getFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core Function
-getFunction name = maybe (asmCrash $ "Unknown function " ++ show name) pure!(findFunction name)
+getFunction : Jname -> Core Function
+getFunction name = maybe (asmCrash $ "Unknown function " ++ show name) pure !(findFunction name)
 
 export
 getCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Core Function
 getCurrentFunction = currentIdrisFunction <$> getState
 
 export
-getProgramName : {auto stateRef: Ref AsmState AsmState} -> Core String
-getProgramName = coreLift $ AsmGlobalState.getProgramName !getGlobalState
+getSpecialisationPlan : {auto stateRef: Ref AsmState AsmState} -> Core SpecialisationPlan
+getSpecialisationPlan = specialisationPlan <$> getState
 
 export
-getFcAndDefinition : {auto stateRef: Ref AsmState AsmState} -> String -> Core (FC, NamedDef)
-getFcAndDefinition name = coreLift $ AsmGlobalState.getFcAndDefinition !getGlobalState name
+getProgramName : Core String
+getProgramName = coreLift AsmGlobalState.getProgramName
+
+export
+getFcAndDefinition : String -> Core (FC, NamedDef)
+getFcAndDefinition name = coreLift $ AsmGlobalState.getFcAndDefinition name
 
 export
 setCurrentFunction : {auto stateRef: Ref AsmState AsmState} -> Function -> Core ()
 setCurrentFunction function = updateState $ { currentIdrisFunction := function }
+
+export
+setSpecialisationPlan : {auto stateRef: Ref AsmState AsmState} -> SpecialisationPlan -> Core ()
+setSpecialisationPlan plan = updateState $ { specialisationPlan := plan }
+
+export
+getCallSiteLog : {auto stateRef: Ref AsmState AsmState} -> Core (List (FC, Name, InferredFunctionType))
+getCallSiteLog = callSiteLog <$> getState
+
+export
+resetCallSiteLog : {auto stateRef: Ref AsmState AsmState} -> Core ()
+resetCallSiteLog = updateState $ { callSiteLog := [] }
+
+export
+getConSpecialisationPlan : {auto stateRef: Ref AsmState AsmState} -> Core ConSpecialisationPlan
+getConSpecialisationPlan = specialisedConstructorPlan <$> getState
+
+export
+setConSpecialisationPlan : {auto stateRef: Ref AsmState AsmState} -> ConSpecialisationPlan -> Core ()
+setConSpecialisationPlan plan = updateState $ { specialisedConstructorPlan := plan }
+
+export
+getConSiteLog : {auto stateRef: Ref AsmState AsmState}
+             -> Core (List (FC, Name, ConInfo, Maybe Int, List InferredType))
+getConSiteLog = conSiteLog <$> getState
+
+export
+resetConSiteLog : {auto stateRef: Ref AsmState AsmState} -> Core ()
+resetConSiteLog = updateState $ { conSiteLog := [] }
 
 getAndUpdateFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core Function
 getAndUpdateFunction f = do
     function <- getCurrentFunction
     let newFunction = f function
     setCurrentFunction newFunction
-    globalState <- getGlobalState
-    coreLift $ addFunction globalState (idrisName newFunction) newFunction
+    coreLift $ addFunction newFunction.name newFunction
     pure function
 
 export
@@ -2337,8 +2452,8 @@ updateCurrentFunction f = ignore $ getAndUpdateFunction f
 
 export
 loadFunction : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core ()
-loadFunction idrisName = do
-    function <- getFunction idrisName
+loadFunction name = do
+    function <- getFunction name
     updateState $ { currentIdrisFunction := function }
 
 export
@@ -2354,7 +2469,6 @@ getFunctionParameterTypes functionName = do
 export
 findFunctionType : {auto stateRef: Ref AsmState AsmState} -> Jname -> Core (Maybe InferredFunctionType)
 findFunctionType functionName = do
-    state <- getState
     function <- findFunction functionName
     pure $ inferredFunctionType <$> function
 
@@ -2383,31 +2497,27 @@ newDynamicVariableIndex = dynamicVariableCounter <$> (getAndUpdateFunction $ {dy
 
 export
 resetScope : {auto stateRef: Ref AsmState AsmState} -> Core ()
-resetScope = updateState $
-    {
-        scopeCounter := 0,
-        currentScopeIndex := 0
-    }
+resetScope = updateState $ { scopeCounter := 0, currentScopeIndex := 0 }
 
 fillNull : (HasIO io, Inherits list (JList a)) => Int -> list -> io ()
 fillNull index aList = do
-    let list = the (JList a) $ believe_me aList
-    size <- Collection.size {elemTy=a,obj=Collection a} $ believe_me list
+    let list = the (JList a) $ subtyping aList
+    size <- Collection.size {elemTy=a,obj=Collection a} $ subtyping list
     nulls <- JList.nCopies {a=a} (index - size) nullValue
-    ignore $ JList.addAll {a=a, obj=Collection a} list $ believe_me nulls
+    ignore $ JList.addAll {a=a, obj=Collection a} list $ subtyping nulls
 
 export
 saveScope : {auto stateRef: Ref AsmState AsmState} -> Scope -> Core ()
 saveScope scope = do
     scopes <- scopes <$> getCurrentFunction
-    size <- coreLift $ Collection.size {elemTy=Scope, obj=Collection Scope} $ believe_me scopes
+    size <- coreLift $ Collection.size {elemTy=Scope, obj=Collection Scope} $ subtyping scopes
     let scopeIndex = index scope
     coreLift $
       if scopeIndex < size
           then ignore $ JList.set scopes scopeIndex scope
           else do
               fillNull {a=Scope} scopeIndex scopes
-              JList.add scopes scopeIndex scope
+              JList.addAt scopes scopeIndex scope
 
 export
 getScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core Scope
@@ -2423,7 +2533,7 @@ addScopeChild parentScopeIndex childScopeIndex = do
 
 export
 getRootMethodName : {auto stateRef: Ref AsmState AsmState} -> Core Jname
-getRootMethodName = jvmClassMethodName <$> getCurrentFunction
+getRootMethodName = name <$> getCurrentFunction
 
 export
 newLabel : {auto stateRef: Ref AsmState AsmState} -> Core String
@@ -2462,11 +2572,11 @@ getLineNumberLabel lineNumber = do
 
 export
 getClassName : {auto stateRef: Ref AsmState AsmState} -> Core String
-getClassName = className . currentMethodName <$> getState
+getClassName = className . name <$> getCurrentFunction
 
 export
 getMethodName : {auto stateRef: Ref AsmState AsmState} -> Core String
-getMethodName = methodName . currentMethodName <$> getState
+getMethodName = methodName . name <$> getCurrentFunction
 
 export
 freshLambdaIndex : {auto stateRef: Ref AsmState AsmState} -> Core Int
@@ -2576,6 +2686,7 @@ export
 retrieveVariableIndex : {auto stateRef: Ref AsmState AsmState} -> String -> Core Int
 retrieveVariableIndex name = retrieveVariableIndexAtScope !getCurrentScopeIndex name
 
+export
 retrieveVariableTypeAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core InferredType
 retrieveVariableTypeAtScope scopeIndex name = do
     scope <- getScope scopeIndex
@@ -2675,7 +2786,7 @@ getVariableScope name = go !getCurrentScopeIndex where
             Nothing => case parentIndex scope of
                 Just parentScopeIndex => go parentScopeIndex
                 Nothing => do
-                  let functionName = idrisName !getCurrentFunction
+                  let functionName = (!getCurrentFunction).name
                   asmCrash ("Unknown variable \{name} in function \{show functionName}")
 
 export
@@ -2740,15 +2851,12 @@ mutual
       getIdrisConstructorType : Name -> InferredType
       getIdrisConstructorType name =
         if isBoolTySpec name then IBool
-        else if name == basics "List" then idrisListType
-        else if name == preludetypes "Maybe" then idrisMaybeType
         else if name == preludetypes "Nat" then inferredBigIntegerType
         else inferredObjectType
 
   parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do
     (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
-      | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++
-               show fc)
+      | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++ show fc)
     ty <- tySpec def
     pure $ Just ty
   parseJvmReferenceType (NmDelay _ _ expr) = pure $ Just !(tySpec expr)
@@ -2768,10 +2876,6 @@ mutual
   export
   tySpec : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
   tySpec (NmCon _ (UN (Basic ty)) _ _ []) = pure $ tySpecStr ty
-  tySpec (NmCon _ _ NOTHING _ []) = pure idrisMaybeType
-  tySpec (NmCon _ _ JUST _ [_]) = pure idrisMaybeType
-  tySpec (NmCon _ _ NIL _ []) = pure idrisListType
-  tySpec (NmCon _ _ CONS _ [_, _]) = pure idrisListType
   tySpec expr@(NmCon _ (NS _ (UN (Basic "Unit"))) _ _ []) = pure IVoid
   tySpec expr = do
     ty <- tryParse expr
@@ -2791,10 +2895,15 @@ asmReturn IDouble  = dreturn
 asmReturn _        = areturn
 
 export
+throwIo: Error -> IO a
+throwIo err = do
+  printLn err
+  exitWith (ExitFailure 1)
+
+export
 runAsm : AsmState -> (Ref AsmState AsmState -> Core a) -> IO a
 runAsm asmState action = coreRun (do ref <- newRef AsmState asmState
                                      put AsmState asmState
                                      action ref)
-                                 (\err: Error => do printLn err
-                                                    exitWith (ExitFailure 1))
+                                 (\err: Error => throwIo err)
                                  pure

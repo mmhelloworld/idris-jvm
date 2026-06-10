@@ -883,7 +883,19 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
 
     assembleCon : (isTailCall: Bool) -> InferredType -> FC -> Name -> (tag : Maybe Int) -> List NamedCExp -> Core ()
     assembleCon isTailCall returnType fc name tag args = do
-        argTypes <- traverse shallowExprType args
+        -- `inferExprCon` logs deeply-inferred argument types per construction
+        -- site keyed by `(fc, name)`.  Prefer that log over `shallowExprType`
+        -- so emission picks the same spec the analysis pass discovered.
+        -- Otherwise the two disagree (e.g. `MkT 100 23 4` with `100 :
+        -- Integer` cast to `Int` — deep inference sees `[int, int, int]`
+        -- and adds a spec; shallow sees `[Object, Object, Object]` and
+        -- builds the natural class) and `assembleConCaseExpr`'s typed-
+        -- accessor narrowing crashes at runtime because the natural class
+        -- is unexpectedly alive.
+        conLog <- getConSiteLog
+        argTypes <- case find (\(f, n, _, _, _) => f == fc && n == name) conLog of
+                      Just (_, _, _, _, ts) => pure ts
+                      Nothing => traverse shallowExprType args
         conPlan <- getConSpecialisationPlan
         case findMatchingConSpec name argTypes conPlan of
           Just spec => assembleConSpec isTailCall returnType tag spec args
@@ -1598,6 +1610,11 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
       do entries <- SortedMap.lookup name plan
          find (\sc => sc.specClassName == className) entries
 
+    isSingleConstructor : ConInfo -> Bool
+    isSingleConstructor RECORD = True
+    isSingleConstructor UNIT   = True
+    isSingleConstructor _      = False
+
     assembleConCaseExpr : InferredType -> Name -> ConInfo -> Int -> List Name -> NamedCExp -> Core ()
     assembleConCaseExpr returnType name conInfo idrisObjectVariableIndex args expr = do
             variableTypes <- getVariableTypes
@@ -1607,37 +1624,66 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             let naturalType@(IRef naturalClassName _ _) = getConstructorType programName name conInfo
                   | _ => asmCrash "Not a reference type for Idris constructor \{show name}"
             conPlan <- getConSpecialisationPlan
-            -- If the discriminant's known JVM class matches a spec class for
-            -- this constructor, switch to that spec's typed accessors.
+            natLive <- getNaturalConsLive
+            let entries = fromMaybe [] $ SortedMap.lookup name conPlan
+            -- Pick a spec class for the discriminant when one is statically provable:
+            --   (a) variable type is already an IRef of a spec class for this Name; or
+            --   (b) The constructor belongs to a single-constructor type
+            --       (`RECORD`/`UNIT`), `name` has exactly one spec entry, and
+            --       the natural class is dead (no construction site produced
+            --       an instance not covered by a spec).  Every runtime value
+            --       must be that spec instance, so an explicit `checkcast`
+            --       from `Object`/`IdrisObject` to the spec class is safe.
+            --
+            -- The single-constructor guard mirrors `inferConCaseExpr`'s — a
+            -- sibling constructor's slot value could otherwise leak into the
+            -- typed-accessor path at runtime, and the field's static slot
+            -- type would not match the value's real shape.
+            let uniqueSafe : Maybe SpecialisedConstructor
+                uniqueSafe = if not (isSingleConstructor conInfo)
+                              then Nothing
+                              else case entries of
+                                     [sc] => if SortedSet.contains name natLive
+                                                then Nothing
+                                                else Just sc
+                                     _    => Nothing
+            let mSpecByClass : Maybe SpecialisedConstructor
+                mSpecByClass = case idrisObjectVariableType of
+                                 IRef varClassName _ _ => findConSpecByClass name varClassName conPlan
+                                 _ => Nothing
             let mSpec : Maybe SpecialisedConstructor
-                mSpec = case idrisObjectVariableType of
-                          IRef varClassName _ _ => findConSpecByClass name varClassName conPlan
-                          _ => Nothing
+                mSpec = mSpecByClass <|> uniqueSafe
             let constructorClassName : String
                 constructorClassName = maybe naturalClassName specClassName mSpec
             let constructorType : InferredType
                 constructorType = maybe naturalType (\sc => IRef sc.specClassName Class []) mSpec
             let mSlotTypes : Maybe (List InferredType)
                 mSlotTypes = (\sc => sc.paramTypes) <$> mSpec
-            bindArg constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes 0 args
+            -- When `uniqueSafe` selected the spec, the discriminant's static type
+            -- doesn't equal `constructorType` but the cast is provably safe —
+            -- force the typed-accessor path.
+            let forceCast = isJust uniqueSafe
+            bindArg forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes 0 args
             assembleExpr True returnType expr
         where
 
-          bindArg : String -> InferredType -> Maybe (List InferredType)
+          bindArg : Bool -> String -> InferredType -> Maybe (List InferredType)
                  -> InferredType -> Map Int InferredType -> Int -> List Name -> Core ()
-          bindArg _ _ _ _ _ _ [] = pure ()
-          bindArg constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes index (var :: vars) = do
+          bindArg _ _ _ _ _ _ _ [] = pure ()
+          bindArg forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes index (var :: vars) = do
               let variableName = jvmSimpleName var
               when (used variableName expr) $ do
                 -- Only emit a direct invokevirtual on the constructor's class
                 -- when we're sure the discriminant has that exact class — i.e.
-                -- the variable's inferred type matches `constructorType`.
-                -- Otherwise fall back to IdrisObject interface dispatch: foreign
-                -- FFI methods can return runtime-defined IdrisObject impls (e.g.
-                -- Strings$CharacterUnconsResult for UnconsResult.Character)
-                -- whose class differs from the Idris-generated constructor
-                -- class the compiler would otherwise cast to.
-                let safeToCast = idrisObjectVariableType == constructorType
+                -- the variable's inferred type matches `constructorType`, or a
+                -- global analysis (`uniqueSafe` above) has proved an explicit
+                -- checkcast is sound.  Otherwise fall back to IdrisObject
+                -- interface dispatch: foreign FFI methods can return runtime-
+                -- defined IdrisObject impls (e.g. Strings$CharacterUnconsResult
+                -- for UnconsResult.Character) whose class differs from the
+                -- Idris-generated constructor class the compiler would
+                -- otherwise cast to.
+                let safeToCast = forceCast || idrisObjectVariableType == constructorType
                 let mSlotType : Maybe InferredType
                     mSlotType = do slots <- mSlotTypes
                                    case drop (cast index) slots of
@@ -1646,13 +1692,16 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                 if safeToCast
                   then case mSlotType of
                     -- Spec class with a known slot type → typed accessor.
+                    -- Slot type is set during inference (`inferConCaseExpr`
+                    -- in Optimizer.idr) so `updateScopeVariableTypes` syncs
+                    -- it into every scope's `allVariableTypes` and the
+                    -- body's `NmLocal` load uses the right instruction.
                     Just slotTy => do
                       loadVar variableTypes idrisObjectVariableType constructorType idrisObjectVariableIndex
                       invokeMethod InvokeVirtual constructorClassName
                         (specConAccessorName slotTy index)
                         ("()" ++ getJvmTypeDescriptor slotTy) False
                       variableIndex <- getVariableIndex variableName
-                      addVariableType variableName slotTy
                       storeVar slotTy slotTy variableIndex
                     -- Non-spec class → existing boxed getProperty.
                     Nothing => do
@@ -1667,7 +1716,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                     invokeMethod InvokeInterface idrisObjectClass "getProperty" "(I)Ljava/lang/Object;" True
                     variableIndex <- getVariableIndex variableName
                     storeVar inferredObjectType !(getVariableType variableName) variableIndex
-              bindArg constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes (index + 1) vars
+              bindArg forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes (index + 1) vars
 
     assembleConstructorSwitch : InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()
     assembleConstructorSwitch _ fc _ [] _ = throw $ GenericMsg fc "Empty cases"
@@ -2575,12 +2624,14 @@ preRegisterConstructorSpecs plan = traverse_ register (snd =<< SortedMap.toList 
 -- The spec has its own AsmState (so it can register a fresh Function with the
 -- spec's primitive signature) but lands in the same Java class as the original.
 assembleSpec : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
-            -> SpecialisationPlan -> ConSpecialisationPlan -> SpecialisedSignature -> Core ()
-assembleSpec plan conPlan (MkSpecialisedSig specName def specType) = do
+            -> SpecialisationPlan -> ConSpecialisationPlan -> SortedSet Name
+            -> SpecialisedSignature -> Core ()
+assembleSpec plan conPlan natLive (MkSpecialisedSig specName def specType) = do
   asmState <- coreLift $ AsmState.fromIdrisName specName
   stateRef <- newRef AsmState asmState
   setSpecialisationPlan {stateRef} plan
   setConSpecialisationPlan {stateRef} conPlan
+  setNaturalConsLive {stateRef} natLive
   inferFunctionType {stateRef} (Just specType) def
   inferDef {stateRef}
   assemble {stateRef} specName emptyFC
@@ -2589,12 +2640,14 @@ assembleNameFcStateRefs : {auto c : Ref Ctxt Defs}
                         -> {auto s : Ref Syn SyntaxInfo}
                         -> SpecialisationPlan
                         -> ConSpecialisationPlan
+                        -> SortedSet Name
                         -> SortedMap String NamedDef
                         -> LazyList (Name, FC, Ref AsmState AsmState) -> Core ()
-assembleNameFcStateRefs _ _ _ [] = pure ()
-assembleNameFcStateRefs plan conPlan defs ((name, fc, stateRef) :: rest) = do
+assembleNameFcStateRefs _ _ _ _ [] = pure ()
+assembleNameFcStateRefs plan conPlan natLive defs ((name, fc, stateRef) :: rest) = do
   setSpecialisationPlan {stateRef} plan
   setConSpecialisationPlan {stateRef} conPlan
+  setNaturalConsLive {stateRef} natLive
   -- Mirror assembleSpec for the natural method: re-run inferFunctionType +
   -- inferDef so the body is rewritten with the FINAL plan right before it's
   -- lowered to bytecode.  buildSpecialisationPlan's iteration also rewrites
@@ -2608,8 +2661,8 @@ assembleNameFcStateRefs plan conPlan defs ((name, fc, stateRef) :: rest) = do
       inferDef {stateRef}
     Nothing => pure ()
   assemble {stateRef=stateRef} name fc
-  traverse_ (assembleSpec plan conPlan) (fromMaybe [] $ SortedMap.lookup name plan)
-  assembleNameFcStateRefs plan conPlan defs rest
+  traverse_ (assembleSpec plan conPlan natLive) (fromMaybe [] $ SortedMap.lookup name plan)
+  assembleNameFcStateRefs plan conPlan natLive defs rest
 
 getNamedDefsByName : String -> LazyList (Name, FC, Ref AsmState AsmState) -> Core (SortedMap String NamedDef)
 getNamedDefsByName programName nameFcStateRefs = go SortedMap.empty nameFcStateRefs where
@@ -2660,31 +2713,84 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
       pure (inferredFunctionType <$> mFn)
 
     -- A spec parameter must be at least as specific as the corresponding
-    -- natural parameter.  v1 scope: only narrow `Object → primitive`.
-    -- Narrowing `Object → reference type` (e.g. SeqEmpty) is unsafe in
-    -- general: the call site's inferred type may match a constructor at one
-    -- site while a different caller passes a sibling constructor at runtime,
-    -- and the spec's parameter cast would fail.  Primitives can't be
-    -- subtyped, so narrowing to a primitive is sound: any value passed to a
-    -- primitive slot must already have been a primitive.
-    isAtLeastAsSpecific : InferredType -> InferredType -> Bool
-    isAtLeastAsSpecific spec natural =
+    -- natural parameter.  Two narrowings are accepted:
+    --
+    --   1. `Object → primitive` — always sound; primitives can't be subtyped.
+    --
+    --   2. `Object → IRef SpecClass` where `SpecClass` corresponds to a
+    --      constructor whose `ConInfo` is `RECORD` or `UNIT` (single-
+    --      constructor data type).  Sound because:
+    --        - At the call site, `inferExprCon` returns the spec class only
+    --          when it matched the construction's argument types, so the
+    --          runtime value is provably that spec class.
+    --        - Inside the spec body, the pattern match has only one alt
+    --          (the unique constructor), so there's no sibling-class cast
+    --          to fail.
+    --        - Field types within a single-constructor record can be
+    --          recursive in `T` itself (e.g. `data Tree a = MkT a (Tree a)`)
+    --          and the recursion stays within the same spec class.
+    --
+    -- Multi-constructor sum types (`List`, `Maybe`, `Either`) are NOT
+    -- handled by this narrowing — those need the Phase 2 TCon-family
+    -- interface hierarchy.  See the monomorphization design doc.
+    isRecordCon : ConInfo -> Bool
+    isRecordCon RECORD = True
+    isRecordCon UNIT   = True
+    isRecordCon _      = False
+
+    isRecordSpecRef : ConSpecialisationPlan -> InferredType -> Bool
+    isRecordSpecRef plan (IRef cls _ _) =
+      cls /= "java/lang/Object"
+      && cls /= idrisObjectClass
+      && any (\(_, entries) => any (\sc => sc.specClassName == cls && isRecordCon sc.conInfo) entries)
+             (SortedMap.toList plan)
+    isRecordSpecRef _ _ = False
+
+    -- Original v1 check: only `Object → primitive` is at-least-as-specific.
+    -- Used for the "pure primitive narrowing" path so that type-case
+    -- function bodies (like `strangeId : {a:Type} -> a -> a`) don't get
+    -- a spec — their bodies have inferenced bytecode for the natural Type-
+    -- discriminated branches that doesn't match a spec'd primitive slot.
+    isAtLeastAsSpecificStrict : InferredType -> InferredType -> Bool
+    isAtLeastAsSpecificStrict spec natural =
       spec == natural || (isObjectType natural && isPrimitive spec)
 
-    isUsefulRefinement : InferredFunctionType -> InferredFunctionType -> Bool
-    isUsefulRefinement spec natural =
-      length spec.parameterTypes == length natural.parameterTypes
-      && isAtLeastAsSpecific spec.returnType natural.returnType
-      && all (uncurry isAtLeastAsSpecific) (zip spec.parameterTypes natural.parameterTypes)
-      && spec /= natural
+    -- Extended check (Phase 1.1): also allow `Object → IRef RECORD` and
+    -- treat `idrisObjectType` as a no-op narrowing.  Used only when the
+    -- candidate spec narrows at least one slot to a RECORD/UNIT class —
+    -- that's the signal the spec carries a real benefit (typed-accessor
+    -- pattern matching inside the body) that justifies the extra method.
+    isAtLeastAsSpecificExtended : ConSpecialisationPlan -> InferredType -> InferredType -> Bool
+    isAtLeastAsSpecificExtended conPlan spec natural =
+      spec == natural
+      || (isObjectType natural
+          && (isPrimitive spec
+              || spec == idrisObjectType
+              || isRecordSpecRef conPlan spec))
 
-    processSite : SpecialisationPlan -> Name -> InferredFunctionType -> Core (SpecialisationPlan, Bool)
-    processSite plan callee fnType =
+    hasRecordNarrowing : ConSpecialisationPlan -> InferredFunctionType -> InferredFunctionType -> Bool
+    hasRecordNarrowing conPlan spec natural =
+      any (\(s, n) => isObjectType n && isRecordSpecRef conPlan s)
+          (zip (spec.returnType :: spec.parameterTypes)
+               (natural.returnType :: natural.parameterTypes))
+
+    isUsefulRefinement : ConSpecialisationPlan -> InferredFunctionType -> InferredFunctionType -> Bool
+    isUsefulRefinement conPlan spec natural =
+      length spec.parameterTypes == length natural.parameterTypes
+      && spec /= natural
+      && (let strict = isAtLeastAsSpecificStrict spec.returnType natural.returnType
+                       && all (uncurry isAtLeastAsSpecificStrict)
+                              (zip spec.parameterTypes natural.parameterTypes)
+              extended = hasRecordNarrowing conPlan spec natural
+                       && isAtLeastAsSpecificExtended conPlan spec.returnType natural.returnType
+                       && all (uncurry (isAtLeastAsSpecificExtended conPlan))
+                              (zip spec.parameterTypes natural.parameterTypes)
+          in strict || extended)
+
+    processSite : SpecialisationPlan -> ConSpecialisationPlan -> Name -> InferredFunctionType -> Core (SpecialisationPlan, Bool)
+    processSite plan conPlan callee fnType =
       case SortedMap.lookup (jvmSimpleName callee) defs of
-        Just def@(MkNmFun compiledParams _) =>
-          if not (hasPrimitiveType fnType)
-            then pure (plan, False)
-            else do
+        Just def@(MkNmFun compiledParams _) => do
               -- A specialised signature only earns its emission when it is
               -- strictly narrower than the callee's natural signature.  A
               -- duplicate (`spec == natural`) or a widening (`spec` has
@@ -2693,7 +2799,7 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
               -- cast at the call site.
               mNatural <- naturalType callee
               let isUseful = case mNatural of
-                    Just natural => isUsefulRefinement fnType natural
+                    Just natural => isUsefulRefinement conPlan fnType natural
                     Nothing => True
               if not isUseful
                 then pure (plan, False)
@@ -2707,11 +2813,11 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
                          in pure (updated, True)
         _ => pure (plan, False)
 
-    foldSites : SpecialisationPlan -> List (FC, Name, InferredFunctionType) -> Core (SpecialisationPlan, Bool)
-    foldSites plan [] = pure (plan, False)
-    foldSites plan ((_, callee, fnType) :: rest) = do
-      (plan',  ch)  <- processSite plan callee fnType
-      (plan'', ch') <- foldSites plan' rest
+    foldSites : SpecialisationPlan -> ConSpecialisationPlan -> List (FC, Name, InferredFunctionType) -> Core (SpecialisationPlan, Bool)
+    foldSites plan _ [] = pure (plan, False)
+    foldSites plan conPlan ((_, callee, fnType) :: rest) = do
+      (plan',  ch)  <- processSite plan conPlan callee fnType
+      (plan'', ch') <- foldSites plan' conPlan rest
       pure (plan'', ch || ch')
 
     -- A constructor spec is *useful* under the same rule as a function spec:
@@ -2720,7 +2826,7 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
     isUsefulConRefinement : List InferredType -> Bool
     isUsefulConRefinement spec =
       not (null spec)
-      && all (\t => isAtLeastAsSpecific t inferredObjectType) spec
+      && all (\t => isAtLeastAsSpecificStrict t inferredObjectType) spec
       && any isPrimitive spec
 
     processConSite : ConSpecialisationPlan
@@ -2772,17 +2878,16 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
       inferFunctionType (Just initialFunctionType) def
       inferDef
       let functionType = inferredFunctionType !getCurrentFunction
-      -- Function-spec discovery from the natural's call sites — gated on
-      -- the natural signature already carrying a primitive (see existing
-      -- comment).  Constructor-spec discovery has no such gate: a generic
-      -- function body that constructs `Cons int int` is exactly the case
-      -- we want to catch.
-      (plan1, ch1) <- the (Core (SpecialisationPlan, Bool)) $
-        if hasPrimitiveType functionType
-          then do
-            naturalSites <- getCallSiteLog {stateRef = asmStateRef}
-            foldSites plan naturalSites
-          else pure (plan, False)
+      -- Function-spec discovery from the natural's call sites.  Previously
+      -- gated on `hasPrimitiveType functionType` to avoid over-spec'ing
+      -- polymorphic functions, but with `inferExprCon` returning concrete
+      -- class IRefs (spec or natural), the call-site types now carry
+      -- enough information for `isUsefulRefinement` to filter on its own —
+      -- a refinement is "useful" only when at least one slot narrows
+      -- `Object → primitive` or `Object → IRef ConcreteClass`.  Pure
+      -- polymorphic call sites (Object→Object) are rejected there.
+      naturalSites <- getCallSiteLog {stateRef = asmStateRef}
+      (plan1, ch1) <- foldSites plan conPlan naturalSites
       naturalConSites <- getConSiteLog {stateRef = asmStateRef}
       (conPlan1, ch1c) <- foldConSites conPlan naturalConSites
       -- For each existing function spec, re-run inference with the spec's
@@ -2804,7 +2909,7 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
                 inferFunctionType {stateRef = specRef} (Just initialFunctionType) def
                 inferDef {stateRef = specRef}
                 sites <- getCallSiteLog {stateRef = specRef}
-                (p', ch') <- foldSites p sites
+                (p', ch') <- foldSites p cp sites
                 conSites <- getConSiteLog {stateRef = specRef}
                 (cp', chc') <- foldConSites cp conSites
                 pure (p', cp', ch || ch' || chc'))
@@ -2827,6 +2932,84 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
 
     iterate : Plans -> Core Plans
     iterate plans = iterate' reachable plans
+
+-- Aggregate every construction site observed across the natural and
+-- specialised bodies of all reachable functions after the spec plan has
+-- converged.  A constructor `name` is added to the returned set when at
+-- least one observed site has `paramTypes` that don't match any spec in
+-- `conPlan[name]`.  The natural class is therefore still emitted at
+-- runtime for that constructor, so `assembleConCaseExpr` must NOT narrow
+-- pattern-match discriminants of that constructor via `checkcast` to a
+-- spec class — the runtime instance could be either.
+--
+-- Conversely, when a constructor is absent from this set, every runtime
+-- instance is a spec instance and the typed-accessor path is safe.
+computeNaturalConsLive : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                     -> SortedMap String NamedDef
+                     -> SortedMap String (Ref AsmState AsmState)
+                     -> SpecialisationPlan
+                     -> ConSpecialisationPlan
+                     -> List Name -> Core (SortedSet Name)
+computeNaturalConsLive defs stateRefs plan conPlan reachable = do
+    perName <- traverse gatherFor reachable
+    pure $ SortedSet.fromList $ mapMaybe needsNatural (concat perName)
+  where
+    slotMatch : InferredType -> InferredType -> Bool
+    slotMatch spec arg =
+      if isPrimitive spec then spec == arg
+      else not (isPrimitive arg)
+
+    slotsMatch : List InferredType -> List InferredType -> Bool
+    slotsMatch xs ys =
+      length xs == length ys
+      && all (uncurry slotMatch) (zip xs ys)
+
+    needsNatural : (Name, List InferredType) -> Maybe Name
+    needsNatural (name, paramTypes) =
+      let specs = fromMaybe [] $ SortedMap.lookup name conPlan
+      in if any (\sc => slotsMatch sc.paramTypes paramTypes) specs
+         then Nothing
+         else Just name
+
+    drain : {auto stateRef : Ref AsmState AsmState} -> InferredFunctionType
+         -> NamedDef -> Core (List (Name, List InferredType))
+    drain initialFunctionType def = do
+      inferFunctionType (Just initialFunctionType) def
+      inferDef
+      log <- getConSiteLog
+      pure $ map (\(_, n, _, _, ts) => (n, ts)) log
+
+    gatherForSpec : NamedDef -> SpecialisedSignature
+                 -> Core (List (Name, List InferredType))
+    gatherForSpec def (MkSpecialisedSig specName specDef specType) = do
+      let specParams = specType.parameterTypes
+      let arity = case def of
+                    MkNmFun ps _ => length ps
+                    _ => length specParams
+      let paddedParams = if length specParams < arity
+                           then padParams arity specParams
+                           else specParams
+      let specInitial = MkInferredFunctionType specType.returnType paddedParams
+      asmState <- coreLift $ AsmState.fromIdrisName specName
+      specRef <- newRef AsmState asmState
+      setSpecialisationPlan {stateRef = specRef} plan
+      setConSpecialisationPlan {stateRef = specRef} conPlan
+      drain {stateRef = specRef} specInitial specDef
+
+    gatherFor : Name -> Core (List (Name, List InferredType))
+    gatherFor name = do
+      let nameStr = jvmSimpleName name
+      let Just asmStateRef = SortedMap.lookup nameStr stateRefs
+            | Nothing => pure []
+      let Just def = SortedMap.lookup nameStr defs
+            | Nothing => pure []
+      setSpecialisationPlan {stateRef = asmStateRef} plan
+      setConSpecialisationPlan {stateRef = asmStateRef} conPlan
+      initialFunctionType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
+      naturalSites <- drain {stateRef = asmStateRef} initialFunctionType def
+      let specs = fromMaybe [] $ SortedMap.lookup name plan
+      specSites <- traverse (gatherForSpec def) specs
+      pure $ naturalSites ++ concat specSites
 
 ||| Compile a TT expression to JVM bytecode
 compileToJvmBytecode : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> String -> String -> ClosedTerm -> Core ()
@@ -2853,10 +3036,11 @@ compileToJvmBytecode outputDirectory outputFile term = do
     let reachableSet = SortedSet.fromList reachable
     let stateRefsMap = SortedMap.fromList $ mapMaybe (\(n, _, r) => Just (jvmSimpleName n, r)) (toList nameFcStateRefs)
     (plan, conPlan) <- buildSpecialisationPlan programName namedDefsByName stateRefsMap reachable
+    natLive <- computeNaturalConsLive namedDefsByName stateRefsMap plan conPlan reachable
     preRegisterSpecs plan
     preRegisterConstructorSpecs conPlan
     let reachableNameFcStateRefs = filter (\(n, _, _) => SortedSet.contains n reachableSet) nameFcStateRefs
-    assembleNameFcStateRefs plan conPlan namedDefsByName reachableNameFcStateRefs
+    assembleNameFcStateRefs plan conPlan natLive namedDefsByName reachableNameFcStateRefs
     coreLift $ do
         exportDefs $ mapMaybe (getExport noMangleMap . fst) allDefs
         mainAsmState <- AsmState.fromIdrisName mainFunctionName

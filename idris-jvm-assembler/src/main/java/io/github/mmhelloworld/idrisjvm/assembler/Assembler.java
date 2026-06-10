@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -37,7 +38,9 @@ import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
 import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 import static org.objectweb.asm.Opcodes.AALOAD;
 import static org.objectweb.asm.Opcodes.AASTORE;
+import static org.objectweb.asm.Opcodes.ACC_ABSTRACT;
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
+import static org.objectweb.asm.Opcodes.ACC_INTERFACE;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 import static org.objectweb.asm.Opcodes.ACC_STATIC;
@@ -539,20 +542,60 @@ public final class Assembler {
     return classInitMethodVisitor;
   }
 
+  // FFI entry-point: emit a marker interface representing one type-
+  // constructor instantiation (e.g. `List$I` for `List Int`).  The
+  // interface extends `IdrisObject` so existing polymorphic callers keep
+  // working; DCon spec classes for that family will declare `implements`
+  // on this interface, and function-spec parameters can then narrow
+  // `Object → LFamilyInterface;` while staying type-safe over sibling
+  // constructors (e.g. both `Cons$I` and `Nil$I` implement `List$I`).
+  public void createIdrisTypeConstructorInterface(String interfaceName) {
+    if (!cws.containsKey(interfaceName)) {
+      ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+      cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
+        interfaceName, null, "java/lang/Object",
+        new String[]{"io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"});
+      cw.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
+      cw.visitEnd();
+      cws.put(interfaceName, cw);
+    }
+  }
+
   public void createIdrisConstructorClass(String newClassName, Object isStringConstructor,
                                           int constructorParameterCount) {
-    createIdrisConstructorClass(newClassName, intToBoolean((int) isStringConstructor), constructorParameterCount);
+    createIdrisConstructorClass(newClassName, intToBoolean((int) isStringConstructor),
+      constructorParameterCount, Collections.emptyList());
   }
 
   public void createIdrisConstructorClass(String newClassName, boolean isStringConstructor,
                                           int constructorParameterCount) {
+    createIdrisConstructorClass(newClassName, isStringConstructor, constructorParameterCount,
+      Collections.emptyList());
+  }
+
+  // FFI entry-point for the variant accepting extra TCon-family interfaces.
+  public void createIdrisConstructorClassWithIfaces(String newClassName, Object isStringConstructor,
+                                                     int constructorParameterCount,
+                                                     List<String> tconInterfaces) {
+    createIdrisConstructorClass(newClassName, intToBoolean((int) isStringConstructor),
+      constructorParameterCount, tconInterfaces);
+  }
+
+  public void createIdrisConstructorClass(String newClassName, boolean isStringConstructor,
+                                          int constructorParameterCount,
+                                          List<String> tconInterfaces) {
     if (!cws.containsKey(newClassName)) {
       ClassWriter newClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
       FieldVisitor newFieldVisitor;
       MethodVisitor newMethodVisitor;
 
+      String[] interfaces = new String[1 + tconInterfaces.size()];
+      interfaces[0] = "io/github/mmhelloworld/idrisjvm/runtime/IdrisObject";
+      for (int i = 0; i < tconInterfaces.size(); i++) {
+        interfaces[i + 1] = tconInterfaces.get(i);
+      }
       newClassWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_SUPER, newClassName, null, "java/lang/Object",
-        new String[]{"io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"});
+        interfaces);
 
       newClassWriter.visitSource(format("IdrisGenerated$%s.idr", newClassName.replaceAll("/", "\\$")), null);
 
@@ -669,7 +712,22 @@ public final class Assembler {
   // descriptors passed as a java.util.List<String>.
   public void createIdrisConstructorClassTyped(String newClassName, Object isStringConstructor,
                                                 List<String> fieldDescriptors) {
-    createIdrisConstructorClassTyped(newClassName, intToBoolean((int) isStringConstructor), fieldDescriptors);
+    createIdrisConstructorClassTyped(newClassName, intToBoolean((int) isStringConstructor),
+      fieldDescriptors, Collections.emptyList());
+  }
+
+  // FFI entry-point for the TCon-interface variant.
+  public void createIdrisConstructorClassTypedWithIfaces(String newClassName, Object isStringConstructor,
+                                                          List<String> fieldDescriptors,
+                                                          List<String> tconInterfaces) {
+    createIdrisConstructorClassTyped(newClassName, intToBoolean((int) isStringConstructor),
+      fieldDescriptors, tconInterfaces);
+  }
+
+  public void createIdrisConstructorClassTyped(String newClassName, boolean isStringConstructor,
+                                                List<String> fieldDescriptors) {
+    createIdrisConstructorClassTyped(newClassName, isStringConstructor, fieldDescriptors,
+      Collections.emptyList());
   }
 
   // Emit a specialised constructor class whose `property<N>` fields carry the
@@ -682,13 +740,19 @@ public final class Assembler {
   // throws `UnsupportedOperationException` — destructuring always uses the
   // typed accessors via the spec class's static type.
   public void createIdrisConstructorClassTyped(String newClassName, boolean isStringConstructor,
-                                                List<String> fieldDescriptors) {
+                                                List<String> fieldDescriptors,
+                                                List<String> tconInterfaces) {
     if (cws.containsKey(newClassName)) {
       return;
     }
     ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    String[] interfaces = new String[1 + tconInterfaces.size()];
+    interfaces[0] = "io/github/mmhelloworld/idrisjvm/runtime/IdrisObject";
+    for (int i = 0; i < tconInterfaces.size(); i++) {
+      interfaces[i + 1] = tconInterfaces.get(i);
+    }
     cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_SUPER, newClassName, null, "java/lang/Object",
-      new String[]{"io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"});
+      interfaces);
     cw.visitSource(format("IdrisGenerated$%s.idr", newClassName.replaceAll("/", "\\$")), null);
 
     String idDescriptor = isStringConstructor ? "Ljava/lang/String;" : "I";

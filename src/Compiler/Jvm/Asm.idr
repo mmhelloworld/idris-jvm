@@ -547,6 +547,12 @@ record AsmState where
     assembler : Assembler
     callSiteLog : List (FC, Name, InferredFunctionType)
     conSiteLog : List (FC, Name, ConInfo, Maybe Int, List InferredType)
+    -- Set of constructor Names whose natural (non-spec) class is still
+    -- emitted at runtime — i.e. at least one construction site does not
+    -- match any spec in `specialisedConstructorPlan`.  Read by
+    -- `assembleConCaseExpr` to decide whether it's safe to narrow a
+    -- pattern-match discriminant to a spec class via `checkcast`.
+    naturalConsLive : SortedSet Name
 
 namespace AsmState
   export
@@ -556,7 +562,7 @@ namespace AsmState
     scopes <- ArrayList.new {elemTy=Scope}
     lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
     let function = MkFunction name (MkInferredFunctionType IUnknown []) (subtyping scopes) 0 (NmCrash emptyFC "uninitialized function")
-    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] []
+    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] [] SortedSet.empty
 
   export
   fromIdrisName : Name -> IO AsmState
@@ -1248,8 +1254,17 @@ asmCreateMethod : Assembler -> (access: Int) -> (sourceFileName: String) -> (cla
 %foreign "jvm:.createIdrisConstructorClass(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean int void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 asmCreateIdrisConstructorClass : Assembler -> String -> Bool -> Int -> PrimIO ()
 
+%foreign "jvm:.createIdrisConstructorClass(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean int java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+asmCreateIdrisConstructorClassWithIfaces : Assembler -> String -> Bool -> Int -> JList String -> PrimIO ()
+
 %foreign "jvm:.createIdrisConstructorClassTyped(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 asmCreateIdrisConstructorClassTyped : Assembler -> String -> Bool -> JList String -> PrimIO ()
+
+%foreign "jvm:.createIdrisConstructorClassTyped(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean java/util/List java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+asmCreateIdrisConstructorClassTypedWithIfaces : Assembler -> String -> Bool -> JList String -> JList String -> PrimIO ()
+
+%foreign "jvm:.createIdrisTypeConstructorInterface(io/github/mmhelloworld/idrisjvm/assembler/Assembler String void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+asmCreateIdrisTypeConstructorInterface : Assembler -> String -> PrimIO ()
 
 %foreign "jvm:.field"
 asmField : Assembler -> Int -> (className: String) -> (fieldName: String) -> (descriptor: String) -> PrimIO ()
@@ -1387,7 +1402,19 @@ parameters {auto state: Ref AsmState AsmState}
 
   public export
   %inline
+  createIdrisConstructorClassWithIfaces : String -> Bool -> Int -> List String -> Core ()
+
+  public export
+  %inline
   createIdrisConstructorClassTyped : String -> Bool -> List String -> Core ()
+
+  public export
+  %inline
+  createIdrisConstructorClassTypedWithIfaces : String -> Bool -> List String -> List String -> Core ()
+
+  public export
+  %inline
+  createIdrisTypeConstructorInterface : String -> Core ()
 
   public export
   %inline
@@ -1953,9 +1980,21 @@ parameters {auto state: Ref AsmState AsmState}
     state <- getState
     coreLift $ primIO $ asmCreateIdrisConstructorClass (assembler state) className isStringConstructor constructorParameterCount
 
+  createIdrisConstructorClassWithIfaces className isStringConstructor constructorParameterCount tconInterfaces = do
+    state <- getState
+    coreLift $ primIO $ asmCreateIdrisConstructorClassWithIfaces (assembler state) className isStringConstructor constructorParameterCount (toJList tconInterfaces)
+
   createIdrisConstructorClassTyped className isStringConstructor fieldDescriptors = do
     state <- getState
     coreLift $ primIO $ asmCreateIdrisConstructorClassTyped (assembler state) className isStringConstructor (toJList fieldDescriptors)
+
+  createIdrisConstructorClassTypedWithIfaces className isStringConstructor fieldDescriptors tconInterfaces = do
+    state <- getState
+    coreLift $ primIO $ asmCreateIdrisConstructorClassTypedWithIfaces (assembler state) className isStringConstructor (toJList fieldDescriptors) (toJList tconInterfaces)
+
+  createIdrisTypeConstructorInterface interfaceName = do
+    state <- getState
+    coreLift $ primIO $ asmCreateIdrisTypeConstructorInterface (assembler state) interfaceName
 
   d2i = do
     state <- getState
@@ -2437,6 +2476,14 @@ getConSiteLog = conSiteLog <$> getState
 export
 resetConSiteLog : {auto stateRef: Ref AsmState AsmState} -> Core ()
 resetConSiteLog = updateState $ { conSiteLog := [] }
+
+export
+getNaturalConsLive : {auto stateRef: Ref AsmState AsmState} -> Core (SortedSet Name)
+getNaturalConsLive = naturalConsLive <$> getState
+
+export
+setNaturalConsLive : {auto stateRef: Ref AsmState AsmState} -> SortedSet Name -> Core ()
+setNaturalConsLive live = updateState $ { naturalConsLive := live }
 
 getAndUpdateFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core Function
 getAndUpdateFunction f = do

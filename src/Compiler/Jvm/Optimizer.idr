@@ -674,19 +674,19 @@ mutual
 
     inferExpr (NmConCase _ sc [] Nothing) = pure IUnknown
     inferExpr (NmConCase _ sc [] (Just def)) = do
-        inferConstructorSwitchExpr sc
+        ignore $ inferConstructorSwitchExpr sc
         inferExpr def
-    inferExpr (NmConCase _ sc [MkNConAlt _ _ _ args expr] Nothing) = do
-        inferConstructorSwitchExpr sc
-        inferConCaseExpr args expr
+    inferExpr (NmConCase _ sc [MkNConAlt name conInfo _ args expr] Nothing) = do
+        discriminantVar <- inferConstructorSwitchExpr sc
+        inferConCaseExpr discriminantVar name conInfo args expr
     inferExpr (NmConCase _ sc alts def) = do
-        inferConstructorSwitchExpr sc
+        discriminantVar <- inferConstructorSwitchExpr sc
         let hasTypeCase = any isTypeCase alts
         when hasTypeCase $ do
             createNewVariable "constructorCaseExpr" inferredStringType
             createNewVariable "hashCodePosition" IInt
         let sortedAlts = if hasTypeCase then alts else sortConCases alts
-        altTypes <- traverse inferExprConAlt sortedAlts
+        altTypes <- traverse (inferExprConAlt discriminantVar) sortedAlts
         defaultTy <- traverseOpt inferExprWithNewScope def
         pure $ combineSwitchTypes defaultTy altTypes
 
@@ -731,14 +731,23 @@ mutual
     inferExpr (NmErased fc) = pure IInt
     inferExpr (NmCrash fc msg) = pure IUnknown
 
-    inferConstructorSwitchExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core ()
+    -- Process the discriminant of an `NmConCase` and return its variable
+    -- name.  When the discriminant is a local (typically a function
+    -- parameter), the existing variable type is preserved — `addVariableType`
+    -- is a no-op for parameter-bound names, so a spec'd function's
+    -- `IRef SpecClass` parameter type survives this step and can be observed
+    -- by `inferConCaseExpr` (which uses it to seed bound-variable types
+    -- from the spec's slot types).
+    inferConstructorSwitchExpr : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core String
     inferConstructorSwitchExpr (NmLocal _ var) = do
         let idrisObjectVariable = jvmSimpleName var
         addVariableType idrisObjectVariable idrisObjectType
+        pure idrisObjectVariable
     inferConstructorSwitchExpr sc = do
         idrisObjectVariable <- generateVariable "constructorSwitchValue"
         ignore $ inferExpr sc
         addVariableType idrisObjectVariable idrisObjectType
+        pure idrisObjectVariable
 
     inferExprConstAlt : {auto stateRef: Ref AsmState AsmState} -> NamedConstAlt -> Core InferredType
     inferExprConstAlt (MkNConstAlt _ expr) = inferExprWithNewScope expr
@@ -749,21 +758,71 @@ mutual
          let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
          withInferenceScope lineStart lineEnd $ inferExpr expr
 
-    inferConCaseExpr : {auto stateRef: Ref AsmState AsmState} -> List Name -> NamedCExp -> Core InferredType
-    inferConCaseExpr args expr = do
-            traverse_ inferArg args
+    inferConCaseExpr : {auto stateRef: Ref AsmState AsmState} -> String -> Name -> ConInfo -> List Name -> NamedCExp -> Core InferredType
+    inferConCaseExpr discriminantVar name conInfo args expr = do
+            -- Two paths seed the bound variable types from a spec's slot
+            -- types here during inference (`updateScopeVariableTypes` then
+            -- propagates them into every scope's `allVariableTypes` so the
+            -- body's `NmLocal` loads use the right instruction):
+            --
+            -- (a) `findByClass`: the discriminant variable is already typed
+            --     as an `IRef SpecClass` for the constructor — typical of a
+            --     spec'd function whose param type was narrowed.  No
+            --     soundness check needed: the JVM already verified the
+            --     discriminant is that class at function entry.
+            --
+            -- (b) `uniqueSafe`: the discriminant has a general type, but
+            --     the constructor belongs to a single-constructor data type
+            --     (`RECORD`/`UNIT`), has exactly one spec entry, and the
+            --     natural class is dead.  The single-constructor guard
+            --     matters for soundness in this path: extracting a
+            --     primitive-typed field from one variant of a sum type
+            --     would otherwise let that variable flow into a slot
+            --     another caller fills with a sibling variant's field.
+            conPlan <- getConSpecialisationPlan
+            natLive <- getNaturalConsLive
+            discriminantTy <- retrieveVariableType discriminantVar
+            let entries = fromMaybe [] (SortedMap.lookup name conPlan)
+            let mByClass : Maybe (List InferredType)
+                mByClass = case discriminantTy of
+                  IRef varClass _ _ =>
+                    (\sc => sc.paramTypes) <$> find (\sc => sc.specClassName == varClass) entries
+                  _ => Nothing
+            let mUniqueSafe : Maybe (List InferredType)
+                mUniqueSafe = if not (isSingleConstructor conInfo)
+                  then Nothing
+                  else case entries of
+                    [sc] => if SortedSet.contains name natLive
+                              then Nothing
+                              else Just sc.paramTypes
+                    _ => Nothing
+            let mSlotTypes = mByClass <|> mUniqueSafe
+            traverse_ (inferArg mSlotTypes) (zip args [0 .. length args])
             inferExpr expr
         where
-            inferArg : Name -> Core ()
-            inferArg var =
-                let variableName = jvmSimpleName var
-                in when (used variableName expr) $ createVariable variableName
+            isSingleConstructor : ConInfo -> Bool
+            isSingleConstructor RECORD = True
+            isSingleConstructor UNIT   = True
+            isSingleConstructor _      = False
 
-    inferExprConAlt : {auto stateRef: Ref AsmState AsmState} -> NamedConAlt -> Core InferredType
-    inferExprConAlt (MkNConAlt _ _ _ args expr) = do
+            inferArg : Maybe (List InferredType) -> (Name, Nat) -> Core ()
+            inferArg mSlotTypes (var, index) =
+                let variableName = jvmSimpleName var
+                in when (used variableName expr) $ do
+                     createVariable variableName
+                     case mSlotTypes of
+                       Just slots => case drop index slots of
+                                       (slotTy :: _) =>
+                                         when (isPrimitive slotTy) $
+                                           addVariableType variableName slotTy
+                                       [] => pure ()
+                       Nothing => pure ()
+
+    inferExprConAlt : {auto stateRef: Ref AsmState AsmState} -> String -> NamedConAlt -> Core InferredType
+    inferExprConAlt discriminantVar (MkNConAlt name conInfo _ args expr) = do
       let fc = getFC expr
       let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
-      withInferenceScope lineStart lineEnd $ inferConCaseExpr args expr
+      withInferenceScope lineStart lineEnd $ inferConCaseExpr discriminantVar name conInfo args expr
 
     inferBinaryOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> NamedCExp -> Core InferredType
     inferBinaryOp ty x y = do
@@ -990,24 +1049,49 @@ mutual
     inferExprCon : {auto stateRef: Ref AsmState AsmState} -> FC -> Name -> ConInfo -> Maybe Int -> List NamedCExp -> Core InferredType
     inferExprCon fc name conInfo tag args = do
       inferredArgTypes <- traverse inferExpr args
-      -- Log the constructor site so buildSpecialisationPlan can discover a
-      -- spec class for it.  Skip when no slot is primitive: an all-Object
-      -- (or all-ref) spec would be identical to the natural class and the
-      -- refinement guard would reject it anyway, but skipping here avoids
-      -- log noise.
-      when (any isPrimitive inferredArgTypes) $
-        updateState { conSiteLog $= ((fc, name, conInfo, tag, inferredArgTypes) :: ) }
-      -- The natural class returned by `getConstructorType` (e.g.
-      -- `M_TTImp/M_Unelab/NoSugar`) is unsafe to propagate as the inferred
-      -- type: every spec class is a sibling — not a subclass — of the
-      -- natural, and when every construction site is specialised the natural
-      -- class is never emitted.  Letting the natural name escape into local
-      -- variable types, lambda parameter descriptors, or invokedynamic
-      -- signatures causes JVM verification to fail (NoClassDefFoundError on
-      -- the natural class) or a runtime ClassCastException when the spec
-      -- instance is cast to the natural.  Erase to `IdrisObject` (the
-      -- interface both natural and spec implement) for every conInfo.
-      pure idrisObjectType
+      -- Normalize reference-typed slots to `inferredObjectType` before
+      -- logging: `mkConSpecClassName` collapses every ref slot to "L", so
+      -- two sites that differ only in their ref classes (e.g.
+      -- `[int, IRef CONS]` vs `[int, IRef CONS$I$L]`) would yield the same
+      -- spec class name but conflicting per-iteration `paramTypes`.  That
+      -- breaks `preRegisterConstructorSpecs` (which builds the class
+      -- descriptor from the first-seen paramTypes) and triggers a
+      -- VerifyError when a later caller pushes the spec instance into a
+      -- slot typed against the older descriptor.  Normalizing makes the
+      -- spec's paramTypes stable across iterations.
+      let normalizedArgTypes = map normalizeRef inferredArgTypes
+      updateState { conSiteLog $= ((fc, name, conInfo, tag, normalizedArgTypes) :: ) }
+      -- Return the IRef of the JVM class that `assembleCon` will actually
+      -- emit at this site.  This is what drives function-spec discovery:
+      -- a caller of `sumNumT (MkT 6 7 8)` should see `IRef MkT$I$I$I` as
+      -- the arg type so a `sumNumT$sp(_, MkT$I$I$I)` variant can be
+      -- registered.  Only return a class IRef when a spec matches (so the
+      -- class is guaranteed live).  When no spec matches we fall back to
+      -- `idrisObjectType` rather than the natural class IRef — the natural
+      -- class may not be emitted (every other site might be specialised)
+      -- and leaking its name into call-site types would cause
+      -- NoClassDefFoundError on classes that don't exist at runtime.
+      programName <- getProgramName
+      conPlan <- getConSpecialisationPlan
+      pure $ case lookupConSpec name normalizedArgTypes conPlan of
+        Just spec => IRef spec.specClassName Class []
+        Nothing => idrisObjectType
+      where
+        normalizeRef : InferredType -> InferredType
+        normalizeRef ty = if isPrimitive ty then ty else inferredObjectType
+
+        slotMatch : InferredType -> InferredType -> Bool
+        slotMatch spec arg =
+          if isPrimitive spec then spec == arg
+          else not (isPrimitive arg)
+
+        lookupConSpec : Name -> List InferredType -> ConSpecialisationPlan
+                     -> Maybe SpecialisedConstructor
+        lookupConSpec n argTypes plan = do
+          entries <- SortedMap.lookup n plan
+          find (\sc => length sc.paramTypes == length argTypes
+                       && all (uncurry slotMatch) (zip sc.paramTypes argTypes))
+               entries
 
     inferExprCast : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> Core InferredType
     inferExprCast targetType expr = do
@@ -1218,6 +1302,35 @@ namespace TermType
     Just termJvmType <- getTermJvmType name
       | Nothing => coreLift $ printLn $ "Missing JVM type for " ++ nameString
     coreLift $ printLn $ "\{nameString}: \{show termJvmType}"
+
+  -- Walk the binders of a DCon's type term to its result type, then return
+  -- the head `Ref` — that's the parent type constructor.  Returns `Nothing`
+  -- for non-DCon names or when the type is missing/unusual (e.g. erased).
+  export
+  findTConForDCon : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                  -> Name -> Core (Maybe Name)
+  findTConForDCon dconName = do
+      Just term <- getTypeTerm dconName
+        | Nothing => pure Nothing
+      pure $ extractTCon term
+    where
+      extractTCon : {vars : _} -> Term vars -> Maybe Name
+      extractTCon (Bind _ _ (Pi _ _ _ _) sc) = extractTCon sc
+      extractTCon term =
+        let (fn, _) = getFnArgs term
+        in case fn of
+          Ref _ _ tyName => Just tyName
+          _ => Nothing
+
+  -- Look up all data constructors of a type constructor.  Returns the
+  -- empty list when the name isn't a TCon or has no recorded datacons.
+  export
+  findDConsForTCon : {auto c : Ref Ctxt Defs} -> Name -> Core (List Name)
+  findDConsForTCon tconName = do
+      defs <- get Ctxt
+      case !(lookupDefExact tconName (gamma defs)) of
+        Just (TCon _ _ _ _ _ (Just dcons) _) => pure dcons
+        _ => pure []
 
 optimizeTailRecursion : String -> (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
 optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =

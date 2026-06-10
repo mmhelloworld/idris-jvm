@@ -405,10 +405,58 @@ The runtime output `42 / 123 / 81` is also checked.
 
 ---
 
-## 11. Future work (v2 and beyond)
+## 11. Typed-accessor pattern matching (v1.1)
+
+### Problem
+
+A constructor spec class (e.g. `MkT$I$I$I` from `data Triple a b c = MkT a b c` used as `Triple Int Int Int`) has typed primitive fields and typed accessors (`getInt0()I`, …).  But the pattern-match site that consumes the constructor was still emitting the boxed `IdrisObject.getProperty(I)Object` interface dispatch — followed by `Conversion.toInt` to unbox each field.  Every spec construction's runtime benefit was undone the moment the value was destructured.
+
+```java
+// Before
+public static int sumT(Object arg$0) {
+    Object e$3 = ((IdrisObject)arg$0).getProperty(0);
+    Object e$4 = ((IdrisObject)arg$0).getProperty(1);
+    Object e$5 = ((IdrisObject)arg$0).getProperty(2);
+    return Conversion.toInt(e$3) + Conversion.toInt(e$4) + Conversion.toInt(e$5);
+}
+
+// After
+public static int sumT(Object arg$0) {
+    int e$3 = ((MkT$I$I$I)arg$0).getInt0();
+    int e$4 = ((MkT$I$I$I)arg$0).getInt1();
+    int e$5 = ((MkT$I$I$I)arg$0).getInt2();
+    return e$3 + e$4 + e$5;
+}
+```
+
+### The `naturalConsLive` analysis
+
+`assembleConCaseExpr` can only narrow a pattern-match discriminant to a spec class via `checkcast` when every runtime value reaching the pattern is provably an instance of that spec.  The conservative sufficient condition is: the constructor `name` has *exactly one* spec entry in `conPlan`, AND no construction site for `name` emits the natural class (so every instance must be that spec class).
+
+`computeNaturalConsLive` (in `Compiler.Jvm.Codegen`) runs after `buildSpecialisationPlan` converges and aggregates `conSiteLog` across every reachable function (natural + each spec).  A `Name` is flagged "natural-live" when any observed site's `paramTypes` doesn't match any spec — `assembleCon` will emit the natural class for that site, so the natural class is live in the classloader and `assembleConCaseExpr` must not assume otherwise.
+
+The result is a `SortedSet Name` threaded through `assembleNameFcStateRefs` and `assembleSpec` via a new `naturalConsLive` field on `AsmState`.
+
+### The single-constructor (`RECORD`/`UNIT`) guard
+
+`uniqueSafe` only fires when the constructor's `ConInfo` is `RECORD` (single-constructor data type — set by `calcRecord` in `TTImp/ProcessData.idr`) or `UNIT`.  This is critical for soundness: extracting a typed-primitive field from one variant of a sum type (e.g., `Cons head tail`) lets that variable's static type be a primitive, but a *sibling* variant's field can hold any reference at runtime.  If the resulting primitive-typed variable then flows into a construction site for the same outer constructor, the upstream call-site logging records `paramTypes` containing primitives where there should be references, and `processConSite` builds an inconsistent spec class.  The single-constructor guard prevents that flow: pattern-matching `MkT` (the only constructor of `Triple`) is safe; pattern-matching `Cons` is not.
+
+### Construction-site type alignment
+
+`assembleCon`'s emission and `inferExprCon`'s logging used to disagree on `paramTypes` — emission relied on `shallowExprType` (which falls back to `Object` for anything beyond literals), while inference performed deep `inferExpr`.  When the two disagreed, `naturalConsLive` would say a constructor's natural class was dead (per inference) but `assembleCon` would actually build it (per shallow), leaving the typed-accessor narrowing unsafe.  `assembleCon` now reads the deeply-inferred `paramTypes` from `conSiteLog` by `(fc, name)`, keeping the two passes consistent.
+
+`inferExprCon` also normalises every reference-typed slot in its log entry to `inferredObjectType` (the natural-class slot signature).  Without this, two sites with the same primitive head but different reference-class tails — `[int, IRef CONS]` and `[int, IRef CONS$I$L]` — would both collapse to the spec name `CONS$I$L` (via `mkConSpecClassName`'s "L" for any ref) but generate conflicting per-iteration `paramTypes`.  `preRegisterConstructorSpecs` would freeze the first-seen descriptor and a later caller would push a sibling spec instance into the resulting slot, triggering a `VerifyError`.
+
+### What the v1 typed-accessor path does NOT cover
+
+The polymorphic-dictionary pattern, e.g. `Num a => Triple a a a -> a`, still uses boxed `getProperty`.  The natural class IS live (the `Integer` instantiation builds it), so `uniqueSafe` correctly refuses to narrow.  Fixing this requires a strictly stronger mechanism — either function-spec ref-type narrowing (which would let `sumNumT$sp(_, MkT$I$I$I)` route the `Int` call to a body that knows its discriminant type) or per-site `instanceof` dispatch.  Neither lands in v1; see §12.
+
+---
+
+## 12. Future work (v2 and beyond)
 
 - **Higher-order specialisation.** Generate typed callback interfaces (e.g. `IntFunction<R>`) and a `map$sp` that takes one, so the inner `apply` is direct on a primitive.
-- **Reference-type narrowing.** Allow specs to refine `Object` to specific reference types (e.g. `String`) when a hot path uses a single type — eliminates the cast in the original body.
+- **Reference-type narrowing for function specs.** Allow function specs to refine `Object → IRef SpecClass` so polymorphic-dictionary callers (`sumNumT (MkT 6 7 8) : Int`) get routed to a spec body whose discriminant is statically known.  Sound for single-constructor types but unsafe for inductive sum types like `List`: a spec param `IRef CONS$I$L` would match Cons but the body extracts a tail typed `Object` that can hold a sibling `Nil` at runtime, and the function's own `$idrisTailRec` loop would re-cast it to `IRef CONS$I$L` and crash.  Needs a per-constructor safety check (single-constructor `ConInfo`) plus a "no recursive arg" analysis on the spec's body, or — equivalently — per-site `instanceof` dispatch at the pattern-match site instead of a function-level spec.
 - **Multi-class spec placement.** Spec currently shares the natural method's class; consider moving very-hot specs to a sibling class to keep the main class size bounded.
 - **Benchmarks.** Add a numeric microbenchmark (sieve, matrix mul) and measure allocation rate before/after with JFR or async-profiler.
 - **Configurable spec budget.** A flag to cap the number of specs per function or per class for users who want predictable compile times over peak runtime.

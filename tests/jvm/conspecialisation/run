@@ -49,12 +49,21 @@ else
   echo "Construction: STILL USES NATURAL"
 fi
 
-# 5. Bootstrap-compat smoke test: IdrisList$Cons still ships.
+# 5. sumT consumes the spec via typed accessors (no boxed getProperty).
+if echo "$main_dis" | grep -q 'getProperty'; then
+  echo "sumT pattern match: STILL BOXED"
+elif echo "$main_dis" | grep -qE 'MkT\$I\$I\$I\.getInt[012]:\(\)I'; then
+  echo "sumT pattern match: typed accessors (getInt0/1/2)"
+else
+  echo "sumT pattern match: UNEXPECTED SHAPE"
+fi
+
+# 6. Bootstrap-compat smoke test: IdrisList$Cons still ships.
 if find build/exec/conspec_app -name 'IdrisList$Cons.class' -print -quit 2>/dev/null | grep -q .; then
   echo "IdrisList\$Cons still present: OK"
 else
   echo "IdrisList\$Cons MISSING (broke bootstrap compat)"
 fi
 
-# 6. Runtime output.
+# 7. Runtime output.
 ./build/exec/conspec${IDRIS_EXEC_EXT}

@@ -3,6 +3,7 @@ Spec fields: TYPED
 Spec <init>: (IIII)V
 Typed accessors: getInt0 + getInt1 + getInt2
 Construction: spec ctor, primitive args
+sumT pattern match: typed accessors (getInt0/1/2)
 IdrisList$Cons still present: OK
 21
 127

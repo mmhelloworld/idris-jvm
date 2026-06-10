@@ -1,0 +1,12 @@
+Spec class Node$I$L$L: PRESENT
+Node fields: int + recursive Tree$F slots
+Typed accessors: getInt0 + getRef1/getRef2 (Tree$F)
+Family interface Tree$F: PRESENT
+Leaf implements Tree$F: OK
+sumLeft$sp(int, Tree$F) -> int: PRESENT
+sumLeft$sp Node alt: family checkcast + typed getRef1
+sumLeft$sp tail-rec: no Tree$F checkcast
+build construction: checkcast Tree$F before Node ctor
+IdrisList$Cons still present: OK
+11
+5050

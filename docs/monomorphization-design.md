@@ -453,10 +453,100 @@ The polymorphic-dictionary pattern, e.g. `Num a => Triple a a a -> a`, still use
 
 ---
 
-## 12. Future work (v2 and beyond)
+## 12. Ref-type narrowing in function specs (v1.1 + v1.2)
+
+### v1.1: single-constructor narrowing (RECORD/UNIT)
+
+`isAtLeastAsSpecific` accepts `Object → IRef SpecClass` when `SpecClass` is the DCon spec class of a constructor whose `ConInfo` is `RECORD` or `UNIT`.  Sound without a TCon class because there are no sibling constructors: the spec's pattern match has only one alt, and at runtime the caller can only have constructed the spec class (or the natural class, which is statically distinguished by the discriminant variable type).
+
+Triggers for `sumNumT (MkT 6 7 8) : Int` and produces `sumNumT$sp(IdrisObject, MkT$I$I$I) → int`.  Inside the spec, the pattern match's discriminant is statically `MkT$I$I$I`, so `findConSpecByClass` already activates the typed-accessor path; the spec returns an int directly.
+
+Function-spec discovery is gated to skip pure primitive narrowings without a record-class narrowing on at least one slot — that avoids triggering spec creation for type-case bodies (`strangeId : {a:Type} → a → a`) where the spec's body is identical to the natural's but emits bytecode that's only valid for the natural slot types.
+
+### v1.2: TCon-family interfaces for sum types
+
+For inductive sum types like `List`, `Maybe`, `Either`, the v1.1 narrowing isn't sound — a `Cons$I$L`-typed parameter would refuse `Nil` at runtime, and recursive calls would re-cast the extracted tail to the spec class even when it's a sibling.  v1.2 lifts the narrowing to a JVM-class hierarchy:
+
+```
+       IdrisObject  (interface, runtime)
+            ▲
+            │ implements
+       List$I$L     (interface, marker per type instantiation)
+            ▲
+            │ implements
+   ┌────────┴────────┐
+   │                 │
+Cons$I$L           NIL
+(spec class,      (natural,
+typed fields)      participates
+                   in family via
+                   added `implements`)
+```
+
+- **TCon-family interface emission** (`createIdrisTypeConstructorInterface`).  One marker interface per spec'd type instantiation: `List$I$L` (List of `int`-headed Cons), `Maybe$I` (Maybe of `Int`-bearing Just), etc.  The interface extends `IdrisObject` so existing polymorphic callers keep working.
+
+- **DCon spec classes `implements TCon$<sig>`** (`createIdrisConstructorClassTypedWithIfaces`).  `Cons$I$L` declares `implements List$I$L`; `JUST$I` declares `implements Maybe$I`.  The JVM type system enforces that every typed-accessor instance is a member of the family at runtime.
+
+- **Sibling natural classes also `implements`** (`createIdrisConstructorClassWithIfaces`).  When `Cons$I$L` triggers emission of `List$I$L`, the natural `NIL` (which has no fields and never earns its own spec class) is taught to `implement List$I$L` via `computeNaturalToTConIfaces`.  Same for `NOTHING` joining `Maybe$I`, `ZERO` joining `Nat$…`.  The map is keyed by family: well-known `ConInfo` shapes share a synthetic key (`CONS`/`NIL` → `List`, `JUST`/`NOTHING` → `Maybe`, `ZERO`/`SUCC` → `Nat`), and ordinary DCons (plain `DATACON`s like `Left`/`Right`) are keyed by their parent TCon resolved via `findTConForDCon` — mirroring both discovery paths of `deriveTConClassName`. A natural class can implement multiple instantiations of its family (e.g. `NIL implements List$I$L, List$L$L, List$C$L` if all three appear in the program). Matching only the synthetic shapes here was a soundness bug: `deriveTConClassName` created `Either$I` for a `Right$I` spec, but natural `Right` was never taught to implement it, and the self-hosted compiler crashed with `Right cannot be cast to Either$I` while installing the prelude.
+
+- **`inferExprCon` returns the family interface** at construction sites that match a spec.  `Cons 5 acc` (with `5 : Int`) yields `IRef List$I$L` instead of `IRef Cons$I$L`, so a downstream call site logs the family type — that lets `rewriteSpecCalls` route both spec-class instances and natural-class siblings through the same `…$sp(…, List$I$L, …)` variant.
+
+- **`isAtLeastAsSpecific` accepts the family-interface narrowing** alongside primitives and record DCon classes; `isUsefulRefinement` requires at least one slot to narrow to a record or TCon family interface before approving the spec.
+
+### Construction sites NOT typed as the family
+
+`inferExprCon` does *not* return the family interface for siblings that lack a matching spec (e.g. `Nil` — no slots, no useful refinement, no spec entry).  Picking one canonical family for such a site (the first `List$I$L` encountered) would falsely commit the caller to that instantiation — Char lists then route to Int-list specs and `$idrisTailRec` reassignments fail with `CONS$C$L cannot be cast to List$I$L`.  Instead the sibling stays `idrisObjectType` at the call site, and the natural class continues to `implement` every active family — which is what keeps a `Cons$I$L`-spec body's reassigned tail valid when the runtime value is `Nil`.
+
+### v1.3: Pattern-match dispatch via the TCon interface
+
+Inside a `sumO$sp(Maybe$I)` body, the alt for `Just` now `checkcast`s the discriminant to `JUST$I` and uses the typed accessor, exactly as Phase 1's `uniqueSafe` does for records.  `assembleConCaseExpr` gained a third spec-selection candidate, `mSpecByFamily` (`mSpec = mSpecByClass <|> mSpecByFamily <|> uniqueSafe`): when the discriminant variable's static type is an `IRef` of a family-instantiation interface, `findUniqueFamilyMember` (Asm.idr, shared with the inference mirror) selects the alt constructor's spec — requiring the candidate to be **unique** among the constructor's entries (distinct slot shapes can share an instantiation, `A : a -> a -> T a` observed `[I,L]`/`[L,I]` are both `T$F$I`, and under-determined sibling shapes implement every instantiation — see v1.4).  The alt-local `checkcast` is sound — **provided the natural class is dead**.  The guard is the same `naturalConsLive` check `uniqueSafe` uses, and it is load-bearing: live natural siblings `implements` every active family instantiation, so a `Maybe$I`-typed value can hold a *natural* `Just` at runtime, and a `checkcast JUST$I` would throw.  `forceCast` includes the family case (the interface type never equals the spec-class type, and `loadVar` emits the interface→class cast via `asmCast`).  `inferConCaseExpr` mirrors the candidate (`mByFamily`) so inference-seeded bound-variable types agree with emission — without the mirror, emission's `istore` of `getInt0()` against an inference-typed `Object` variable is a VerifyError.
+
+Because the result of `computeNaturalConsLive` now feeds back into how inference types pattern-match alts in sum types (not just records), the natural-liveness computation iterates to a fixpoint: each pass drains inference with the previous candidate set installed on every state ref, accumulating results by **union** until stable.  Union rather than replacement matters both for termination and conservatism — the step function is not monotone (turning narrowing off can flip a primitive slot back to Object and accidentally satisfy a ref-slot spec match a previous pass rejected).
+
+Covered by `tests/jvm/confamilydispatch` (both family-discovery paths: an ordinary-DATACON sum `Shape` via `findTConForDCon`, and the synthetic Maybe shape via the intrinsic `_builtin/JUST`).
+
+### v2 / Phase 2d: Recursive slot types (ordinary DATACONs)
+
+`SpecialisedConstructor` carries a second slot list, `fieldTypes`, alongside `paramTypes`:
+
+- `paramTypes` stays ref-normalized (every reference slot is Object) and keeps driving **naming, dedup, and site matching** (`mkConSpecClassName`, `processConSite`'s dedup, `findMatchingConSpec`, `lookupConSpec`, `computeNaturalConsLive`) — the frozen-descriptor stability story of §11 is unchanged.
+- `fieldTypes` drives the **emitted class shape**: field descriptors and the `<init>` descriptor (`preRegisterConstructorSpecs`), construction argument casts (`assembleConSpec` — `asmCast` emits the Object→family-interface `checkcast` for refined slots at construction), typed-accessor descriptors and bound-variable types (`bindArg`), and the inference mirror (`inferConCaseExpr` projects `fieldTypes`; `inferArg` seeds refined ref slots, not just primitives).  It is a pure function of `(paramTypes, tconClassName, Ctxt)` — same length, identical at primitive slots — so the frozen descriptor stays stable across plan iterations.
+
+A slot is refined to the family interface when `findRecursiveConSlots` proves it RECURSIVE: the DCon's argument type is the parent TCon applied to **exactly the return type's spine** of telescope variables (`Node`'s `Tree` slots; `data T a = MkT a (T Int)` must NOT refine — its occurrence is a different instantiation).  Locals are compared by telescope binder position, erased binders are skipped (to align with post-erasure `NmCon` argument lists) but still count toward binder depth, and any unusual shape (missing type, non-`Ref` head, non-`Local` spine — e.g. indexed types) conservatively refuses.
+
+One hard gate:
+
+- **Synthetic shapes are never refined.**  `tryIntrinsic` (Compiler.Opts.Constructor) rewrites every CONS/NIL/JUST/NOTHING constructor to a shared intrinsic Name (`_builtin/CONS`), so one spec class serves every source type of that shape — and the shape doesn't guarantee recursion: `calcListy` (TTImp.ProcessData) assigns CONS to ANY 2-unerased-arg constructor, *explicitly including non-recursive pairs*.  Typing `CONS$I$L`'s second slot as `List$I$L` would checkcast-crash the first `(5, "five")` tuple.  This is why the original "make `Cons$I$L.property1 : List$I$L`" formulation of this item is unachievable under the intrinsic-sharing scheme — prelude list cells ARE `_builtin/CONS` instances shared with pairs.
+
+(A second gate from the original v2 landing — "every other constructor of the TCon must be nullary" — was an artifact of the DCon-slot-suffix interface naming and is superseded by v1.4's instantiation-keyed interfaces below: `tconClassName /= ""` now implies every well-typed member of the slot's instantiation implements the slot's interface.)
+
+Net effect on the motivating loop: in a `sumLeft$sp(int, Tree$F)` body, `getRef1()` returns `Tree$F` and the `$idrisTailRec` reassignment of the family-typed parameter is cast-free; the single `checkcast Tree$F` moves to construction sites whose argument is statically untyped.  Covered by `tests/jvm/conrecursiveslots`.
+
+### v1.4 / Phase 2e: Family interfaces keyed by TCon instantiation
+
+The original family naming derived the interface suffix from the **DCon slot signature** (substr of `specClassName`), conflating "which constructor shape" with "which type instantiation": `data Run = Done Int | Step Int Run` produced *disjoint* `Run$I` and `Run$I$L`, and a function spec narrowed to `Run$I$L` crashed with `Done$I cannot be cast to Run$I$L` when tail recursion reached the sibling.  For a parameterless TCon there is exactly one instantiation — one interface — and suffixes are only needed for parameterized TCons where primitive substitutions create genuinely different instantiations.
+
+For **ordinary DATACONs**, `deriveTConFamily` (replacing `deriveTConClassName`) now keys the interface by the parent TCon's type-argument instantiation:
+
+- `<TConNatural>$F` plus one char per type parameter: `Run$F`, `Tree$F` (no params), `T$F$I` (`T Int`).  All data-carrying siblings of one instantiation share the interface (`Done$I` and `Step$I$L` both implement `Run$F`), so family-typed tail recursion across siblings is sound, and one function spec per instantiation covers every alt with typed dispatch.
+- The **`$F` marker** is required: TCon Names get natural *classes* at runtime (type-case programs construct TCon values via `assembleCon` with `tag = Nothing`), and a bare `Tree` interface would collide.  It also fixes a latent collision for a DCon named like its TCon (`data Run = Run Int | Stop`: interface `Run$I` vs class `Run$I`).
+- **Param chars** come from `findConSlotRoles` (Optimizer): each non-erased DCon slot is `SlotRecursive`, `SlotBare ks` (a bare telescope variable occupying return-spine positions `ks` — a list, since GADT-style `MkD : a -> D a a` repeats variables), or `SlotOther`.  A parameter's char is taken only from a **primitive** observation at one of its bare slots (an Object observation of a bare-`a` slot does not pin `a`; conflicting primitive observations — believe_me — refuse).
+- **Eligibility** (pure in Ctxt, so stable across plan iterations): every DCon of the TCon must walk (all-Local return spine — a nullary `VNil : V 0` of an indexed TCon disqualifies the family), spine lengths must agree, and every non-nullary DCon must have a bare non-erased slot for every parameter position.  Otherwise NO DCon of the TCon gets a family — a data-carrying sibling that could never determine its instantiation (`data E a b = L a | R b`) would otherwise be stranded outside every instantiation interface.
+- **Under-determined specs** (eligible TCon, but this spec's observations don't pin every param — e.g. `A : a -> Int -> T a` observed `[L, I]`): `tconClassName = ""` (lone class for routing; `inferExprCon` doesn't family-type its sites) but the new `tconFamilyBase` field records the family, and `preRegisterConstructorSpecs` (now two passes: all interfaces, then all classes) makes the class `implements` **every active instantiation** of the base — such a cell is a semantic member of *some* instantiation and must pass that instantiation's checkcasts (Phase-2d construction sites, `$idrisTailRec` reassignment).
+- **Dispatch uniqueness is checked** (`findUniqueFamilyMember`, shared by `mSpecByFamily` and `mByFamily`): distinct slot shapes of one DCon can share an instantiation (`[I,L]`/`[L,I]` → `T$F$I`), and under-determined shapes inhabit all of them — checkcast/typed accessors only fire for a unique candidate.
+
+**Synthetic shapes keep the slot-suffix scheme** (`Maybe$I` stays `Maybe$I`): the intrinsic `_builtin/*` Names have no Ctxt telescope to derive parameters from, and each synthetic family has exactly one data-carrying shape, so its slot suffix *is* the instantiation key.
+
+Covered by `tests/jvm/conmixedcarrier` (the previously-crashing Run program: single `sumRun$sp(int, Run$F)`, typed dispatch in both alts, `Run$F`-typed recursive slot, cast-free tail recursion), plus the updated `confamilydispatch` (single `area$sp(Shape$F)` covering Circle and Rect alts) and `conrecursiveslots` (`Tree$F`).
+
+### What's still future work (from v1.2–v1.4)
+
+- **Recursive slots for synthetic shapes** would require splitting the intrinsic constructor classes per source type (losing the cheap-pair sharing) or proving per-instance recursion at construction sites; both are out of scope here.
+- **Nested-parameter instantiation witnesses.**  Only bare-param slots determine instantiation chars; a TCon whose parameter appears solely under another constructor (`data T a = A (List a) Int | ...`) fails eligibility.  Deriving witnesses through nested positions is possible but needs care with rep-level vs semantic instantiation.
+
+## 13. Future work (v3 and beyond)
 
 - **Higher-order specialisation.** Generate typed callback interfaces (e.g. `IntFunction<R>`) and a `map$sp` that takes one, so the inner `apply` is direct on a primitive.
-- **Reference-type narrowing for function specs.** Allow function specs to refine `Object → IRef SpecClass` so polymorphic-dictionary callers (`sumNumT (MkT 6 7 8) : Int`) get routed to a spec body whose discriminant is statically known.  Sound for single-constructor types but unsafe for inductive sum types like `List`: a spec param `IRef CONS$I$L` would match Cons but the body extracts a tail typed `Object` that can hold a sibling `Nil` at runtime, and the function's own `$idrisTailRec` loop would re-cast it to `IRef CONS$I$L` and crash.  Needs a per-constructor safety check (single-constructor `ConInfo`) plus a "no recursive arg" analysis on the spec's body, or — equivalently — per-site `instanceof` dispatch at the pattern-match site instead of a function-level spec.
 - **Multi-class spec placement.** Spec currently shares the natural method's class; consider moving very-hot specs to a sibling class to keep the main class size bounded.
 - **Benchmarks.** Add a numeric microbenchmark (sieve, matrix mul) and measure allocation rate before/after with JFR or async-profiler.
 - **Configurable spec budget.** A flag to cap the number of specs per function or per class for users who want predictable compile times over peak runtime.

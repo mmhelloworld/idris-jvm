@@ -1,0 +1,85 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o mixcarrier Spec.idr > /dev/null 2>&1
+
+app=build/exec/mixcarrier_app
+
+done_spec=$(find "$app" -name 'Done$I.class' -print -quit 2>/dev/null)
+step_spec=$(find "$app" -name 'Step$I$L.class' -print -quit 2>/dev/null)
+run_iface=$(find "$app" -name 'Run$F.class' -print -quit 2>/dev/null)
+
+if [ -f "$done_spec" ] && [ -f "$step_spec" ]; then
+  echo "Spec classes Done\$I + Step\$I\$L: PRESENT"
+else
+  echo "Spec classes Done\$I + Step\$I\$L: MISSING"
+fi
+
+# One instantiation-keyed family interface for the parameterless TCon.
+if [ -f "$run_iface" ] && javap "$run_iface" 2>/dev/null | grep -q 'interface'; then
+  echo "Family interface Run\$F: PRESENT"
+else
+  echo "Family interface Run\$F: MISSING"
+fi
+
+# BOTH data-carrying siblings implement the same instantiation interface.
+if javap "$done_spec" 2>/dev/null | grep -q 'Run\$F' \
+   && javap "$step_spec" 2>/dev/null | grep -q 'Run\$F'; then
+  echo "Done\$I + Step\$I\$L implement Run\$F: OK"
+else
+  echo "Done\$I + Step\$I\$L implement Run\$F: MISSING"
+fi
+
+# Step's recursive slot is typed at the family (Phase 2d on a
+# mixed-carrier type — relies on the sibling implementing Run$F).
+step_members=$(javap -p "$step_spec" 2>/dev/null)
+if echo "$step_members" | grep -qE 'int property0;' \
+   && echo "$step_members" | grep -qE 'Run\$F property1;' \
+   && echo "$step_members" | grep -qE 'Run\$F getRef1\(\)'; then
+  echo "Step recursive slot: typed Run\$F"
+else
+  echo "Step recursive slot: NOT REFINED"
+fi
+
+main_class=$(find "$app" -path '*mixcarrier/Main.class' -print -quit)
+methods=$(javap -p "$main_class" 2>/dev/null)
+disassembly=$(javap -c -p "$main_class" 2>/dev/null)
+
+# ONE sumRun spec at the family instantiation covers both constructors.
+if [ "$(echo "$methods" | grep -cE 'static int sumRun\$sp[0-9]+\(int, .*Run\$F\)')" = 1 ]; then
+  echo "sumRun\$sp(int, Run\$F) -> int: SINGLE"
+else
+  echo "sumRun\$sp(int, Run\$F) -> int: WRONG COUNT"
+fi
+
+sumrun_body=$(echo "$disassembly" | awk '/static int sumRun\$sp[0-9]+\(int, .*Run\$F\)/,/^$/')
+
+# Typed dispatch in BOTH alts.
+if echo "$sumrun_body" | grep -q 'checkcast.*Done\$I' \
+   && echo "$sumrun_body" | grep -qE 'Done\$I\.getInt0:\(\)I'; then
+  echo "sumRun\$sp Done alt: typed accessor via family checkcast"
+else
+  echo "sumRun\$sp Done alt: NO FAMILY DISPATCH"
+fi
+
+if echo "$sumrun_body" | grep -q 'checkcast.*Step\$I\$L' \
+   && echo "$sumrun_body" | grep -qE 'getRef1:\(\).*Run\$F'; then
+  echo "sumRun\$sp Step alt: typed accessor via family checkcast"
+else
+  echo "sumRun\$sp Step alt: NO FAMILY DISPATCH"
+fi
+
+# Tail-rec reassignment of the Run$F param from getRef1 is cast-free.
+if echo "$sumrun_body" | grep -qE 'checkcast.*Run\$F'; then
+  echo "sumRun\$sp tail-rec: REDUNDANT checkcast Run\$F"
+else
+  echo "sumRun\$sp tail-rec: no Run\$F checkcast"
+fi
+
+# Bootstrap-compat smoke test.
+if find "$app" -name 'IdrisList$Cons.class' -print -quit 2>/dev/null | grep -q .; then
+  echo "IdrisList\$Cons still present: OK"
+else
+  echo "IdrisList\$Cons MISSING (broke bootstrap compat)"
+fi
+
+./build/exec/mixcarrier${IDRIS_EXEC_EXT}

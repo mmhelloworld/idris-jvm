@@ -786,7 +786,23 @@ mutual
             let mByClass : Maybe (List InferredType)
                 mByClass = case discriminantTy of
                   IRef varClass _ _ =>
-                    (\sc => sc.paramTypes) <$> find (\sc => sc.specClassName == varClass) entries
+                    (\sc => sc.fieldTypes) <$> find (\sc => sc.specClassName == varClass) entries
+                  _ => Nothing
+            -- (c) `mByFamily`: the discriminant is typed as a TCon
+            --     family-instantiation interface (e.g. `Maybe$I`, `Run$F`).
+            --     Mirrors `mSpecByFamily` in Codegen's
+            --     `assembleConCaseExpr` via the shared
+            --     `findUniqueFamilyMember` (uniqueness-checked) — sound
+            --     only when the natural class is also dead, because live
+            --     natural siblings `implements` every active family
+            --     instantiation and could therefore inhabit the
+            --     interface-typed discriminant.
+            let mByFamily : Maybe (List InferredType)
+                mByFamily = case discriminantTy of
+                  IRef varClass _ _ =>
+                    if SortedSet.contains name natLive
+                      then Nothing
+                      else (\sc => sc.fieldTypes) <$> findUniqueFamilyMember conPlan name varClass
                   _ => Nothing
             let mUniqueSafe : Maybe (List InferredType)
                 mUniqueSafe = if not (isSingleConstructor conInfo)
@@ -794,9 +810,9 @@ mutual
                   else case entries of
                     [sc] => if SortedSet.contains name natLive
                               then Nothing
-                              else Just sc.paramTypes
+                              else Just sc.fieldTypes
                     _ => Nothing
-            let mSlotTypes = mByClass <|> mUniqueSafe
+            let mSlotTypes = mByClass <|> mByFamily <|> mUniqueSafe
             traverse_ (inferArg mSlotTypes) (zip args [0 .. length args])
             inferExpr expr
         where
@@ -804,6 +820,21 @@ mutual
             isSingleConstructor RECORD = True
             isSingleConstructor UNIT   = True
             isSingleConstructor _      = False
+
+            -- Seed primitive slot types AND refined reference slot types
+            -- (recursive slots typed as the family interface, e.g.
+            -- `Node$I$L$L`'s subtrees as `Tree$I$L$L`).  Emission's `bindArg`
+            -- stores the typed accessor's result at the slot type, so the
+            -- variable type here must match — and a family-typed loop
+            -- variable is what lets `$idrisTailRec` reassignment skip the
+            -- per-iteration checkcast.  Plain Object slots stay unseeded
+            -- (the variable keeps its default Object type).
+            shouldSeed : InferredType -> Bool
+            shouldSeed slotTy =
+              isPrimitive slotTy ||
+                (case slotTy of
+                   IRef cls _ _ => cls /= "java/lang/Object"
+                   _ => False)
 
             inferArg : Maybe (List InferredType) -> (Name, Nat) -> Core ()
             inferArg mSlotTypes (var, index) =
@@ -813,7 +844,7 @@ mutual
                      case mSlotTypes of
                        Just slots => case drop index slots of
                                        (slotTy :: _) =>
-                                         when (isPrimitive slotTy) $
+                                         when (shouldSeed slotTy) $
                                            addVariableType variableName slotTy
                                        [] => pure ()
                        Nothing => pure ()
@@ -1073,8 +1104,30 @@ mutual
       -- NoClassDefFoundError on classes that don't exist at runtime.
       programName <- getProgramName
       conPlan <- getConSpecialisationPlan
+      -- When a matching spec exists, prefer the TCon family interface
+      -- (e.g. `Maybe$I`) over the concrete DCon spec class (`JUST$I`):
+      -- it lets a call site's logged arg type cover both `Just`-spec
+      -- and `Nothing`-natural instances at the family level, so
+      -- function-spec routing through `rewriteSpecCalls` matches
+      -- whichever sibling is emitted at runtime.  When the spec carries
+      -- no `tconClassName` (Phase-1 lone-DCon case for RECORD types),
+      -- fall back to the spec class itself.
+      --
+      -- Note: sibling DCons WITHOUT a matching spec (e.g. `Nil`, which
+      -- has no slots) are NOT typed as the family interface here.  A
+      -- polymorphic `Nil` can flow into many `List`-family contexts (Int,
+      -- Char, …) and picking one family for it would falsely commit the
+      -- caller to a specific instantiation — that's how cross-family
+      -- ClassCast errors showed up during the v2 bring-up.  Instead, the
+      -- sibling's natural class still `implements` every active family
+      -- (via `computeNaturalToTConIfaces`), so once a call site is
+      -- statically typed at the family (e.g. by the parent `Cons$I$L`'s
+      -- recursive slot — Phase 2d), the sibling instance is acceptable
+      -- without committing the construction site itself to a family.
       pure $ case lookupConSpec name normalizedArgTypes conPlan of
-        Just spec => IRef spec.specClassName Class []
+        Just spec => if spec.tconClassName /= ""
+                       then IRef spec.tconClassName Interface []
+                       else IRef spec.specClassName Class []
         Nothing => idrisObjectType
       where
         normalizeRef : InferredType -> InferredType
@@ -1332,6 +1385,90 @@ namespace TermType
         Just (TCon _ _ _ _ _ (Just dcons) _) => pure dcons
         _ => pure []
 
+  -- Role of one (non-erased) DCon argument slot relative to its parent
+  -- TCon:
+  --   * `SlotRecursive` — the argument's type is the parent TCon applied
+  --     to exactly the same telescope variables as the DCon's return
+  --     type (`Node`'s subtrees; the instantiation check matters:
+  --     `data T a = MkT a (T Int)` must NOT mark the second slot — its
+  --     runtime value belongs to a different family instantiation).
+  --   * `SlotBare ks` — the argument's type is a bare telescope variable
+  --     that occupies the return-type spine positions `ks` (≥1 position;
+  --     a list because GADT-style `MkD : a -> D a a` repeats a variable
+  --     in the spine).  Observed slot types at such slots witness the
+  --     TCon's type-argument instantiation.
+  --   * `SlotOther` — anything else (concrete types, applications, …).
+  public export
+  data ConSlotRole = SlotRecursive | SlotBare (List Nat) | SlotOther
+
+  -- Classify every non-erased argument slot of a DCon and report the
+  -- parent TCon's parameter count (= return-type spine length).  Locals
+  -- are compared by telescope binder position (depth - 1 -
+  -- de-Bruijn-index), so the comparison is scope-independent.  Erased
+  -- (0-multiplicity) binders are skipped to stay aligned with compiled
+  -- `NmCon` argument lists, but still count toward binder depth.
+  -- `Nothing` on any unusual shape: missing type, non-`Ref` head,
+  -- non-`Local` spine arguments (indexed types like `Vect (S n) a`).
+  export
+  findConSlotRoles : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                   -> Name -> Core (Maybe (Nat, List ConSlotRole))
+  findConSlotRoles dconName = do
+      Just term <- getTypeTerm dconName
+        | Nothing => pure Nothing
+      pure $ (\(_, retSpine, roles) => (length retSpine, roles)) <$> walk 0 term
+    where
+      -- Application-spine arguments as telescope binder positions; every
+      -- argument must be a plain Local.
+      spineBinders : {vars : _} -> (depth : Nat) -> List (Term vars) -> Maybe (List Nat)
+      spineBinders depth [] = Just []
+      spineBinders depth (Local _ _ idx _ :: rest) = do
+        restBinders <- spineBinders depth rest
+        if idx < depth
+          then Just (minus depth (S idx) :: restBinders)
+          else Nothing
+      spineBinders _ _ = Nothing
+
+      slotRole : {vars : _} -> (depth : Nat) -> Name -> List Nat -> Term vars -> ConSlotRole
+      slotRole depth tcon retSpine ty =
+        case getFnArgs ty of
+          (Ref _ _ tyName, args) =>
+            if tyName == tcon && spineBinders depth args == Just retSpine
+              then SlotRecursive
+              else SlotOther
+          (Local _ _ idx _, []) =>
+            if idx < depth
+              then let binder = minus depth (S idx)
+                       ks = findIndices (== binder) retSpine
+                   in if isNil ks then SlotOther else SlotBare ks
+              else SlotOther
+          _ => SlotOther
+
+      walk : {vars : _} -> (depth : Nat) -> Term vars
+           -> Maybe (Name, List Nat, List ConSlotRole)
+      walk depth (Bind _ _ (Pi _ count _ ty) sc) = do
+        (tcon, retSpine, roles) <- walk (S depth) sc
+        if count == plusNeutral
+          then Just (tcon, retSpine, roles)
+          else Just (tcon, retSpine, slotRole depth tcon retSpine ty :: roles)
+      walk depth term =
+        case getFnArgs term of
+          (Ref _ _ tyName, args) => do
+            spine <- spineBinders depth args
+            Just (tyName, spine, [])
+          _ => Nothing
+
+  -- Per-slot recursion flags, kept for Phase 2d (`computeFieldTypes`).
+  export
+  findRecursiveConSlots : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                        -> Name -> Core (Maybe (List Bool))
+  findRecursiveConSlots dconName = do
+      mRoles <- findConSlotRoles dconName
+      pure $ (\(_, roles) => map isRecursive roles) <$> mRoles
+    where
+      isRecursive : ConSlotRole -> Bool
+      isRecursive SlotRecursive = True
+      isRecursive _ = False
+
 optimizeTailRecursion : String -> (Name, FC, NamedDef) -> List (Name, FC, NamedDef)
 optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
   let jname = jvmName programName name
@@ -1344,12 +1481,119 @@ optimizeTailRecursion programName (name, fc, (MkNmFun args body)) =
   in logFunction "Unoptimized" jname args body optimizedDefs
 optimizeTailRecursion _ nameFcDef = [nameFcDef]
 
+-- After frontend inlining, distinct construction and call sites often share
+-- one FC: every inlined `pure x` carries the FC of the `Right x` inside
+-- `pure`'s definition.  The specialisation site logs (`conSiteLog`,
+-- `callSiteLog`) are keyed by FC, so colliding sites can pick up each
+-- other's inferred types — e.g. `pure $ partitionOpts opts` matching the
+-- `(fc, Right, [int])` entry logged by a sibling `pure True` and getting
+-- emitted as the int-slot `Right$I` spec, crashing in `Conversion.toInt`
+-- at runtime.  Stamp a per-definition counter into the start column of
+-- every NmCon/NmApp FC to make the keys site-unique: `getLineNumbers`
+-- ignores start columns, so line-number debug info is unaffected.
+-- Synthetic EmptyFC sites (e.g. from tail-recursion optimisation) are
+-- lifted to virtual FCs carrying the counter.
+markUniqueFc : Int -> FC -> (Int, FC)
+markUniqueFc counter (MkFC origin (startLine, _) end) =
+  (counter + 1, MkFC origin (startLine, counter) end)
+markUniqueFc counter (MkVirtualFC origin (startLine, _) end) =
+  (counter + 1, MkVirtualFC origin (startLine, counter) end)
+markUniqueFc counter EmptyFC =
+  (counter + 1, MkVirtualFC (Virtual Interactive) (0, counter) (0, 0))
+
+mutual
+  uniquifySiteFcs : Int -> NamedCExp -> (Int, NamedCExp)
+  uniquifySiteFcs counter (NmLam fc x body) =
+    let (c1, body') = uniquifySiteFcs counter body
+    in (c1, NmLam fc x body')
+  uniquifySiteFcs counter (NmLet fc x value body) =
+    let (c1, value') = uniquifySiteFcs counter value
+        (c2, body') = uniquifySiteFcs c1 body
+    in (c2, NmLet fc x value' body')
+  uniquifySiteFcs counter (NmApp fc f args) =
+    -- Applied-lambda sentinel FCs from `splitFunction` are matched by
+    -- equality in `getAppliedLambdaType` during inference — leave them as is.
+    let (c1, fc') = if fc == appliedLambdaSwitchIndicator || fc == appliedLambdaLetIndicator
+                      then (counter, fc)
+                      else markUniqueFc counter fc
+        (c2, f') = uniquifySiteFcs c1 f
+        (c3, args') = uniquifySiteFcsList c2 args
+    in (c3, NmApp fc' f' args')
+  uniquifySiteFcs counter (NmCon fc name conInfo tag args) =
+    let (c1, fc') = markUniqueFc counter fc
+        (c2, args') = uniquifySiteFcsList c1 args
+    in (c2, NmCon fc' name conInfo tag args')
+  uniquifySiteFcs counter (NmOp fc op args) =
+    let (c1, args') = uniquifySiteFcsVect counter args
+    in (c1, NmOp fc op args')
+  uniquifySiteFcs counter (NmExtPrim fc name args) =
+    let (c1, args') = uniquifySiteFcsList counter args
+    in (c1, NmExtPrim fc name args')
+  uniquifySiteFcs counter (NmForce fc reason expr) =
+    let (c1, expr') = uniquifySiteFcs counter expr
+    in (c1, NmForce fc reason expr')
+  uniquifySiteFcs counter (NmDelay fc reason expr) =
+    let (c1, expr') = uniquifySiteFcs counter expr
+    in (c1, NmDelay fc reason expr')
+  uniquifySiteFcs counter (NmConCase fc sc alts def) =
+    let (c1, sc') = uniquifySiteFcs counter sc
+        (c2, alts') = uniquifySiteFcsConAlts c1 alts
+        (c3, def') = uniquifySiteFcsMaybe c2 def
+    in (c3, NmConCase fc sc' alts' def')
+  uniquifySiteFcs counter (NmConstCase fc sc alts def) =
+    let (c1, sc') = uniquifySiteFcs counter sc
+        (c2, alts') = uniquifySiteFcsConstAlts c1 alts
+        (c3, def') = uniquifySiteFcsMaybe c2 def
+    in (c3, NmConstCase fc sc' alts' def')
+  uniquifySiteFcs counter expr = (counter, expr)
+
+  uniquifySiteFcsList : Int -> List NamedCExp -> (Int, List NamedCExp)
+  uniquifySiteFcsList counter [] = (counter, [])
+  uniquifySiteFcsList counter (x :: xs) =
+    let (c1, x') = uniquifySiteFcs counter x
+        (c2, xs') = uniquifySiteFcsList c1 xs
+    in (c2, x' :: xs')
+
+  uniquifySiteFcsVect : Int -> Vect n NamedCExp -> (Int, Vect n NamedCExp)
+  uniquifySiteFcsVect counter [] = (counter, [])
+  uniquifySiteFcsVect counter (x :: xs) =
+    let (c1, x') = uniquifySiteFcs counter x
+        (c2, xs') = uniquifySiteFcsVect c1 xs
+    in (c2, x' :: xs')
+
+  uniquifySiteFcsMaybe : Int -> Maybe NamedCExp -> (Int, Maybe NamedCExp)
+  uniquifySiteFcsMaybe counter Nothing = (counter, Nothing)
+  uniquifySiteFcsMaybe counter (Just x) =
+    let (c1, x') = uniquifySiteFcs counter x
+    in (c1, Just x')
+
+  uniquifySiteFcsConAlts : Int -> List NamedConAlt -> (Int, List NamedConAlt)
+  uniquifySiteFcsConAlts counter [] = (counter, [])
+  uniquifySiteFcsConAlts counter (MkNConAlt name conInfo tag args expr :: rest) =
+    let (c1, expr') = uniquifySiteFcs counter expr
+        (c2, rest') = uniquifySiteFcsConAlts c1 rest
+    in (c2, MkNConAlt name conInfo tag args expr' :: rest')
+
+  uniquifySiteFcsConstAlts : Int -> List NamedConstAlt -> (Int, List NamedConstAlt)
+  uniquifySiteFcsConstAlts counter [] = (counter, [])
+  uniquifySiteFcsConstAlts counter (MkNConstAlt constant expr :: rest) =
+    let (c1, expr') = uniquifySiteFcs counter expr
+        (c2, rest') = uniquifySiteFcsConstAlts c1 rest
+    in (c2, MkNConstAlt constant expr' :: rest')
+
+uniquifyDefSiteFcs : (Name, FC, NamedDef) -> (Name, FC, NamedDef)
+uniquifyDefSiteFcs (name, fc, MkNmFun args body) =
+  (name, fc, MkNmFun args (snd $ uniquifySiteFcs 0 body))
+uniquifyDefSiteFcs (name, fc, MkNmError expr) =
+  (name, fc, MkNmError (snd $ uniquifySiteFcs 0 expr))
+uniquifyDefSiteFcs def = def
+
 export
 optimize : String -> LazyList (Name, FC, NamedDef) -> LazyList (Name, FC, NamedDef)
 optimize programName allDefs =
   let tailRecOptimizedDefs = concatMap (Lazy.fromList . optimizeTailRecursion programName) allDefs
       tailCallOptimizedDefs = TailRec.functions tailRecLoopFunctionName $ toList tailRecOptimizedDefs
-  in toNameFcDef <$> fromList tailCallOptimizedDefs
+  in uniquifyDefSiteFcs . toNameFcDef <$> fromList tailCallOptimizedDefs
 
 getArity : InferredFunctionType -> Nat
 getArity (MkInferredFunctionType _ args) = length args
@@ -1415,16 +1659,16 @@ inferFunctionType _ _ = pure ()
 rewriteSpecCalls : List (FC, Name, InferredFunctionType) -> SpecialisationPlan
                 -> NamedCExp -> NamedCExp
 rewriteSpecCalls log plan = go where
-  lookupSiteType : FC -> Maybe InferredFunctionType
-  lookupSiteType targetFc =
-    (\(_, _, ty) => ty) <$> find (\(fc, _, _) => fc == targetFc) log
+  lookupSiteType : FC -> Name -> Maybe InferredFunctionType
+  lookupSiteType targetFc targetName =
+    (\(_, _, ty) => ty) <$> find (\(fc, n, _) => fc == targetFc && n == targetName) log
 
   mutual
     go : NamedCExp -> NamedCExp
     go (NmApp fc (NmRef nfc orig) args) =
       let args'  = go <$> args
           chosen = fromMaybe orig $ do
-                     fnType <- lookupSiteType fc
+                     fnType <- lookupSiteType fc orig
                      specs  <- SortedMap.lookup orig plan
                      spec   <- find (\s => s.type.parameterTypes == fnType.parameterTypes) specs
                      pure spec.name

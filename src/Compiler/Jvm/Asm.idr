@@ -515,6 +515,55 @@ SpecialisationPlan = SortedMap Name (List SpecialisedSignature)
 -- `<base>$I$I` whose fields are stored as primitives (instead of boxed
 -- Object).  paramTypes holds one entry per constructor slot; specClassName
 -- is the synthesised JVM class name (see mkConSpecClassName).
+--
+-- `tconClassName` is the JVM-class name of the type-constructor family
+-- interface this DCon's spec belongs to in this instantiation.  The
+-- assembler emits it as an interface that the DCon spec class
+-- implements, so function-spec parameters can statically type the
+-- discriminant at the family level without losing sibling-cast safety.
+-- Two naming schemes:
+--
+--   * Synthetic `ConInfo` shapes (CONS/NIL/JUST/NOTHING via the
+--     `_builtin/*` intrinsics): the DCon slot suffix, e.g.
+--     `M__builtin/Maybe$I` for `JUST$I`.  Sound there because each
+--     synthetic family has exactly one data-carrying shape.
+--   * Ordinary DATACONs: keyed by the parent TCon's TYPE-ARGUMENT
+--     instantiation — `<TConNatural>$F` plus one char per type
+--     parameter (`Run$F` for the parameterless `Run`; `T$F$I` for
+--     `T Int`).  ALL data-carrying siblings of one instantiation share
+--     the interface (`Done$I` and `Step$I$L` both implement `Run$F`),
+--     which is what makes family-typed tail recursion across siblings
+--     sound.  The `$F` marker avoids colliding with the TCon's own
+--     natural class (type-case programs construct TCon values).
+--
+-- Empty when no family applies: synthetic path failures, RECORD/UNIT,
+-- TCons that fail the eligibility gate (see `deriveTConFamily` in
+-- Codegen), or UNDER-DETERMINED specs — ordinary-DCon specs whose
+-- observed slots don't pin every type parameter with a primitive.
+--
+-- `tconFamilyBase` is the `<TConNatural>$F` base for ordinary DCons of
+-- an ELIGIBLE TCon (else "").  When `tconClassName` is "" but
+-- `tconFamilyBase` isn't, the spec is under-determined: its emission
+-- makes it `implements` EVERY active instantiation interface sharing
+-- the base, because such a cell is a semantic member of SOME
+-- instantiation and must pass that instantiation's checkcasts (Phase 2d
+-- construction sites, `$idrisTailRec` reassignment).
+--
+-- `paramTypes` vs `fieldTypes`: `paramTypes` is the ref-NORMALIZED slot
+-- list (every reference type collapsed to Object) — it drives spec
+-- naming (`mkConSpecClassName`), plan dedup, and construction-site
+-- matching, all of which must stay stable across inference iterations
+-- (un-normalized refs at those points caused frozen-descriptor
+-- VerifyErrors — see `inferExprCon`).  `fieldTypes` is the REFINED slot
+-- list that drives the emitted class shape: field descriptors, the
+-- `<init>` descriptor, typed-accessor descriptors, and pattern-match
+-- bound-variable types.
+--
+-- STABILITY INVARIANT: `fieldTypes`, `tconClassName` and
+-- `tconFamilyBase` are pure functions of `(paramTypes, the DCon's
+-- declared telescope, TCon eligibility, Ctxt)` — so the descriptors and
+-- interfaces frozen by `preRegisterConstructorSpecs` are identical on
+-- every plan iteration.
 public export
 record SpecialisedConstructor where
   constructor MkSpecialisedCon
@@ -522,16 +571,66 @@ record SpecialisedConstructor where
   conInfo       : ConInfo
   tag           : Maybe Int
   paramTypes    : List InferredType
+  fieldTypes    : List InferredType
   specClassName : String
+  tconClassName : String
+  tconFamilyBase : String
 
 public export
 Show SpecialisedConstructor where
-  show (MkSpecialisedCon name _ _ paramTypes specClassName) =
-    show name ++ " -> " ++ specClassName ++ " (" ++ showSep ", " (show <$> paramTypes) ++ ")"
+  show (MkSpecialisedCon name _ _ paramTypes fieldTypes specClassName tconClassName tconFamilyBase) =
+    show name ++ " -> " ++ specClassName ++ " [tcon=" ++ tconClassName
+    ++ ", base=" ++ tconFamilyBase ++ "] ("
+    ++ showSep ", " (show <$> paramTypes) ++ ") [fields="
+    ++ showSep ", " (show <$> fieldTypes) ++ "]"
 
 public export
 ConSpecialisationPlan : Type
 ConSpecialisationPlan = SortedMap Name (List SpecialisedConstructor)
+
+-- Family-dispatch candidate lookup shared by emission
+-- (`assembleConCaseExpr.mSpecByFamily`) and inference
+-- (`inferConCaseExpr.mByFamily`) — the two MUST agree, since inference
+-- seeds the bound-variable types that emission's typed accessors store
+-- into.
+--
+-- A spec entry of constructor `name` can inhabit a discriminant
+-- statically typed as the family-instantiation interface `varClass` iff
+--   * its own `tconClassName` IS `varClass`, or
+--   * it is an under-determined entry of the same TCon (tconClassName
+--     "", tconFamilyBase matching `varClass`'s base) — those implement
+--     every active instantiation.
+-- The checkcast/typed-accessor path is sound only when the candidate is
+-- UNIQUE: distinct slot shapes of one DCon can share an instantiation
+-- (`A : a -> a -> T a` observed `[I,L]` and `[L,I]` are different spec
+-- classes but both `T$F$I`), and an under-determined sibling shape can
+-- inhabit any instantiation.  `varClass`'s base is recovered by exact
+-- `tconClassName` lookup across the plan — no name parsing.
+export
+findUniqueFamilyMember : ConSpecialisationPlan -> Name -> String
+                       -> Maybe SpecialisedConstructor
+findUniqueFamilyMember plan name varClass =
+  case filter isCandidate entries of
+    [sc] => Just sc
+    _    => Nothing
+  where
+    entries : List SpecialisedConstructor
+    entries = fromMaybe [] (SortedMap.lookup name plan)
+
+    varBase : Maybe String
+    varBase = Data.List.head' $ mapMaybe baseOf (concatMap snd (SortedMap.toList plan))
+      where
+        baseOf : SpecialisedConstructor -> Maybe String
+        baseOf sc =
+          if sc.tconClassName == varClass && sc.tconFamilyBase /= ""
+            then Just sc.tconFamilyBase
+            else Nothing
+
+    isCandidate : SpecialisedConstructor -> Bool
+    isCandidate sc =
+         (sc.tconClassName /= "" && sc.tconClassName == varClass)
+      || (sc.tconClassName == "" && sc.tconFamilyBase /= ""
+            && Just sc.tconFamilyBase == varBase)
 
 public export
 record AsmState where
@@ -553,6 +652,13 @@ record AsmState where
     -- `assembleConCaseExpr` to decide whether it's safe to narrow a
     -- pattern-match discriminant to a spec class via `checkcast`.
     naturalConsLive : SortedSet Name
+    -- Map from a natural constructor's JVM class name to the TCon-family
+    -- interfaces it should `implements`.  Populated when a sibling DCon
+    -- gets a spec class (and a TCon interface emitted alongside): the
+    -- sibling natural class also needs to participate in the family so
+    -- function-spec parameters typed as the interface accept any
+    -- runtime instance from the type, not just spec instances.
+    naturalToTConIfaces : SortedMap String (List String)
 
 namespace AsmState
   export
@@ -562,7 +668,7 @@ namespace AsmState
     scopes <- ArrayList.new {elemTy=Scope}
     lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
     let function = MkFunction name (MkInferredFunctionType IUnknown []) (subtyping scopes) 0 (NmCrash emptyFC "uninitialized function")
-    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] [] SortedSet.empty
+    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] [] SortedSet.empty SortedMap.empty
 
   export
   fromIdrisName : Name -> IO AsmState
@@ -2484,6 +2590,14 @@ getNaturalConsLive = naturalConsLive <$> getState
 export
 setNaturalConsLive : {auto stateRef: Ref AsmState AsmState} -> SortedSet Name -> Core ()
 setNaturalConsLive live = updateState $ { naturalConsLive := live }
+
+export
+getNaturalToTConIfaces : {auto stateRef: Ref AsmState AsmState} -> Core (SortedMap String (List String))
+getNaturalToTConIfaces = naturalToTConIfaces <$> getState
+
+export
+setNaturalToTConIfaces : {auto stateRef: Ref AsmState AsmState} -> SortedMap String (List String) -> Core ()
+setNaturalToTConIfaces m = updateState $ { naturalToTConIfaces := m }
 
 getAndUpdateFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core Function
 getAndUpdateFunction f = do

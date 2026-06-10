@@ -855,8 +855,12 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         new spec.specClassName
         dup
         maybe (ldc . StringConst $ spec.specClassName) iconst tag
-        let constructorTypes = constructorIdType :: spec.paramTypes
-        traverse_ assembleParameter (zip args spec.paramTypes)
+        -- `fieldTypes`, not `paramTypes`: the emitted class's `<init>`
+        -- descriptor carries the refined slot types, and
+        -- `assembleParameter`'s `asmCast` emits the Object→family-interface
+        -- checkcast for refined recursive slots at construction.
+        let constructorTypes = constructorIdType :: spec.fieldTypes
+        traverse_ assembleParameter (zip args spec.fieldTypes)
         let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid constructorTypes
         invokeMethod InvokeSpecial spec.specClassName "<init>" descriptor False
         -- The spec class is a sibling of the natural constructor class (both
@@ -915,7 +919,9 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             hasConstructor <- coreLift $ AsmGlobalState.hasConstructor constructorClassName
             when (not hasConstructor) $ do
                 coreLift $ AsmGlobalState.addConstructor constructorClassName
-                createIdrisConstructorClass constructorClassName (isNothing tag) constructorParameterCount
+                natIfaces <- getNaturalToTConIfaces
+                let ifaces = fromMaybe [] $ SortedMap.lookup constructorClassName natIfaces
+                createIdrisConstructorClassWithIfaces constructorClassName (isNothing tag) constructorParameterCount ifaces
             invokeMethod InvokeSpecial constructorClassName "<init>" descriptor False
             let constructorType = IRef constructorClassName Class []
             asmCast constructorType returnType
@@ -1651,18 +1657,40 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                 mSpecByClass = case idrisObjectVariableType of
                                  IRef varClassName _ _ => findConSpecByClass name varClassName conPlan
                                  _ => Nothing
+            -- (c) Family-interface dispatch: the discriminant is statically
+            --     typed as a TCon family-instantiation interface (e.g.
+            --     `Maybe$I`, `Run$F`).  `findUniqueFamilyMember` requires
+            --     the candidate to be the UNIQUE entry of this constructor
+            --     that can inhabit the interface (distinct slot shapes can
+            --     share an instantiation — `A : a -> a -> T a` observed
+            --     `[I,L]` and `[L,I]` are both `T$F$I` — and
+            --     under-determined sibling shapes implement every
+            --     instantiation).  The checkcast is sound PROVIDED the
+            --     natural class is also dead:
+            --     `computeNaturalToTConIfaces` teaches live natural
+            --     siblings to `implements` every active family
+            --     instantiation, so a `Maybe$I`-typed value may hold a
+            --     natural `Just` when `Just` is natural-live, and a
+            --     checkcast to `JUST$I` would throw.
+            let mSpecByFamily : Maybe SpecialisedConstructor
+                mSpecByFamily = case idrisObjectVariableType of
+                                  IRef varClassName _ _ =>
+                                    if SortedSet.contains name natLive
+                                      then Nothing
+                                      else findUniqueFamilyMember conPlan name varClassName
+                                  _ => Nothing
             let mSpec : Maybe SpecialisedConstructor
-                mSpec = mSpecByClass <|> uniqueSafe
+                mSpec = mSpecByClass <|> mSpecByFamily <|> uniqueSafe
             let constructorClassName : String
                 constructorClassName = maybe naturalClassName specClassName mSpec
             let constructorType : InferredType
                 constructorType = maybe naturalType (\sc => IRef sc.specClassName Class []) mSpec
             let mSlotTypes : Maybe (List InferredType)
-                mSlotTypes = (\sc => sc.paramTypes) <$> mSpec
-            -- When `uniqueSafe` selected the spec, the discriminant's static type
-            -- doesn't equal `constructorType` but the cast is provably safe —
-            -- force the typed-accessor path.
-            let forceCast = isJust uniqueSafe
+                mSlotTypes = (\sc => sc.fieldTypes) <$> mSpec
+            -- When `uniqueSafe` or `mSpecByFamily` selected the spec, the
+            -- discriminant's static type doesn't equal `constructorType` but
+            -- the cast is provably safe — force the typed-accessor path.
+            let forceCast = isJust uniqueSafe || isJust mSpecByFamily
             bindArg forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes 0 args
             assembleExpr True returnType expr
         where
@@ -2598,16 +2626,51 @@ preRegisterSpecs plan = traverse_ register (snd =<< SortedMap.toList plan)
       AsmGlobalState.addFunction jname stub
 
 -- Eagerly emit the specialised constructor classes the plan discovered.  Each
--- spec class has typed fields (per-slot JVM descriptors from `paramTypes`)
+-- spec class has typed fields (per-slot JVM descriptors from `fieldTypes`)
 -- and per-slot typed accessors — see `Assembler.createIdrisConstructorClassTyped`.
 -- A `(programName, simpleClassName)` is tracked in `AsmGlobalState.constructors`
 -- so we don't re-emit the class on every constructor call site.
+--
+-- Two passes: ALL family-instantiation interfaces first, then the spec
+-- classes.  Determined entries `implements` their own instantiation
+-- interface; UNDER-DETERMINED entries (tconClassName "", tconFamilyBase
+-- set) `implements` EVERY active instantiation of their TCon — such a
+-- cell is a semantic member of SOME instantiation and must pass that
+-- instantiation's checkcasts (Phase-2d construction sites,
+-- `$idrisTailRec` reassignment).  The plan has converged when this runs,
+-- so "every active" is final.
 preRegisterConstructorSpecs : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
                            -> ConSpecialisationPlan -> Core ()
-preRegisterConstructorSpecs plan = traverse_ register (snd =<< SortedMap.toList plan)
+preRegisterConstructorSpecs plan = do
+    let entries = snd =<< SortedMap.toList plan
+    let actives = nub $ mapMaybe activeIface entries
+    traverse_ createIface actives
+    traverse_ (registerClass (activesByBase entries)) entries
   where
-    register : SpecialisedConstructor -> Core ()
-    register (MkSpecialisedCon _ _ tag paramTypes specClassName) = do
+    activeIface : SpecialisedConstructor -> Maybe String
+    activeIface sc = if sc.tconClassName /= "" then Just sc.tconClassName else Nothing
+
+    activesByBase : List SpecialisedConstructor -> SortedMap String (List String)
+    activesByBase = foldl add SortedMap.empty
+      where
+        add : SortedMap String (List String) -> SpecialisedConstructor
+           -> SortedMap String (List String)
+        add acc sc =
+          if sc.tconClassName == "" || sc.tconFamilyBase == ""
+            then acc
+            else let existing = fromMaybe [] (SortedMap.lookup sc.tconFamilyBase acc)
+                 in if elem sc.tconClassName existing
+                      then acc
+                      else SortedMap.insert sc.tconFamilyBase (sc.tconClassName :: existing) acc
+
+    createIface : String -> Core ()
+    createIface tconClassName = do
+      tconAsm <- coreLift $ AsmState.fromJavaName (Jqualified tconClassName "<clinit>")
+      tconRef <- newRef AsmState tconAsm
+      createIdrisTypeConstructorInterface tconClassName
+
+    registerClass : SortedMap String (List String) -> SpecialisedConstructor -> Core ()
+    registerClass byBase (MkSpecialisedCon _ _ tag _ fieldTypes specClassName tconClassName tconFamilyBase) = do
       hasIt <- coreLift $ AsmGlobalState.hasConstructor specClassName
       when (not hasIt) $ do
         coreLift $ AsmGlobalState.addConstructor specClassName
@@ -2617,21 +2680,28 @@ preRegisterConstructorSpecs plan = traverse_ register (snd =<< SortedMap.toList 
         -- component is irrelevant for class emission.
         asmState <- coreLift $ AsmState.fromJavaName (Jqualified specClassName "<init>")
         stateRef <- newRef AsmState asmState
-        let descriptors = getJvmTypeDescriptor <$> paramTypes
-        createIdrisConstructorClassTyped specClassName (isNothing tag) descriptors
+        let descriptors = getJvmTypeDescriptor <$> fieldTypes
+        let tconIfaces = if tconClassName /= ""
+                           then [tconClassName]
+                           else if tconFamilyBase /= ""
+                                  then sort (fromMaybe [] (SortedMap.lookup tconFamilyBase byBase))
+                                  else []
+        createIdrisConstructorClassTypedWithIfaces specClassName (isNothing tag) descriptors tconIfaces
 
 -- Emit a single specialised method using the existing assembly pipeline.
 -- The spec has its own AsmState (so it can register a fresh Function with the
 -- spec's primitive signature) but lands in the same Java class as the original.
 assembleSpec : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
             -> SpecialisationPlan -> ConSpecialisationPlan -> SortedSet Name
+            -> SortedMap String (List String)
             -> SpecialisedSignature -> Core ()
-assembleSpec plan conPlan natLive (MkSpecialisedSig specName def specType) = do
+assembleSpec plan conPlan natLive natIfaces (MkSpecialisedSig specName def specType) = do
   asmState <- coreLift $ AsmState.fromIdrisName specName
   stateRef <- newRef AsmState asmState
   setSpecialisationPlan {stateRef} plan
   setConSpecialisationPlan {stateRef} conPlan
   setNaturalConsLive {stateRef} natLive
+  setNaturalToTConIfaces {stateRef} natIfaces
   inferFunctionType {stateRef} (Just specType) def
   inferDef {stateRef}
   assemble {stateRef} specName emptyFC
@@ -2641,13 +2711,15 @@ assembleNameFcStateRefs : {auto c : Ref Ctxt Defs}
                         -> SpecialisationPlan
                         -> ConSpecialisationPlan
                         -> SortedSet Name
+                        -> SortedMap String (List String)
                         -> SortedMap String NamedDef
                         -> LazyList (Name, FC, Ref AsmState AsmState) -> Core ()
-assembleNameFcStateRefs _ _ _ _ [] = pure ()
-assembleNameFcStateRefs plan conPlan natLive defs ((name, fc, stateRef) :: rest) = do
+assembleNameFcStateRefs _ _ _ _ _ [] = pure ()
+assembleNameFcStateRefs plan conPlan natLive natIfaces defs ((name, fc, stateRef) :: rest) = do
   setSpecialisationPlan {stateRef} plan
   setConSpecialisationPlan {stateRef} conPlan
   setNaturalConsLive {stateRef} natLive
+  setNaturalToTConIfaces {stateRef} natIfaces
   -- Mirror assembleSpec for the natural method: re-run inferFunctionType +
   -- inferDef so the body is rewritten with the FINAL plan right before it's
   -- lowered to bytecode.  buildSpecialisationPlan's iteration also rewrites
@@ -2661,8 +2733,8 @@ assembleNameFcStateRefs plan conPlan natLive defs ((name, fc, stateRef) :: rest)
       inferDef {stateRef}
     Nothing => pure ()
   assemble {stateRef=stateRef} name fc
-  traverse_ (assembleSpec plan conPlan natLive) (fromMaybe [] $ SortedMap.lookup name plan)
-  assembleNameFcStateRefs plan conPlan natLive defs rest
+  traverse_ (assembleSpec plan conPlan natLive natIfaces) (fromMaybe [] $ SortedMap.lookup name plan)
+  assembleNameFcStateRefs plan conPlan natLive natIfaces defs rest
 
 getNamedDefsByName : String -> LazyList (Name, FC, Ref AsmState AsmState) -> Core (SortedMap String NamedDef)
 getNamedDefsByName programName nameFcStateRefs = go SortedMap.empty nameFcStateRefs where
@@ -2746,6 +2818,21 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
              (SortedMap.toList plan)
     isRecordSpecRef _ _ = False
 
+    -- True when `ty` is `IRef X` for some `X` that's a TCon-family interface
+    -- in `conPlan` (registered by Phase 2's `deriveTConClassName`).  Such
+    -- narrowings are safe for sum types: every runtime instance of the
+    -- family implements the interface (siblings are taught to via
+    -- `computeNaturalToTConIfaces` + `createIdrisConstructorClassWithIfaces`),
+    -- so a function-spec parameter typed as the interface can checkcast
+    -- without sibling-class confusion.
+    isTConIfaceRef : ConSpecialisationPlan -> InferredType -> Bool
+    isTConIfaceRef plan (IRef cls _ _) =
+      cls /= "java/lang/Object"
+      && cls /= idrisObjectClass
+      && any (\(_, entries) => any (\sc => sc.tconClassName == cls) entries)
+             (SortedMap.toList plan)
+    isTConIfaceRef _ _ = False
+
     -- Original v1 check: only `Object → primitive` is at-least-as-specific.
     -- Used for the "pure primitive narrowing" path so that type-case
     -- function bodies (like `strangeId : {a:Type} -> a -> a`) don't get
@@ -2755,22 +2842,25 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
     isAtLeastAsSpecificStrict spec natural =
       spec == natural || (isObjectType natural && isPrimitive spec)
 
-    -- Extended check (Phase 1.1): also allow `Object → IRef RECORD` and
-    -- treat `idrisObjectType` as a no-op narrowing.  Used only when the
-    -- candidate spec narrows at least one slot to a RECORD/UNIT class —
-    -- that's the signal the spec carries a real benefit (typed-accessor
-    -- pattern matching inside the body) that justifies the extra method.
+    -- Extended check (Phase 1.1 + Phase 2): also allow `Object → IRef
+    -- RECORD-DCon`, `Object → IRef TConInterface`, and treat
+    -- `idrisObjectType` as a no-op narrowing.  Used only when the
+    -- candidate spec narrows at least one slot to either a RECORD/UNIT
+    -- spec class or a TCon-family interface — those are the signals the
+    -- spec carries a real benefit (typed-accessor pattern matching or
+    -- sibling-safe family dispatch inside the body).
     isAtLeastAsSpecificExtended : ConSpecialisationPlan -> InferredType -> InferredType -> Bool
     isAtLeastAsSpecificExtended conPlan spec natural =
       spec == natural
       || (isObjectType natural
           && (isPrimitive spec
               || spec == idrisObjectType
-              || isRecordSpecRef conPlan spec))
+              || isRecordSpecRef conPlan spec
+              || isTConIfaceRef conPlan spec))
 
     hasRecordNarrowing : ConSpecialisationPlan -> InferredFunctionType -> InferredFunctionType -> Bool
     hasRecordNarrowing conPlan spec natural =
-      any (\(s, n) => isObjectType n && isRecordSpecRef conPlan s)
+      any (\(s, n) => isObjectType n && (isRecordSpecRef conPlan s || isTConIfaceRef conPlan s))
           (zip (spec.returnType :: spec.parameterTypes)
                (natural.returnType :: natural.parameterTypes))
 
@@ -2829,6 +2919,189 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
       && all (\t => isAtLeastAsSpecificStrict t inferredObjectType) spec
       && any isPrimitive spec
 
+    -- For Idris's special-case data shapes (CONS/NIL, JUST/NOTHING,
+    -- ZERO/SUCC, etc.), `ConInfo` already pins down the family.  Map it
+    -- to a synthetic TCon name that all sibling DCons share — this lets
+    -- user-defined `data Opt a = MkN | MkS a` and `Maybe a` both fold into
+    -- the same JVM TCon-interface family at runtime (they're structurally
+    -- equivalent anyway).
+    syntheticTConName : ConInfo -> Maybe String
+    syntheticTConName NIL     = Just "List"
+    syntheticTConName CONS    = Just "List"
+    syntheticTConName NOTHING = Just "Maybe"
+    syntheticTConName JUST    = Just "Maybe"
+    syntheticTConName ZERO    = Just "Nat"
+    syntheticTConName SUCC    = Just "Nat"
+    syntheticTConName _       = Nothing
+
+    -- Single-constructor (`RECORD`/`UNIT`) data types don't need a TCon
+    -- family interface: Phase 1's `findConSpecByClass` works directly with
+    -- the DCon spec class — adding a TCon interface for the lone DCon
+    -- would just confuse `inferExprCon` into returning the TCon type at
+    -- construction sites, which forces function specs to use the
+    -- interface signature when the more specific DCon signature would
+    -- enable typed accessors in the spec's pattern match.
+    isSingleConCon : ConInfo -> Bool
+    isSingleConCon RECORD = True
+    isSingleConCon UNIT   = True
+    isSingleConCon _      = False
+
+    isBareFor : Nat -> ConSlotRole -> Bool
+    isBareFor k (SlotBare ks) = elem k ks
+    isBareFor _ _ = False
+
+    -- A TCon's family interfaces may be derived only when its FULL set of
+    -- DCons cooperates (pure in Ctxt, so stable across plan iterations):
+    --   * every DCon's telescope walks (all-Local return spine, no
+    --     indexed shapes — a nullary `VNil : V 0` disqualifies the
+    --     family rather than silently joining instantiations its index
+    --     excludes), with equal spine lengths;
+    --   * every NON-NULLARY DCon has, for every type-param position, at
+    --     least one bare non-erased slot witnessing it.
+    -- Without the second condition a data-carrying sibling could never
+    -- determine its instantiation (`data E a b = L a | R b`: L never
+    -- sees b, R never sees a) and its spec instances would be stranded
+    -- outside every instantiation interface — so NO DCon of such a TCon
+    -- gets a family.  Returns the TCon's type-param count when eligible.
+    tconFamilyEligible : Name -> Core (Maybe Nat)
+    tconFamilyEligible tcon = do
+      dcons <- findDConsForTCon tcon
+      if isNil dcons
+        then pure Nothing
+        else do
+          mRoles <- traverse findConSlotRoles dcons
+          let Just allRoles = sequence mRoles
+            | Nothing => pure Nothing
+          case allRoles of
+            [] => pure Nothing
+            ((n, _) :: _) =>
+              if all (\(count, _) => count == n) allRoles && all (dconOk n) allRoles
+                then pure (Just n)
+                else pure Nothing
+      where
+        dconOk : Nat -> (Nat, List ConSlotRole) -> Bool
+        dconOk Z _ = True
+        dconOk _ (_, []) = True
+        dconOk n (_, roles) = all (\k => any (isBareFor k) roles) [0 .. minus n 1]
+
+    -- Derive `(tconFamilyBase, tconClassName)` for a DCon spec entry.
+    --
+    -- 1. Synthetic `ConInfo` shapes (CONS/NIL/JUST/NOTHING/...): keep the
+    --    DCon-slot-suffix scheme — the intrinsic `_builtin/*` Names have
+    --    no Ctxt telescope to derive type params from, and each
+    --    synthetic family has exactly one data-carrying shape, so the
+    --    slot suffix IS the instantiation key there.  `tconFamilyBase`
+    --    stays "" (synthetic entries are never under-determined).
+    -- 2. Ordinary DATACONs: keyed by the parent TCon's TYPE-ARGUMENT
+    --    instantiation — `<TConNatural>$F` + one char per type param
+    --    derived from primitive observations at bare-param slots
+    --    (`Run$F` for parameterless `Run`; `T$F$I` for `T Int`).  ALL
+    --    data-carrying siblings of one instantiation share the
+    --    interface, which is what makes family-typed tail recursion
+    --    across siblings sound (previously `Done$I`/`Step$I$L` got
+    --    disjoint `Run$I`/`Run$I$L` and crashed with a CCE).  The `$F`
+    --    marker avoids colliding with the TCon's own natural class
+    --    (type-case programs construct TCon values via `assembleCon`
+    --    with `tag = Nothing`) — and with same-named DCons (`data Run =
+    --    Run Int | Stop`).
+    --
+    -- A param char comes only from a PRIMITIVE observation (an Object
+    -- observation of a bare-`a` slot does not pin `a`); conflicting
+    -- primitive observations (believe_me) also refuse.  Specs that fail
+    -- to pin every param are UNDER-DETERMINED: `("base", "")` — they
+    -- behave as lone classes for routing but `implements` every active
+    -- instantiation of the base at emission (see
+    -- `preRegisterConstructorSpecs`).
+    deriveTConFamily : Name -> ConInfo -> String -> List InferredType -> Core (String, String)
+    deriveTConFamily dconName conInfo specClassName paramTypes =
+      if isSingleConCon conInfo then pure ("", "") else do
+        programName <- getProgramName
+        let dconNatural = getIdrisConstructorClassName programName (jvmSimpleName dconName)
+        case syntheticTConName conInfo of
+          Just synthetic =>
+            let suffix = substr (length dconNatural) (length specClassName) specClassName
+                segments = forget (split (== '/') dconNatural)
+            in case reverse segments of
+              (_ :: revPath) =>
+                pure ("", concat (intersperse "/" (reverse (synthetic :: revPath))) ++ suffix)
+              [] => pure ("", "")
+          Nothing => do
+            Just tcon <- findTConForDCon dconName
+              | Nothing => pure ("", "")
+            Just nParams <- tconFamilyEligible tcon
+              | Nothing => pure ("", "")
+            let base = getIdrisConstructorClassName programName (jvmSimpleName tcon) ++ "$F"
+            Just (_, roles) <- findConSlotRoles dconName
+              | Nothing => pure ("", "")
+            if length roles /= length paramTypes
+              then pure (base, "")
+              else case paramChars nParams roles of
+                Nothing => pure (base, "")
+                Just chars => pure (base, base ++ concat (map ("$" ++) chars))
+      where
+        primCharAt : Nat -> (ConSlotRole, InferredType) -> Maybe String
+        primCharAt k (role, ty) =
+          if isPrimitive ty && isBareFor k role
+            then Just (specConDescriptorChar ty)
+            else Nothing
+
+        charFor : List (ConSlotRole, InferredType) -> Nat -> Maybe String
+        charFor slots k =
+          case nub (mapMaybe (primCharAt k) slots) of
+            [c] => Just c
+            _ => Nothing
+
+        paramChars : Nat -> List ConSlotRole -> Maybe (List String)
+        paramChars Z _ = Just []
+        paramChars n roles =
+          traverse (charFor (zip roles paramTypes)) [0 .. minus n 1]
+
+    -- Refine reference slots that are RECURSIVE in the DCon's own type
+    -- family to the family interface (`Node$I$L$L`'s subtree slots become
+    -- `Tree$I$L$L` instead of Object) — the emitted field, `<init>` and
+    -- accessor descriptors then carry the family type, and
+    -- `$idrisTailRec` reassignments of the extracted slot skip a
+    -- per-iteration checkcast.  Only Object slots are refined, only when
+    -- the spec has a family interface, and only when the recursion flags
+    -- align 1:1 with `paramTypes` (arity/erasure mismatch → conservative
+    -- skip).
+    --
+    -- Synthetic `ConInfo` shapes are NEVER refined.  Their constructors
+    -- are rewritten to shared intrinsic Names (`_builtin/CONS` etc., see
+    -- Compiler.Opts.Constructor.tryIntrinsic), so one spec class serves
+    -- every source type of that shape — and the shapes don't guarantee
+    -- recursion: `calcListy` (TTImp.ProcessData) assigns CONS to ANY
+    -- 2-unerased-arg constructor, explicitly including non-recursive
+    -- pairs ("Note they don't have to be recursive!").  Typing
+    -- `CONS$I$L`'s second slot as `List$I$L` would checkcast-crash the
+    -- first `(5, "five")` pair.  There is also no Ctxt entry for the
+    -- intrinsic Names to consult.
+    --
+    -- For ordinary DATACONs the Ctxt telescope walk
+    -- (`findRecursiveConSlots`) decides recursion.  `tconClassName /= ""`
+    -- means the TCon passed `tconFamilyEligible` AND this spec fully
+    -- determined its instantiation — every well-typed runtime value of a
+    -- refined slot then implements the slot's interface: fully-determined
+    -- sibling specs of the same instantiation share the identical
+    -- interface name (instantiation-keyed naming), under-determined
+    -- sibling specs `implements` every active instantiation
+    -- (`preRegisterConstructorSpecs`), and live natural siblings do too
+    -- (`computeNaturalToTConIfaces`).
+    computeFieldTypes : Name -> ConInfo -> String -> List InferredType -> Core (List InferredType)
+    computeFieldTypes name conInfo tconClassName paramTypes =
+      if tconClassName == "" || isJust (syntheticTConName conInfo)
+        then pure paramTypes
+        else do
+          Just flags <- findRecursiveConSlots name
+            | Nothing => pure paramTypes
+          if length flags /= length paramTypes
+            then pure paramTypes
+            else pure $ zipWith refine flags paramTypes
+      where
+        refine : Bool -> InferredType -> InferredType
+        refine True ty = if ty == inferredObjectType then IRef tconClassName Interface [] else ty
+        refine False ty = ty
+
     processConSite : ConSpecialisationPlan
                   -> Name -> ConInfo -> Maybe Int -> List InferredType
                   -> Core (ConSpecialisationPlan, Bool)
@@ -2842,10 +3115,13 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
           let existing = fromMaybe [] $ SortedMap.lookup name conPlan
           if any (\sc => sc.paramTypes == paramTypes) existing
              then pure (conPlan, False)
-             else
-                   let entry   = MkSpecialisedCon name conInfo tag paramTypes specName
-                       updated = SortedMap.insert name (existing ++ [entry]) conPlan
-                   in pure (updated, True)
+             else do
+                   (tconFamilyBase, tconClassName) <- deriveTConFamily name conInfo specName paramTypes
+                   fieldTypes <- computeFieldTypes name conInfo tconClassName paramTypes
+                   let entry   = MkSpecialisedCon name conInfo tag paramTypes fieldTypes specName
+                                   tconClassName tconFamilyBase
+                   let updated = SortedMap.insert name (existing ++ [entry]) conPlan
+                   pure (updated, True)
 
     foldConSites : ConSpecialisationPlan
                 -> List (FC, Name, ConInfo, Maybe Int, List InferredType)
@@ -2944,15 +3220,25 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
 --
 -- Conversely, when a constructor is absent from this set, every runtime
 -- instance is a spec instance and the typed-accessor path is safe.
+--
+-- The result feeds back into inference (`inferConCaseExpr` narrows bound
+-- variables only when the natural class is dead), and narrowing decisions
+-- change which `paramTypes` get logged at downstream construction sites —
+-- so the set is computed as a fixpoint: each pass drains inference with
+-- the previous pass's candidate set installed on every state ref, and the
+-- results are accumulated by UNION until stable.  Union (rather than
+-- replacement) is required both for termination and for conservatism: the
+-- step function is not monotone — turning narrowing off can flip a
+-- primitive slot back to Object and accidentally *satisfy* a ref-slot
+-- spec match that a previous pass rejected.  Once a constructor is
+-- observed natural-live under any candidate set, it stays live.
 computeNaturalConsLive : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
                      -> SortedMap String NamedDef
                      -> SortedMap String (Ref AsmState AsmState)
                      -> SpecialisationPlan
                      -> ConSpecialisationPlan
                      -> List Name -> Core (SortedSet Name)
-computeNaturalConsLive defs stateRefs plan conPlan reachable = do
-    perName <- traverse gatherFor reachable
-    pure $ SortedSet.fromList $ mapMaybe needsNatural (concat perName)
+computeNaturalConsLive defs stateRefs plan conPlan reachable = loop SortedSet.empty
   where
     slotMatch : InferredType -> InferredType -> Bool
     slotMatch spec arg =
@@ -2979,9 +3265,9 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = do
       log <- getConSiteLog
       pure $ map (\(_, n, _, _, ts) => (n, ts)) log
 
-    gatherForSpec : NamedDef -> SpecialisedSignature
+    gatherForSpec : SortedSet Name -> NamedDef -> SpecialisedSignature
                  -> Core (List (Name, List InferredType))
-    gatherForSpec def (MkSpecialisedSig specName specDef specType) = do
+    gatherForSpec current def (MkSpecialisedSig specName specDef specType) = do
       let specParams = specType.parameterTypes
       let arity = case def of
                     MkNmFun ps _ => length ps
@@ -2994,10 +3280,11 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = do
       specRef <- newRef AsmState asmState
       setSpecialisationPlan {stateRef = specRef} plan
       setConSpecialisationPlan {stateRef = specRef} conPlan
+      setNaturalConsLive {stateRef = specRef} current
       drain {stateRef = specRef} specInitial specDef
 
-    gatherFor : Name -> Core (List (Name, List InferredType))
-    gatherFor name = do
+    gatherFor : SortedSet Name -> Name -> Core (List (Name, List InferredType))
+    gatherFor current name = do
       let nameStr = jvmSimpleName name
       let Just asmStateRef = SortedMap.lookup nameStr stateRefs
             | Nothing => pure []
@@ -3005,11 +3292,142 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = do
             | Nothing => pure []
       setSpecialisationPlan {stateRef = asmStateRef} plan
       setConSpecialisationPlan {stateRef = asmStateRef} conPlan
+      setNaturalConsLive {stateRef = asmStateRef} current
       initialFunctionType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
       naturalSites <- drain {stateRef = asmStateRef} initialFunctionType def
       let specs = fromMaybe [] $ SortedMap.lookup name plan
-      specSites <- traverse (gatherForSpec def) specs
+      specSites <- traverse (gatherForSpec current def) specs
       pure $ naturalSites ++ concat specSites
+
+    onePass : SortedSet Name -> Core (SortedSet Name)
+    onePass current = do
+      perName <- traverse (gatherFor current) reachable
+      pure $ SortedSet.fromList $ mapMaybe needsNatural (concat perName)
+
+    loop : SortedSet Name -> Core (SortedSet Name)
+    loop current = do
+      next <- onePass current
+      let merged = SortedSet.union current next
+      if SortedSet.toList merged == SortedSet.toList current
+        then pure merged
+        else loop merged
+
+-- For each spec entry with a TCon-family interface, find every sibling
+-- DCon's natural class and register that natural class to implement the
+-- TCon interface.  Without this, a function spec parameter typed as the
+-- family (e.g. `Maybe$I`) would refuse callers that pass the sibling
+-- natural class (`NOTHING`), reducing routing to natural-only — or worse,
+-- crash with a ClassCastException when a natural instance reaches a slot
+-- the inference typed at the family.
+--
+-- Sibling matching mirrors BOTH discovery paths of `deriveTConClassName`:
+-- the well-known `ConInfo` shapes (CONS/NIL, JUST/NOTHING, ZERO/SUCC)
+-- share a synthetic family, and ordinary DCons (e.g. `Left`/`Right`,
+-- which are plain DATACONs) resolve their parent TCon via
+-- `findTConForDCon`.  Matching only the synthetic shapes left natural
+-- `Right` without `implements Either$I` while `Either$I`-typed slots
+-- existed — the prelude build then died with
+-- `Right cannot be cast to Either$I`.
+--
+-- Inputs walked:
+--   * `conPlan` — spec entries with their `tconClassName` and originating
+--     `conInfo`.
+--   * `conSiteLog` aggregates — surfaces sibling `Name`s actually
+--     constructed in the program (so we register only siblings that exist
+--     at runtime, avoiding spurious interface declarations).
+computeNaturalToTConIfaces : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                          -> String -> ConSpecialisationPlan
+                          -> SortedMap String NamedDef
+                          -> SortedMap String (Ref AsmState AsmState)
+                          -> SpecialisationPlan
+                          -> List Name
+                          -> Core (SortedMap String (List String))
+computeNaturalToTConIfaces programName conPlan defs stateRefs plan reachable = do
+    perName <- traverse gatherSites reachable
+    let sites = concat perName
+    -- Family resolution hits the context (`findTConForDCon`), so collapse
+    -- the site list to one entry per constructor before tagging.
+    let uniqueSites = map snd $ SortedMap.toList $ SortedMap.fromList $
+                        map (\site => (jvmSimpleName (fst site), site)) sites
+    specFamilies <- traverse tagSpecFamily allSpecs
+    siteFamilies <- traverse tagSiteFamily uniqueSites
+    pure $ foldl (recordSibling specFamilies) SortedMap.empty siteFamilies
+  where
+    allSpecs : List SpecialisedConstructor
+    allSpecs = concat (snd <$> SortedMap.toList conPlan)
+
+    syntheticFamily : ConInfo -> Maybe String
+    syntheticFamily NIL     = Just "List"
+    syntheticFamily CONS    = Just "List"
+    syntheticFamily NOTHING = Just "Maybe"
+    syntheticFamily JUST    = Just "Maybe"
+    syntheticFamily ZERO    = Just "Nat"
+    syntheticFamily SUCC    = Just "Nat"
+    syntheticFamily _       = Nothing
+
+    Site : Type
+    Site = (Name, ConInfo)
+
+    -- A family key identifies one TCon hierarchy.  Well-known shapes
+    -- share a synthetic key regardless of parent TCon (`CONS` matches
+    -- `CONS` across `List$I$L`/`List$L$L` AND `NIL`); everything else is
+    -- keyed by the parent TCon from the context, so `Left`/`Right` both
+    -- map to `Either` and natural siblings of `Either$<sig>` get found.
+    familyKey : Name -> ConInfo -> Core (Maybe String)
+    familyKey name conInfo =
+      case syntheticFamily conInfo of
+        Just synthetic => pure $ Just ("synthetic:" ++ synthetic)
+        Nothing => do
+          mTCon <- findTConForDCon name
+          pure $ (\tcon => "tcon:" ++ show tcon) <$> mTCon
+
+    tagSpecFamily : SpecialisedConstructor -> Core (SpecialisedConstructor, Maybe String)
+    tagSpecFamily sc@(MkSpecialisedCon dconName conInfo _ _ _ _ _ _) = do
+      family <- familyKey dconName conInfo
+      pure (sc, family)
+
+    tagSiteFamily : Site -> Core (Name, Maybe String)
+    tagSiteFamily (name, conInfo) = do
+      family <- familyKey name conInfo
+      pure (name, family)
+
+    drainSites : {auto stateRef : Ref AsmState AsmState} -> InferredFunctionType
+              -> NamedDef -> Core (List Site)
+    drainSites initialFunctionType def = do
+      inferFunctionType (Just initialFunctionType) def
+      inferDef
+      log <- getConSiteLog
+      pure $ map (\(_, n, ci, _, _) => (n, ci)) log
+
+    gatherSites : Name -> Core (List Site)
+    gatherSites name = do
+      let nameStr = jvmSimpleName name
+      let Just asmStateRef = SortedMap.lookup nameStr stateRefs
+            | Nothing => pure []
+      let Just def = SortedMap.lookup nameStr defs
+            | Nothing => pure []
+      setConSpecialisationPlan {stateRef = asmStateRef} conPlan
+      initialFunctionType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
+      drainSites {stateRef = asmStateRef} initialFunctionType def
+
+    addUnique : String -> List String -> List String
+    addUnique s xs = if elem s xs then xs else xs ++ [s]
+
+    -- For each same-family spec, register its `tconClassName` on the
+    -- site's natural class.  Multiple instantiations share a family key
+    -- (e.g. `List$I$L` and `List$L$L` both ask `NIL` to implement them),
+    -- so we accumulate one entry per matching spec instead of choosing
+    -- one canonical interface per family.
+    recordSibling : List (SpecialisedConstructor, Maybe String)
+                 -> SortedMap String (List String) -> (Name, Maybe String)
+                 -> SortedMap String (List String)
+    recordSibling specs acc (name, Just siteFamily) =
+      let cls = getIdrisConstructorClassName programName (jvmSimpleName name)
+          existing = fromMaybe [] (SortedMap.lookup cls acc)
+          matching = filter (\(sc, family) => sc.tconClassName /= "" && family == Just siteFamily) specs
+          updated = foldl (\xs, (sc, _) => addUnique sc.tconClassName xs) existing matching
+      in if isNil matching then acc else SortedMap.insert cls updated acc
+    recordSibling _ acc (_, Nothing) = acc
 
 ||| Compile a TT expression to JVM bytecode
 compileToJvmBytecode : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> String -> String -> ClosedTerm -> Core ()
@@ -3037,10 +3455,11 @@ compileToJvmBytecode outputDirectory outputFile term = do
     let stateRefsMap = SortedMap.fromList $ mapMaybe (\(n, _, r) => Just (jvmSimpleName n, r)) (toList nameFcStateRefs)
     (plan, conPlan) <- buildSpecialisationPlan programName namedDefsByName stateRefsMap reachable
     natLive <- computeNaturalConsLive namedDefsByName stateRefsMap plan conPlan reachable
+    natIfaces <- computeNaturalToTConIfaces programName conPlan namedDefsByName stateRefsMap plan reachable
     preRegisterSpecs plan
     preRegisterConstructorSpecs conPlan
     let reachableNameFcStateRefs = filter (\(n, _, _) => SortedSet.contains n reachableSet) nameFcStateRefs
-    assembleNameFcStateRefs plan conPlan natLive namedDefsByName reachableNameFcStateRefs
+    assembleNameFcStateRefs plan conPlan natLive natIfaces namedDefsByName reachableNameFcStateRefs
     coreLift $ do
         exportDefs $ mapMaybe (getExport noMangleMap . fst) allDefs
         mainAsmState <- AsmState.fromIdrisName mainFunctionName

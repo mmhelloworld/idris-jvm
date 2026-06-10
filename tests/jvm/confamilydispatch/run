@@ -1,0 +1,90 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o famdispatch Spec.idr > /dev/null 2>&1
+
+app=build/exec/famdispatch_app
+
+# Spec DCon class and its TCon family interface for the user-defined sum
+# type (ordinary DATACONs — family resolved via findTConForDCon).  Shape
+# has no type params, so there is exactly ONE instantiation interface
+# Shape$F, shared by Circle$I and Rect$I$I.
+circle_spec=$(find "$app" -name 'Circle$I.class' -print -quit 2>/dev/null)
+rect_spec=$(find "$app" -name 'Rect$I$I.class' -print -quit 2>/dev/null)
+shape_iface=$(find "$app" -name 'Shape$F.class' -print -quit 2>/dev/null)
+
+if [ -f "$circle_spec" ]; then
+  echo "Spec class Circle\$I: PRESENT"
+else
+  echo "Spec class Circle\$I: MISSING"
+fi
+
+if [ -f "$shape_iface" ] && javap "$shape_iface" 2>/dev/null | grep -q 'interface'; then
+  echo "Family interface Shape\$F: PRESENT"
+else
+  echo "Family interface Shape\$F: MISSING"
+fi
+
+# BOTH data-carrying constructors implement the single instantiation.
+if javap "$circle_spec" 2>/dev/null | grep -q 'Shape\$F' \
+   && javap "$rect_spec" 2>/dev/null | grep -q 'Shape\$F'; then
+  echo "Circle\$I + Rect\$I\$I implement Shape\$F: OK"
+else
+  echo "Circle\$I + Rect\$I\$I implement Shape\$F: MISSING"
+fi
+
+main_class=$(find "$app" -path '*famdispatch/Main.class' -print -quit)
+methods=$(javap -p "$main_class" 2>/dev/null)
+disassembly=$(javap -c -p "$main_class" 2>/dev/null)
+
+# Exactly ONE area spec covers both constructors (previously the two
+# slot-suffix-keyed instantiations produced one spec each).
+if [ "$(echo "$methods" | grep -cE 'static int area\$sp[0-9]+\(.*Shape\$F\)')" = 1 ]; then
+  echo "area\$sp(Shape\$F) -> int: SINGLE"
+else
+  echo "area\$sp(Shape\$F) -> int: WRONG COUNT"
+fi
+
+area_body=$(echo "$disassembly" | awk '/static int area\$sp[0-9]+\(.*Shape\$F\)/,/^$/')
+
+# Family-interface dispatch in BOTH alts of the same spec body.
+if echo "$area_body" | grep -q 'checkcast.*Circle\$I' \
+   && echo "$area_body" | grep -qE 'invokevirtual.*Circle\$I\.getInt0:\(\)I'; then
+  echo "area\$sp Circle alt: typed accessor via family checkcast"
+else
+  echo "area\$sp Circle alt: NO FAMILY DISPATCH"
+fi
+
+if echo "$area_body" | grep -q 'checkcast.*Rect\$I\$I' \
+   && echo "$area_body" | grep -qE 'invokevirtual.*Rect\$I\$I\.getInt0:\(\)I' \
+   && echo "$area_body" | grep -qE 'invokevirtual.*Rect\$I\$I\.getInt1:\(\)I'; then
+  echo "area\$sp Rect alt: typed accessor via family checkcast"
+else
+  echo "area\$sp Rect alt: NO FAMILY DISPATCH"
+fi
+
+# Same dispatch through the synthetic-family path (prelude Maybe shape —
+# slot-suffix keying retained there, Maybe$I unchanged).
+sumo_body=$(echo "$disassembly" | awk '/static int sumO\$sp[0-9]+\(.*Maybe\$I\)/,/^$/')
+
+if echo "$sumo_body" | grep -q 'checkcast.*JUST\$I' \
+   && echo "$sumo_body" | grep -qE 'invokevirtual.*JUST\$I\.getInt0:\(\)I'; then
+  echo "sumO\$sp Just alt: typed accessor via family checkcast"
+else
+  echo "sumO\$sp Just alt: NO FAMILY DISPATCH"
+fi
+
+if echo "$sumo_body" | grep -q 'getProperty'; then
+  echo "sumO\$sp boxing: STILL BOXED"
+else
+  echo "sumO\$sp boxing: NONE"
+fi
+
+# Bootstrap-compat smoke test: IdrisList$Cons still ships.
+if find "$app" -name 'IdrisList$Cons.class' -print -quit 2>/dev/null | grep -q .; then
+  echo "IdrisList\$Cons still present: OK"
+else
+  echo "IdrisList\$Cons MISSING (broke bootstrap compat)"
+fi
+
+# Runtime output.
+./build/exec/famdispatch${IDRIS_EXEC_EXT}

@@ -1,0 +1,95 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o recslots Spec.idr > /dev/null 2>&1
+
+app=build/exec/recslots_app
+
+node_spec=$(find "$app" -name 'Node$I$L$L.class' -print -quit 2>/dev/null)
+tree_iface=$(find "$app" -name 'Tree$F.class' -print -quit 2>/dev/null)
+leaf_class=$(find "$app" -name 'Leaf.class' -print -quit 2>/dev/null)
+
+if [ -f "$node_spec" ]; then
+  echo "Spec class Node\$I\$L\$L: PRESENT"
+else
+  echo "Spec class Node\$I\$L\$L: MISSING"
+fi
+
+node_members=$(javap -p "$node_spec" 2>/dev/null)
+
+# Recursive slots typed as the family-instantiation interface (Tree has
+# no type params -> single interface Tree$F), not Object.
+if echo "$node_members" | grep -qE 'int property0;' \
+   && echo "$node_members" | grep -qE 'Tree\$F property1;' \
+   && echo "$node_members" | grep -qE 'Tree\$F property2;'; then
+  echo "Node fields: int + recursive Tree\$F slots"
+else
+  echo "Node fields: NOT REFINED"
+fi
+
+# Typed accessors carry the refined descriptors.
+if echo "$node_members" | grep -qE 'public int getInt0\(\)' \
+   && echo "$node_members" | grep -qE 'Tree\$F getRef1\(\)' \
+   && echo "$node_members" | grep -qE 'Tree\$F getRef2\(\)'; then
+  echo "Typed accessors: getInt0 + getRef1/getRef2 (Tree\$F)"
+else
+  echo "Typed accessors: WRONG DESCRIPTORS"
+fi
+
+# Family interface exists and the nullary sibling natural implements it.
+if [ -f "$tree_iface" ] && javap "$tree_iface" 2>/dev/null | grep -q 'interface'; then
+  echo "Family interface Tree\$F: PRESENT"
+else
+  echo "Family interface Tree\$F: MISSING"
+fi
+
+if javap "$leaf_class" 2>/dev/null | grep -q 'Tree\$F'; then
+  echo "Leaf implements Tree\$F: OK"
+else
+  echo "Leaf implements Tree\$F: MISSING"
+fi
+
+main_class=$(find "$app" -path '*recslots/Main.class' -print -quit)
+disassembly=$(javap -c -p "$main_class" 2>/dev/null)
+
+# The sumLeft spec narrowed to the family interface...
+sumleft_body=$(echo "$disassembly" | awk '/static int sumLeft\$sp[0-9]+\(int, .*Tree\$F\)/,/^$/')
+
+if [ -n "$sumleft_body" ]; then
+  echo "sumLeft\$sp(int, Tree\$F) -> int: PRESENT"
+else
+  echo "sumLeft\$sp(int, Tree\$F) -> int: MISSING"
+fi
+
+# ...uses the typed accessor via the family checkcast...
+if echo "$sumleft_body" | grep -q 'checkcast.*Node\$I\$L\$L' \
+   && echo "$sumleft_body" | grep -qE 'getRef1:\(\).*Tree\$F'; then
+  echo "sumLeft\$sp Node alt: family checkcast + typed getRef1"
+else
+  echo "sumLeft\$sp Node alt: NO FAMILY DISPATCH"
+fi
+
+# ...and the tail-recursion reassignment needs NO cast back to the family
+# interface: getRef1 already returns Tree$F.
+if echo "$sumleft_body" | grep -qE 'checkcast.*Tree\$F'; then
+  echo "sumLeft\$sp tail-rec: REDUNDANT checkcast Tree\$F"
+else
+  echo "sumLeft\$sp tail-rec: no Tree\$F checkcast"
+fi
+
+# The construction site pays the (single) cast instead: build's untyped
+# recursive result is checkcast to Tree$F before the Node ctor.
+build_body=$(echo "$disassembly" | awk '/static java.lang.Object build\(/,/^$/')
+if echo "$build_body" | grep -qE 'checkcast.*Tree\$F'; then
+  echo "build construction: checkcast Tree\$F before Node ctor"
+else
+  echo "build construction: NO CONSTRUCTION CAST"
+fi
+
+# Bootstrap-compat smoke test.
+if find "$app" -name 'IdrisList$Cons.class' -print -quit 2>/dev/null | grep -q .; then
+  echo "IdrisList\$Cons still present: OK"
+else
+  echo "IdrisList\$Cons MISSING (broke bootstrap compat)"
+fi
+
+./build/exec/recslots${IDRIS_EXEC_EXT}

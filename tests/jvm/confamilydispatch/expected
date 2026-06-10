@@ -1,0 +1,13 @@
+Spec class Circle$I: PRESENT
+Family interface Shape$F: PRESENT
+Circle$I + Rect$I$I implement Shape$F: OK
+area$sp(Shape$F) -> int: SINGLE
+area$sp Circle alt: typed accessor via family checkcast
+area$sp Rect alt: typed accessor via family checkcast
+sumO$sp Just alt: typed accessor via family checkcast
+sumO$sp boxing: NONE
+IdrisList$Cons still present: OK
+75
+12
+42
+0

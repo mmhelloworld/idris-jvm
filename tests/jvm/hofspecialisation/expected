@@ -1,0 +1,16 @@
+Typed callback interface: OK
+HOF spec for applyN: OK
+HOF spec for twice: OK
+HOF spec for hof: OK
+HOF spec for countdown: OK
+Typed apply in applyN spec: OK
+Typed lambda implementation: OK
+Natural applyN retained: OK
+1024
+54
+16
+11
+12
+3
+40
+Just [2, 3]

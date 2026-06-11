@@ -123,6 +123,7 @@ import static org.objectweb.asm.Opcodes.ILOAD;
 import static org.objectweb.asm.Opcodes.IMUL;
 import static org.objectweb.asm.Opcodes.INEG;
 import static org.objectweb.asm.Opcodes.INSTANCEOF;
+import static org.objectweb.asm.Opcodes.INVOKEINTERFACE;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
 import static org.objectweb.asm.Opcodes.INVOKESTATIC;
 import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
@@ -558,6 +559,111 @@ public final class Assembler {
       cw.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
       cw.visitEnd();
       cws.put(interfaceName, cw);
+    }
+  }
+
+  // FFI entry-point: emit a typed callback SAM interface for higher-order
+  // specialisation (e.g. `Fn$I$I` declaring `int apply(int)`).  The
+  // interface extends `java.util.function.Function` and carries a default
+  // `apply(Object)Object` bridge that unboxes the argument, invokes the
+  // typed apply and boxes the result.  The bridge is what keeps a typed
+  // callback instance assignable (and behaviourally identical) wherever a
+  // natural `Function` flows — passed to unspecialised higher-order
+  // functions, stored in Object constructor slots, or applied through the
+  // generic boxed path.  With the bridge present the only abstract method
+  // is the typed `apply`, so the interface stays functional and
+  // LambdaMetafactory can target the typed signature directly.
+  public void createIdrisFunctionInterface(String interfaceName, String typedApplyDescriptor) {
+    if (!cws.containsKey(interfaceName)) {
+      ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+      cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
+        interfaceName, null, "java/lang/Object",
+        new String[]{"java/util/function/Function"});
+      cw.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
+
+      MethodVisitor typedApply = cw.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, "apply", typedApplyDescriptor,
+        null, null);
+      typedApply.visitEnd();
+
+      Type[] parameterTypes = Type.getArgumentTypes(typedApplyDescriptor);
+      Type returnType = Type.getReturnType(typedApplyDescriptor);
+      MethodVisitor bridge = cw.visitMethod(ACC_PUBLIC, "apply",
+        "(Ljava/lang/Object;)Ljava/lang/Object;", null, null);
+      bridge.visitCode();
+      bridge.visitVarInsn(ALOAD, 0);
+      bridge.visitVarInsn(ALOAD, 1);
+      unboxObjectTo(bridge, parameterTypes[0]);
+      bridge.visitMethodInsn(INVOKEINTERFACE, interfaceName, "apply", typedApplyDescriptor, true);
+      boxValue(bridge, returnType);
+      bridge.visitInsn(ARETURN);
+      bridge.visitMaxs(-1, -1);
+      bridge.visitEnd();
+      cw.visitEnd();
+      cws.put(interfaceName, cw);
+    }
+  }
+
+  private static void unboxObjectTo(MethodVisitor mv, Type type) {
+    String conversion = "io/github/mmhelloworld/idrisjvm/runtime/Conversion";
+    String objectParamDesc = "(Ljava/lang/Object;)";
+    switch (type.getSort()) {
+      case Type.BOOLEAN:
+        mv.visitMethodInsn(INVOKESTATIC, conversion, "toBoolean", objectParamDesc + "Z", false);
+        break;
+      case Type.BYTE:
+        mv.visitMethodInsn(INVOKESTATIC, conversion, "toByte", objectParamDesc + "B", false);
+        break;
+      case Type.CHAR:
+        mv.visitMethodInsn(INVOKESTATIC, conversion, "toChar", objectParamDesc + "C", false);
+        break;
+      case Type.SHORT:
+        mv.visitMethodInsn(INVOKESTATIC, conversion, "toShort", objectParamDesc + "S", false);
+        break;
+      case Type.INT:
+        mv.visitMethodInsn(INVOKESTATIC, conversion, "toInt", objectParamDesc + "I", false);
+        break;
+      case Type.LONG:
+        mv.visitMethodInsn(INVOKESTATIC, conversion, "toLong", objectParamDesc + "J", false);
+        break;
+      case Type.FLOAT:
+        mv.visitMethodInsn(INVOKESTATIC, conversion, "toFloat", objectParamDesc + "F", false);
+        break;
+      case Type.DOUBLE:
+        mv.visitMethodInsn(INVOKESTATIC, conversion, "toDouble", objectParamDesc + "D", false);
+        break;
+      default:
+        break; // reference slot: the Object argument is passed through unchanged
+    }
+  }
+
+  private static void boxValue(MethodVisitor mv, Type type) {
+    switch (type.getSort()) {
+      case Type.BOOLEAN:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false);
+        break;
+      case Type.BYTE:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", false);
+        break;
+      case Type.CHAR:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;", false);
+        break;
+      case Type.SHORT:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;", false);
+        break;
+      case Type.INT:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false);
+        break;
+      case Type.LONG:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false);
+        break;
+      case Type.FLOAT:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;", false);
+        break;
+      case Type.DOUBLE:
+        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false);
+        break;
+      default:
+        break; // reference return: already an Object
     }
   }
 

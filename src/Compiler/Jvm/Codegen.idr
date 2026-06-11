@@ -702,7 +702,15 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         if paramTypes == []
             then assembleNmAppNilArity isTailCall returnType idrisName
             else do
-                let argsWithTypes = zip args paramTypes
+                -- Mirror of inferAppArgs: literal lambdas at typed
+                -- callback slots (spec callee or decl-driven) are
+                -- assembled expecting the typed interface; the
+                -- invokestatic descriptor below keeps the callee's actual
+                -- parameter types (the typed value is assignable to a
+                -- natural Function slot since the interface extends it).
+                declSigs <- fromMaybe [] . SortedMap.lookup (jvmSimpleName idrisName) <$> getCallbackSlotSigs
+                let expectedTypes = adjustCallbackSlotTypes !getProgramName declSigs args paramTypes
+                let argsWithTypes = zip args expectedTypes
                 traverse_ assembleParameter argsWithTypes
                 let methodReturnType = InferredFunctionType.returnType functionType
                 let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType methodReturnType paramTypes
@@ -711,11 +719,35 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                 when isTailCall $ asmReturn returnType
 
     assembleExpr isTailCall returnType (NmApp _ lambdaVariable [arg]) = do
-        assembleExpr False inferredLambdaType lambdaVariable
-        assembleExpr False IUnknown arg
-        invokeMethod InvokeInterface "java/util/function/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" True
-        asmCast inferredObjectType returnType
+        -- Typed apply (higher-order specialisation): when the applied
+        -- value is a variable statically typed as a callback interface
+        -- (e.g. a spec's callback parameter), invoke the typed `apply`
+        -- directly — argument cast to the typed parameter, primitive
+        -- result with no boxing.  Mirrors inferExprApp's variable-head
+        -- case; every other shape stays on the boxed `Function.apply`
+        -- path, which remains correct for typed callbacks through the
+        -- interface's default bridge method.
+        case !(callbackSigOfVariable lambdaVariable) of
+          Just (ifaceName, sig) => do
+            createIdrisFunctionInterface ifaceName (getMethodDescriptor sig)
+            assembleExpr False (IRef ifaceName Interface []) lambdaVariable
+            assembleExpr False (fromMaybe inferredObjectType (head' sig.parameterTypes)) arg
+            invokeMethod InvokeInterface ifaceName "apply" (getMethodDescriptor sig) True
+            asmCast sig.returnType returnType
+          Nothing => do
+            assembleExpr False inferredLambdaType lambdaVariable
+            assembleExpr False IUnknown arg
+            invokeMethod InvokeInterface "java/util/function/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" True
+            asmCast inferredObjectType returnType
         when isTailCall $ asmReturn returnType
+      where
+        callbackSigOfVariable : NamedCExp -> Core (Maybe (String, InferredFunctionType))
+        callbackSigOfVariable (NmLocal _ var) = do
+          varType <- getVariableType (jvmSimpleName var)
+          pure $ case (varType, parseCallbackIfaceType varType) of
+            (IRef cls _ _, Just sig) => Just (cls, sig)
+            _ => Nothing
+        callbackSigOfVariable _ = pure Nothing
 
     assembleExpr isTailCall returnType expr@(NmCon fc name conInfo tag args) = assembleCon isTailCall returnType fc name tag args
 
@@ -1287,7 +1319,15 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                             -> (isMethodReference : Bool) -> (arity: Nat) -> (functionName: Name)
                             -> (parameterName : Maybe Name) -> NamedCExp -> Core ()
     assembleMethodReference isTailCall returnType isMethodReference arity functionName parameterName body =
-      if isMethodReference
+      -- A lambda expected at a typed callback interface must NOT take the
+      -- method-reference shortcut: createMethodReference emits an
+      -- invokedynamic against the natural `Function`, which is not an
+      -- instance of the typed interface (the subtyping only goes the
+      -- other way), so the value would fail the interface cast at
+      -- runtime.  The seeded inference path (inferCallbackLambda) never
+      -- takes the method-reference shape either, so the scope created
+      -- there is consumed by the sub-method path here.
+      if isMethodReference && isNothing (parseCallbackIfaceType returnType)
         then createMethodReference isTailCall arity functionName
         else assembleSubMethodWithScope1 isTailCall returnType parameterName body
 
@@ -1348,14 +1388,34 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         when (lambdaType == DelayedLambda) $ do
             new "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed"
             dup
-        let lambdaInterfaceType = getLambdaInterfaceType lambdaType
+        let isExtracted = isJust parameterValueExpr
+        -- Higher-order specialisation: a real one-parameter lambda whose
+        -- expected type is a typed callback interface is created against
+        -- that interface — typed SAM descriptor, primitive-typed
+        -- implementation method.  The parameter's type below comes from
+        -- the scope that inferCallbackLambda seeded with the signature's
+        -- parameter type, so the descriptors here and inference agree.
+        let mCallbackSig = if isExtracted || lambdaType /= FunctionLambda
+                             then Nothing
+                             else parseCallbackIfaceType lambdaReturnType
+        -- The interface class file must exist in the output whenever a
+        -- lambda is created against it — including at sites that never
+        -- earn a spec (decl-driven or lambda-derived signatures).  The
+        -- assembler dedups by class name, so this is idempotent.
+        case mCallbackSig of
+          Just sig => do
+            ifaceName <- getJvmReferenceTypeName lambdaReturnType
+            createIdrisFunctionInterface ifaceName (getMethodDescriptor sig)
+          Nothing => pure ()
+        let lambdaInterfaceType = maybe (getLambdaInterfaceType lambdaType) (const lambdaReturnType) mCallbackSig
         parameterType <- traverseOpt getVariableType (jvmSimpleName <$> parameterName)
         variableTypes <- coreLift $ Map.values {key=Int} !(loadClosures declaringScope scope)
         maybe (pure ()) id parameterValueExpr
         let invokeDynamicDescriptor = getMethodDescriptor $ MkInferredFunctionType lambdaInterfaceType variableTypes
-        let isExtracted = isJust parameterValueExpr
         let implementationMethodReturnType =
-            if isExtracted then lambdaBodyReturnType else getLambdaImplementationMethodReturnType lambdaType
+            if isExtracted
+              then lambdaBodyReturnType
+              else maybe (getLambdaImplementationMethodReturnType lambdaType) (.returnType) mCallbackSig
         let implementationMethodDescriptor =
             getMethodDescriptor $
                 MkInferredFunctionType implementationMethodReturnType (variableTypes ++ toList parameterType)
@@ -1368,7 +1428,8 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             let instantiatedMethodDescriptor = getMethodDescriptor $
                 MkInferredFunctionType implementationMethodReturnType $ toList parameterType
             asmInvokeDynamic lambdaClassName lambdaMethodName interfaceMethodName invokeDynamicDescriptor
-                (getSamDesc lambdaType) implementationMethodDescriptor instantiatedMethodDescriptor
+                (maybe (getSamDesc lambdaType) getMethodDescriptor mCallbackSig)
+                implementationMethodDescriptor instantiatedMethodDescriptor
             when (lambdaType == DelayedLambda) $
                 invokeMethod InvokeSpecial "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "<init>"
                     "(Lio/github/mmhelloworld/idrisjvm/runtime/Delayed;)V" False
@@ -1388,7 +1449,10 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         let labelEnd = methodEndLabel
         addLambdaStartLabel scope labelStart
         maybe (pure ()) (\parentScopeIndex => updateScopeStartLabel parentScopeIndex labelStart) (parentIndex scope)
-        let lambdaReturnType = if isExtracted then lambdaBodyReturnType else inferredObjectType
+        let lambdaReturnType =
+            if isExtracted
+              then lambdaBodyReturnType
+              else maybe inferredObjectType (.returnType) mCallbackSig
         assembleExpr True lambdaReturnType expr
         addLambdaEndLabel scope labelEnd
         maybe (pure ()) (\parentScopeIndex => updateScopeEndLabel parentScopeIndex labelEnd) (parentIndex scope)
@@ -2625,6 +2689,33 @@ preRegisterSpecs plan = traverse_ register (snd =<< SortedMap.toList plan)
       let stub = MkFunction jname specType (believe_me scopes) 0 (NmCrash emptyFC "spec stub")
       AsmGlobalState.addFunction jname stub
 
+-- Emit every typed callback interface the emitted bytecode can reference
+-- (higher-order specialisation): the slots of every function spec in the
+-- plan, plus every declaration-driven callback signature — emission
+-- creates a typed lambda at a decl-driven slot even when the site never
+-- earns a spec (the typed value is assignable to the natural Function
+-- slot), so the interface class must exist regardless of the plan.  One
+-- interface per distinct signature program-wide.
+preRegisterCallbackInterfaces : (programName : String) -> SpecialisationPlan
+                             -> SortedMap String (List CallbackSlot) -> Core ()
+preRegisterCallbackInterfaces programName plan cbSigs = do
+    let planSpecs = the (List SpecialisedSignature) (concatMap snd (SortedMap.toList plan))
+    let planSlotTypes = concatMap (\(MkSpecialisedSig _ _ t) => t.returnType :: t.parameterTypes) planSpecs
+    let planSigs = mapMaybe parseCallbackIfaceType planSlotTypes
+    let declSigs = mapMaybe concreteSig (concatMap snd (SortedMap.toList cbSigs))
+    let named = map (\sig => (mkCallbackIfaceName programName sig, sig)) (planSigs ++ declSigs)
+    traverse_ createCallbackIface (nubBy (\a, b => fst a == fst b) named)
+  where
+    concreteSig : CallbackSlot -> Maybe InferredFunctionType
+    concreteSig (CallbackConcrete sig) = Just sig
+    concreteSig _ = Nothing
+
+    createCallbackIface : (String, InferredFunctionType) -> Core ()
+    createCallbackIface (ifaceName, sig) = do
+      asmState <- coreLift $ AsmState.fromJavaName (Jqualified ifaceName "<clinit>")
+      stateRef <- newRef AsmState asmState
+      createIdrisFunctionInterface ifaceName (getMethodDescriptor sig)
+
 -- Eagerly emit the specialised constructor classes the plan discovered.  Each
 -- spec class has typed fields (per-slot JVM descriptors from `fieldTypes`)
 -- and per-slot typed accessors — see `Assembler.createIdrisConstructorClassTyped`.
@@ -2694,14 +2785,16 @@ preRegisterConstructorSpecs plan = do
 assembleSpec : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
             -> SpecialisationPlan -> ConSpecialisationPlan -> SortedSet Name
             -> SortedMap String (List String)
+            -> SortedMap String (List CallbackSlot)
             -> SpecialisedSignature -> Core ()
-assembleSpec plan conPlan natLive natIfaces (MkSpecialisedSig specName def specType) = do
+assembleSpec plan conPlan natLive natIfaces cbSigs (MkSpecialisedSig specName def specType) = do
   asmState <- coreLift $ AsmState.fromIdrisName specName
   stateRef <- newRef AsmState asmState
   setSpecialisationPlan {stateRef} plan
   setConSpecialisationPlan {stateRef} conPlan
   setNaturalConsLive {stateRef} natLive
   setNaturalToTConIfaces {stateRef} natIfaces
+  setCallbackSlotSigs {stateRef} cbSigs
   inferFunctionType {stateRef} (Just specType) def
   inferDef {stateRef}
   assemble {stateRef} specName emptyFC
@@ -2733,7 +2826,8 @@ assembleNameFcStateRefs plan conPlan natLive natIfaces defs ((name, fc, stateRef
       inferDef {stateRef}
     Nothing => pure ()
   assemble {stateRef=stateRef} name fc
-  traverse_ (assembleSpec plan conPlan natLive natIfaces) (fromMaybe [] $ SortedMap.lookup name plan)
+  cbSigs <- getCallbackSlotSigs {stateRef}
+  traverse_ (assembleSpec plan conPlan natLive natIfaces cbSigs) (fromMaybe [] $ SortedMap.lookup name plan)
   assembleNameFcStateRefs plan conPlan natLive natIfaces defs rest
 
 getNamedDefsByName : String -> LazyList (Name, FC, Ref AsmState AsmState) -> Core (SortedMap String NamedDef)
@@ -2840,7 +2934,14 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
     -- discriminated branches that doesn't match a spec'd primitive slot.
     isAtLeastAsSpecificStrict : InferredType -> InferredType -> Bool
     isAtLeastAsSpecificStrict spec natural =
-      spec == natural || (isObjectType natural && isPrimitive spec)
+      spec == natural
+      || (isObjectType natural && isPrimitive spec)
+      -- Higher-order specialisation: a natural `Function` slot may narrow
+      -- to a typed callback interface.  Sound because the interface
+      -- extends `Function` (with a default boxed-apply bridge), and the
+      -- slot is only logged as the interface for literal lambdas that
+      -- emission constructs against it.
+      || (natural == inferredLambdaType && isJust (parseCallbackIfaceType spec))
 
     -- Extended check (Phase 1.1 + Phase 2): also allow `Object → IRef
     -- RECORD-DCon`, `Object → IRef TConInterface`, and treat
@@ -2857,6 +2958,7 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
               || spec == idrisObjectType
               || isRecordSpecRef conPlan spec
               || isTConIfaceRef conPlan spec))
+      || (natural == inferredLambdaType && isJust (parseCallbackIfaceType spec))
 
     hasRecordNarrowing : ConSpecialisationPlan -> InferredFunctionType -> InferredFunctionType -> Bool
     hasRecordNarrowing conPlan spec natural =
@@ -3182,6 +3284,7 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
                 specRef <- newRef AsmState asmState
                 setSpecialisationPlan {stateRef = specRef} p
                 setConSpecialisationPlan {stateRef = specRef} cp
+                setCallbackSlotSigs {stateRef = specRef} !(getCallbackSlotSigs {stateRef = asmStateRef})
                 inferFunctionType {stateRef = specRef} (Just initialFunctionType) def
                 inferDef {stateRef = specRef}
                 sites <- getCallSiteLog {stateRef = specRef}
@@ -3265,9 +3368,10 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = loop SortedSet.em
       log <- getConSiteLog
       pure $ map (\(_, n, _, _, ts) => (n, ts)) log
 
-    gatherForSpec : SortedSet Name -> NamedDef -> SpecialisedSignature
+    gatherForSpec : SortedSet Name -> NamedDef -> SortedMap String (List CallbackSlot)
+                 -> SpecialisedSignature
                  -> Core (List (Name, List InferredType))
-    gatherForSpec current def (MkSpecialisedSig specName specDef specType) = do
+    gatherForSpec current def cbSigs (MkSpecialisedSig specName specDef specType) = do
       let specParams = specType.parameterTypes
       let arity = case def of
                     MkNmFun ps _ => length ps
@@ -3281,6 +3385,7 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = loop SortedSet.em
       setSpecialisationPlan {stateRef = specRef} plan
       setConSpecialisationPlan {stateRef = specRef} conPlan
       setNaturalConsLive {stateRef = specRef} current
+      setCallbackSlotSigs {stateRef = specRef} cbSigs
       drain {stateRef = specRef} specInitial specDef
 
     gatherFor : SortedSet Name -> Name -> Core (List (Name, List InferredType))
@@ -3296,7 +3401,8 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = loop SortedSet.em
       initialFunctionType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
       naturalSites <- drain {stateRef = asmStateRef} initialFunctionType def
       let specs = fromMaybe [] $ SortedMap.lookup name plan
-      specSites <- traverse (gatherForSpec current def) specs
+      cbSigs <- getCallbackSlotSigs {stateRef = asmStateRef}
+      specSites <- traverse (gatherForSpec current def cbSigs) specs
       pure $ naturalSites ++ concat specSites
 
     onePass : SortedSet Name -> Core (SortedSet Name)
@@ -3429,6 +3535,25 @@ computeNaturalToTConIfaces programName conPlan defs stateRefs plan reachable = d
       in if isNil matching then acc else SortedMap.insert cls updated acc
     recordSibling _ acc (_, Nothing) = acc
 
+-- Declaration-driven callback-slot classification for every function def:
+-- jvmSimpleName -> one CallbackSlot per unerased parameter slot (see
+-- getTermCallbackSigs).  Only functions with at least one callback slot
+-- get an entry.
+computeCallbackSlotSigs : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                       -> LazyList (Name, FC, NamedDef)
+                       -> Core (SortedMap String (List CallbackSlot))
+computeCallbackSlotSigs nameFcDefs = go SortedMap.empty nameFcDefs
+  where
+    go : SortedMap String (List CallbackSlot) -> LazyList (Name, FC, NamedDef)
+       -> Core (SortedMap String (List CallbackSlot))
+    go acc [] = pure acc
+    go acc ((name, _, MkNmFun _ _) :: rest) = do
+      sigs <- getTermCallbackSigs name
+      if any isCallbackSlot sigs
+        then go (SortedMap.insert (jvmSimpleName name) sigs acc) rest
+        else go acc rest
+    go acc (_ :: rest) = go acc rest
+
 ||| Compile a TT expression to JVM bytecode
 compileToJvmBytecode : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> String -> String -> ClosedTerm -> Core ()
 compileToJvmBytecode outputDirectory outputFile term = do
@@ -3453,11 +3578,19 @@ compileToJvmBytecode outputDirectory outputFile term = do
     let reachable   = concatMap postOrder callForest
     let reachableSet = SortedSet.fromList reachable
     let stateRefsMap = SortedMap.fromList $ mapMaybe (\(n, _, r) => Just (jvmSimpleName n, r)) (toList nameFcStateRefs)
+    -- Declaration-driven callback signatures (higher-order specialisation)
+    -- are a pure function of the Ctxt; compute them once and install on
+    -- every per-def state before ANY inferDef runs, so all inference
+    -- passes (plan iteration, naturalConsLive fixpoint, final assembly)
+    -- see the same configuration.
+    callbackSigs <- computeCallbackSlotSigs nameFcDefs
+    traverse_ (\(_, r) => setCallbackSlotSigs {stateRef = r} callbackSigs) (SortedMap.toList stateRefsMap)
     (plan, conPlan) <- buildSpecialisationPlan programName namedDefsByName stateRefsMap reachable
     natLive <- computeNaturalConsLive namedDefsByName stateRefsMap plan conPlan reachable
     natIfaces <- computeNaturalToTConIfaces programName conPlan namedDefsByName stateRefsMap plan reachable
     preRegisterSpecs plan
     preRegisterConstructorSpecs conPlan
+    preRegisterCallbackInterfaces programName plan callbackSigs
     let reachableNameFcStateRefs = filter (\(n, _, _) => SortedSet.contains n reachableSet) nameFcStateRefs
     assembleNameFcStateRefs plan conPlan natLive natIfaces namedDefsByName reachableNameFcStateRefs
     coreLift $ do

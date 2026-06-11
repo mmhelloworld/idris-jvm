@@ -596,6 +596,183 @@ tailRecLoopFunctionName : Name
 tailRecLoopFunctionName =
   NS (mkNamespace "io.github.mmhelloworld.idrisjvm.runtime.Runtime") (UN $ Basic "tailRec")
 
+-- Derive a typed callback signature from a literal lambda's own body for
+-- POLYMORPHIC callback slots (type arguments are erased in NamedCExp, so
+-- the declaration cannot pin them — e.g. the `a -> b` slot of `map`).
+-- The parameter is pinned to a primitive only when every primitive-typed
+-- observation of it (as an argument of a primitive operation) agrees; the
+-- return type is read off the body's root expression shape.  Purely
+-- syntactic — shared verbatim by inference and emission, and stable under
+-- rewriteSpecCalls (which only renames NmRef heads).  Anything unclear
+-- (no primitive anywhere, conflicting observations, shadowed binders)
+-- yields Nothing and the lambda stays on the natural path.
+export
+findLambdaCallbackSig : Name -> NamedCExp -> Maybe InferredFunctionType
+findLambdaCallbackSig paramName body =
+    case nub (filter isPrimitive (observe body)) of
+      []   => mkCallbackSig (MkInferredFunctionType (rootReturnType body) [inferredObjectType])
+      [ty] => mkCallbackSig (MkInferredFunctionType (rootReturnType body) [ty])
+      _    => Nothing
+  where
+    isParam : NamedCExp -> Bool
+    isParam (NmLocal _ n) = n == paramName
+    isParam _ = False
+
+    -- Expected argument types of the primitive operations that can pin
+    -- the parameter.  Mirrors inferExprOp's typing of the same ops.
+    opArgTypes : {arity : _} -> PrimFn arity -> List InferredType
+    opArgTypes (Add ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (Sub ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (Mul ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (Div ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (Mod ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (Neg ty) = [getInferredType ty]
+    opArgTypes (ShiftL ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (ShiftR ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (BAnd ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (BOr ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (BXOr ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (LT ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (LTE ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (EQ ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (GT ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (GTE ty) = [getInferredType ty, getInferredType ty]
+    opArgTypes (Cast ty1 _) = [getInferredType ty1]
+    opArgTypes DoubleExp = [IDouble]
+    opArgTypes DoubleLog = [IDouble]
+    opArgTypes DoublePow = [IDouble, IDouble]
+    opArgTypes DoubleSin = [IDouble]
+    opArgTypes DoubleCos = [IDouble]
+    opArgTypes DoubleTan = [IDouble]
+    opArgTypes DoubleASin = [IDouble]
+    opArgTypes DoubleACos = [IDouble]
+    opArgTypes DoubleATan = [IDouble]
+    opArgTypes DoubleSqrt = [IDouble]
+    opArgTypes DoubleFloor = [IDouble]
+    opArgTypes DoubleCeiling = [IDouble]
+    opArgTypes _ = []
+
+    opReturnType : {arity : _} -> PrimFn arity -> InferredType
+    opReturnType (Add ty) = getInferredType ty
+    opReturnType (Sub ty) = getInferredType ty
+    opReturnType (Mul ty) = getInferredType ty
+    opReturnType (Div ty) = getInferredType ty
+    opReturnType (Mod ty) = getInferredType ty
+    opReturnType (Neg ty) = getInferredType ty
+    opReturnType (ShiftL ty) = getInferredType ty
+    opReturnType (ShiftR ty) = getInferredType ty
+    opReturnType (BAnd ty) = getInferredType ty
+    opReturnType (BOr ty) = getInferredType ty
+    opReturnType (BXOr ty) = getInferredType ty
+    opReturnType (LT _) = IBool
+    opReturnType (LTE _) = IBool
+    opReturnType (EQ _) = IBool
+    opReturnType (GT _) = IBool
+    opReturnType (GTE _) = IBool
+    opReturnType (Cast _ ty2) = getInferredType ty2
+    opReturnType DoubleExp = IDouble
+    opReturnType DoubleLog = IDouble
+    opReturnType DoublePow = IDouble
+    opReturnType DoubleSin = IDouble
+    opReturnType DoubleCos = IDouble
+    opReturnType DoubleTan = IDouble
+    opReturnType DoubleASin = IDouble
+    opReturnType DoubleACos = IDouble
+    opReturnType DoubleATan = IDouble
+    opReturnType DoubleSqrt = IDouble
+    opReturnType DoubleFloor = IDouble
+    opReturnType DoubleCeiling = IDouble
+    opReturnType StrLength = IInt
+    opReturnType StrHead = IChar
+    opReturnType StrIndex = IChar
+    opReturnType _ = inferredObjectType
+
+    constReturnType : Primitive.Constant -> InferredType
+    constReturnType (I _) = IInt
+    constReturnType (I8 _) = IInt
+    constReturnType (I16 _) = IInt
+    constReturnType (I32 _) = IInt
+    constReturnType (I64 _) = ILong
+    constReturnType (B8 _) = IInt
+    constReturnType (B16 _) = IInt
+    constReturnType (B32 _) = IInt
+    constReturnType (B64 _) = ILong
+    constReturnType (Ch _) = IInt
+    constReturnType (Db _) = IDouble
+    constReturnType _ = inferredObjectType
+
+    rootReturnType : NamedCExp -> InferredType
+    rootReturnType (NmOp _ op _) = opReturnType op
+    rootReturnType (NmPrimVal _ c) = constReturnType c
+    rootReturnType (NmLet _ _ _ e) = rootReturnType e
+    rootReturnType _ = inferredObjectType
+
+    -- A binder that rebinds the parameter name shadows it; stop
+    -- descending that branch (conservative).
+    mutual
+      observeList : List NamedCExp -> List InferredType
+      observeList [] = []
+      observeList (e :: es) = observe e ++ observeList es
+
+      observeConAlt : NamedConAlt -> List InferredType
+      observeConAlt (MkNConAlt _ _ _ argNames e) =
+        if any (== paramName) argNames then [] else observe e
+
+      observeConstAlt : NamedConstAlt -> List InferredType
+      observeConstAlt (MkNConstAlt _ e) = observe e
+
+      observe : NamedCExp -> List InferredType
+      observe (NmLam _ p e) = if p == paramName then [] else observe e
+      observe (NmLet _ p value e) =
+        observe value ++ (if p == paramName then [] else observe e)
+      observe (NmApp _ f args) = observe f ++ observeList args
+      observe (NmCon _ _ _ _ args) = observeList args
+      observe (NmOp _ op args) =
+        let argList = toList args
+            here = mapMaybe (\(arg, ty) => if isParam arg then Just ty else Nothing)
+                     (zip argList (opArgTypes op))
+        in here ++ observeList argList
+      observe (NmExtPrim _ _ args) = observeList args
+      observe (NmForce _ _ e) = observe e
+      observe (NmDelay _ _ e) = observe e
+      observe (NmConCase _ sc alts def) =
+        observe sc ++ concatMap observeConAlt alts ++ maybe [] observe def
+      observe (NmConstCase _ sc alts def) =
+        observe sc ++ concatMap observeConstAlt alts ++ maybe [] observe def
+      observe _ = []
+
+-- The positional rule shared by inference (inferAppArgs) and emission
+-- (assembleExpr's direct-call case): the typed signature for a literal
+-- lambda argument at a callback slot.  Concrete decl slots use the
+-- declared signature; polymorphic function slots derive one from the
+-- lambda body; everything else (including non-lambda arguments) stays
+-- natural.
+export
+callbackSigForArg : CallbackSlot -> NamedCExp -> Maybe InferredFunctionType
+callbackSigForArg (CallbackConcrete sig) (NmLam _ _ _) = Just sig
+callbackSigForArg CallbackPoly (NmLam _ param body) = findLambdaCallbackSig param body
+callbackSigForArg _ _ = Nothing
+
+-- Emission counterpart of inferAppArgs: per-argument EXPECTED types for a
+-- direct call.  A literal lambda at a typed callback slot is assembled
+-- expecting the typed interface — in both the rewritten (spec callee,
+-- slot already the interface) and natural cases, which is sound because
+-- the interface extends java.util.function.Function.  Only the expected
+-- types are adjusted; the call's method descriptor must keep the callee's
+-- actual parameter types.
+export
+adjustCallbackSlotTypes : (programName : String) -> List CallbackSlot
+                       -> List NamedCExp -> List InferredType -> List InferredType
+adjustCallbackSlotTypes programName declSlots (arg :: args) (slot :: slots) =
+  let adjusted =
+        if isJust (parseCallbackIfaceType slot)
+          then slot
+          else case callbackSigForArg (fromMaybe CallbackNone (head' declSlots)) arg of
+                 Just sig => callbackIfaceType programName sig
+                 Nothing => slot
+  in adjusted :: adjustCallbackSlotTypes programName (drop 1 declSlots) args slots
+adjustCallbackSlotTypes _ _ _ slots = slots
+
 export
 getJavaLambdaType : {auto stateRef: Ref AsmState AsmState} -> FC -> List NamedCExp -> Core JavaLambdaType
 getJavaLambdaType fc [functionType, javaInterfaceType, _] =
@@ -1035,10 +1212,72 @@ mutual
         let (_, lineStart, lineEnd) = getSourceLocation expr
         withInferenceScope lineStart lineEnd $ inferExpr expr
 
+    -- Infer a literal lambda argument destined for a typed callback slot
+    -- (higher-order specialisation).  Mirrors inferExprLamWithParameterType
+    -- but seeds the parameter variable with the callback signature's
+    -- parameter type and types the lambda value as the typed interface.
+    -- Seeding is only valid when the call site will be emitted against the
+    -- typed interface — i.e. when the resolved callee's slot already
+    -- carries the interface type.  assembleSubMethod keys typed lambda
+    -- creation off the same condition (the expected parameter type parses
+    -- as a callback interface), which is what keeps inference and emission
+    -- agreeing on the implementation method descriptors.
+    inferCallbackLambda : {auto stateRef: Ref AsmState AsmState} -> InferredFunctionType
+                        -> (parameterName : Name) -> NamedCExp -> Core InferredType
+    inferCallbackLambda sig parameterName expr = do
+        let (_, lineStart, lineEnd) = getSourceLocation expr
+        let jvmParameterName = jvmSimpleName parameterName
+        let paramType = fromMaybe inferredObjectType (head' sig.parameterTypes)
+        ignore $ withInferenceLambdaScope lineStart lineEnd (Just parameterName) expr $ do
+            createVariable jvmParameterName
+            addVariableType jvmParameterName paramType
+            lambdaBodyReturnType <- inferExpr expr
+            currentScope <- getScope !getCurrentScopeIndex
+            saveScope $ { returnType := sig.returnType } currentScope
+            pure lambdaBodyReturnType
+        pure $ callbackIfaceType !getProgramName sig
+
+    -- Per-argument inference for a direct call.  A literal lambda whose
+    -- slot expects a typed callback — either because the callee slot
+    -- already carries the interface type or because the callee's
+    -- declaration pins a concrete primitive callback type — is inferred
+    -- SEEDED and logged as the typed interface; emission applies the same
+    -- positional rule (see adjustCallbackSlotTypes) and always creates
+    -- such a lambda against the interface, which is sound even when the
+    -- site is not rewritten to a spec: the interface extends Function.
+    -- Non-literal function arguments (variables, partial applications)
+    -- deliberately log their natural types and stay on the boxed path.
+    inferAppArgs : {auto stateRef: Ref AsmState AsmState} -> List InferredType
+                 -> List CallbackSlot -> List NamedCExp -> Core (List InferredType)
+    inferAppArgs calleeSlots declSlots [] = pure []
+    inferAppArgs calleeSlots declSlots (arg :: rest) = do
+        argType <- inferAppArg (head' calleeSlots) (fromMaybe CallbackNone (head' declSlots)) arg
+        restTypes <- inferAppArgs (drop 1 calleeSlots) (drop 1 declSlots) rest
+        pure (argType :: restTypes)
+      where
+        inferAppArg : Maybe InferredType -> CallbackSlot -> NamedCExp -> Core InferredType
+        inferAppArg mSlotType declSlot lam@(NmLam _ param body) =
+          case the (Maybe InferredFunctionType)
+                 ((mSlotType >>= parseCallbackIfaceType) <|> callbackSigForArg declSlot lam) of
+            Just sig => inferCallbackLambda sig param body
+            Nothing => inferExpr lam
+        inferAppArg _ _ arg = inferExpr arg
+
     inferSelfTailCallParameter : {auto stateRef: Ref AsmState AsmState} -> Map Int String
                               -> (NamedCExp, Int) -> Core ()
     inferSelfTailCallParameter argumentNameByIndices (arg, index) = do
-        ty <- inferExpr arg
+        -- Higher-order specialisation: a fresh literal lambda passed in a
+        -- self tail call must be seeded against the function's own typed
+        -- callback slot — an unseeded inference here would both build the
+        -- wrong implementation descriptor and merge `Function` into the
+        -- parameter variable's interface type, corrupting the typed apply
+        -- in the rest of the body.
+        fnParamTypes <- (.inferredFunctionType.parameterTypes) . currentIdrisFunction <$> getState
+        let mCallbackSig = the (Maybe InferredFunctionType)
+                             (getAt (cast index) fnParamTypes >>= parseCallbackIfaceType)
+        ty <- case (mCallbackSig, arg) of
+                (Just sig, NmLam _ param body) => inferCallbackLambda sig param body
+                _ => inferExpr arg
         optName <- coreLift $ Map.get {value=String} argumentNameByIndices index
         maybe (pure ()) (doAddVariableType ty) $ nullableToMaybe optName
       where
@@ -1063,14 +1302,31 @@ mutual
                 pure IUnknown -- The type will not be used as it is in tail call position
     inferExprApp (NmApp fc (NmRef _ idrisName) args) = do
         let functionName = jvmName !getProgramName idrisName
-        retType <- case !(findFunctionType functionName) of
+        mFunctionType <- findFunctionType functionName
+        retType <- case mFunctionType of
             Just functionType => pure $ returnType functionType
             Nothing => if idrisName == tailRecLoopFunctionName
                          then pure inferredObjectType
                          else throw $ GenericMsg fc "Unknown type for function \{show functionName}"
-        inferredArgTypes <- traverse inferExpr args
+        let calleeSlots = maybe [] parameterTypes mFunctionType
+        declSigs <- fromMaybe [] . SortedMap.lookup (jvmSimpleName idrisName) <$> getCallbackSlotSigs
+        inferredArgTypes <- inferAppArgs calleeSlots declSigs args
         updateState { callSiteLog $= ((fc, idrisName, MkInferredFunctionType retType inferredArgTypes) :: ) }
         pure retType
+    inferExprApp (NmApp _ lambdaVariable@(NmLocal _ var) [arg]) = do
+        -- Inference mirror of the typed-apply emission: applying a
+        -- variable statically typed as a callback interface yields the
+        -- typed return; emission invokes the typed `apply` with the
+        -- argument cast to the typed parameter.  Everything else stays on
+        -- the boxed `Function.apply` path.
+        varType <- inferExpr lambdaVariable
+        case parseCallbackIfaceType varType of
+          Just sig => do
+            ignore $ inferExpr arg
+            pure sig.returnType
+          Nothing => do
+            ignore $ inferExpr arg
+            pure IUnknown
     inferExprApp (NmApp _ lambdaVariable args) = do
         ignore $ inferExpr lambdaVariable
         traverse_ inferExpr args
@@ -1290,6 +1546,32 @@ namespace TermType
       | Nothing => coreLift $ printLn $ "Missing type for " ++ show name
     coreLift $ printLn $ show name ++ "(" ++ show conInfo ++ ")" ++ ": " ++ show ty
 
+  getConstructorType : {auto c : Ref Ctxt Defs} -> Name -> Core InferredType
+  getConstructorType name =
+    if isBoolTySpec name then pure IInt
+    else if name == preludetypes "Nat" then pure inferredBigIntegerType
+    else pure inferredObjectType
+
+  mutual
+    getFnType' : {auto c : Ref Ctxt Defs} -> {vars : _} -> List InferredType -> Term vars -> List (Term vars) -> Core (List1 InferredType)
+    getFnType' types (Ref _ _ tyName) args = do
+      constructorType <- getConstructorType tyName
+      pure (constructorType ::: types)
+    getFnType' types (PrimVal _ c) [] = pure (getConstantType c ::: types)
+    getFnType' types (Bind _ x (Pi _ count _ ty) sc) [] =
+      if count == plusNeutral then getFnType (toList types) sc
+      else do
+        lambdaTypes <- getFnType [] ty
+        case lambdaTypes of
+          (jvmType ::: []) => getFnType (toList (jvmType ::: types)) sc
+          xs => getFnType (inferredLambdaType :: toList types) sc
+    getFnType' types term _ = pure (inferredObjectType ::: types)
+
+    getFnType : {auto c : Ref Ctxt Defs} -> {vars : _} -> List InferredType -> Term vars -> Core (List1 InferredType)
+    getFnType types term =
+      let (fn, args) = getFnArgs term
+      in getFnType' types fn args
+
   export
   getTermJvmType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> Name -> Core (Maybe InferredFunctionType)
   getTermJvmType name = do
@@ -1297,53 +1579,52 @@ namespace TermType
         | Nothing => pure Nothing
       (ret ::: args) <- getFnType [] term
       pure $ Just $ MkInferredFunctionType ret (reverse args)
+
+  -- Declaration-driven callback-slot classification for higher-order
+  -- specialisation: one CallbackSlot per unerased top-level parameter
+  -- slot.  A concrete arity-1 function type with a primitive (the
+  -- `(Int -> Int)` slot of `applyN`) is CallbackConcrete; an arity-1
+  -- function type that doesn't pin a primitive — type variables like
+  -- `a -> b` of `map`, or all-reference types — is CallbackPoly (a typed
+  -- signature may still be derived per-lambda by findLambdaCallbackSig);
+  -- anything else is CallbackNone.
+  export
+  getTermCallbackSigs : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> Name
+                      -> Core (List CallbackSlot)
+  getTermCallbackSigs name = do
+      Just term <- getTypeTerm name
+        | Nothing => pure []
+      walk term
     where
+      -- An erased Pi binder inside a first-class function type still
+      -- occupies a runtime application stage: a rank-2 argument like
+      -- `(forall vs . Term vs -> Bool)` is coerced via a lambda that
+      -- takes the erased argument FIRST and returns the real predicate
+      -- (the caller applies it to an erased placeholder before the real
+      -- argument).  Such a slot is therefore NOT an arity-1 callback —
+      -- typing its outer stage as `Fn$…` would emit a primitive cast on
+      -- a function value.  getFnType skips erased binders, so check for
+      -- them separately and refuse the slot.
+      hasErasedBinder : {vars : _} -> Term vars -> Bool
+      hasErasedBinder (Bind _ _ (Pi _ count _ _) sc) =
+        count == plusNeutral || hasErasedBinder sc
+      hasErasedBinder _ = False
 
-      getPrimVal : List (Term vars) -> Maybe Primitive.Constant
-      getPrimVal [PrimVal _ c] = Just c
-      getPrimVal args = Nothing
-
-      getDataConstructorArity: Name -> Core Nat
-      getDataConstructorArity name = do
-        defs <- get Ctxt
-        case !(lookupDefExact name (gamma defs)) of
-           Just (DCon _ a _) => pure a
-           _ => throw $ GenericMsg emptyFC $ "Unknown data constructor: " ++ show name
-
-      getConstructorType : Name -> Core InferredType
-      getConstructorType name =
-        if isBoolTySpec name then pure IInt
-        else if name == preludetypes "Nat" then pure inferredBigIntegerType
-        else pure inferredObjectType
-        {-else do
-          defs <- get Ctxt
-          case !(lookupDefExact name (gamma defs)) of
-             Just (TCon 0 _ _ (MkTypeFlags _ False) _ (Just constructorNames) _) => do
-               arities <- traverse getDataConstructorArity constructorNames
-               if all (\arity => arity == 0) arities
-                 then pure IInt
-                 else pure inferredObjectType
-             _ => pure inferredObjectType-}
-
-      mutual
-        getFnType' : {vars : _} -> List InferredType -> Term vars -> List (Term vars) -> Core (List1 InferredType)
-        getFnType' types (Ref _ _ tyName) args = do
-          constructorType <- getConstructorType tyName
-          pure (constructorType ::: types)
-        getFnType' types (PrimVal _ c) [] = pure (getConstantType c ::: types)
-        getFnType' types (Bind _ x (Pi _ count _ ty) sc) [] =
-          if count == plusNeutral then getFnType (toList types) sc
-          else do
-            lambdaTypes <- getFnType [] ty
-            case lambdaTypes of
-              (jvmType ::: []) => getFnType (toList (jvmType ::: types)) sc
-              xs => getFnType (inferredLambdaType :: toList types) sc
-        getFnType' types term _ = pure (inferredObjectType ::: types)
-
-        getFnType : {vars : _} -> List InferredType -> Term vars -> Core (List1 InferredType)
-        getFnType types term =
-          let (fn, args) = getFnArgs term
-          in getFnType' types fn args
+      walk : {vars : _} -> Term vars -> Core (List CallbackSlot)
+      walk (Bind _ x (Pi _ count _ ty) sc) =
+        if count == plusNeutral then walk sc
+        else do
+          slotTypes <- getFnType [] ty
+          let slot = if hasErasedBinder ty
+                       then CallbackNone
+                       else case slotTypes of
+                              (ret ::: params@(_ :: [])) =>
+                                maybe CallbackPoly CallbackConcrete
+                                  (mkCallbackSig (MkInferredFunctionType ret params))
+                              _ => CallbackNone
+          rest <- walk sc
+          pure (slot :: rest)
+      walk _ = pure []
 
   export
   showType : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo} -> Name -> Core ()

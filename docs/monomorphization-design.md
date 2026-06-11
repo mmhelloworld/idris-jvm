@@ -322,7 +322,7 @@ A function like `map : (a -> b) -> List a -> List b` has the callback parameter 
 
 The *callback* passed at the call site can be specialised independently; the lambda body simply calls the spec via the natural `Function.apply` path.
 
-Future work (v2): generate typed callback interfaces and a `map$sp` that takes one.
+v2 (§13) lifts this: a typed callback interface is generated and the HOF gets a spec whose callback slot is that interface — for HOFs whose callback parameter has a concrete primitive-bearing declared type (`applyN : Int -> (Int -> Int) -> Int -> Int`), and for polymorphic HOFs like `map` when a literal lambda's body pins a primitive signature.
 
 ### 5.7 InferredType → JVM descriptor mapping
 
@@ -343,7 +343,7 @@ Future work (v2): generate typed callback interfaces and a `map$sp` that takes o
 | `assembleSpec` per-spec emission     | ✅ done     | `src/Compiler/Jvm/Codegen.idr`                     |
 | Call-forest reachability             | ✅ done     | `src/Compiler/Jvm/FunctionTree.idr`, `Codegen.idr` |
 | Test (`tests/jvm/specialisation`)    | ✅ done     | `tests/jvm/specialisation/`                        |
-| Higher-order specialisation (v2)     | ❌ planned  | —                                                  |
+| Higher-order specialisation (v2, §13) | ✅ done (decl-driven + polymorphic, arity 1) | `Asm.idr`, `Optimizer.idr`, `Codegen.idr`, `Assembler.java` |
 | Reference-type narrowing (e.g. `String`) | ❌ planned | —                                                |
 | Benchmarks vs main                   | ❌ planned  | —                                                  |
 
@@ -541,12 +541,73 @@ Covered by `tests/jvm/conmixedcarrier` (the previously-crashing Run program: sin
 
 ### What's still future work (from v1.2–v1.4)
 
-- **Recursive slots for synthetic shapes** would require splitting the intrinsic constructor classes per source type (losing the cheap-pair sharing) or proving per-instance recursion at construction sites; both are out of scope here.
+- **Recursive slots for synthetic shapes** would require splitting the intrinsic constructor classes per source type (losing the cheap-pair sharing) or proving per-instance recursion at construction sites; both are out of scope here.  Full analysis — why the shared `_builtin/CONS` class blocks slot refinement, both designs' costs, the recommended CONS/RCONS split-by-recursion-evidence middle path, and the benchmark prerequisite — in [recursive-slots-synthetic-shapes.md](recursive-slots-synthetic-shapes.md).
 - **Nested-parameter instantiation witnesses.**  Only bare-param slots determine instantiation chars; a TCon whose parameter appears solely under another constructor (`data T a = A (List a) Int | ...`) fails eligibility.  Deriving witnesses through nested positions is possible but needs care with rep-level vs semantic instantiation.
 
-## 13. Future work (v3 and beyond)
+## 13. Higher-order specialisation (v2)
 
-- **Higher-order specialisation.** Generate typed callback interfaces (e.g. `IntFunction<R>`) and a `map$sp` that takes one, so the inner `apply` is direct on a primitive.
+### Problem
+
+A higher-order parameter is `java.util.function.Function` with a boxed `apply(Object)Object`. Every callback invocation costs: box the argument (caller), interface dispatch, unbox in the implementation, box the result (implementation), unbox the result (caller). For a numeric loop like `applyN : Int -> (Int -> Int) -> Int -> Int` that is four box/unbox operations per iteration plus an untyped implementation method the JIT has to see through.
+
+### Typed callback interfaces (`Fn$I$I`)
+
+One generated JVM interface per distinct typed callback signature, named parameter-chars-then-return-char with the `specConDescriptorChar` letters (`L` = exactly `java/lang/Object`): `int apply(int)` → `<programName>/Fn$I$I`. The name is injective over the signature, so **the name is the registry**: `parseCallbackIfaceType` (Asm.idr) decodes any `IRef …/Fn$…` back to its `InferredFunctionType`, and no plan-threading is needed — the `mkConSpecClassName` precedent. The interface lives directly under the program root, where no user constructor class can appear (user names are namespace-qualified into `M_`-prefixed segments by `getIdrisConstructorClassName`). Eligibility (`mkCallbackSig`): arity 1, refs normalised to Object, at least one primitive among parameter/return.
+
+**The interface extends `Function` with a default bridge** (`Assembler.createIdrisFunctionInterface`):
+
+```java
+public interface Fn$I$I extends java.util.function.Function {
+  int apply(int arg);                  // SAM — LambdaMetafactory targets this
+  default Object apply(Object arg) {   // bridge: unbox → typed apply → box
+    return Integer.valueOf(apply(Conversion.toInt(arg)));
+  }
+}
+```
+
+The bridge is the load-bearing soundness decision: a typed callback value is assignable and behaviourally identical wherever a natural `Function` flows — passed to unspecialised HOFs, stored in Object constructor slots, returned, applied through the generic boxed path. Every fallback path stays correct; typed paths are opt-in optimisations. The converse is deliberately false (a plain `Function` is NOT an `Fn$I$I`), so typed slots only receive values that emission constructs against the interface (literal lambdas at rewritten call sites) or that are statically typed as it (spec parameters).
+
+### Discovery — literal lambdas only
+
+A call-site slot is logged as `IRef Fn$…` (instead of `Function`) only when the argument is a **literal `NmLam`** and a typed signature is derivable. `getTermCallbackSigs` (Optimizer.idr) classifies each unerased parameter slot once per program (needs Ctxt) into `AsmState.callbackSlotSigs`, installed on every state before any `inferDef` runs:
+
+- **`CallbackConcrete sig`** — the slot's declared type is a concrete arity-1 function with a primitive (e.g. the `(Int -> Int)` slot of `applyN`); every literal lambda at the slot uses `sig`.
+- **`CallbackPoly`** — an arity-1 function slot that doesn't pin a primitive (type variables like `a -> b` of `map`, or all-reference types). Type arguments are erased in `NamedCExp`, so the signature is derived from the lambda itself: `findLambdaCallbackSig` is a **purely syntactic scan of the lambda body** — the parameter is pinned to a primitive only when every primitive-op observation of it (`NmOp` argument positions with known primitive types) agrees, the return type is read off the body's root expression shape, and anything unclear (no primitive, conflicting observations, shadowed binders) yields nothing. Pure means inference and emission share it verbatim, and it is stable under `rewriteSpecCalls` (which only renames `NmRef` heads).
+- **`CallbackNone`** — everything else (arity ≥2, non-function slots, and **any slot type containing an erased Pi binder**). The erased-binder refusal is load-bearing: a rank-2 slot like `(forall vs . Term vs -> Bool)` is coerced via a lambda that takes the erased argument as a REAL runtime application stage (the caller applies an erased placeholder before the actual argument — see `lambda$shaped$2` in `TTImp.ProcessData`), so the outer stage returns a function; typing it as `Fn$L$I` emits a primitive cast on a function value. `getFnType` skips erased binders, which is why the slot walks like arity-1 — the classification checks for them separately. Found in the stage-2 self-host soak (`NumberFormatException`/`VerifyError` via `shaped`/`calcNaty`); pinned by the `shapedR` case in `tests/jvm/hofspecialisation`.
+- **Spec-callee slots** (rewritten bodies at emission, recursive self-calls through the spec's own `Fn$…`-typed parameter): the slot already carries the interface type and `parseCallbackIfaceType` fires with zero extra bookkeeping.
+
+Variables, partial applications, `NmDelay`, non-lambda arguments log their natural types → never match a typed spec slot → conservatively stay on the boxed path. (Note Idris eta-expands under-applied function arguments into literal lambdas, so function-valued arguments like `applyN 3 (mkAdder 2) 10` route through the typed path as `\x => mkAdder 2 x`.)
+
+`isAtLeastAsSpecificStrict`/`Extended` accept the `Function → Fn$…` narrowing; everything downstream (`processSite` dedup, `$spN` naming, `rewriteSpecCalls` parameter-equality matching, `preRegisterSpecs`) works unchanged. `preRegisterCallbackInterfaces` emits the interface class files for plan slots and concrete decl signatures before assembly, and emission additionally creates interfaces **on demand** (idempotent, assembler dedups by class name) wherever a typed lambda or typed apply references one — sites that never earn a spec still emit typed lambdas, so pre-scanning alone is insufficient (found as a `NoClassDefFoundError` in REPL tests).
+
+### One positional rule for seeding (inference/emission agreement)
+
+`inferDef` always re-infers a function from its ORIGINAL `NamedDef` (call sites name natural callees; `rewriteSpecCalls` runs after inference), so "is the callee the spec?" cannot drive the lambda's typing — inference would see the natural callee while emission (which lowers the rewritten body) sees the spec, and the invokedynamic descriptors would disagree (`LambdaConversionException`, found while landing this).
+
+Instead both passes apply the same positional rule to every direct-call argument (`inferAppArgs` in inference, `adjustCallbackSlotTypes` + `assembleParameter` in emission): a literal lambda at a slot that either already carries the interface type (rewritten/spec callee) **or** has a decl-driven callback signature for the (natural) callee is **always** seeded (`inferCallbackLambda`) and **always** created against the typed interface, with the typed SAM descriptor and a primitive-typed implementation method. This is sound even when the site is never rewritten to a spec — the interface extends `Function`, so the typed value is assignable to the natural `Function` slot and behaves identically through the bridge. Only the per-argument expected types are adjusted; the `invokestatic` descriptor keeps the callee's actual parameter types.
+
+Two hazards need explicit mirroring (the v1.3 lesson — inference/emission disagreement is a VerifyError):
+
+- **Method-reference shortcut**: an eta-shaped lambda must not take `createMethodReference` when the expected type is a callback interface — that path emits a plain-`Function` indy, which is not an instance of the typed interface. Gated in `assembleMethodReference`; `inferCallbackLambda` never takes the method-reference shape either.
+- **`$idrisTailRec` self-calls**: a fresh literal lambda in a self tail call (e.g. `countdown (n-1) (\x => f (x+1))`) is seeded against the function's own typed slot in `inferSelfTailCallParameter`; emission's `storeParameter` already uses the function's parameter types.
+
+### Typed apply
+
+Inside a spec body the callback parameter is statically `IRef Fn$…`. `assembleExpr`'s variable-application case (`NmApp _ (NmLocal f) [arg]`) emits `invokeinterface Fn$….apply` with the typed descriptor — argument cast to the typed parameter, primitive result, no boxing. `inferExprApp` mirrors it (returns the sig's return type instead of `IUnknown`). Every other application shape (non-local heads, multi-arg) stays on the boxed path, which remains correct for typed callbacks through the bridge.
+
+### Where the win is
+
+- Numeric HOFs (`applyN`, `iterate`): all four box/unbox operations per callback call disappear and the lambda implementation method is statically `int(int)`.
+- `map`-style HOFs over lists: synthetic CONS slots are never refined (§12 Phase 2d), so the element is Object in the spec body and the typed apply costs one explicit unbox on the argument — but the primitive result flows unboxed into a `CONS$I$L` typed construction and the implementation-internal unbox+box disappears.
+
+### Scope and deferred work
+
+Arity-1 callbacks only (arity ≥2 surfaces partly as curried `Function` chains through `Functions.curry`); `DelayedLambda` out of scope. Deferred: arity-2 (`BiFunction`, fold accumulators — the naming scheme already accommodates), let-bound local lambdas typed as callback interfaces, `NmRef`-callee observations in `findLambdaCallbackSig` (currently primitive ops only).
+
+Covered by `tests/jvm/hofspecialisation` (decl-driven: typed interface shape — extends `Function`, typed SAM, default bridge — `$sp` variants with `Fn$I$I` slots for `applyN`/`twice`/`hof`/`countdown`, typed apply with no boxing in the recursive spec body, primitive-typed lambda implementation methods, natural method retention, and a runtime bridge escape through an Object constructor slot) and `tests/jvm/hofpolyspecialisation` (polymorphic: `myMap$sp0` with a lambda-derived `Fn$I$I` slot, typed apply, the int result flowing unboxed into `CONS$I$L` construction, and an all-reference lambda staying natural).
+
+## 14. Future work (v3 and beyond)
+
 - **Multi-class spec placement.** Spec currently shares the natural method's class; consider moving very-hot specs to a sibling class to keep the main class size bounded.
 - **Benchmarks.** Add a numeric microbenchmark (sieve, matrix mul) and measure allocation rate before/after with JFR or async-profiler.
 - **Configurable spec budget.** A flag to cap the number of specs per function or per class for users who want predictable compile times over peak runtime.

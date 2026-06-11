@@ -1,0 +1,69 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o spec Spec.idr > /dev/null 2>&1
+
+# 1. The typed callback interface Fn$I$I must exist, extend
+#    java.util.function.Function, declare the typed SAM `int apply(int)`
+#    and carry the default Object-apply bridge.
+iface=$(javap -p 'build/exec/spec_app/spec/Fn$I$I.class' 2>/dev/null)
+if echo "$iface" | grep -qF 'interface spec.Fn$I$I extends java.util.function.Function' \
+  && echo "$iface" | grep -qE 'int apply\(int\);' \
+  && echo "$iface" | grep -qE 'java.lang.Object apply\(java.lang.Object\);'; then
+  echo "Typed callback interface: OK"
+else
+  echo "Typed callback interface: MISSING OR WRONG SHAPE"
+fi
+
+methods=$(javap -p build/exec/spec_app/spec/Main.class 2>/dev/null)
+disasm=$(javap -c -p build/exec/spec_app/spec/Main.class 2>/dev/null)
+
+# 2. Each HOF called with a literal lambda gets a $sp variant whose
+#    callback slot is the typed interface, and the spec is actually
+#    invoked somewhere in the class.
+for fn in applyN twice hof countdown; do
+  has_spec=0
+  is_called=0
+  if echo "$methods" | grep "${fn}\$sp0" | grep -qF 'spec.Fn$I$I'; then
+    has_spec=1
+  fi
+  if echo "$disasm" | grep -q "invokestatic.*${fn}\$sp0"; then
+    is_called=1
+  fi
+  if [ "$has_spec" = 1 ] && [ "$is_called" = 1 ]; then
+    echo "HOF spec for ${fn}: OK"
+  elif [ "$has_spec" = 1 ]; then
+    echo "HOF spec for ${fn}: EMITTED BUT NEVER CALLED"
+  else
+    echo "HOF spec for ${fn}: MISSING"
+  fi
+done
+
+# 3. The spec body applies the callback through the typed interface
+#    method (no boxed Function.apply, no boxing in the loop).
+spec_body=$(echo "$disasm" | awk '/static int applyN\$sp0/,/^$/')
+if echo "$spec_body" | grep -qF 'InterfaceMethod spec/Fn$I$I.apply:(I)I'; then
+  if echo "$spec_body" | grep -q 'Integer.valueOf\|Conversion.toInt\|Function.apply'; then
+    echo "Typed apply in applyN spec: BOXING REMAINS"
+  else
+    echo "Typed apply in applyN spec: OK"
+  fi
+else
+  echo "Typed apply in applyN spec: MISSING"
+fi
+
+# 4. At least one lambda implementation method is primitive-typed.
+if echo "$methods" | grep -qE 'static int lambda[^(]*\(int\);'; then
+  echo "Typed lambda implementation: OK"
+else
+  echo "Typed lambda implementation: MISSING"
+fi
+
+# 5. The natural method is retained alongside the spec (callers without a
+#    matching spec — polymorphic or external — keep invoking it).
+if echo "$methods" | grep -qE 'public static int applyN\(int, java.util.function.Function, int\);'; then
+  echo "Natural applyN retained: OK"
+else
+  echo "Natural applyN retained: MISSING"
+fi
+
+./build/exec/spec${IDRIS_EXEC_EXT}

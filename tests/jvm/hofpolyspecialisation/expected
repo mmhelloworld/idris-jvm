@@ -1,0 +1,6 @@
+Poly HOF spec for myMap: OK
+Typed apply in myMap spec: OK
+Typed CONS construction in myMap spec: OK
+Natural path for non-primitive lambda: OK
+12
+["a!", "b!"]

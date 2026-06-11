@@ -632,6 +632,24 @@ findUniqueFamilyMember plan name varClass =
       || (sc.tconClassName == "" && sc.tconFamilyBase /= ""
             && Just sc.tconFamilyBase == varBase)
 
+-- Declaration-driven classification of a function's parameter slot for
+-- higher-order specialisation:
+--   * CallbackConcrete sig — the slot's declared type is a concrete
+--     arity-1 function carrying a primitive (e.g. `Int -> Int`); every
+--     literal lambda at this slot uses `sig`.
+--   * CallbackPoly — the slot is an arity-1 function type that does not
+--     pin a primitive signature (type variables like `a -> b` of `map`,
+--     or all-reference types); a typed signature may still be derived
+--     from a literal lambda's own body (findLambdaCallbackSig).
+--   * CallbackNone — not an arity-1 function slot.
+public export
+data CallbackSlot = CallbackConcrete InferredFunctionType | CallbackPoly | CallbackNone
+
+export
+isCallbackSlot : CallbackSlot -> Bool
+isCallbackSlot CallbackNone = False
+isCallbackSlot _ = True
+
 public export
 record AsmState where
     constructor MkAsmState
@@ -659,6 +677,13 @@ record AsmState where
     -- function-spec parameters typed as the interface accept any
     -- runtime instance from the type, not just spec instances.
     naturalToTConIfaces : SortedMap String (List String)
+    -- Declaration-driven callback-slot classification for higher-order
+    -- specialisation, keyed by jvmSimpleName: one CallbackSlot per
+    -- parameter slot (see CallbackSlot).  Computed once per program from
+    -- the Ctxt (getTermCallbackSigs) and threaded to every AsmState
+    -- alongside the specialisation plan, since inference has no Ctxt
+    -- access.
+    callbackSlotSigs : SortedMap String (List CallbackSlot)
 
 namespace AsmState
   export
@@ -668,7 +693,7 @@ namespace AsmState
     scopes <- ArrayList.new {elemTy=Scope}
     lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
     let function = MkFunction name (MkInferredFunctionType IUnknown []) (subtyping scopes) 0 (NmCrash emptyFC "uninitialized function")
-    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] [] SortedSet.empty SortedMap.empty
+    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] [] SortedSet.empty SortedMap.empty SortedMap.empty
 
   export
   fromIdrisName : Name -> IO AsmState
@@ -976,6 +1001,76 @@ specConAccessorName ILong   i = "getLong"   ++ show i
 specConAccessorName IFloat  i = "getFloat"  ++ show i
 specConAccessorName IDouble i = "getDouble" ++ show i
 specConAccessorName _       i = "getRef"    ++ show i
+
+-- Inverse of specConDescriptorChar over the letters it can emit; "L"
+-- decodes to Object (callback signatures are ref-normalized, like
+-- constructor-spec paramTypes).
+callbackSlotType : Char -> Maybe InferredType
+callbackSlotType 'Z' = Just IBool
+callbackSlotType 'B' = Just IByte
+callbackSlotType 'C' = Just IChar
+callbackSlotType 'S' = Just IShort
+callbackSlotType 'I' = Just IInt
+callbackSlotType 'J' = Just ILong
+callbackSlotType 'F' = Just IFloat
+callbackSlotType 'D' = Just IDouble
+callbackSlotType 'L' = Just inferredObjectType
+callbackSlotType _   = Nothing
+
+-- Normalise a callback signature for naming and eligibility: arity 1
+-- only, every reference slot collapses to Object, and at least one of
+-- parameter/return must be primitive (an all-Object callback is the
+-- natural `Function` — no useful refinement).
+export
+mkCallbackSig : InferredFunctionType -> Maybe InferredFunctionType
+mkCallbackSig (MkInferredFunctionType ret [param]) =
+  let sig = MkInferredFunctionType (normalise ret) [normalise param]
+  in if hasPrimitiveType sig then Just sig else Nothing
+  where
+    normalise : InferredType -> InferredType
+    normalise ty = if isPrimitive ty then ty else inferredObjectType
+mkCallbackSig _ = Nothing
+
+-- Typed callback SAM interface name for higher-order specialisation:
+-- one interface per distinct typed signature, parameter chars first,
+-- return char last. Example: `int apply(int)` -> `<programName>/Fn$I$I`.
+-- The name is injective over the signature, so it doubles as the
+-- registry: parseCallbackIfaceType below decodes it back.  Lives directly
+-- under the program root, where no user constructor class can appear
+-- (user names are namespace-qualified, so getIdrisConstructorClassName
+-- always routes them under `M_`-prefixed segments).
+export
+mkCallbackIfaceName : (programName : String) -> InferredFunctionType -> String
+mkCallbackIfaceName programName (MkInferredFunctionType ret params) =
+  getIdrisConstructorClassName programName
+    ("Fn$" ++ concat (intersperse "$" (specConDescriptorChar <$> (params ++ [ret]))))
+
+export
+callbackIfaceType : (programName : String) -> InferredFunctionType -> InferredType
+callbackIfaceType programName sig = IRef (mkCallbackIfaceName programName sig) Interface []
+
+-- Recognise a typed callback interface type and decode its signature.
+-- Returns Nothing for every other type, including the natural
+-- `java.util.function.Function`.
+export
+parseCallbackIfaceType : InferredType -> Maybe InferredFunctionType
+parseCallbackIfaceType (IRef className _ _) =
+  case unpack (last (split (== '/') className)) of
+    'F' :: 'n' :: '$' :: rest => do
+      slots <- decodeSlots rest
+      case reverse slots of
+        (ret :: params@(_ :: _)) => do
+          let sig = MkInferredFunctionType ret (reverse params)
+          guard (length params == 1 && hasPrimitiveType sig)
+          Just sig
+        _ => Nothing
+    _ => Nothing
+  where
+    decodeSlots : List Char -> Maybe (List InferredType)
+    decodeSlots [c] = (:: []) <$> callbackSlotType c
+    decodeSlots (c :: '$' :: rest) = [| callbackSlotType c :: decodeSlots rest |]
+    decodeSlots _ = Nothing
+parseCallbackIfaceType _ = Nothing
 
 export
 getJvmReferenceTypeName : InferredType -> Core String
@@ -1372,6 +1467,9 @@ asmCreateIdrisConstructorClassTypedWithIfaces : Assembler -> String -> Bool -> J
 %foreign "jvm:.createIdrisTypeConstructorInterface(io/github/mmhelloworld/idrisjvm/assembler/Assembler String void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 asmCreateIdrisTypeConstructorInterface : Assembler -> String -> PrimIO ()
 
+%foreign "jvm:.createIdrisFunctionInterface(io/github/mmhelloworld/idrisjvm/assembler/Assembler String String void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+asmCreateIdrisFunctionInterface : Assembler -> String -> String -> PrimIO ()
+
 %foreign "jvm:.field"
 asmField : Assembler -> Int -> (className: String) -> (fieldName: String) -> (descriptor: String) -> PrimIO ()
 
@@ -1521,6 +1619,10 @@ parameters {auto state: Ref AsmState AsmState}
   public export
   %inline
   createIdrisTypeConstructorInterface : String -> Core ()
+
+  public export
+  %inline
+  createIdrisFunctionInterface : String -> String -> Core ()
 
   public export
   %inline
@@ -2102,6 +2204,10 @@ parameters {auto state: Ref AsmState AsmState}
     state <- getState
     coreLift $ primIO $ asmCreateIdrisTypeConstructorInterface (assembler state) interfaceName
 
+  createIdrisFunctionInterface interfaceName typedApplyDescriptor = do
+    state <- getState
+    coreLift $ primIO $ asmCreateIdrisFunctionInterface (assembler state) interfaceName typedApplyDescriptor
+
   d2i = do
     state <- getState
     coreLift $ jvmInstance () "io/github/mmhelloworld/idrisjvm/assembler/Assembler.d2i" [assembler state]
@@ -2598,6 +2704,14 @@ getNaturalToTConIfaces = naturalToTConIfaces <$> getState
 export
 setNaturalToTConIfaces : {auto stateRef: Ref AsmState AsmState} -> SortedMap String (List String) -> Core ()
 setNaturalToTConIfaces m = updateState $ { naturalToTConIfaces := m }
+
+export
+getCallbackSlotSigs : {auto stateRef: Ref AsmState AsmState} -> Core (SortedMap String (List CallbackSlot))
+getCallbackSlotSigs = callbackSlotSigs <$> getState
+
+export
+setCallbackSlotSigs : {auto stateRef: Ref AsmState AsmState} -> SortedMap String (List CallbackSlot) -> Core ()
+setCallbackSlotSigs sigs = updateState $ { callbackSlotSigs := sigs }
 
 getAndUpdateFunction : {auto stateRef: Ref AsmState AsmState} -> (Function -> Function) -> Core Function
 getAndUpdateFunction f = do

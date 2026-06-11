@@ -1,0 +1,41 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o spec Spec.idr > /dev/null 2>&1
+
+methods=$(javap -p build/exec/spec_app/spec/Main.class 2>/dev/null)
+disasm=$(javap -c -p build/exec/spec_app/spec/Main.class 2>/dev/null)
+
+# 1. The polymorphic HOF gets a spec whose callback slot is the typed
+#    interface derived from the literal lambda's body.
+if echo "$methods" | grep 'myMap\$sp0' | grep -qF 'spec.Fn$I$I'; then
+  echo "Poly HOF spec for myMap: OK"
+else
+  echo "Poly HOF spec for myMap: MISSING"
+fi
+
+# 2. The spec body applies the callback through the typed interface.
+spec_body=$(echo "$disasm" | awk '/myMap\$sp0/,/^$/')
+if echo "$spec_body" | grep -qF 'InterfaceMethod spec/Fn$I$I.apply:(I)I'; then
+  echo "Typed apply in myMap spec: OK"
+else
+  echo "Typed apply in myMap spec: MISSING"
+fi
+
+# 3. The int result of the typed apply flows unboxed into a typed CONS
+#    spec cell (interaction with constructor specialisation).
+if [ -n "$(find build/exec/spec_app -name 'CONS$I$L.class' -print -quit 2>/dev/null)" ] \
+   && echo "$spec_body" | grep -q 'CONS\$I\$L'; then
+  echo "Typed CONS construction in myMap spec: OK"
+else
+  echo "Typed CONS construction in myMap spec: MISSING"
+fi
+
+# 4. The String call site stays natural: an all-reference lambda derives
+#    no typed signature.
+if echo "$disasm" | grep 'invokestatic' | grep -qF 'Method myMap:('; then
+  echo "Natural path for non-primitive lambda: OK"
+else
+  echo "Natural path for non-primitive lambda: MISSING"
+fi
+
+./build/exec/spec${IDRIS_EXEC_EXT}

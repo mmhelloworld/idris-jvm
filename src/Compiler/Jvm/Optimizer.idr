@@ -598,25 +598,25 @@ tailRecLoopFunctionName =
 
 -- Derive a typed callback signature from a literal lambda's own body for
 -- POLYMORPHIC callback slots (type arguments are erased in NamedCExp, so
--- the declaration cannot pin them — e.g. the `a -> b` slot of `map`).
--- The parameter is pinned to a primitive only when every primitive-typed
+-- the declaration cannot pin them — e.g. the `a -> b` slot of `map` or
+-- the `a -> b -> c` slot of `zipWith`).
+-- Each parameter is pinned to a primitive only when every primitive-typed
 -- observation of it (as an argument of a primitive operation) agrees; the
 -- return type is read off the body's root expression shape.  Purely
 -- syntactic — shared verbatim by inference and emission, and stable under
 -- rewriteSpecCalls (which only renames NmRef heads).  Anything unclear
--- (no primitive anywhere, conflicting observations, shadowed binders)
--- yields Nothing and the lambda stays on the natural path.
+-- (conflicting observations, shadowed binders, or no primitive anywhere
+-- in the whole signature) yields Nothing and the lambda stays on the
+-- natural path.
 export
-findLambdaCallbackSig : Name -> NamedCExp -> Maybe InferredFunctionType
-findLambdaCallbackSig paramName body =
-    case nub (filter isPrimitive (observe body)) of
-      []   => mkCallbackSig (MkInferredFunctionType (rootReturnType body) [inferredObjectType])
-      [ty] => mkCallbackSig (MkInferredFunctionType (rootReturnType body) [ty])
-      _    => Nothing
+findLambdaCallbackSigN : List Name -> NamedCExp -> Maybe InferredFunctionType
+findLambdaCallbackSigN paramNames body = do
+    paramTypes <- traverse pin paramNames
+    mkCallbackSig (MkInferredFunctionType (rootReturnType body) paramTypes)
   where
-    isParam : NamedCExp -> Bool
-    isParam (NmLocal _ n) = n == paramName
-    isParam _ = False
+    isParam : Name -> NamedCExp -> Bool
+    isParam paramName (NmLocal _ n) = n == paramName
+    isParam _ _ = False
 
     -- Expected argument types of the primitive operations that can pin
     -- the parameter.  Mirrors inferExprOp's typing of the same ops.
@@ -710,36 +710,49 @@ findLambdaCallbackSig paramName body =
     -- A binder that rebinds the parameter name shadows it; stop
     -- descending that branch (conservative).
     mutual
-      observeList : List NamedCExp -> List InferredType
-      observeList [] = []
-      observeList (e :: es) = observe e ++ observeList es
+      observeList : Name -> List NamedCExp -> List InferredType
+      observeList _ [] = []
+      observeList paramName (e :: es) = observe paramName e ++ observeList paramName es
 
-      observeConAlt : NamedConAlt -> List InferredType
-      observeConAlt (MkNConAlt _ _ _ argNames e) =
-        if any (== paramName) argNames then [] else observe e
+      observeConAlt : Name -> NamedConAlt -> List InferredType
+      observeConAlt paramName (MkNConAlt _ _ _ argNames e) =
+        if any (== paramName) argNames then [] else observe paramName e
 
-      observeConstAlt : NamedConstAlt -> List InferredType
-      observeConstAlt (MkNConstAlt _ e) = observe e
+      observeConstAlt : Name -> NamedConstAlt -> List InferredType
+      observeConstAlt paramName (MkNConstAlt _ e) = observe paramName e
 
-      observe : NamedCExp -> List InferredType
-      observe (NmLam _ p e) = if p == paramName then [] else observe e
-      observe (NmLet _ p value e) =
-        observe value ++ (if p == paramName then [] else observe e)
-      observe (NmApp _ f args) = observe f ++ observeList args
-      observe (NmCon _ _ _ _ args) = observeList args
-      observe (NmOp _ op args) =
+      observe : Name -> NamedCExp -> List InferredType
+      observe paramName (NmLam _ p e) = if p == paramName then [] else observe paramName e
+      observe paramName (NmLet _ p value e) =
+        observe paramName value ++ (if p == paramName then [] else observe paramName e)
+      observe paramName (NmApp _ f args) = observe paramName f ++ observeList paramName args
+      observe paramName (NmCon _ _ _ _ args) = observeList paramName args
+      observe paramName (NmOp _ op args) =
         let argList = toList args
-            here = mapMaybe (\(arg, ty) => if isParam arg then Just ty else Nothing)
+            here = mapMaybe (\(arg, ty) => if isParam paramName arg then Just ty else Nothing)
                      (zip argList (opArgTypes op))
-        in here ++ observeList argList
-      observe (NmExtPrim _ _ args) = observeList args
-      observe (NmForce _ _ e) = observe e
-      observe (NmDelay _ _ e) = observe e
-      observe (NmConCase _ sc alts def) =
-        observe sc ++ concatMap observeConAlt alts ++ maybe [] observe def
-      observe (NmConstCase _ sc alts def) =
-        observe sc ++ concatMap observeConstAlt alts ++ maybe [] observe def
-      observe _ = []
+        in here ++ observeList paramName argList
+      observe paramName (NmExtPrim _ _ args) = observeList paramName args
+      observe paramName (NmForce _ _ e) = observe paramName e
+      observe paramName (NmDelay _ _ e) = observe paramName e
+      observe paramName (NmConCase _ sc alts def) =
+        observe paramName sc ++ concatMap (observeConAlt paramName) alts ++ maybe [] (observe paramName) def
+      observe paramName (NmConstCase _ sc alts def) =
+        observe paramName sc ++ concatMap (observeConstAlt paramName) alts ++ maybe [] (observe paramName) def
+      observe _ _ = []
+
+    -- A parameter pins to the unique primitive observation; no
+    -- observation pins to Object; conflicting observations refuse.
+    pin : Name -> Maybe InferredType
+    pin paramName =
+      case nub (filter isPrimitive (observe paramName body)) of
+        []   => Just inferredObjectType
+        [ty] => Just ty
+        _    => Nothing
+
+export
+findLambdaCallbackSig : Name -> NamedCExp -> Maybe InferredFunctionType
+findLambdaCallbackSig paramName = findLambdaCallbackSigN [paramName]
 
 -- The positional rule shared by inference (inferAppArgs) and emission
 -- (assembleExpr's direct-call case): the typed signature for a literal
@@ -747,10 +760,32 @@ findLambdaCallbackSig paramName body =
 -- declared signature; polymorphic function slots derive one from the
 -- lambda body; everything else (including non-lambda arguments) stays
 -- natural.
+-- True when a literal lambda's syntactic shape can implement the typed
+-- signature: an arity-2 signature needs the nested two-lambda shape (the
+-- typed implementation method takes both parameters at once); an arity-1
+-- signature is implementable by any literal lambda.
+export
+sigMatchesLambdaShape : InferredFunctionType -> NamedCExp -> Bool
+sigMatchesLambdaShape _ (NmLam _ _ (NmLam _ _ _)) = True
+sigMatchesLambdaShape sig (NmLam _ _ _) = length sig.parameterTypes == 1
+sigMatchesLambdaShape _ _ = False
+
 export
 callbackSigForArg : CallbackSlot -> NamedCExp -> Maybe InferredFunctionType
-callbackSigForArg (CallbackConcrete sig) (NmLam _ _ _) = Just sig
-callbackSigForArg CallbackPoly (NmLam _ param body) = findLambdaCallbackSig param body
+callbackSigForArg (CallbackConcrete sig) lam@(NmLam _ _ _) =
+  -- An arity-2 signature needs the two-lambda shape (the typed
+  -- implementation method takes both parameters at once); an arity-1
+  -- signature types any literal lambda — a nested lambda there just
+  -- returns the inner closure as the (reference-typed) result.
+  case sig.parameterTypes of
+    [_, _] => case lam of
+                NmLam _ _ (NmLam _ _ _) => Just sig
+                _ => Nothing
+    [_] => Just sig
+    _ => Nothing
+callbackSigForArg (CallbackPoly 2) (NmLam _ p1 (NmLam _ p2 body)) =
+  findLambdaCallbackSigN [p1, p2] body
+callbackSigForArg (CallbackPoly 1) (NmLam _ param body) = findLambdaCallbackSig param body
 callbackSigForArg _ _ = Nothing
 
 -- Emission counterpart of inferAppArgs: per-argument EXPECTED types for a
@@ -1228,10 +1263,21 @@ mutual
         let (_, lineStart, lineEnd) = getSourceLocation expr
         let jvmParameterName = jvmSimpleName parameterName
         let paramType = fromMaybe inferredObjectType (head' sig.parameterTypes)
+        -- An arity-2 signature comes with the nested two-lambda shape
+        -- (enforced by the dispatch in inferAppArg /
+        -- inferSelfTailCallParameter): both parameters live in ONE lambda
+        -- scope and the typed implementation method takes them together,
+        -- so the inner lambda is dissolved rather than inferred as a
+        -- nested closure.
+        let (moreParams, bodyExpr) = the (List (String, InferredType), NamedCExp) $
+              case (sig.parameterTypes, expr) of
+                ([_, p2Type], NmLam _ p2 inner) => ([(jvmSimpleName p2, p2Type)], inner)
+                _ => ([], expr)
         ignore $ withInferenceLambdaScope lineStart lineEnd (Just parameterName) expr $ do
             createVariable jvmParameterName
             addVariableType jvmParameterName paramType
-            lambdaBodyReturnType <- inferExpr expr
+            traverse_ (\(name, ty) => do createVariable name; addVariableType name ty) moreParams
+            lambdaBodyReturnType <- inferExpr bodyExpr
             currentScope <- getScope !getCurrentScopeIndex
             saveScope $ { returnType := sig.returnType } currentScope
             pure lambdaBodyReturnType
@@ -1259,7 +1305,9 @@ mutual
         inferAppArg mSlotType declSlot lam@(NmLam _ param body) =
           case the (Maybe InferredFunctionType)
                  ((mSlotType >>= parseCallbackIfaceType) <|> callbackSigForArg declSlot lam) of
-            Just sig => inferCallbackLambda sig param body
+            Just sig => if sigMatchesLambdaShape sig lam
+                          then inferCallbackLambda sig param body
+                          else inferExpr lam
             Nothing => inferExpr lam
         inferAppArg _ _ arg = inferExpr arg
 
@@ -1276,7 +1324,10 @@ mutual
         let mCallbackSig = the (Maybe InferredFunctionType)
                              (getAt (cast index) fnParamTypes >>= parseCallbackIfaceType)
         ty <- case (mCallbackSig, arg) of
-                (Just sig, NmLam _ param body) => inferCallbackLambda sig param body
+                (Just sig, NmLam _ param body) =>
+                  if sigMatchesLambdaShape sig arg
+                    then inferCallbackLambda sig param body
+                    else inferExpr arg
                 _ => inferExpr arg
         optName <- coreLift $ Map.get {value=String} argumentNameByIndices index
         maybe (pure ()) (doAddVariableType ty) $ nullableToMaybe optName
@@ -1311,19 +1362,55 @@ mutual
         let calleeSlots = maybe [] parameterTypes mFunctionType
         declSigs <- fromMaybe [] . SortedMap.lookup (jvmSimpleName idrisName) <$> getCallbackSlotSigs
         inferredArgTypes <- inferAppArgs calleeSlots declSigs args
-        updateState { callSiteLog $= ((fc, idrisName, MkInferredFunctionType retType inferredArgTypes) :: ) }
+        -- Normalize unknown slots to Object before logging: spec routing
+        -- (`rewriteSpecCalls`) matches logged parameter types against the
+        -- spec signature EXACTLY, and spec signatures use Object for
+        -- unrefined slots.  Without this a spec body's recursive call —
+        -- whose con-case binders infer as IUnknown — fails the match and
+        -- recurses into the NATURAL variant, so only the first iteration
+        -- runs specialised (zipWith/takeUntil kept allocating boxed CONS
+        -- cells from their second element on).
+        let normalizedArgTypes = map (\ty => if ty == IUnknown then inferredObjectType else ty) inferredArgTypes
+        updateState { callSiteLog $= ((fc, idrisName, MkInferredFunctionType retType normalizedArgTypes) :: ) }
         pure retType
+    inferExprApp (NmApp _ inner@(NmApp _ lambdaVariable@(NmLocal _ var) [x]) [y]) = do
+        -- Inference mirror of the arity-2 typed-apply emission: `f x y`
+        -- (nested unary application) on a variable statically typed as a
+        -- two-parameter callback interface invokes the typed `apply` in
+        -- one call and yields the typed return.  Anything else replays
+        -- the nested boxed path.
+        varType <- inferExpr lambdaVariable
+        case parseCallbackIfaceType varType of
+          Just sig => if length sig.parameterTypes == 2
+            then do
+              ignore $ inferExpr x
+              ignore $ inferExpr y
+              pure sig.returnType
+            else do
+              ignore $ inferExprApp inner
+              ignore $ inferExpr y
+              pure IUnknown
+          Nothing => do
+            ignore $ inferExprApp inner
+            ignore $ inferExpr y
+            pure IUnknown
     inferExprApp (NmApp _ lambdaVariable@(NmLocal _ var) [arg]) = do
         -- Inference mirror of the typed-apply emission: applying a
-        -- variable statically typed as a callback interface yields the
-        -- typed return; emission invokes the typed `apply` with the
-        -- argument cast to the typed parameter.  Everything else stays on
+        -- variable statically typed as an arity-1 callback interface
+        -- yields the typed return; emission invokes the typed `apply`
+        -- with the argument cast to the typed parameter.  Everything else
+        -- (including a partial application of an arity-2 typed callback,
+        -- which goes through the interface's default bridge) stays on
         -- the boxed `Function.apply` path.
         varType <- inferExpr lambdaVariable
         case parseCallbackIfaceType varType of
-          Just sig => do
-            ignore $ inferExpr arg
-            pure sig.returnType
+          Just sig => if length sig.parameterTypes == 1
+            then do
+              ignore $ inferExpr arg
+              pure sig.returnType
+            else do
+              ignore $ inferExpr arg
+              pure IUnknown
           Nothing => do
             ignore $ inferExpr arg
             pure IUnknown
@@ -1582,10 +1669,11 @@ namespace TermType
 
   -- Declaration-driven callback-slot classification for higher-order
   -- specialisation: one CallbackSlot per unerased top-level parameter
-  -- slot.  A concrete arity-1 function type with a primitive (the
-  -- `(Int -> Int)` slot of `applyN`) is CallbackConcrete; an arity-1
-  -- function type that doesn't pin a primitive — type variables like
-  -- `a -> b` of `map`, or all-reference types — is CallbackPoly (a typed
+  -- slot.  A concrete arity-1 or arity-2 function type with a primitive
+  -- (the `(Int -> Int)` slot of `applyN`) is CallbackConcrete; a function
+  -- type of arity 1 or 2 that doesn't pin a primitive — type variables
+  -- like `a -> b` of `map` or `a -> b -> c` of `zipWith`, or
+  -- all-reference types — is CallbackPoly with that arity (a typed
   -- signature may still be derived per-lambda by findLambdaCallbackSig);
   -- anything else is CallbackNone.
   export
@@ -1619,7 +1707,10 @@ namespace TermType
                        then CallbackNone
                        else case slotTypes of
                               (ret ::: params@(_ :: [])) =>
-                                maybe CallbackPoly CallbackConcrete
+                                maybe (CallbackPoly 1) CallbackConcrete
+                                  (mkCallbackSig (MkInferredFunctionType ret params))
+                              (ret ::: params@(_ :: _ :: [])) =>
+                                maybe (CallbackPoly 2) CallbackConcrete
                                   (mkCallbackSig (MkInferredFunctionType ret params))
                               _ => CallbackNone
           rest <- walk sc
@@ -1869,10 +1960,68 @@ uniquifyDefSiteFcs (name, fc, MkNmError expr) =
   (name, fc, MkNmError (snd $ uniquifySiteFcs 0 expr))
 uniquifyDefSiteFcs def = def
 
+-- CSE lifts shared literal lambdas into nil-arity functions (`csegen`),
+-- so a callback slot sees `NmApp cse []` instead of the lambda and the
+-- higher-order specialisation machinery can't type it (e.g. `foldl (+) 0
+-- xs` boxes every accumulator step because `(+)` was lifted).  Inline
+-- such a definition back when (a) it appears as a DIRECT argument of a
+-- direct call and (b) its lambda derives a typed callback signature —
+-- exactly the sites the machinery can use.  Allocation-neutral where no
+-- spec fires: the inlined lambdas are non-capturing, and non-capturing
+-- invokedynamic closures are constant-folded singletons.
+getInlinableCallbackLambda : NamedDef -> Maybe NamedCExp
+getInlinableCallbackLambda (MkNmFun [] lam@(NmLam _ p1 body)) =
+  let derivable = case body of
+        NmLam _ p2 inner => isJust (findLambdaCallbackSigN [p1, p2] inner)
+                            || isJust (findLambdaCallbackSig p1 body)
+        _ => isJust (findLambdaCallbackSig p1 body)
+  in if derivable then Just lam else Nothing
+getInlinableCallbackLambda _ = Nothing
+
+buildCallbackLambdaMap : LazyList (Name, FC, NamedDef) -> SortedMap Name NamedCExp
+buildCallbackLambdaMap defs = foldl add SortedMap.empty defs where
+  add : SortedMap Name NamedCExp -> (Name, FC, NamedDef) -> SortedMap Name NamedCExp
+  add acc (name, _, def) =
+    maybe acc (\lam => SortedMap.insert name lam acc) (getInlinableCallbackLambda def)
+
+inlineCallbackLambdas : SortedMap Name NamedCExp -> NamedCExp -> NamedCExp
+inlineCallbackLambdas lambdas = go where
+  mutual
+    inlineArg : NamedCExp -> NamedCExp
+    inlineArg arg@(NmApp _ (NmRef _ g) []) = fromMaybe arg (SortedMap.lookup g lambdas)
+    inlineArg arg = go arg
+
+    go : NamedCExp -> NamedCExp
+    go (NmApp fc f@(NmRef _ _) args@(_ :: _)) = NmApp fc f (inlineArg <$> args)
+    go (NmApp fc f args) = NmApp fc (go f) (go <$> args)
+    go (NmLam fc x body) = NmLam fc x (go body)
+    go (NmLet fc x val body) = NmLet fc x (go val) (go body)
+    go (NmCon fc n ci tag args) = NmCon fc n ci tag (go <$> args)
+    go (NmOp fc op args) = NmOp fc op (map go args)
+    go (NmExtPrim fc n args) = NmExtPrim fc n (go <$> args)
+    go (NmForce fc reason t) = NmForce fc reason (go t)
+    go (NmDelay fc reason t) = NmDelay fc reason (go t)
+    go (NmConCase fc sc alts def) = NmConCase fc (go sc) (goConAlt <$> alts) (go <$> def)
+    go (NmConstCase fc sc alts def) = NmConstCase fc (go sc) (goConstAlt <$> alts) (go <$> def)
+    go e = e
+
+    goConAlt : NamedConAlt -> NamedConAlt
+    goConAlt (MkNConAlt n ci tag args body) = MkNConAlt n ci tag args (go body)
+
+    goConstAlt : NamedConstAlt -> NamedConstAlt
+    goConstAlt (MkNConstAlt c body) = MkNConstAlt c (go body)
+
+inlineCallbackLambdasDef : SortedMap Name NamedCExp -> (Name, FC, NamedDef) -> (Name, FC, NamedDef)
+inlineCallbackLambdasDef lambdas (name, fc, MkNmFun args body) =
+  (name, fc, MkNmFun args (inlineCallbackLambdas lambdas body))
+inlineCallbackLambdasDef _ def = def
+
 export
 optimize : String -> LazyList (Name, FC, NamedDef) -> LazyList (Name, FC, NamedDef)
 optimize programName allDefs =
-  let tailRecOptimizedDefs = concatMap (Lazy.fromList . optimizeTailRecursion programName) allDefs
+  let callbackLambdas = buildCallbackLambdaMap allDefs
+      inlinedDefs = inlineCallbackLambdasDef callbackLambdas <$> allDefs
+      tailRecOptimizedDefs = concatMap (Lazy.fromList . optimizeTailRecursion programName) inlinedDefs
       tailCallOptimizedDefs = TailRec.functions tailRecLoopFunctionName $ toList tailRecOptimizedDefs
   in uniquifyDefSiteFcs . toNameFcDef <$> fromList tailCallOptimizedDefs
 

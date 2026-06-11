@@ -635,15 +635,17 @@ findUniqueFamilyMember plan name varClass =
 -- Declaration-driven classification of a function's parameter slot for
 -- higher-order specialisation:
 --   * CallbackConcrete sig — the slot's declared type is a concrete
---     arity-1 function carrying a primitive (e.g. `Int -> Int`); every
---     literal lambda at this slot uses `sig`.
---   * CallbackPoly — the slot is an arity-1 function type that does not
---     pin a primitive signature (type variables like `a -> b` of `map`,
---     or all-reference types); a typed signature may still be derived
+--     arity-1 or arity-2 function carrying a primitive (e.g. `Int -> Int`
+--     or `Double -> Double -> Double`); every literal lambda of the
+--     matching shape at this slot uses `sig`.
+--   * CallbackPoly arity — the slot is a function type of that arity
+--     (1 or 2) that does not pin a primitive signature (type variables
+--     like `a -> b` of `map` or `a -> b -> c` of `zipWith`, or
+--     all-reference types); a typed signature may still be derived
 --     from a literal lambda's own body (findLambdaCallbackSig).
---   * CallbackNone — not an arity-1 function slot.
+--   * CallbackNone — not an arity-1/2 function slot.
 public export
-data CallbackSlot = CallbackConcrete InferredFunctionType | CallbackPoly | CallbackNone
+data CallbackSlot = CallbackConcrete InferredFunctionType | CallbackPoly Nat | CallbackNone
 
 export
 isCallbackSlot : CallbackSlot -> Bool
@@ -1017,15 +1019,15 @@ callbackSlotType 'D' = Just IDouble
 callbackSlotType 'L' = Just inferredObjectType
 callbackSlotType _   = Nothing
 
--- Normalise a callback signature for naming and eligibility: arity 1
--- only, every reference slot collapses to Object, and at least one of
--- parameter/return must be primitive (an all-Object callback is the
+-- Normalise a callback signature for naming and eligibility: arity 1 or
+-- 2, every reference slot collapses to Object, and at least one of
+-- parameters/return must be primitive (an all-Object callback is the
 -- natural `Function` — no useful refinement).
 export
 mkCallbackSig : InferredFunctionType -> Maybe InferredFunctionType
-mkCallbackSig (MkInferredFunctionType ret [param]) =
-  let sig = MkInferredFunctionType (normalise ret) [normalise param]
-  in if hasPrimitiveType sig then Just sig else Nothing
+mkCallbackSig (MkInferredFunctionType ret params@(_ :: rest)) =
+  let sig = MkInferredFunctionType (normalise ret) (normalise <$> params)
+  in if length params <= 2 && hasPrimitiveType sig then Just sig else Nothing
   where
     normalise : InferredType -> InferredType
     normalise ty = if isPrimitive ty then ty else inferredObjectType
@@ -1061,7 +1063,7 @@ parseCallbackIfaceType (IRef className _ _) =
       case reverse slots of
         (ret :: params@(_ :: _)) => do
           let sig = MkInferredFunctionType ret (reverse params)
-          guard (length params == 1 && hasPrimitiveType sig)
+          guard (length params <= 2 && hasPrimitiveType sig)
           Just sig
         _ => Nothing
     _ => Nothing
@@ -1290,7 +1292,7 @@ mutual
     toJAnnotation : HasIO io => Asm.Annotation -> io JAnnotation
     toJAnnotation (MkAnnotation name props) = do
       properties <- traverse toJAnnotationProperty props
-      primIO $ prim_newJAnnotation name $ believe_me properties
+      primIO $ prim_newJAnnotation name (toJList properties)
 
 mutual
   asmAnnotationValue : AnnotationValue -> AnnotationValue
@@ -3130,7 +3132,7 @@ mutual
         else inferredObjectType
 
   parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do
-    (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
+    (_, MkNmFun _ def) <- getFcAndDefinition (getSimpleName (jvmName !getProgramName name))
       | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++ show fc)
     ty <- tySpec def
     pure $ Just ty

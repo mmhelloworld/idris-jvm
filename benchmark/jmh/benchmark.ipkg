@@ -1,0 +1,6 @@
+package benchmark
+
+sourcedir = "src/main/idris"
+
+main = Benchmarks
+executable = benchmark

@@ -198,6 +198,8 @@ public final class Assembler {
   private static final int CLOSE_CURLY_BRACE = 125;
   private static final int ICONST_MAX = 5;
   private static final boolean SHOULD_DEBUG;
+
+  // Read by the compiler through FFI (Compiler.Jvm.Asm.javaClassFileVersion), so it must stay public
   public static final int JAVA_VERSION = getClassVersion(Integer.parseInt(IdrisSystem.getEnv("IDRIS_JVM_TARGET_VERSION", Integer.toString(Runtime.version().feature()))));
 
   static {
@@ -574,33 +576,108 @@ public final class Assembler {
   // is the typed `apply`, so the interface stays functional and
   // LambdaMetafactory can target the typed signature directly.
   public void createIdrisFunctionInterface(String interfaceName, String typedApplyDescriptor) {
-    if (!cws.containsKey(interfaceName)) {
-      ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-      cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
-        interfaceName, null, "java/lang/Object",
-        new String[]{"java/util/function/Function"});
-      cw.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
+    if (cws.containsKey(interfaceName)) {
+      return;
+    }
+    Type[] parameterTypes = Type.getArgumentTypes(typedApplyDescriptor);
+    Type returnType = Type.getReturnType(typedApplyDescriptor);
 
-      MethodVisitor typedApply = cw.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, "apply", typedApplyDescriptor,
-        null, null);
-      typedApply.visitEnd();
+    ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
+      interfaceName, null, "java/lang/Object",
+      new String[]{"java/util/function/Function"});
+    cw.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
 
-      Type[] parameterTypes = Type.getArgumentTypes(typedApplyDescriptor);
-      Type returnType = Type.getReturnType(typedApplyDescriptor);
-      MethodVisitor bridge = cw.visitMethod(ACC_PUBLIC, "apply",
-        "(Ljava/lang/Object;)Ljava/lang/Object;", null, null);
-      bridge.visitCode();
+    MethodVisitor typedApply = cw.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, "apply", typedApplyDescriptor,
+      null, null);
+    typedApply.visitEnd();
+
+    MethodVisitor bridge = cw.visitMethod(ACC_PUBLIC, "apply",
+      "(Ljava/lang/Object;)Ljava/lang/Object;", null, null);
+    bridge.visitCode();
+    if (parameterTypes.length == 1) {
+      // Unary: unbox the argument, invoke the typed apply, box the result.
       bridge.visitVarInsn(ALOAD, 0);
       bridge.visitVarInsn(ALOAD, 1);
       unboxObjectTo(bridge, parameterTypes[0]);
       bridge.visitMethodInsn(INVOKEINTERFACE, interfaceName, "apply", typedApplyDescriptor, true);
       boxValue(bridge, returnType);
       bridge.visitInsn(ARETURN);
-      bridge.visitMaxs(-1, -1);
-      bridge.visitEnd();
-      cw.visitEnd();
-      cws.put(interfaceName, cw);
+    } else {
+      // Arity 2: the Idris runtime applies closures one argument at a
+      // time, so the boxed apply returns a partial-application closure (a
+      // companion `<iface>$P` class) holding the typed callback and the
+      // first argument; its own apply invokes the typed two-parameter
+      // apply.  This keeps a typed arity-2 callback behaviourally
+      // identical to a natural curried `Function` wherever one flows.
+      String partialName = interfaceName + "$P";
+      String constructorDescriptor = "(L" + interfaceName + ";" + parameterTypes[0].getDescriptor() + ")V";
+      bridge.visitTypeInsn(NEW, partialName);
+      bridge.visitInsn(DUP);
+      bridge.visitVarInsn(ALOAD, 0);
+      bridge.visitVarInsn(ALOAD, 1);
+      unboxObjectTo(bridge, parameterTypes[0]);
+      bridge.visitMethodInsn(INVOKESPECIAL, partialName, "<init>", constructorDescriptor, false);
+      bridge.visitInsn(ARETURN);
+      createIdrisFunctionPartialClass(interfaceName, partialName, constructorDescriptor, typedApplyDescriptor);
     }
+    bridge.visitMaxs(-1, -1);
+    bridge.visitEnd();
+    cw.visitEnd();
+    cws.put(interfaceName, cw);
+  }
+
+  // Companion partial-application closure for an arity-2 typed callback
+  // interface: implements `java.util.function.Function`, holds the typed
+  // callback plus its (typed, possibly primitive) first argument, and its
+  // boxed apply supplies the second argument to the typed two-parameter
+  // apply.
+  private void createIdrisFunctionPartialClass(String interfaceName, String partialName,
+                                               String constructorDescriptor, String typedApplyDescriptor) {
+    if (cws.containsKey(partialName)) {
+      return;
+    }
+    Type[] parameterTypes = Type.getArgumentTypes(typedApplyDescriptor);
+    Type returnType = Type.getReturnType(typedApplyDescriptor);
+    String interfaceFieldDescriptor = "L" + interfaceName + ";";
+    String firstArgDescriptor = parameterTypes[0].getDescriptor();
+
+    ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_FINAL + ACC_SUPER, partialName, null, "java/lang/Object",
+      new String[]{"java/util/function/Function"});
+    cw.visitSource(format("IdrisGenerated$%s.idr", partialName.replaceAll("/", "\\$")), null);
+    cw.visitField(ACC_PRIVATE + ACC_FINAL, "function", interfaceFieldDescriptor, null, null).visitEnd();
+    cw.visitField(ACC_PRIVATE + ACC_FINAL, "argument", firstArgDescriptor, null, null).visitEnd();
+
+    MethodVisitor constructor = cw.visitMethod(ACC_PUBLIC, "<init>", constructorDescriptor, null, null);
+    constructor.visitCode();
+    constructor.visitVarInsn(ALOAD, 0);
+    constructor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+    constructor.visitVarInsn(ALOAD, 0);
+    constructor.visitVarInsn(ALOAD, 1);
+    constructor.visitFieldInsn(PUTFIELD, partialName, "function", interfaceFieldDescriptor);
+    constructor.visitVarInsn(ALOAD, 0);
+    constructor.visitVarInsn(parameterTypes[0].getOpcode(ILOAD), 2);
+    constructor.visitFieldInsn(PUTFIELD, partialName, "argument", firstArgDescriptor);
+    constructor.visitInsn(RETURN);
+    constructor.visitMaxs(-1, -1);
+    constructor.visitEnd();
+
+    MethodVisitor apply = cw.visitMethod(ACC_PUBLIC, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;", null, null);
+    apply.visitCode();
+    apply.visitVarInsn(ALOAD, 0);
+    apply.visitFieldInsn(GETFIELD, partialName, "function", interfaceFieldDescriptor);
+    apply.visitVarInsn(ALOAD, 0);
+    apply.visitFieldInsn(GETFIELD, partialName, "argument", firstArgDescriptor);
+    apply.visitVarInsn(ALOAD, 1);
+    unboxObjectTo(apply, parameterTypes[1]);
+    apply.visitMethodInsn(INVOKEINTERFACE, interfaceName, "apply", typedApplyDescriptor, true);
+    boxValue(apply, returnType);
+    apply.visitInsn(ARETURN);
+    apply.visitMaxs(-1, -1);
+    apply.visitEnd();
+    cw.visitEnd();
+    cws.put(partialName, cw);
   }
 
   private static void unboxObjectTo(MethodVisitor mv, Type type) {

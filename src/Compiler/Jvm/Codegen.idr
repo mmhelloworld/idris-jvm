@@ -623,6 +623,18 @@ assembleBranch defaultLabel labels cases =
 
 parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef: Ref AsmState AsmState}
   mutual
+    -- The applied variable's static type when it is a typed callback
+    -- interface of the given arity (higher-order specialisation); Nothing
+    -- routes the application to the boxed `Function.apply` path.
+    callbackSigOfVariableWithArity : Nat -> NamedCExp -> Core (Maybe (String, InferredFunctionType))
+    callbackSigOfVariableWithArity arity (NmLocal _ var) = do
+      varType <- getVariableType (jvmSimpleName var)
+      pure $ case (varType, parseCallbackIfaceType varType) of
+        (IRef cls _ _, Just sig) =>
+          if length sig.parameterTypes == arity then Just (cls, sig) else Nothing
+        _ => Nothing
+    callbackSigOfVariableWithArity _ _ = pure Nothing
+
     assembleExpr : (isTailCall: Bool) -> InferredType -> NamedCExp -> Core ()
     assembleExpr isTailCall returnType (NmDelay _ _ expr) =
         assembleSubMethodWithScope isTailCall returnType Nothing Nothing expr
@@ -718,16 +730,42 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                 asmCast methodReturnType returnType
                 when isTailCall $ asmReturn returnType
 
+    assembleExpr isTailCall returnType (NmApp _ inner@(NmApp _ lambdaVariable@(NmLocal _ _) [x]) [y]) = do
+        -- Typed apply (arity-2 higher-order specialisation): `f x y` —
+        -- nested unary application — on a variable statically typed as a
+        -- two-parameter callback interface invokes the typed `apply` in
+        -- one call: no intermediate partial-application closure, no
+        -- boxing.  Mirrors inferExprApp's nested variable-head case;
+        -- every other shape replays the nested boxed path.
+        case !(callbackSigOfVariableWithArity 2 lambdaVariable) of
+          Just (ifaceName, sig) => do
+            createIdrisFunctionInterface ifaceName (getMethodDescriptor sig)
+            assembleExpr False (IRef ifaceName Interface []) lambdaVariable
+            let (t1, t2) = case sig.parameterTypes of
+                             [a, b] => (a, b)
+                             _ => (inferredObjectType, inferredObjectType)
+            assembleExpr False t1 x
+            assembleExpr False t2 y
+            invokeMethod InvokeInterface ifaceName "apply" (getMethodDescriptor sig) True
+            asmCast sig.returnType returnType
+          Nothing => do
+            assembleExpr False inferredLambdaType inner
+            assembleExpr False IUnknown y
+            invokeMethod InvokeInterface "java/util/function/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" True
+            asmCast inferredObjectType returnType
+        when isTailCall $ asmReturn returnType
+
     assembleExpr isTailCall returnType (NmApp _ lambdaVariable [arg]) = do
         -- Typed apply (higher-order specialisation): when the applied
-        -- value is a variable statically typed as a callback interface
-        -- (e.g. a spec's callback parameter), invoke the typed `apply`
-        -- directly — argument cast to the typed parameter, primitive
-        -- result with no boxing.  Mirrors inferExprApp's variable-head
-        -- case; every other shape stays on the boxed `Function.apply`
-        -- path, which remains correct for typed callbacks through the
-        -- interface's default bridge method.
-        case !(callbackSigOfVariable lambdaVariable) of
+        -- value is a variable statically typed as an arity-1 callback
+        -- interface (e.g. a spec's callback parameter), invoke the typed
+        -- `apply` directly — argument cast to the typed parameter,
+        -- primitive result with no boxing.  Mirrors inferExprApp's
+        -- variable-head case; every other shape — including a partial
+        -- application of an arity-2 typed callback — stays on the boxed
+        -- `Function.apply` path, which remains correct for typed
+        -- callbacks through the interface's default bridge method.
+        case !(callbackSigOfVariableWithArity 1 lambdaVariable) of
           Just (ifaceName, sig) => do
             createIdrisFunctionInterface ifaceName (getMethodDescriptor sig)
             assembleExpr False (IRef ifaceName Interface []) lambdaVariable
@@ -740,14 +778,6 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             invokeMethod InvokeInterface "java/util/function/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" True
             asmCast inferredObjectType returnType
         when isTailCall $ asmReturn returnType
-      where
-        callbackSigOfVariable : NamedCExp -> Core (Maybe (String, InferredFunctionType))
-        callbackSigOfVariable (NmLocal _ var) = do
-          varType <- getVariableType (jvmSimpleName var)
-          pure $ case (varType, parseCallbackIfaceType varType) of
-            (IRef cls _ _, Just sig) => Just (cls, sig)
-            _ => Nothing
-        callbackSigOfVariable _ = pure Nothing
 
     assembleExpr isTailCall returnType expr@(NmCon fc name conInfo tag args) = assembleCon isTailCall returnType fc name tag args
 
@@ -1273,6 +1303,14 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
     assembleParameter : (NamedCExp, InferredType) -> Core ()
     assembleParameter (param, ty) = assembleExpr False ty param
 
+    -- The `tailRecArg` temporaries are typed during inference from the
+    -- argument expression, but specialised callees store them with the
+    -- callee's parameter type (e.g. a primitive double unboxed from a
+    -- closure result).  Record that type in the by-index map driving
+    -- physical-slot translation (`opWithWordSize`) so a two-word temp
+    -- shifts every later variable by two slots instead of one —
+    -- otherwise the next temp's astore clobbers the double's second
+    -- slot and the verifier rejects the method.
     storeParameter : Map Int InferredType -> (Int, NamedCExp, InferredType) -> Core Int
     storeParameter variableTypes (var, (NmLocal _ loc), ty) = do
         let valueVariableName = jvmSimpleName loc
@@ -1282,12 +1320,14 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                 valueVariableType <- getVariableType valueVariableName
                 loadVar variableTypes valueVariableType ty valueVariableIndex
                 targetVariableIndex <- getDynamicVariableIndex "tailRecArg"
+                ignore $ coreLift $ Map.put variableTypes targetVariableIndex ty
                 storeVar ty ty targetVariableIndex
                 pure targetVariableIndex
             else pure var
-    storeParameter _ (var, param, ty) = do
+    storeParameter variableTypes (var, param, ty) = do
         assembleExpr False ty param
         targetVariableIndex <- getDynamicVariableIndex "tailRecArg"
+        ignore $ coreLift $ Map.put variableTypes targetVariableIndex ty
         storeVar ty ty targetVariableIndex
         pure targetVariableIndex
 
@@ -1389,12 +1429,16 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             new "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed"
             dup
         let isExtracted = isJust parameterValueExpr
-        -- Higher-order specialisation: a real one-parameter lambda whose
-        -- expected type is a typed callback interface is created against
-        -- that interface — typed SAM descriptor, primitive-typed
-        -- implementation method.  The parameter's type below comes from
-        -- the scope that inferCallbackLambda seeded with the signature's
-        -- parameter type, so the descriptors here and inference agree.
+        -- Higher-order specialisation: a real lambda whose expected type
+        -- is a typed callback interface is created against that interface
+        -- — typed SAM descriptor, primitive-typed implementation method.
+        -- The parameter types below come from the scope that
+        -- inferCallbackLambda seeded with the signature's parameter
+        -- types, so the descriptors here and inference agree.  An
+        -- arity-2 signature comes with the nested two-lambda shape
+        -- (inference enforced it via sigMatchesLambdaShape): the inner
+        -- lambda dissolves into a second parameter of the SAME
+        -- implementation method and the body is the inner lambda's body.
         let mCallbackSig = if isExtracted || lambdaType /= FunctionLambda
                              then Nothing
                              else parseCallbackIfaceType lambdaReturnType
@@ -1407,8 +1451,19 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             ifaceName <- getJvmReferenceTypeName lambdaReturnType
             createIdrisFunctionInterface ifaceName (getMethodDescriptor sig)
           Nothing => pure ()
+        (parameterNames, bodyExpr) <- the (Core (List Name, NamedCExp)) $
+            case (mCallbackSig, expr) of
+              (Just sig, NmLam _ p2 inner) =>
+                if length sig.parameterTypes == 2
+                  then pure (toList parameterName ++ [p2], inner)
+                  else pure (toList parameterName, expr)
+              (Just sig, _) =>
+                if length sig.parameterTypes == 2
+                  then asmCrash "Arity-2 callback lambda without the nested two-lambda shape"
+                  else pure (toList parameterName, expr)
+              _ => pure (toList parameterName, expr)
         let lambdaInterfaceType = maybe (getLambdaInterfaceType lambdaType) (const lambdaReturnType) mCallbackSig
-        parameterType <- traverseOpt getVariableType (jvmSimpleName <$> parameterName)
+        parameterTypes <- traverse (getVariableType . jvmSimpleName) parameterNames
         variableTypes <- coreLift $ Map.values {key=Int} !(loadClosures declaringScope scope)
         maybe (pure ()) id parameterValueExpr
         let invokeDynamicDescriptor = getMethodDescriptor $ MkInferredFunctionType lambdaInterfaceType variableTypes
@@ -1418,7 +1473,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
               else maybe (getLambdaImplementationMethodReturnType lambdaType) (.returnType) mCallbackSig
         let implementationMethodDescriptor =
             getMethodDescriptor $
-                MkInferredFunctionType implementationMethodReturnType (variableTypes ++ toList parameterType)
+                MkInferredFunctionType implementationMethodReturnType (variableTypes ++ parameterTypes)
         let methodPrefix = if isExtracted then "extr" else "lambda"
         lambdaClassMethodName <- getLambdaImplementationMethodName methodPrefix
         let lambdaMethodName = methodName lambdaClassMethodName
@@ -1426,7 +1481,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         let interfaceMethodName = getLambdaInterfaceMethodName lambdaType
         let indy = the (Core ()) $ do
             let instantiatedMethodDescriptor = getMethodDescriptor $
-                MkInferredFunctionType implementationMethodReturnType $ toList parameterType
+                MkInferredFunctionType implementationMethodReturnType parameterTypes
             asmInvokeDynamic lambdaClassName lambdaMethodName interfaceMethodName invokeDynamicDescriptor
                 (maybe (getSamDesc lambdaType) getMethodDescriptor mCallbackSig)
                 implementationMethodDescriptor instantiatedMethodDescriptor
@@ -1453,7 +1508,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             if isExtracted
               then lambdaBodyReturnType
               else maybe inferredObjectType (.returnType) mCallbackSig
-        assembleExpr True lambdaReturnType expr
+        assembleExpr True lambdaReturnType bodyExpr
         addLambdaEndLabel scope labelEnd
         maybe (pure ()) (\parentScopeIndex => updateScopeEndLabel parentScopeIndex labelEnd) (parentIndex scope)
         addLocalVariables $ fromMaybe (index scope) (parentIndex scope)
@@ -2288,12 +2343,13 @@ exportFunction typeExports (MkMethodExport jvmFunctionName idrisName type should
     let signature = Just $ getMethodSignature functionType
     createMethod modifiers fileName jvmClassName jvmFunctionName descriptor signature Nothing asmAnnotations asmParameterAnnotations
     methodCodeStart
-    (_, MkNmFun idrisFunctionArgs _) <- getFcAndDefinition (jvmSimpleName idrisName)
+    programName <- getProgramName
+    let jvmIdrisName = jvmName programName idrisName
+    (_, MkNmFun idrisFunctionArgs _) <- getFcAndDefinition (getSimpleName jvmIdrisName)
       | _ => asmCrash ("Unknown idris function " ++ show idrisName)
     let idrisFunctionArity = length idrisFunctionArgs
     let idrisArgumentTypes = replicate idrisFunctionArity inferredObjectType
     let idrisFunctionType = MkInferredFunctionType inferredObjectType idrisArgumentTypes
-    let jvmIdrisName = jvmName !getProgramName idrisName
     let isField = idrisFunctionArity == 0
     let isConstructor = jvmFunctionName == "<init>"
     if isConstructor
@@ -2575,10 +2631,10 @@ exportMemberIo typeExports descriptorsByEncloser (MkMethodExportDescriptor desc)
   if desc.name == "<init>"
     then do
       let idrisName = desc.idrisName
-      fcDef <- AsmGlobalState.getFcAndDefinition (jvmSimpleName idrisName)
+      programName <- AsmGlobalState.getProgramName
+      fcDef <- AsmGlobalState.getFcAndDefinition (getSimpleName (jvmName programName idrisName))
       case snd <$> nullableToMaybe fcDef of
         Just (MkNmFun args expr) => do
-            programName <- AsmGlobalState.getProgramName
             let jname = jvmName programName desc.idrisName
             let dottedClassName = replace (className jname) '/' '.'
             let constructorJavaName = methodName jname ++ "<init>"

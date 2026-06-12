@@ -1,25 +1,25 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static java.lang.Thread.currentThread;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
-@Disabled
 class ChannelIoTest {
 
     static Stream<Arguments> readFile() throws IOException {
@@ -30,73 +30,66 @@ class ChannelIoTest {
 
     private static Arguments createArguments(String fileName) throws IOException {
         String path = getPath(fileName);
-        List<String> content = readFile(path);
-        return arguments(path, content);
-    }
-
-    private static List<String> readFile(String path) throws IOException {
-        BufferedReader bufferedReader = Files.newBufferedReader(Paths.get(path));
-        int currentChar;
-        List<String> content = new ArrayList<>();
-        StringBuilder line = new StringBuilder();
-        while ((currentChar = bufferedReader.read()) != -1) {
-            line.append((char) currentChar);
-            if (currentChar == '\n') {
-                content.add(line.toString());
-                line = new StringBuilder();
-            }
-        }
-        String lineStr = line.toString();
-        if (!lineStr.isEmpty()) {
-            content.add(lineStr);
-        }
-        return content;
+        return arguments(path, Files.readString(Paths.get(path)));
     }
 
     private static String getPath(String name) {
         return new File(requireNonNull(currentThread().getContextClassLoader().getResource(name)).getFile()).getPath();
     }
 
+    // The check-EOF-then-read idiom used by the Idris standard library (System.File.ReadWrite.fRead)
     @ParameterizedTest
     @MethodSource("readFile")
-    void readFile1(String fileName, List<String> expectedContent) {
-        // when
-        List<String> actualContent = testReadFile1(fileName);
-
-        // then
-        assertThat(actualContent).containsExactlyElementsOf(expectedContent);
-    }
-
-    @ParameterizedTest
-    @MethodSource("readFile")
-    void readFile2(String fileName, List<String> expectedContent) {
-        // when
-        List<String> actualContent = testReadFile2(fileName);
-
-        // then
-        assertThat(actualContent).containsExactlyElementsOf(expectedContent);
-    }
-
-    private List<String> testReadFile1(String fileName) {
+    void readFile(String fileName, String expectedContent) {
         ChannelIo file = ChannelIo.open(fileName, "r");
-        List<String> content = new ArrayList<>();
-        while (true) {
-            String line = file.readLine();
-            if (file.isEof() == 1) {
-                break;
-            }
-            content.add(line);
-        }
-        return content;
-    }
-
-    private List<String> testReadFile2(String fileName) {
-        ChannelIo file = ChannelIo.open(fileName, "r");
-        List<String> content = new ArrayList<>();
+        StringBuilder content = new StringBuilder();
         while (file.isEof() != 1) {
-            String line = file.readLine();
-            content.add(line);
+            content.append(file.readLine());
         }
-        return content;
+        assertThat(content.toString()).isEqualTo(expectedContent);
+    }
+
+    @Test
+    void isEofShouldNotReadFromChannel() throws IOException {
+        Deque<byte[]> chunks = new ArrayDeque<>();
+        chunks.add("((:load-file \"foo.idr\") 1)\n".getBytes(UTF_8));
+        AtomicInteger readCount = new AtomicInteger();
+        ByteBufferIo io = new ByteBufferIo(buffer -> {
+            readCount.incrementAndGet();
+            byte[] chunk = chunks.poll();
+            if (chunk == null) {
+                throw new IOException("read would block: no data available");
+            }
+            buffer.put(chunk);
+            return chunk.length;
+        }, buffer -> 0);
+
+        // feof semantics: no read has hit end-of-stream, so this must answer without reading
+        assertThat(io.isEof()).isFalse();
+        assertThat(readCount).hasValue(0);
+
+        assertThat(io.getLine()).isEqualTo("((:load-file \"foo.idr\") 1)\n");
+
+        // the request consumed the buffer; checking EOF before replying must still not block
+        assertThat(io.isEof()).isFalse();
+        assertThat(readCount).hasValue(1);
+    }
+
+    @Test
+    void isEofShouldReportEndOfStreamAfterReadHitsIt() throws IOException {
+        Deque<byte[]> chunks = new ArrayDeque<>();
+        chunks.add("last line".getBytes(UTF_8));
+        ByteBufferIo io = new ByteBufferIo(buffer -> {
+            byte[] chunk = chunks.poll();
+            if (chunk == null) {
+                return -1;
+            }
+            buffer.put(chunk);
+            return chunk.length;
+        }, buffer -> 0);
+
+        assertThat(io.isEof()).isFalse();
+        assertThat(io.getLine()).isEqualTo("last line");
+        assertThat(io.isEof()).isTrue();
     }
 }

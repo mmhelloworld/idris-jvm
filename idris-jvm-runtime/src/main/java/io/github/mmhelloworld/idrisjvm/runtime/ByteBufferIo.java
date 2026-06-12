@@ -14,7 +14,6 @@ public final class ByteBufferIo {
     private final Charset charset;
     private final ByteBuffer buffer;
     private CharBuffer charBuffer;
-    private String lastReadLine;
     private boolean isEof;
 
     ByteBufferIo(FunctionE<ByteBuffer, Integer, IOException> reader,
@@ -40,14 +39,11 @@ public final class ByteBufferIo {
         return charBuffer.get();
     }
 
-    public boolean isEof() throws IOException {
-        if (charBuffer == null || lastReadLine == null) {
-            return !ensureBuffer();
-        }
-        if (!lastReadLine.isEmpty()) {
-            isEof = false;
-        }
-        lastReadLine = null;
+    // C feof semantics: report the end-of-file indicator set by a previous read that hit
+    // end-of-stream. Must never read from the channel - a blocking read here would deadlock
+    // clients of read-reply protocols (e.g. ide-mode on stdio) that check EOF between
+    // reading a request and writing the reply.
+    public boolean isEof() {
         return isEof;
     }
 
@@ -75,13 +71,10 @@ public final class ByteBufferIo {
         while ((c = getChar()) != (char) -1) {
             sb.append(c);
             if (c == '\n') {
-                isEof = false;
                 break;
             }
         }
-        String line = sb.toString();
-        lastReadLine = line;
-        return line;
+        return sb.toString();
     }
 
     // follows Idris C implementation "idris2_seekLine"

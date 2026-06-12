@@ -1,7 +1,5 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
-import org.jline.terminal.Terminal;
-
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.File;

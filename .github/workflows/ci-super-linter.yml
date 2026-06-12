@@ -59,6 +59,9 @@ jobs:
           VALIDATE_PYTHON_MYPY: false
           VALIDATE_PYTHON_PYLINT: false
           VALIDATE_PYTHON_BLACK: false
+          VALIDATE_MARKDOWN: false
+          VALIDATE_BASH: false
+          VALIDATE_SHELL_SHFMT: false
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IGNORE_GENERATED_FILES: true

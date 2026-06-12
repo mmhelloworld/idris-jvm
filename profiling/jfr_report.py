@@ -35,14 +35,21 @@ TOP_N = 30
 
 
 def classify(frames):
-    """frames are ordered leaf -> root. Return bucket name."""
-    for f in frames:
-        if f.startswith(JVM_BACKEND_PREFIXES) or any(s in f for s in JVM_BACKEND_SUBSTRINGS):
-            return "jvm-backend"
-        if f.startswith(BACKEND_COMMON_PREFIX):
-            return "backend-common"
-        if f.startswith(FRONTEND_PREFIXES):
-            return "frontend"
+    """frames are ordered leaf -> root. Return bucket name.
+
+    Category priority over the whole stack, not first-matching-frame: the
+    JVM backend executes inside the Core monad, so backend samples routinely
+    have M_Core.* plumbing frames (traverse_, catch, wrapRef) at the leaf —
+    frame-order classification misfiled those as frontend (observed: a
+    "frontend 43%" bucket that --timing showed was mostly backend time).
+    """
+    if any(f.startswith(JVM_BACKEND_PREFIXES) or any(s in f for s in JVM_BACKEND_SUBSTRINGS)
+           for f in frames):
+        return "jvm-backend"
+    if any(f.startswith(BACKEND_COMMON_PREFIX) for f in frames):
+        return "backend-common"
+    if any(f.startswith(FRONTEND_PREFIXES) for f in frames):
+        return "frontend"
     return "runtime/other"
 
 

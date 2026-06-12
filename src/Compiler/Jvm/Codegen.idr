@@ -2897,6 +2897,111 @@ getNamedDefsByName programName nameFcStateRefs = go SortedMap.empty nameFcStateR
     let newAcc = SortedMap.insert mapKey def acc
     go newAcc rest
 
+mutual
+  refsExp : SortedSet Name -> NamedCExp -> SortedSet Name
+  refsExp acc (NmLocal _ _) = acc
+  refsExp acc (NmRef _ f) = SortedSet.insert f acc
+  refsExp acc (NmLam _ _ sc) = refsExp acc sc
+  refsExp acc (NmLet _ _ val sc) = refsExp (refsExp acc val) sc
+  refsExp acc (NmApp _ f args) = refsList (refsExp acc f) args
+  refsExp acc (NmCon _ n _ _ args) = refsList (SortedSet.insert n acc) args
+  refsExp acc (NmOp _ _ args) = refsVect acc args
+  refsExp acc (NmExtPrim _ _ args) = refsList acc args
+  refsExp acc (NmForce _ _ t) = refsExp acc t
+  refsExp acc (NmDelay _ _ t) = refsExp acc t
+  refsExp acc (NmConCase _ sc alts def) =
+    refsConAlts (maybe (refsExp acc sc) (refsExp (refsExp acc sc)) def) alts
+  refsExp acc (NmConstCase _ sc alts def) =
+    refsConstAlts (maybe (refsExp acc sc) (refsExp (refsExp acc sc)) def) alts
+  refsExp acc (NmPrimVal _ _) = acc
+  refsExp acc (NmErased _) = acc
+  refsExp acc (NmCrash _ _) = acc
+
+  refsList : SortedSet Name -> List NamedCExp -> SortedSet Name
+  refsList acc [] = acc
+  refsList acc (e :: es) = refsList (refsExp acc e) es
+
+  refsVect : SortedSet Name -> Vect n NamedCExp -> SortedSet Name
+  refsVect acc [] = acc
+  refsVect acc (e :: es) = refsVect (refsExp acc e) es
+
+  refsConAlts : SortedSet Name -> List NamedConAlt -> SortedSet Name
+  refsConAlts acc [] = acc
+  refsConAlts acc (MkNConAlt n _ _ _ sc :: alts) =
+    refsConAlts (refsExp (SortedSet.insert n acc) sc) alts
+
+  refsConstAlts : SortedSet Name -> List NamedConstAlt -> SortedSet Name
+  refsConstAlts acc [] = acc
+  refsConstAlts acc (MkNConstAlt _ sc :: alts) = refsConstAlts (refsExp acc sc) alts
+
+-- Names referenced by a definition body: called/referenced functions
+-- (NmRef heads) plus constructors (construction sites and pattern-match
+-- alternatives).  This is the dependency footprint of the plan
+-- iteration's `step` for the definition: re-running `step` on a function
+-- can only produce a different outcome when a plan entry or inferred
+-- type of one of these names (or the function's own spec list) changed
+-- since its last step.
+bodyRefNames : NamedDef -> SortedSet Name
+bodyRefNames (MkNmFun _ body) = refsExp SortedSet.empty body
+bodyRefNames (MkNmError body) = refsExp SortedSet.empty body
+bodyRefNames _ = SortedSet.empty
+
+-- Reverse-dependency index over the reachable functions: for each
+-- referenced name (function or constructor), the set of reachable
+-- functions whose ORIGINAL body references it.  Bodies rewritten during
+-- iteration by `rewriteSpecCalls` only ever swap an `NmRef orig` head
+-- for a spec variant of the same original, so original-body edges stay
+-- valid for dirty propagation (spec-level changes are reported against
+-- the parent name).
+buildReverseDeps : SortedMap String NamedDef -> List Name -> SortedMap Name (SortedSet Name)
+buildReverseDeps defs reachable = go SortedMap.empty reachable where
+  addDep : Name -> SortedMap Name (SortedSet Name) -> Name -> SortedMap Name (SortedSet Name)
+  addDep fn acc dep =
+    SortedMap.insert dep (SortedSet.insert fn (fromMaybe SortedSet.empty (SortedMap.lookup dep acc))) acc
+
+  go : SortedMap Name (SortedSet Name) -> List Name -> SortedMap Name (SortedSet Name)
+  go acc [] = acc
+  go acc (fn :: rest) = case SortedMap.lookup (jvmSimpleName fn) defs of
+    Nothing => go acc rest
+    Just def => go (foldl (addDep fn) acc (SortedSet.toList (bodyRefNames def))) rest
+
+revDepsOf : SortedMap Name (SortedSet Name) -> Name -> SortedSet Name
+revDepsOf revDeps n = fromMaybe SortedSet.empty (SortedMap.lookup n revDeps)
+
+unionAll : List (SortedSet Name) -> SortedSet Name
+unionAll = foldl SortedSet.union SortedSet.empty
+
+-- Fixpoint state threaded through buildSpecialisationPlan: the two plans
+-- plus indices derived from conPlan insertions —
+-- `recordSpecClasses`/`tconIfaceClasses` give O(log n) membership for
+-- `isRecordSpecRef`/`isTConIfaceRef` (previously O(conPlan) scans per
+-- call-site slot check), and `familyMembers` records which DCons
+-- registered each TCon-family interface so a sibling's registration can
+-- dirty the other members' dependents.
+record PlanState where
+  constructor MkPlanState
+  funPlan : SpecialisationPlan
+  conPlan : ConSpecialisationPlan
+  recordSpecClasses : SortedSet String
+  tconIfaceClasses : SortedSet String
+  familyMembers : SortedMap String (SortedSet Name)
+
+emptyPlanState : PlanState
+emptyPlanState = MkPlanState SortedMap.empty SortedMap.empty SortedSet.empty SortedSet.empty SortedMap.empty
+
+-- What one `step` changed, for dirty propagation in the worklist fixpoint.
+record StepEffects where
+  constructor MkStepEffects
+  newSpecKeys : List Name              -- callees that gained a function spec
+  newConEntries : List (Name, String)  -- (DCon, tconClassName) entries added
+  typeChangedNames : List Name         -- functions whose natural/spec inferred type changed
+
+emptyEffects : StepEffects
+emptyEffects = MkStepEffects [] [] []
+
+mergeEffects : StepEffects -> StepEffects -> StepEffects
+mergeEffects (MkStepEffects a b c) (MkStepEffects x y z) = MkStepEffects (a ++ x) (b ++ y) (c ++ z)
+
 -- Walk the call tree in post-order from main, iterating to a fixed point, to
 -- build a plan of functions that benefit from a primitive-typed specialisation.
 --
@@ -2914,7 +3019,7 @@ buildSpecialisationPlan
   -> SortedMap String (Ref AsmState AsmState)
   -> List Name
   -> Core (SpecialisationPlan, ConSpecialisationPlan)
-buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMap.empty, SortedMap.empty)
+buildSpecialisationPlan programName defs stateRefs reachable = iterate
   where
     alreadySpecFor : List SpecialisedSignature -> InferredFunctionType -> Bool
     alreadySpecFor existing (MkInferredFunctionType retType params) = any (\s => s.type.parameterTypes == params && s.type.returnType == retType) existing
@@ -2960,12 +3065,8 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
     isRecordCon UNIT   = True
     isRecordCon _      = False
 
-    isRecordSpecRef : ConSpecialisationPlan -> InferredType -> Bool
-    isRecordSpecRef plan (IRef cls _ _) =
-      cls /= "java/lang/Object"
-      && cls /= idrisObjectClass
-      && any (\(_, entries) => any (\sc => sc.specClassName == cls && isRecordCon sc.conInfo) entries)
-             (SortedMap.toList plan)
+    isRecordSpecRef : PlanState -> InferredType -> Bool
+    isRecordSpecRef ps (IRef cls _ _) = SortedSet.contains cls ps.recordSpecClasses
     isRecordSpecRef _ _ = False
 
     -- True when `ty` is `IRef X` for some `X` that's a TCon-family interface
@@ -2975,12 +3076,8 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
     -- `computeNaturalToTConIfaces` + `createIdrisConstructorClassWithIfaces`),
     -- so a function-spec parameter typed as the interface can checkcast
     -- without sibling-class confusion.
-    isTConIfaceRef : ConSpecialisationPlan -> InferredType -> Bool
-    isTConIfaceRef plan (IRef cls _ _) =
-      cls /= "java/lang/Object"
-      && cls /= idrisObjectClass
-      && any (\(_, entries) => any (\sc => sc.tconClassName == cls) entries)
-             (SortedMap.toList plan)
+    isTConIfaceRef : PlanState -> InferredType -> Bool
+    isTConIfaceRef ps (IRef cls _ _) = SortedSet.contains cls ps.tconIfaceClasses
     isTConIfaceRef _ _ = False
 
     -- Original v1 check: only `Object → primitive` is at-least-as-specific.
@@ -3006,37 +3103,37 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
     -- spec class or a TCon-family interface — those are the signals the
     -- spec carries a real benefit (typed-accessor pattern matching or
     -- sibling-safe family dispatch inside the body).
-    isAtLeastAsSpecificExtended : ConSpecialisationPlan -> InferredType -> InferredType -> Bool
-    isAtLeastAsSpecificExtended conPlan spec natural =
+    isAtLeastAsSpecificExtended : PlanState -> InferredType -> InferredType -> Bool
+    isAtLeastAsSpecificExtended ps spec natural =
       spec == natural
       || (isObjectType natural
           && (isPrimitive spec
               || spec == idrisObjectType
-              || isRecordSpecRef conPlan spec
-              || isTConIfaceRef conPlan spec))
+              || isRecordSpecRef ps spec
+              || isTConIfaceRef ps spec))
       || (natural == inferredLambdaType && isJust (parseCallbackIfaceType spec))
 
-    hasRecordNarrowing : ConSpecialisationPlan -> InferredFunctionType -> InferredFunctionType -> Bool
-    hasRecordNarrowing conPlan spec natural =
-      any (\(s, n) => isObjectType n && (isRecordSpecRef conPlan s || isTConIfaceRef conPlan s))
+    hasRecordNarrowing : PlanState -> InferredFunctionType -> InferredFunctionType -> Bool
+    hasRecordNarrowing ps spec natural =
+      any (\(s, n) => isObjectType n && (isRecordSpecRef ps s || isTConIfaceRef ps s))
           (zip (spec.returnType :: spec.parameterTypes)
                (natural.returnType :: natural.parameterTypes))
 
-    isUsefulRefinement : ConSpecialisationPlan -> InferredFunctionType -> InferredFunctionType -> Bool
-    isUsefulRefinement conPlan spec natural =
+    isUsefulRefinement : PlanState -> InferredFunctionType -> InferredFunctionType -> Bool
+    isUsefulRefinement ps spec natural =
       length spec.parameterTypes == length natural.parameterTypes
       && spec /= natural
       && (let strict = isAtLeastAsSpecificStrict spec.returnType natural.returnType
                        && all (uncurry isAtLeastAsSpecificStrict)
                               (zip spec.parameterTypes natural.parameterTypes)
-              extended = hasRecordNarrowing conPlan spec natural
-                       && isAtLeastAsSpecificExtended conPlan spec.returnType natural.returnType
-                       && all (uncurry (isAtLeastAsSpecificExtended conPlan))
+              extended = hasRecordNarrowing ps spec natural
+                       && isAtLeastAsSpecificExtended ps spec.returnType natural.returnType
+                       && all (uncurry (isAtLeastAsSpecificExtended ps))
                               (zip spec.parameterTypes natural.parameterTypes)
           in strict || extended)
 
-    processSite : SpecialisationPlan -> ConSpecialisationPlan -> Name -> InferredFunctionType -> Core (SpecialisationPlan, Bool)
-    processSite plan conPlan callee fnType =
+    processSite : PlanState -> Name -> InferredFunctionType -> Core (PlanState, Maybe Name)
+    processSite ps callee fnType =
       case SortedMap.lookup (jvmSimpleName callee) defs of
         Just def@(MkNmFun compiledParams _) => do
               -- A specialised signature only earns its emission when it is
@@ -3047,26 +3144,26 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
               -- cast at the call site.
               mNatural <- naturalType callee
               let isUseful = case mNatural of
-                    Just natural => isUsefulRefinement conPlan fnType natural
+                    Just natural => isUsefulRefinement ps fnType natural
                     Nothing => True
               if not isUseful
-                then pure (plan, False)
+                then pure (ps, Nothing)
                 else
-                  let existing = fromMaybe [] $ SortedMap.lookup callee plan
+                  let existing = fromMaybe [] $ SortedMap.lookup callee ps.funPlan
                   in if alreadySpecFor existing fnType
-                       then pure (plan, False)
+                       then pure (ps, Nothing)
                        else
                          let sig     = mkSpecSig def callee fnType (cast $ length existing)
-                             updated = SortedMap.insert callee (existing ++ [sig]) plan
-                         in pure (updated, True)
-        _ => pure (plan, False)
+                             updated = SortedMap.insert callee (existing ++ [sig]) ps.funPlan
+                         in pure ({ funPlan := updated } ps, Just callee)
+        _ => pure (ps, Nothing)
 
-    foldSites : SpecialisationPlan -> ConSpecialisationPlan -> List (FC, Name, InferredFunctionType) -> Core (SpecialisationPlan, Bool)
-    foldSites plan _ [] = pure (plan, False)
-    foldSites plan conPlan ((_, callee, fnType) :: rest) = do
-      (plan',  ch)  <- processSite plan conPlan callee fnType
-      (plan'', ch') <- foldSites plan' conPlan rest
-      pure (plan'', ch || ch')
+    foldSites : PlanState -> List (FC, Name, InferredFunctionType) -> Core (PlanState, List Name)
+    foldSites ps [] = pure (ps, [])
+    foldSites ps ((_, callee, fnType) :: rest) = do
+      (ps',  mNew)  <- processSite ps callee fnType
+      (ps'', news) <- foldSites ps' rest
+      pure (ps'', maybe news (:: news) mNew)
 
     -- A constructor spec is *useful* under the same rule as a function spec:
     -- at least one slot must narrow `Object → primitive` and the spec must
@@ -3260,35 +3357,48 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
         refine True ty = if ty == inferredObjectType then IRef tconClassName Interface [] else ty
         refine False ty = ty
 
-    processConSite : ConSpecialisationPlan
+    processConSite : PlanState
                   -> Name -> ConInfo -> Maybe Int -> List InferredType
-                  -> Core (ConSpecialisationPlan, Bool)
-    processConSite conPlan name conInfo tag paramTypes = do
+                  -> Core (PlanState, Maybe (Name, String))
+    processConSite ps name conInfo tag paramTypes = do
       if not (isUsefulConRefinement paramTypes)
-        then pure (conPlan, False)
+        then pure (ps, Nothing)
         else do
           programName <- getProgramName
           let baseClass = getIdrisConstructorClassName programName (jvmSimpleName name)
           let specName = mkConSpecClassName baseClass paramTypes
-          let existing = fromMaybe [] $ SortedMap.lookup name conPlan
+          let existing = fromMaybe [] $ SortedMap.lookup name ps.conPlan
           if any (\sc => sc.paramTypes == paramTypes) existing
-             then pure (conPlan, False)
+             then pure (ps, Nothing)
              else do
                    (tconFamilyBase, tconClassName) <- deriveTConFamily name conInfo specName paramTypes
                    fieldTypes <- computeFieldTypes name conInfo tconClassName paramTypes
                    let entry   = MkSpecialisedCon name conInfo tag paramTypes fieldTypes specName
                                    tconClassName tconFamilyBase
-                   let updated = SortedMap.insert name (existing ++ [entry]) conPlan
-                   pure (updated, True)
+                   let ps' = { conPlan := SortedMap.insert name (existing ++ [entry]) ps.conPlan
+                             , recordSpecClasses := if isRecordCon conInfo
+                                 then SortedSet.insert specName ps.recordSpecClasses
+                                 else ps.recordSpecClasses
+                             , tconIfaceClasses := if tconClassName == ""
+                                 then ps.tconIfaceClasses
+                                 else SortedSet.insert tconClassName ps.tconIfaceClasses
+                             , familyMembers := if tconClassName == ""
+                                 then ps.familyMembers
+                                 else SortedMap.insert tconClassName
+                                        (SortedSet.insert name (fromMaybe SortedSet.empty
+                                          (SortedMap.lookup tconClassName ps.familyMembers)))
+                                        ps.familyMembers
+                             } ps
+                   pure (ps', Just (name, tconClassName))
 
-    foldConSites : ConSpecialisationPlan
+    foldConSites : PlanState
                 -> List (FC, Name, ConInfo, Maybe Int, List InferredType)
-                -> Core (ConSpecialisationPlan, Bool)
-    foldConSites conPlan [] = pure (conPlan, False)
-    foldConSites conPlan ((_, name, conInfo, tag, paramTypes) :: rest) = do
-      (conPlan',  ch)  <- processConSite conPlan name conInfo tag paramTypes
-      (conPlan'', ch') <- foldConSites conPlan' rest
-      pure (conPlan'', ch || ch')
+                -> Core (PlanState, List (Name, String))
+    foldConSites ps [] = pure (ps, [])
+    foldConSites ps ((_, name, conInfo, tag, paramTypes) :: rest) = do
+      (ps',  mNew)  <- processConSite ps name conInfo tag paramTypes
+      (ps'', news) <- foldConSites ps' rest
+      pure (ps'', maybe news (:: news) mNew)
 
     -- Threaded plan: (function specs, constructor specs).  Constructor specs
     -- are discovered from `conSiteLog` alongside the existing `callSiteLog`
@@ -3296,22 +3406,23 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
     Plans : Type
     Plans = (SpecialisationPlan, ConSpecialisationPlan)
 
-    step : Plans -> Name -> Core (Plans, Bool)
-    step (plan, conPlan) name = do
+    step : PlanState -> Name -> Core (PlanState, StepEffects)
+    step ps name = do
       let nameStr = jvmSimpleName name
       let Just asmStateRef = SortedMap.lookup nameStr stateRefs
-            | Nothing => pure ((plan, conPlan), False)
+            | Nothing => pure (ps, emptyEffects)
       let Just def = SortedMap.lookup nameStr defs
-            | Nothing => pure ((plan, conPlan), False)
+            | Nothing => pure (ps, emptyEffects)
       let initialFunctionType = inferredFunctionType !getCurrentFunction
       -- Make both plans visible to inferDef so its rewriteSpecCalls
       -- post-pass can rewire NmRef[orig] → NmRef[spec] using the latest plan,
       -- and so emission of the function body can look up constructor specs.
-      setSpecialisationPlan {stateRef = asmStateRef} plan
-      setConSpecialisationPlan {stateRef = asmStateRef} conPlan
+      setSpecialisationPlan {stateRef = asmStateRef} ps.funPlan
+      setConSpecialisationPlan {stateRef = asmStateRef} ps.conPlan
       inferFunctionType (Just initialFunctionType) def
       inferDef
       let functionType = inferredFunctionType !getCurrentFunction
+      let naturalTypeChanged = functionType /= initialFunctionType
       -- Function-spec discovery from the natural's call sites.  Previously
       -- gated on `hasPrimitiveType functionType` to avoid over-spec'ing
       -- polymorphic functions, but with `inferExprCon` returning concrete
@@ -3321,52 +3432,101 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate (SortedMa
       -- `Object → primitive` or `Object → IRef ConcreteClass`.  Pure
       -- polymorphic call sites (Object→Object) are rejected there.
       naturalSites <- getCallSiteLog {stateRef = asmStateRef}
-      (plan1, ch1) <- foldSites plan conPlan naturalSites
+      (ps1, newKeys1) <- foldSites ps naturalSites
       naturalConSites <- getConSiteLog {stateRef = asmStateRef}
-      (conPlan1, ch1c) <- foldConSites conPlan naturalConSites
+      (ps2, newCons1) <- foldConSites ps1 naturalConSites
       -- For each existing function spec, re-run inference with the spec's
       -- parameter types and drain BOTH logs.
-      let allSpecs = fromMaybe [] $ SortedMap.lookup name plan1
+      let allSpecs = fromMaybe [] $ SortedMap.lookup name ps2.funPlan
       case def of
         (MkNmFun paramNames body) => do
-          (p, cp, ch) <- foldl
+          (psN, keys, cons, anyTypeChanged) <- foldl
             (\acc, (MkSpecialisedSig specFnName def fnType) => do
-                (p, cp, ch) <- acc
+                (p, keys, cons, tyCh) <- acc
                 let specParams = fnType.parameterTypes
                 let arity = length paramNames
                 let paddedParams = if length specParams < arity then padParams arity specParams else specParams
                 let initialFunctionType = MkInferredFunctionType fnType.returnType paddedParams
+                prevSpecType <- map inferredFunctionType <$> findFunction (jvmName programName specFnName)
                 asmState <- coreLift $ AsmState.fromIdrisName specFnName
                 specRef <- newRef AsmState asmState
-                setSpecialisationPlan {stateRef = specRef} p
-                setConSpecialisationPlan {stateRef = specRef} cp
+                setSpecialisationPlan {stateRef = specRef} p.funPlan
+                setConSpecialisationPlan {stateRef = specRef} p.conPlan
                 setCallbackSlotSigs {stateRef = specRef} !(getCallbackSlotSigs {stateRef = asmStateRef})
                 inferFunctionType {stateRef = specRef} (Just initialFunctionType) def
                 inferDef {stateRef = specRef}
+                specType <- inferredFunctionType <$> getCurrentFunction {stateRef = specRef}
+                let specTypeChanged = maybe True (/= specType) prevSpecType
                 sites <- getCallSiteLog {stateRef = specRef}
-                (p', ch') <- foldSites p cp sites
+                (p', keys') <- foldSites p sites
                 conSites <- getConSiteLog {stateRef = specRef}
-                (cp', chc') <- foldConSites cp conSites
-                pure (p', cp', ch || ch' || chc'))
-            (pure (plan1, conPlan1, ch1 || ch1c))
+                (p'', cons') <- foldConSites p' conSites
+                pure (p'', keys ++ keys', cons ++ cons', tyCh || specTypeChanged))
+            (pure (ps2, newKeys1, newCons1, naturalTypeChanged))
             allSpecs
-          pure ((p, cp), ch)
-        _ => pure ((plan1, conPlan1), ch1 || ch1c)
+          pure (psN, MkStepEffects keys cons (if anyTypeChanged then [name] else []))
+        _ => pure (ps2, MkStepEffects newKeys1 newCons1 (if naturalTypeChanged then [name] else []))
 
-    scan : Plans -> List Name -> Core (Plans, Bool)
-    scan plans [] = pure (plans, False)
-    scan plans (name :: names) = do
-      (plans',  ch)  <- step plans name
-      (plans'', ch') <- scan plans' names
-      pure (plans'', ch || ch')
+    scan : PlanState -> List Name -> Core (PlanState, StepEffects)
+    scan ps [] = pure (ps, emptyEffects)
+    scan ps (name :: names) = do
+      (ps',  eff)  <- step ps name
+      (ps'', eff') <- scan ps' names
+      pure (ps'', mergeEffects eff eff')
 
-    iterate' : List Name -> Plans -> Core Plans
-    iterate' names plans = do
-      (plans', changed) <- scan plans names
-      if changed then iterate' names plans' else pure plans'
+    -- The next round's dirty set, from what this round changed:
+    --  * a callee gained a function spec → the callee itself (its new spec
+    --    body must be inferred and drained) and everything referencing it
+    --    (their call sites get rewired by rewriteSpecCalls and retyped);
+    --  * a constructor gained a spec entry → everything referencing the
+    --    constructor (inferExprCon now narrows there), and when the entry
+    --    registers a TCon-family interface, everything referencing any
+    --    family sibling registered so far (`isTConIfaceRef` answers can
+    --    flip for site types those functions already carry);
+    --  * a function's inferred type changed → everything referencing it
+    --    (callers consume callee types via findFunctionType) — but only in
+    --    rounds where some plan entry was also added, mirroring the
+    --    original algorithm, which likewise stopped propagating type
+    --    ripples once a full pass added no plan entries.  Dropping the
+    --    gate would risk non-termination if re-inference oscillates.
+    nextDirty : SortedMap Name (SortedSet Name) -> PlanState -> StepEffects -> SortedSet Name
+    nextDirty revDeps ps (MkStepEffects specKeys conEntries typeChanged) =
+      let planGrew = not (null specKeys && null conEntries)
+          fromSpecs = unionAll (map (\c => SortedSet.insert c (revDepsOf revDeps c)) specKeys)
+          fromCons  = unionAll (map conDirty conEntries)
+          fromTypes = if planGrew
+                        then unionAll (map (revDepsOf revDeps) typeChanged)
+                        else SortedSet.empty
+      in SortedSet.union fromSpecs (SortedSet.union fromCons fromTypes)
+      where
+        conDirty : (Name, String) -> SortedSet Name
+        conDirty (k, tconCls) =
+          SortedSet.union (revDepsOf revDeps k) $
+            if tconCls == "" then SortedSet.empty
+            else unionAll (map (revDepsOf revDeps)
+                   (SortedSet.toList (fromMaybe SortedSet.empty
+                     (SortedMap.lookup tconCls ps.familyMembers))))
 
-    iterate : Plans -> Core Plans
-    iterate plans = iterate' reachable plans
+    -- Worklist fixpoint: round 1 steps every reachable function (identical
+    -- to the original algorithm's first pass); subsequent rounds re-step
+    -- only the names whose step inputs could have changed, instead of
+    -- re-inferring the whole program until a full pass reports no change.
+    -- Names are always processed in `reachable` (post-order) order for
+    -- deterministic spec numbering.
+    iterate' : SortedMap Name (SortedSet Name) -> SortedSet Name -> PlanState -> Core PlanState
+    iterate' revDeps dirty ps =
+      case SortedSet.toList dirty of
+        [] => pure ps
+        _ => do
+          let names = filter (\n => SortedSet.contains n dirty) reachable
+          (ps', effects) <- scan ps names
+          iterate' revDeps (nextDirty revDeps ps' effects) ps'
+
+    iterate : Core Plans
+    iterate = do
+      let revDeps = buildReverseDeps defs reachable
+      ps <- iterate' revDeps (SortedSet.fromList reachable) emptyPlanState
+      pure (ps.funPlan, ps.conPlan)
 
 -- Aggregate every construction site observed across the natural and
 -- specialised bodies of all reachable functions after the spec plan has
@@ -3397,7 +3557,8 @@ computeNaturalConsLive : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInf
                      -> SpecialisationPlan
                      -> ConSpecialisationPlan
                      -> List Name -> Core (SortedSet Name)
-computeNaturalConsLive defs stateRefs plan conPlan reachable = loop SortedSet.empty
+computeNaturalConsLive defs stateRefs plan conPlan reachable =
+    loop (buildReverseDeps defs reachable) (SortedSet.fromList reachable) SortedSet.empty
   where
     slotMatch : InferredType -> InferredType -> Bool
     slotMatch spec arg =
@@ -3426,7 +3587,7 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = loop SortedSet.em
 
     gatherForSpec : SortedSet Name -> NamedDef -> SortedMap String (List CallbackSlot)
                  -> SpecialisedSignature
-                 -> Core (List (Name, List InferredType))
+                 -> Core (List (Name, List InferredType), Bool)
     gatherForSpec current def cbSigs (MkSpecialisedSig specName specDef specType) = do
       let specParams = specType.parameterTypes
       let arity = case def of
@@ -3436,47 +3597,77 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = loop SortedSet.em
                            then padParams arity specParams
                            else specParams
       let specInitial = MkInferredFunctionType specType.returnType paddedParams
+      programName <- getProgramName
+      prevSpecType <- map inferredFunctionType <$> findFunction (jvmName programName specName)
       asmState <- coreLift $ AsmState.fromIdrisName specName
       specRef <- newRef AsmState asmState
       setSpecialisationPlan {stateRef = specRef} plan
       setConSpecialisationPlan {stateRef = specRef} conPlan
       setNaturalConsLive {stateRef = specRef} current
       setCallbackSlotSigs {stateRef = specRef} cbSigs
-      drain {stateRef = specRef} specInitial specDef
+      sites <- drain {stateRef = specRef} specInitial specDef
+      specType' <- inferredFunctionType <$> getCurrentFunction {stateRef = specRef}
+      pure (sites, maybe True (/= specType') prevSpecType)
 
-    gatherFor : SortedSet Name -> Name -> Core (List (Name, List InferredType))
+    gatherFor : SortedSet Name -> Name -> Core (List (Name, List InferredType), Bool)
     gatherFor current name = do
       let nameStr = jvmSimpleName name
       let Just asmStateRef = SortedMap.lookup nameStr stateRefs
-            | Nothing => pure []
+            | Nothing => pure ([], False)
       let Just def = SortedMap.lookup nameStr defs
-            | Nothing => pure []
+            | Nothing => pure ([], False)
       setSpecialisationPlan {stateRef = asmStateRef} plan
       setConSpecialisationPlan {stateRef = asmStateRef} conPlan
       setNaturalConsLive {stateRef = asmStateRef} current
       initialFunctionType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
       naturalSites <- drain {stateRef = asmStateRef} initialFunctionType def
+      finalType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
       let specs = fromMaybe [] $ SortedMap.lookup name plan
       cbSigs <- getCallbackSlotSigs {stateRef = asmStateRef}
-      specSites <- traverse (gatherForSpec current def cbSigs) specs
-      pure $ naturalSites ++ join specSites
+      specResults <- traverse (gatherForSpec current def cbSigs) specs
+      pure ( naturalSites ++ join (map fst specResults)
+           , finalType /= initialFunctionType || any snd specResults)
 
-    onePass : SortedSet Name -> Core (SortedSet Name)
-    onePass current = do
-      perName <- traverse (gatherFor current) reachable
+    onePass : SortedSet Name -> List Name -> Core (SortedSet Name, List Name)
+    onePass current names = do
+      results <- the (Core (List (List (Name, List InferredType), Maybe Name))) $
+                   traverse (\n => do (sites, tyCh) <- gatherFor current n
+                                      pure (sites, if tyCh then Just n else Nothing))
+                            names
       -- `join` is List's tail-recursive O(n) bind; `concat` is
       -- `foldl (<+>)` and re-copies the accumulator per chunk, which is
       -- quadratic over `reachable` and dominated the build (50% of all
       -- samples landed here before the change).
-      pure $ SortedSet.fromList $ mapMaybe needsNatural (join perName)
+      let sites = join (map Builtin.fst results)
+      pure (SortedSet.fromList (mapMaybe needsNatural sites), mapMaybe Builtin.snd results)
 
-    loop : SortedSet Name -> Core (SortedSet Name)
-    loop current = do
-      next <- onePass current
-      let merged = SortedSet.union current next
-      if SortedSet.toList merged == SortedSet.toList current
-        then pure merged
-        else loop merged
+    -- Worklist analogue of the original all-reachable fixpoint: round 1
+    -- drains everything (`dirty` starts as all of `reachable`); afterwards
+    -- a function is re-drained only when its inference inputs moved —
+    -- plans and callback sigs are fixed here, so that means (a) a
+    -- constructor referenced by its body became natural-live (the
+    -- `inferConCaseExpr` narrowing gate flips off), or (b) a function it
+    -- references changed its inferred type (callers consume callee types),
+    -- the latter gated on the live set having grown in the same round,
+    -- mirroring the original loop which also stopped propagating type
+    -- ripples once a full pass added nothing.  Partial re-drains are exact
+    -- here because contributions accumulate by UNION and a site's
+    -- `needsNatural` verdict depends only on the site and the static
+    -- conPlan — once observed, its contribution is permanent.
+    loop : SortedMap Name (SortedSet Name) -> SortedSet Name -> SortedSet Name -> Core (SortedSet Name)
+    loop revDeps dirty current =
+      case SortedSet.toList dirty of
+        [] => pure current
+        _ => do
+          let names = filter (\n => SortedSet.contains n dirty) reachable
+          (next, typeChanged) <- onePass current names
+          let delta = filter (\k => not (SortedSet.contains k current)) (SortedSet.toList next)
+          let merged = SortedSet.union current next
+          let dirtyFromLive = unionAll (map (revDepsOf revDeps) delta)
+          let dirtyFromTypes = if isNil delta
+                                 then SortedSet.empty
+                                 else unionAll (map (revDepsOf revDeps) typeChanged)
+          loop revDeps (SortedSet.union dirtyFromLive dirtyFromTypes) merged
 
 -- For each spec entry with a TCon-family interface, find every sibling
 -- DCon's natural class and register that natural class to implement the
@@ -3559,14 +3750,16 @@ computeNaturalToTConIfaces programName conPlan defs stateRefs plan reachable = d
       family <- familyKey name conInfo
       pure (name, family)
 
-    drainSites : {auto stateRef : Ref AsmState AsmState} -> InferredFunctionType
-              -> NamedDef -> Core (List Site)
-    drainSites initialFunctionType def = do
-      inferFunctionType (Just initialFunctionType) def
-      inferDef
-      log <- getConSiteLog
-      pure $ map (\(_, n, ci, _, _) => (n, ci)) log
-
+    -- No re-inference here: `conSiteLog` is never reset (only
+    -- `callSiteLog` is, in `inferFunctionType`), so each ref's log has
+    -- accumulated every construction site across the plan fixpoint and
+    -- `computeNaturalConsLive` rounds — every reachable function was
+    -- fully drained at least once by those.  Only the `(name, conInfo)`
+    -- projection is consumed here, and that set is purely syntactic:
+    -- `inferExprCon` logs every `NmCon` it walks unconditionally, and
+    -- body rewrites (`rewriteSpecCalls`) rename only `NmRef` heads, never
+    -- constructors — so the unique site set is identical to what one more
+    -- drain with the final plans would log.
     gatherSites : Name -> Core (List Site)
     gatherSites name = do
       let nameStr = jvmSimpleName name
@@ -3574,9 +3767,8 @@ computeNaturalToTConIfaces programName conPlan defs stateRefs plan reachable = d
             | Nothing => pure []
       let Just def = SortedMap.lookup nameStr defs
             | Nothing => pure []
-      setConSpecialisationPlan {stateRef = asmStateRef} conPlan
-      initialFunctionType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
-      drainSites {stateRef = asmStateRef} initialFunctionType def
+      log <- getConSiteLog {stateRef = asmStateRef}
+      pure $ map (\(_, n, ci, _, _) => (n, ci)) log
 
     addUnique : String -> List String -> List String
     addUnique s xs = if elem s xs then xs else xs ++ [s]

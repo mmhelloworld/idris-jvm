@@ -8,14 +8,6 @@ import static java.util.Map.Entry.comparingByValue;
 
 public final class AsmState {
 
-    public static void updateVariableIndices(Map<String, Integer> resultIndicesByName,
-                                             Map<String, Integer> indicesByName) {
-        indicesByName.entrySet().stream()
-            .filter(nameAndIndex -> !resultIndicesByName.containsKey(nameAndIndex.getKey()) &&
-                !resultIndicesByName.containsValue(nameAndIndex.getValue()))
-            .forEach(nameAndIndex -> resultIndicesByName.put(nameAndIndex.getKey(), nameAndIndex.getValue()));
-    }
-
     public static List<String> getVariableNames(Map<String, Integer> indicesByName) {
         return indicesByName.entrySet().stream()
             .sorted(comparingByValue())

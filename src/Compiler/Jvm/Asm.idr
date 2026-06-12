@@ -2894,14 +2894,6 @@ generateVariable namePrefix = do
     pure variableName
 
 namespace JAsmState
-    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "updateVariableIndices" "java/util/Map java/util/Map" "void"
-    prim_updateVariableIndices : Map key value -> Map key value -> PrimIO ()
-
-    export
-    updateVariableIndices : HasIO io => Map String Int -> Map String Int -> io ()
-    updateVariableIndices resultIndicesByName indicesByName =
-        primIO $ prim_updateVariableIndices resultIndicesByName indicesByName
-
     %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/AsmState" "getVariableNames" "java/util/Map" "java/util/List"
     prim_getVariableNames : Map key value -> PrimIO (JList key)
 
@@ -2911,21 +2903,54 @@ namespace JAsmState
         jlist <- primIO $ prim_getVariableNames indicesByName
         JList.fromIterable jlist
 
+namespace VariableMerger
+    export
+    data VariableMerger : Type where [external]
+
+    %foreign "jvm:<init>(io/github/mmhelloworld/idrisjvm/assembler/VariableMerger),io/github/mmhelloworld/idrisjvm/assembler/VariableMerger"
+    prim_new : PrimIO VariableMerger
+
+    export %inline
+    new : HasIO io => io VariableMerger
+    new = primIO prim_new
+
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/VariableMerger" ".mergeScope"
+                "io/github/mmhelloworld/idrisjvm/assembler/VariableMerger java/util/Map java/util/Map" "void"
+    prim_mergeScope : VariableMerger -> Map String Int -> Map String InferredType -> PrimIO ()
+
+    export %inline
+    mergeScope : HasIO io => VariableMerger -> Map String Int -> Map String InferredType -> io ()
+    mergeScope merger indicesByName typesByName = primIO $ prim_mergeScope merger indicesByName typesByName
+
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/VariableMerger" ".getMergedIndices"
+                "io/github/mmhelloworld/idrisjvm/assembler/VariableMerger" "java/util/Map"
+    prim_getMergedIndices : VariableMerger -> PrimIO (Map String Int)
+
+    export %inline
+    getMergedIndices : HasIO io => VariableMerger -> io (Map String Int)
+    getMergedIndices merger = primIO $ prim_getMergedIndices merger
+
+    %foreign jvm' "io/github/mmhelloworld/idrisjvm/assembler/VariableMerger" ".getMergedTypesByIndex"
+                "io/github/mmhelloworld/idrisjvm/assembler/VariableMerger java/lang/Object" "java/util/Map"
+    prim_getMergedTypesByIndex : VariableMerger -> InferredType -> PrimIO (Map Int InferredType)
+
+    export %inline
+    getMergedTypesByIndex : HasIO io => VariableMerger -> InferredType -> io (Map Int InferredType)
+    getMergedTypesByIndex merger unknownType = primIO $ prim_getMergedTypesByIndex merger unknownType
+
+mergeScopeChain : {auto stateRef: Ref AsmState AsmState} -> VariableMerger -> Int -> Core ()
+mergeScopeChain merger scopeIndex = do
+    scope <- getScope scopeIndex
+    coreLift $ mergeScope merger (variableIndices scope) (variableTypes scope)
+    case parentIndex scope of
+        Just parentScopeIndex => mergeScopeChain merger parentScopeIndex
+        Nothing => pure ()
+
 retrieveVariableIndicesByName : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map String Int)
 retrieveVariableIndicesByName scopeIndex = do
-    variableIndices <- coreLift $ Map.newTreeMap {key=String} {value=Int}
-    go variableIndices scopeIndex
-    pure variableIndices
-  where
-    go : Map String Int -> Int -> Core ()
-    go acc scopeIndex = go1 scopeIndex where
-        go1 : Int -> Core ()
-        go1 scopeIndex = do
-            scope <- getScope scopeIndex
-            coreLift $ updateVariableIndices acc (variableIndices scope)
-            let Just nextScopeIndex = parentIndex scope
-                  | Nothing => pure ()
-            go1 nextScopeIndex
+    merger <- coreLift VariableMerger.new
+    mergeScopeChain merger scopeIndex
+    coreLift $ getMergedIndices merger
 
 isParameter : {auto stateRef: Ref AsmState AsmState} -> String -> Core Bool
 isParameter name = do
@@ -2973,26 +2998,6 @@ retrieveVariableTypeAtScope scopeIndex name = do
         Nothing => case parentIndex scope of
             Just parentScope => retrieveVariableTypeAtScope parentScope name
             Nothing => pure IUnknown
-
-export
-retrieveVariableTypesAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map Int InferredType)
-retrieveVariableTypesAtScope scopeIndex = do
-    typesByIndex <- coreLift $ Map.newTreeMap {key=Int} {value=InferredType}
-    go typesByIndex !(retrieveVariables scopeIndex)
-    pure typesByIndex
-  where
-    go : Map Int InferredType -> List String -> Core ()
-    go acc names = go1 names where
-        go1 : List String -> Core ()
-        go1 [] = pure ()
-        go1 (var :: vars) = do
-            varIndex <- retrieveVariableIndexAtScope scopeIndex var
-            ty <- retrieveVariableTypeAtScope scopeIndex var
-            hasVar <- coreLift $ containsKey {value=InferredType} acc varIndex
-            when (not hasVar) $ coreLift $ do
-                oldTy <- Map.put acc varIndex ty
-                pure ()
-            go1 vars
 
 export
 getVariableIndicesByName : {auto stateRef: Ref AsmState AsmState} -> Int -> Core (Map String Int)
@@ -3046,10 +3051,12 @@ updateScopeVariableTypes = go (scopeCounter !getState - 1) where
     go scopeIndex =
         if scopeIndex < 0 then pure ()
         else do
-            variableTypes <- retrieveVariableTypesAtScope scopeIndex
-            variableIndices <- retrieveVariableIndicesByName scopeIndex
+            merger <- coreLift VariableMerger.new
+            mergeScopeChain merger scopeIndex
+            mergedIndices <- coreLift $ getMergedIndices merger
+            mergedTypes <- coreLift $ getMergedTypesByIndex merger IUnknown
             scope <- getScope scopeIndex
-            saveScope $ {allVariableTypes := variableTypes, allVariableIndices := variableIndices} scope
+            saveScope $ {allVariableTypes := mergedTypes, allVariableIndices := mergedIndices} scope
             go (scopeIndex - 1)
 
 getVariableScope : {auto stateRef: Ref AsmState AsmState} -> String -> Core Scope

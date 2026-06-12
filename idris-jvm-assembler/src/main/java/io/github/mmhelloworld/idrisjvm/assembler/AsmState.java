@@ -8,10 +8,13 @@ import static java.util.Map.Entry.comparingByValue;
 
 public final class AsmState {
 
-    public static List<String> getVariableNames(Map<String, Integer> indicesByName) {
-        return indicesByName.entrySet().stream()
-            .sorted(comparingByValue())
-            .map(Entry::getKey)
-            .toList();
-    }
+  private AsmState() {
+  }
+
+  public static List<String> getVariableNames(Map<String, Integer> indicesByName) {
+    return indicesByName.entrySet().stream()
+      .sorted(comparingByValue())
+      .map(Entry::getKey)
+      .toList();
+  }
 }

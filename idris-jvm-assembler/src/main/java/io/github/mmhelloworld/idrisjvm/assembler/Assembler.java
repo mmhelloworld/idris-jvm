@@ -554,13 +554,13 @@ public final class Assembler {
   // constructors (e.g. both `Cons$I` and `Nil$I` implement `List$I`).
   public void createIdrisTypeConstructorInterface(String interfaceName) {
     if (!cws.containsKey(interfaceName)) {
-      ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-      cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
+      var interfaceClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+      interfaceClassWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
         interfaceName, null, "java/lang/Object",
         new String[]{"io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"});
-      cw.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
-      cw.visitEnd();
-      cws.put(interfaceName, cw);
+      interfaceClassWriter.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
+      interfaceClassWriter.visitEnd();
+      cws.put(interfaceName, interfaceClassWriter);
     }
   }
 
@@ -582,17 +582,17 @@ public final class Assembler {
     Type[] parameterTypes = Type.getArgumentTypes(typedApplyDescriptor);
     Type returnType = Type.getReturnType(typedApplyDescriptor);
 
-    ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-    cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
+    ClassWriter interfaceClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    interfaceClassWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
       interfaceName, null, "java/lang/Object",
       new String[]{"java/util/function/Function"});
-    cw.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
+    interfaceClassWriter.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
 
-    MethodVisitor typedApply = cw.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, "apply", typedApplyDescriptor,
+    MethodVisitor typedApply = interfaceClassWriter.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, "apply", typedApplyDescriptor,
       null, null);
     typedApply.visitEnd();
 
-    MethodVisitor bridge = cw.visitMethod(ACC_PUBLIC, "apply",
+    MethodVisitor bridge = interfaceClassWriter.visitMethod(ACC_PUBLIC, "apply",
       "(Ljava/lang/Object;)Ljava/lang/Object;", null, null);
     bridge.visitCode();
     if (parameterTypes.length == 1) {
@@ -623,8 +623,8 @@ public final class Assembler {
     }
     bridge.visitMaxs(-1, -1);
     bridge.visitEnd();
-    cw.visitEnd();
-    cws.put(interfaceName, cw);
+    interfaceClassWriter.visitEnd();
+    cws.put(interfaceName, interfaceClassWriter);
   }
 
   // Companion partial-application closure for an arity-2 typed callback
@@ -642,14 +642,14 @@ public final class Assembler {
     String interfaceFieldDescriptor = "L" + interfaceName + ";";
     String firstArgDescriptor = parameterTypes[0].getDescriptor();
 
-    ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-    cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_FINAL + ACC_SUPER, partialName, null, "java/lang/Object",
+    ClassWriter functionClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    functionClassWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_FINAL + ACC_SUPER, partialName, null, "java/lang/Object",
       new String[]{"java/util/function/Function"});
-    cw.visitSource(format("IdrisGenerated$%s.idr", partialName.replaceAll("/", "\\$")), null);
-    cw.visitField(ACC_PRIVATE + ACC_FINAL, "function", interfaceFieldDescriptor, null, null).visitEnd();
-    cw.visitField(ACC_PRIVATE + ACC_FINAL, "argument", firstArgDescriptor, null, null).visitEnd();
+    functionClassWriter.visitSource(format("IdrisGenerated$%s.idr", partialName.replaceAll("/", "\\$")), null);
+    functionClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "function", interfaceFieldDescriptor, null, null).visitEnd();
+    functionClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "argument", firstArgDescriptor, null, null).visitEnd();
 
-    MethodVisitor constructor = cw.visitMethod(ACC_PUBLIC, "<init>", constructorDescriptor, null, null);
+    MethodVisitor constructor = functionClassWriter.visitMethod(ACC_PUBLIC, "<init>", constructorDescriptor, null, null);
     constructor.visitCode();
     constructor.visitVarInsn(ALOAD, 0);
     constructor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
@@ -663,7 +663,7 @@ public final class Assembler {
     constructor.visitMaxs(-1, -1);
     constructor.visitEnd();
 
-    MethodVisitor apply = cw.visitMethod(ACC_PUBLIC, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;", null, null);
+    MethodVisitor apply = functionClassWriter.visitMethod(ACC_PUBLIC, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;", null, null);
     apply.visitCode();
     apply.visitVarInsn(ALOAD, 0);
     apply.visitFieldInsn(GETFIELD, partialName, "function", interfaceFieldDescriptor);
@@ -676,8 +676,8 @@ public final class Assembler {
     apply.visitInsn(ARETURN);
     apply.visitMaxs(-1, -1);
     apply.visitEnd();
-    cw.visitEnd();
-    cws.put(partialName, cw);
+    functionClassWriter.visitEnd();
+    cws.put(partialName, functionClassWriter);
   }
 
   private static void unboxObjectTo(MethodVisitor mv, Type type) {
@@ -928,21 +928,21 @@ public final class Assembler {
     if (cws.containsKey(newClassName)) {
       return;
     }
-    ClassWriter cw = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
+    var constructorClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
     String[] interfaces = new String[1 + tconInterfaces.size()];
     interfaces[0] = "io/github/mmhelloworld/idrisjvm/runtime/IdrisObject";
     for (int i = 0; i < tconInterfaces.size(); i++) {
       interfaces[i + 1] = tconInterfaces.get(i);
     }
-    cw.visit(JAVA_VERSION, ACC_PUBLIC + ACC_SUPER, newClassName, null, "java/lang/Object",
+    constructorClassWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_SUPER, newClassName, null, "java/lang/Object",
       interfaces);
-    cw.visitSource(format("IdrisGenerated$%s.idr", newClassName.replaceAll("/", "\\$")), null);
+    constructorClassWriter.visitSource(format("IdrisGenerated$%s.idr", newClassName.replaceAll("/", "\\$")), null);
 
     String idDescriptor = isStringConstructor ? "Ljava/lang/String;" : "I";
-    cw.visitField(ACC_PRIVATE + ACC_FINAL, "constructorId", idDescriptor, null, null).visitEnd();
+    constructorClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "constructorId", idDescriptor, null, null).visitEnd();
 
     for (int i = 0; i < fieldDescriptors.size(); i++) {
-      cw.visitField(ACC_PRIVATE + ACC_FINAL, "property" + i, fieldDescriptors.get(i), null, null).visitEnd();
+      constructorClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "property" + i, fieldDescriptors.get(i), null, null).visitEnd();
     }
 
     // <init>(idDescriptor, fieldDescriptors...)V
@@ -952,7 +952,7 @@ public final class Assembler {
     }
     ctorSig.append(")V");
 
-    MethodVisitor ctor = cw.visitMethod(ACC_PUBLIC, "<init>", ctorSig.toString(), null, null);
+    MethodVisitor ctor = constructorClassWriter.visitMethod(ACC_PUBLIC, "<init>", ctorSig.toString(), null, null);
     ctor.visitCode();
     // super()
     ctor.visitVarInsn(ALOAD, 0);
@@ -976,7 +976,7 @@ public final class Assembler {
 
     // getConstructorId / getStringConstructorId — same as the untyped variant
     String constructorGetter = isStringConstructor ? "getStringConstructorId" : "getConstructorId";
-    MethodVisitor getId = cw.visitMethod(ACC_PUBLIC, constructorGetter,
+    MethodVisitor getId = constructorClassWriter.visitMethod(ACC_PUBLIC, constructorGetter,
       format("()%s", idDescriptor), null, null);
     getId.visitCode();
     getId.visitVarInsn(ALOAD, 0);
@@ -989,7 +989,7 @@ public final class Assembler {
     for (int i = 0; i < fieldDescriptors.size(); i++) {
       String d = fieldDescriptors.get(i);
       String accessor = accessorNameFor(d, i);
-      MethodVisitor get = cw.visitMethod(ACC_PUBLIC, accessor, "()" + d, null, null);
+      MethodVisitor get = constructorClassWriter.visitMethod(ACC_PUBLIC, accessor, "()" + d, null, null);
       get.visitCode();
       get.visitVarInsn(ALOAD, 0);
       get.visitFieldInsn(GETFIELD, newClassName, "property" + i, d);
@@ -1005,15 +1005,19 @@ public final class Assembler {
     // The typed accessors above remain the fast path when the spec class is
     // statically known at the call site.
     if (!fieldDescriptors.isEmpty()) {
-      MethodVisitor gp = cw.visitMethod(ACC_PUBLIC, "getProperty", "(I)Ljava/lang/Object;", null, null);
+      MethodVisitor gp = constructorClassWriter.visitMethod(ACC_PUBLIC, "getProperty", "(I)Ljava/lang/Object;", null, null);
       gp.visitCode();
       gp.visitVarInsn(ILOAD, 1);
       int n = fieldDescriptors.size();
       Label[] caseLabels = new Label[n];
-      for (int i = 0; i < n; i++) caseLabels[i] = new Label();
+      for (int i = 0; i < n; i++) {
+        caseLabels[i] = new Label();
+      }
       Label defaultLabel = new Label();
       int[] keys = new int[n];
-      for (int i = 0; i < n; i++) keys[i] = i;
+      for (int i = 0; i < n; i++) {
+        keys[i] = i;
+      }
       gp.visitLookupSwitchInsn(defaultLabel, keys, caseLabels);
       for (int i = 0; i < n; i++) {
         String d = fieldDescriptors.get(i);
@@ -1031,7 +1035,7 @@ public final class Assembler {
     }
 
     // toString — appends each typed field with the matching StringBuilder.append signature.
-    MethodVisitor ts = cw.visitMethod(ACC_PUBLIC, "toString", "()Ljava/lang/String;", null, null);
+    MethodVisitor ts = constructorClassWriter.visitMethod(ACC_PUBLIC, "toString", "()Ljava/lang/String;", null, null);
     ts.visitCode();
     ts.visitTypeInsn(NEW, "java/lang/StringBuilder");
     ts.visitInsn(DUP);
@@ -1062,8 +1066,8 @@ public final class Assembler {
     ts.visitMaxs(-1, -1);
     ts.visitEnd();
 
-    cw.visitEnd();
-    cws.put(newClassName, cw);
+    constructorClassWriter.visitEnd();
+    cws.put(newClassName, constructorClassWriter);
   }
 
   private static int loadOpcodeFor(String descriptor) {

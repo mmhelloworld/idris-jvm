@@ -66,3 +66,7 @@ classes/**
 .DS_Store
 
 .claude/settings.local.json
+
+# Compiler build profiling output
+profiling/results/
+profiling/history.csv

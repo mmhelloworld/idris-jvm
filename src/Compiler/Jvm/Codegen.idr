@@ -3459,12 +3459,16 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable = loop SortedSet.em
       let specs = fromMaybe [] $ SortedMap.lookup name plan
       cbSigs <- getCallbackSlotSigs {stateRef = asmStateRef}
       specSites <- traverse (gatherForSpec current def cbSigs) specs
-      pure $ naturalSites ++ concat specSites
+      pure $ naturalSites ++ join specSites
 
     onePass : SortedSet Name -> Core (SortedSet Name)
     onePass current = do
       perName <- traverse (gatherFor current) reachable
-      pure $ SortedSet.fromList $ mapMaybe needsNatural (concat perName)
+      -- `join` is List's tail-recursive O(n) bind; `concat` is
+      -- `foldl (<+>)` and re-copies the accumulator per chunk, which is
+      -- quadratic over `reachable` and dominated the build (50% of all
+      -- samples landed here before the change).
+      pure $ SortedSet.fromList $ mapMaybe needsNatural (join perName)
 
     loop : SortedSet Name -> Core (SortedSet Name)
     loop current = do
@@ -3506,7 +3510,9 @@ computeNaturalToTConIfaces : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn Synta
                           -> Core (SortedMap String (List String))
 computeNaturalToTConIfaces programName conPlan defs stateRefs plan reachable = do
     perName <- traverse gatherSites reachable
-    let sites = concat perName
+    -- `join`, not `concat`: same quadratic-append trap as in
+    -- `computeNaturalConsLive.onePass` (this site was 40% of the build).
+    let sites = join perName
     -- Family resolution hits the context (`findTConForDCon`), so collapse
     -- the site list to one entry per constructor before tagging.
     let uniqueSites = map snd $ SortedMap.toList $ SortedMap.fromList $
@@ -3516,7 +3522,7 @@ computeNaturalToTConIfaces programName conPlan defs stateRefs plan reachable = d
     pure $ foldl (recordSibling specFamilies) SortedMap.empty siteFamilies
   where
     allSpecs : List SpecialisedConstructor
-    allSpecs = concat (snd <$> SortedMap.toList conPlan)
+    allSpecs = join (snd <$> SortedMap.toList conPlan)
 
     syntheticFamily : ConInfo -> Maybe String
     syntheticFamily NIL     = Just "List"

@@ -341,8 +341,7 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
     }
 
     public int isEof() {
-        boolean isEof = withExceptionHandling(byteBufferIo::isEof, true);
-        return isEof || exception != null ? 1 : 0;
+        return byteBufferIo.isEof() ? 1 : 0;
     }
 
     public int size() {
@@ -489,17 +488,6 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
             return action.get();
         } catch (Exception newException) {
             handleException(newException);
-            return fallback;
-        }
-    }
-
-    private boolean withExceptionHandling(BooleanSupplierE<? extends Exception> action, boolean fallback) {
-        exception = null;
-        Runtime.setErrorNumber(0);
-        try {
-            return action.get();
-        } catch (Exception currentException) {
-            handleException(currentException);
             return fallback;
         }
     }

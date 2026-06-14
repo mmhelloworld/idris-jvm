@@ -67,6 +67,25 @@ else
   echo "useBox\$sp Full alt: NO TYPED READ"
 fi
 
+# Regression guard: RECORD producers must NOT be return-refined to a concrete
+# record spec class (else a consumer inherits one and a differently-inferred
+# sibling CCEs).  The parametric `wrap`'s natural is dead (useWrap routes to
+# wrap$sp0) and DCE'd; the LIVE `wrap$sp0` must return Object, and no `wrap`
+# method may return a `MkWrap$...` spec class.  Non-parametric `mkRec` is
+# monomorphic — called directly, so its natural is live and retained.
+if echo "$disassembly" | grep -qE 'java\.lang\.Object wrap\$sp[0-9]+\(int\)' \
+   && ! echo "$disassembly" | grep -qE 'MkWrap\$[A-Z$]* wrap'; then
+  echo "wrap (parametric record) spec return: Object (not refined)"
+else
+  echo "wrap (parametric record) spec return: WRONGLY REFINED"
+fi
+if echo "$disassembly" | grep -qE 'java\.lang\.Object mkRec\(int\)' \
+   && ! echo "$disassembly" | grep -qE 'MkNRec\$[A-Z$]* mkRec\('; then
+  echo "mkRec (non-param record) return: Object (not refined)"
+else
+  echo "mkRec (non-param record) return: WRONGLY REFINED"
+fi
+
 # Bootstrap-compat smoke test.
 if find "$app" -name 'IdrisList$Cons.class' -print -quit 2>/dev/null | grep -q .; then
   echo "IdrisList\$Cons still present: OK"

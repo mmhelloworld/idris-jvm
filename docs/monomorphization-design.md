@@ -346,6 +346,9 @@ v2 (§13) lifts this: a typed callback interface is generated and the HOF gets a
 | Higher-order specialisation (v2, §13) | ✅ done (decl-driven + polymorphic, arity 1 **and 2**) | `Asm.idr`, `Optimizer.idr`, `Codegen.idr`, `Assembler.java` |
 | FC-collision miscompile fix (§7)     | ✅ done     | `src/Compiler/Jvm/Optimizer.idr`                   |
 | Family-typed return refinement (§14) | ✅ done     | `Codegen.idr` (`refineNaturalReturn`), `Optimizer.idr` (`getResultTypeCon`) |
+| Spec-return propagation (parametric, §14.1) | ✅ done | `Codegen.idr` (`computeReturnRefinement`/`setSpecReturn`), `Optimizer.idr` (`inferExprApp`) |
+| Liveness-aware `naturalConsLive` (§14.2) | ✅ done (reachability closure) | `Codegen.idr` (`computeNaturalConsLive`/`reachableFns`) |
+| Dead-function elimination (§14.3)    | ✅ done     | `Codegen.idr` (`assembleNameFcStateRefs` filters by `liveFns`) |
 | Reference-type narrowing (e.g. `String`) | ❌ planned | —                                                |
 | Benchmarks vs main (JMH)             | ✅ done (`benchmark/jmh`, §13.2) | `benchmark/jmh/`                       |
 
@@ -650,8 +653,9 @@ remaining boxing site for user data types.
 When a natural producer's declared result is a single TCon `T` and every
 data-carrying construction in its body belongs to **one** family
 instantiation of `T`, the function's return type is refined from `Object`
-to that family interface (`Box$F`, `Tree$F`) — or, for a RECORD/UNIT
-producer, the lone DCon spec class.  The refined type:
+to that family interface (`Box$F`, `Tree$F`).  Only a **family interface**
+is a valid target — never a record's concrete DCon spec class (see the
+soundness gates below).  The refined type:
 
 - persists on the per-name `AsmState` (`getCurrentFunction`), so it is read
   back by the next plan pass, by the `naturalConsLive` fixpoint, and by
@@ -683,7 +687,31 @@ interface at `areturn` by the existing `asmCast`/`loadVar` return path and
 succeeds at runtime.  The body's construction sites (`conSiteLog`) only
 choose **which** instantiation; the type gate guarantees soundness.
 
-Conservative refusals: synthetic shapes (CONS/JUST/...) are skipped — their
+**The result TCon must be non-parametric and non-indexed**
+(`getTypeConArity == 0`).  A parametric TCon has more than one runtime
+instantiation, and the natural function's refined return is **inherited by
+its specs** via the call-site log (`mkSpecSig`) — but an `int`-spec of a
+`WithBounds ty` producer builds `MkBounded$I$I$L` while the natural refined
+to `MkBounded$L$I$L`, so the spec's `areturn` fails verification (`Bad
+return type`).  A zero-arity TCon has exactly one instantiation, so the
+natural function, every inheriting spec, and every caller agree on the
+single family/spec class.  (Found self-hosting the compiler's own
+`Libraries.Text.Bounded`; non-parametric `Box`/`Tree` never exposed it.)
+
+**Records (RECORD/UNIT) are never refined.**  A family interface is a
+*marker* every member implements (`computeNaturalToTConIfaces`), so a
+`checkcast` to it always succeeds; a record has no such interface, only its
+concrete DCon spec class, whose identity is **per-construction-site
+field-type inference** — the same record is `MkPFR$L$L$I` where an `Int`
+field was inferred primitive and natural `MkPFR` where it was `Object`.
+Refining a producer's return to one of those classes commits consumers to
+it while a differently-inferred sibling value flows in →
+`ClassCastException` (found self-hosting `Idris.Package.partitionOpts` —
+the same failure mode as the §7 FC-collision miscompile).  Records have
+`tconClassName == ""`, so the family-interface-only rule excludes them
+automatically.
+
+Other conservative refusals: synthetic shapes (CONS/JUST/...) are skipped — their
 natural class is essentially always live program-wide (boxed prelude
 lists), so the family-interface typed read is blocked by `naturalConsLive`
 anyway (this is the §12 "recursive slots for synthetic shapes" limitation);
@@ -703,13 +731,142 @@ recursive slot cast-free; only the nullary `Leaf` branches pay the single
 `Box`/`mkBox`/`useBox` chain) and the updated `tests/jvm/conrecursiveslots`
 (`build` now returns `Tree$F`).
 
+### 14.1 Spec-return propagation (parametric producers)
+
+The natural-return refinement above is **monomorphic only** (the
+non-parametric gate): a polymorphic producer like `mkTree : a -> Tree a` has
+a type-erased natural method that serves every instantiation, so its return
+stays Object.  But its **spec** `mkTree$sp0(int)` genuinely returns `Tree
+Int`, so its return may carry the concrete family interface `Tree$F$I`.
+
+Each spec's return is refined independently in `step`'s per-spec loop
+(`computeReturnRefinement … requireMonomorphic=False`) and written back into
+the plan entry (`setSpecReturn`).  Because each spec gets its OWN correct
+return — keyed to its instantiation — there is no inherited-mismatch hazard
+(the WithBounds VerifyError of §14): a spec never inherits another
+instantiation's class.
+
+`computeReturnRefinement` has **two sources**, in order:
+
+1. **The body's inferred return type** — `inferDef` now stores its
+   `inferExpr` result on the `AsmState` (`inferredReturnType`) instead of
+   discarding it.  When that type is a (non-synthetic) family interface, the
+   body provably produces it, so the return is refined to it directly (no
+   gate — a polymorphic body infers Object, not a concrete family).  Because
+   that body type already reflects the plan (a call `g x` infers as
+   `g$sp0`'s refined return via `inferExprApp`), this covers **pass-through
+   producers** (`f x = g x`, whose body is just a spec call), direct
+   constructions, and uniform-branch cases.
+2. **Construction sites** (`conSiteLog`) — the fallback for **recursive**
+   producers, whose `Leaf`-base branch makes `combineSwitchTypes` collapse
+   the body type to `Object` even though the data-carrying constructions are
+   one family.  This path keeps the non-parametric result-TCon gate (it has
+   no per-value body type to vouch for soundness).
+
+A refined spec return reaches callers through **`inferExprApp`**: when a
+call's inferred argument types match a spec of the callee (the same
+parameter-type match `rewriteSpecCalls` uses), inference takes the call's
+type from that spec's refined return rather than the natural Object return.
+So `sumTree (mkTree 7)` — whose argument is a *call*, not a construction —
+logs `Tree$F$I` for `sumTree`'s slot and earns `sumTree$sp0(Tree$F$I)`.
+Inference and emission agree: emission lowers the already-rewritten
+`mkTree$sp0` head and reads the same refined type via `findFunctionType`.  A
+spec-return change re-dirties the callee's callers (surfaced through
+`specKeys`, which also ungates `nextDirty`'s type-ripple propagation);
+monotone (Object→family once per spec), so the fixpoint converges.
+
+### 14.2 Liveness-aware `naturalConsLive`
+
+Spec-return propagation alone earns the consumer a family-typed parameter,
+but the typed-accessor *read* was still blocked: the typed read fires only
+when the constructor's natural class is dead (`naturalConsLive`), and the
+**polymorphic natural producer is always emitted** and builds the natural
+`Node` (`x : Object`), keeping it live.  Yet that natural method is *never
+called* — every caller (`mkTree 7`) is rewritten to `mkTree$sp0` — so its
+construction never executes at runtime.
+
+`computeNaturalConsLive` is therefore made **liveness-aware**: each
+construction site is tagged with the function it was observed in, the
+fixpoint maintains a **persistent per-node graph** (`sitesByFn`/`refsByFn`,
+keyed by natural names AND spec names — draining stays worklist-incremental,
+but the maps accumulate the full rewritten graph), and a site counts toward
+natural-liveness only when its origin function is **live**.  Liveness is a
+proper **reachability closure** (`reachableFns`) from the roots
+(`main`/exports) over the full `refsByFn` — a function is live only when
+reachable through references in OTHER live bodies, so a natural referenced
+SOLELY from dead code is correctly dead (not merely "referenced somewhere").
+The dead natural `mkTree`'s `Node` site drops out, so `Node` is not
+natural-live and `sumTree$sp0` reads `getInt0`/`getRef` and its recursion
+stays in the spec (the typed `getRef` returns `Tree$F$I`, cast-free).
+
+This is computed **incrementally** — `naturalConsLive` is the codegen
+hotspot, so the loop must never do per-round full-graph work.  `liveFns`
+grows via `growReachable` (seeded each round with only the dirty live
+functions, since reachability can only grow and only from a re-drained live
+body), and each round contributes `needsNatural` for the sites of only the
+**touched** nodes — re-drained dirty nodes that are live, plus newly-live
+nodes — unioned and never removed.  Because `needsNatural` is pure in the
+fixed `conPlan` (a site's verdict never changes) and reachability only
+grows, this is equivalent at convergence to rescanning the whole graph every
+round, but avoids the quadratic that made an earlier cut ~2× slower.
+Reachability never changes a function's own inference, so the worklist's
+existing re-dirty triggers (a constructor became live, or a callee's type
+changed) keep the persistent state valid with no extra liveness
+re-dirtying.
+
+Soundness rests on the existing **union-from-∅** structure (which already
+handles the slot-flipping non-monotonicity — turning a typed read on can
+flip a slot and change a sibling's spec match): the union accumulates each
+pass's live-function contributions, including the converged final pass whose
+rewriting emission uses, so a typed read implies no LIVE function builds the
+natural class under that rewriting.  Things that keep a natural live —
+exports, a call at a type matching no spec, a first-class `NmRef` (eta /
+partial application / passed to a HOF) — surface as references reachable from
+roots.  It only affects polymorphic producers: a monomorphic producer is
+called directly, hence live, so non-parametric results (§14) and all existing
+tests are unchanged.
+
+Covered by `tests/jvm/conreturnfamilypoly` (`mkTree`/`sumTree` over `Tree a`:
+`mkTree$sp0 → Tree$F$I`, `sumTree$sp0(Tree$F$I)` with typed reads, spec-stable
+recursion, no natural `Node`) and `tests/jvm/conreturnfamilyreach` (the
+second-order case: a dead natural `viaOuter` is the only referrer of natural
+`leafOf`, so reachability — unlike "referenced anywhere" — still marks
+`leafOf` dead and the consumer reads typed).
+
+### 14.3 Dead-function elimination
+
+The reachability closure (`reachableFns`, §14.2) is exactly the set of
+functions callable in the rewritten graph, so emission uses it to **drop
+dead functions**.  `computeNaturalConsLive` returns the live-function set
+alongside `natLive`, and `assembleNameFcStateRefs` emits a natural method or
+a spec only when its name is in that set.  A polymorphic producer whose every
+caller was rewritten to a spec (`mkTree`), a HOF natural whose callers all
+use the typed spec (`applyN`), and the natural constructor classes that only
+those dead bodies build (natural `Node`) are no longer emitted — pure dead
+bytecode that the JVM never loaded but that bloated the class files.
+
+This refines §7's invariant: the natural method is still **never replaced by
+a trampoline**, and it is **retained whenever a live caller invokes it**
+(unspecialised, polymorphic, or external) — it is dropped only when no live
+body references it.  `liveFns` is a superset of genuinely-callable functions
+(every call head and first-class `NmRef` is followed from `main`/exports), so
+DCE never removes a method that is actually used; the self-host (which keeps
+every reachable compiler function) and the runtime of all jvm tests confirm
+no `NoSuchMethodError`.  Covered by the structural assertions in
+`tests/jvm/hofspecialisation` (natural `applyN` eliminated),
+`conreturnfamilypoly` (natural `mkTree`/`sumTree`/`Node` gone), and
+`conreturnfamily` (parametric-record natural dropped, live spec retained).
+
 ### Scope and deferred work
 
-Natural producers only — a **spec's** refined return does not reach its
-callers (callers infer against the natural callee; `rewriteSpecCalls` only
-renames the head afterward), so cross-spec-chain propagation is out of
-scope.  Synthetic-shape lists still read boxed (needs the CONS/RCONS
-split-by-recursion of §12).
+Synthetic-shape lists still read boxed (needs the CONS/RCONS
+split-by-recursion of §12).  Return refinement now derives from the body's
+inferred type as well as construction sites (§14.1), so pass-through
+producers (`f x = g x`) propagate; the one remaining gap is a **recursive**
+producer of a **parametric** instantiation (`f : Int -> Tree Int` with a
+`Leaf`-base recursion), where the body type collapses to `Object` (so source
+1 misses it) and the construction-site fallback's non-parametric gate
+rejects it — niche enough to leave as future work.
 
 ## 15. Future work (v3 and beyond)
 

@@ -1,0 +1,65 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o pf Spec.idr > /dev/null 2>&1
+
+app=build/exec/pf_app
+mc=$(find "$app" -path '*pf/Main.class' -print -quit 2>/dev/null)
+dis=$(javap -c -p "$mc" 2>/dev/null)
+
+# The PARAMETRIC family interface for the Int instantiation exists.
+if [ -f "$(find "$app" -name 'Tree$F$I.class' -print -quit 2>/dev/null)" ]; then
+  echo "Family interface Tree\$F\$I: PRESENT"
+else
+  echo "Family interface Tree\$F\$I: MISSING"
+fi
+
+# Spec-return propagation across a parametric instantiation: the POLYMORPHIC
+# producer's natural is never refined (it serves all instantiations) AND, with
+# every caller routed to mkTree$sp0, it is unreachable, so DCE eliminates it.
+if echo "$dis" | grep -qE 'mkTree\(java\.lang\.Object\)'; then
+  echo "mkTree (natural, polymorphic): NOT ELIMINATED"
+else
+  echo "mkTree (natural, polymorphic): eliminated (dead)"
+fi
+if echo "$dis" | grep -qE 'Tree\$F\$I mkTree\$sp[0-9]+\(int\)'; then
+  echo "mkTree\$sp0 returns Tree\$F\$I: YES"
+else
+  echo "mkTree\$sp0 returns Tree\$F\$I: NO"
+fi
+
+# The consumer earns a family-typed parameter spec, fed purely by the
+# producer's spec return (the argument is a call, not a construction).
+sumbody=$(echo "$dis" | awk '/int sumTree\$sp[0-9]+\(.*Tree\$F\$I\)/,/^$/')
+if [ -n "$sumbody" ]; then
+  echo "sumTree\$sp0(Tree\$F\$I) -> int: PRESENT"
+else
+  echo "sumTree\$sp0(Tree\$F\$I) -> int: MISSING"
+fi
+
+# Liveness-aware naturalConsLive: the natural `mkTree` is never called (every
+# caller routes to mkTree$sp0), so natural `Node` is dead and the consumer
+# reads with TYPED accessors (getInt0 / getRef) instead of boxed getProperty.
+if echo "$sumbody" | grep -qE 'getInt0:\(\)' \
+   && echo "$sumbody" | grep -qE 'getRef[12]:\(\)' \
+   && ! echo "$sumbody" | grep -qE 'getProperty'; then
+  echo "sumTree\$sp0 reads: typed (getInt0/getRef, no getProperty)"
+else
+  echo "sumTree\$sp0 reads: STILL BOXED"
+fi
+
+# ...and the recursion stays specialised (the typed getRef returns Tree$F$I).
+if echo "$sumbody" | grep -qE 'invokestatic.*sumTree\$sp[0-9]+:\(LM_Main/Tree\$F\$I' \
+   && ! echo "$sumbody" | grep -qE 'invokestatic.*sumTree:\(Ljava'; then
+  echo "sumTree\$sp0 recursion: stays specialised"
+else
+  echo "sumTree\$sp0 recursion: escapes to natural"
+fi
+
+# Natural Node is never constructed anywhere reachable.
+if echo "$dis" | grep -qE 'new .*// class M_Main/Node;'; then
+  echo "natural Node: CONSTRUCTED (liveness failed)"
+else
+  echo "natural Node: never constructed"
+fi
+
+./build/exec/pf${IDRIS_EXEC_EXT}

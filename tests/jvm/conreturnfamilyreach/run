@@ -1,0 +1,37 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o rt Spec.idr > /dev/null 2>&1
+
+app=build/exec/rt_app
+mc=$(find "$app" -path '*rt/Main.class' -print -quit 2>/dev/null)
+dis=$(javap -c -p "$mc" 2>/dev/null)
+
+# Reachability-precise liveness: natural `viaOuter` is dead (every caller
+# routes to viaOuter$sp0), and it is the ONLY referrer of natural `leafOf`.
+# A reachability closure (not "referenced anywhere") therefore marks natural
+# `leafOf` dead, so its natural `Node` construction does not count — and the
+# consumer `sumTree$sp0`, fed by a DIRECT `Node 5 ...` construction, reads
+# the int field with `getInt0` instead of boxed `getProperty`.  Under the
+# weaker all-refs liveness, natural leafOf would be "live" and this read
+# would be boxed.
+sumbody=$(echo "$dis" | awk '/int sumTree\$sp[0-9]+\(.*Tree\$F\$I\)/,/^$/')
+if [ -n "$sumbody" ]; then
+  echo "sumTree\$sp0(Tree\$F\$I): PRESENT"
+else
+  echo "sumTree\$sp0(Tree\$F\$I): MISSING"
+fi
+if echo "$sumbody" | grep -qE 'getInt0:\(\)' && ! echo "$sumbody" | grep -qE 'getProperty'; then
+  echo "sumTree\$sp0 read: typed (reachability-precise liveness)"
+else
+  echo "sumTree\$sp0 read: BOXED (liveness too conservative)"
+fi
+
+# natural leafOf is referenced only by the dead natural viaOuter; with
+# reachability it is dead, so natural Node is never constructed.
+if echo "$dis" | grep -qE 'new .*// class M_Main/Node;'; then
+  echo "natural Node: CONSTRUCTED"
+else
+  echo "natural Node: never constructed"
+fi
+
+./build/exec/rt${IDRIS_EXEC_EXT}

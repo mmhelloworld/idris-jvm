@@ -686,6 +686,14 @@ record AsmState where
     -- alongside the specialisation plan, since inference has no Ctxt
     -- access.
     callbackSlotSigs : SortedMap String (List CallbackSlot)
+    -- The body's inferred return type from the most recent `inferDef` on
+    -- this state (the result of `inferExpr` on the function body, which is
+    -- otherwise discarded).  Read by `computeReturnRefinement` (Codegen) as
+    -- the primary source for family-typed return refinement — it already
+    -- reflects the spec plan (a pass-through `f x = g x` infers as `g`'s
+    -- refined spec return), covering producers the construction-site scan
+    -- misses.  Reset to `IUnknown` by `inferFunctionType`.
+    inferredReturnType : InferredType
 
 namespace AsmState
   export
@@ -695,7 +703,7 @@ namespace AsmState
     scopes <- ArrayList.new {elemTy=Scope}
     lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
     let function = MkFunction name (MkInferredFunctionType IUnknown []) (subtyping scopes) 0 (NmCrash emptyFC "uninitialized function")
-    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] [] SortedSet.empty SortedMap.empty SortedMap.empty
+    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] [] SortedSet.empty SortedMap.empty SortedMap.empty IUnknown
 
   export
   fromIdrisName : Name -> IO AsmState
@@ -2690,6 +2698,14 @@ getConSiteLog = conSiteLog <$> getState
 export
 resetConSiteLog : {auto stateRef: Ref AsmState AsmState} -> Core ()
 resetConSiteLog = updateState $ { conSiteLog := [] }
+
+export
+getInferredReturnType : {auto stateRef: Ref AsmState AsmState} -> Core InferredType
+getInferredReturnType = inferredReturnType <$> getState
+
+export
+setInferredReturnType : {auto stateRef: Ref AsmState AsmState} -> InferredType -> Core ()
+setInferredReturnType ty = updateState $ { inferredReturnType := ty }
 
 export
 getNaturalConsLive : {auto stateRef: Ref AsmState AsmState} -> Core (SortedSet Name)

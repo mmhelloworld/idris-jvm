@@ -1,0 +1,38 @@
+rm -rf build Java
+
+# One invocation: --jvm-ffi-import reflects the class (and its generic signatures) off the
+# classpath and writes the binding modules before Main.idr is compiled.
+$1 --no-banner --no-color --console-width 0 \
+   --jvm-ffi-import java/util/ArrayList \
+   -o ffigen Main.idr > /dev/null 2>&1
+
+# 1. The package module was generated.
+if [ -f Java/Util.idr ]; then
+  echo "Generated Java/Util.idr: PRESENT"
+else
+  echo "Generated Java/Util.idr: MISSING"
+fi
+
+# 2. Parameterised marker type, derived from the class's generic arity.
+if grep -q '^data ArrayList : Type -> Type where' Java/Util.idr 2>/dev/null; then
+  echo "Marker: data ArrayList : Type -> Type"
+else
+  echo "Marker: NOT PARAMETERIZED"
+fi
+
+# 3. get returns the element type (not Object) — generics preserved through the signature.
+if grep -qE '^  get : .*ArrayList e -> Int -> io e' Java/Util.idr 2>/dev/null; then
+  echo "Typed return: get : ArrayList e -> Int -> io e"
+else
+  echo "Typed return: ERASED"
+fi
+
+# 4. Subtyping instance from the reflected hierarchy, parameterised.
+if grep -q '^Inherits (Java.Util.ArrayList e) (Java.Util.List e) where' Java/Util.idr 2>/dev/null; then
+  echo "Subtyping: Inherits (ArrayList e) (List e)"
+else
+  echo "Subtyping: MISSING"
+fi
+
+# 5. Runtime: build a list, read back a typed element.
+./build/exec/ffigen${IDRIS_EXEC_EXT}

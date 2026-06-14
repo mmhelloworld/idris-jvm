@@ -62,6 +62,8 @@ modules =
     Compiler.Jvm.ShowUtil,
     Compiler.Jvm.Tree,
     Compiler.Jvm.Foreign,
+    Compiler.Jvm.FfiGen,
+    Compiler.Jvm.Reflection,
 
     Core.AutoSearch,
     Core.Binary,

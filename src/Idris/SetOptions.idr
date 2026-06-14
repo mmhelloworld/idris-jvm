@@ -1,6 +1,7 @@
 module Idris.SetOptions
 
 import Compiler.Common
+import Compiler.Jvm.Reflection
 
 import Core.Binary
 import Core.Context
@@ -28,6 +29,7 @@ import Libraries.Data.List1 as Lib
 
 import System
 import System.Directory
+import System.File
 
 %default covering
 
@@ -386,6 +388,33 @@ setIncrementalCG failOnError cgn
                          coreLift $ exitWith (ExitFailure 1)
                  else pure ()
 
+-- Directory portion of a file path (everything up to the last '/'), or "." if none.
+ffiDirOf : String -> String
+ffiDirOf p = case break (== '/') (reverse (unpack p)) of
+               (_, '/' :: dir) => pack (reverse dir)
+               _               => "."
+
+writeBindingModule : {auto c : Ref Ctxt Defs} -> (root : String) -> (String, String) -> Core ()
+writeBindingModule root (relPath, contents)
+    = do let path = root </> relPath
+         ensureDirectoryExists (ffiDirOf path)
+         Right () <- coreLift $ writeFile path contents
+           | Left err => throw (FileErr path err)
+         pure ()
+
+||| Reflect the named JVM classes off the classpath and write generated Idris FFI
+||| binding modules (one Idris module per Java package) so user code can import
+||| them. Runs in `preOptions`, before the main file is loaded.
+generateJvmFfiBindings : {auto c : Ref Ctxt Defs} -> List String -> Core ()
+generateJvmFfiBindings classes
+    = do infos <- for classes $ \cn => do
+                    Right ci <- coreLift (reflectClass cn)
+                      | Left err => throw (UserError ("JVM FFI import failed for " ++ cn ++ ": " ++ err))
+                    pure ci
+         dirs <- getDirs
+         let root = fromMaybe "." (source_dir dirs)
+         traverse_ (writeBindingModule root) (renderAll infos)
+
 ||| Options to be processed before type checking. Return whether to continue.
 export
 preOptions : {auto c : Ref Ctxt Defs} ->
@@ -540,6 +569,9 @@ preOptions (Total :: opts)
          preOptions opts
 preOptions (NoCSE :: opts)
     = do updateSession ({ noCSE := True })
+         preOptions opts
+preOptions (JvmFfiImport classes :: opts)
+    = do generateJvmFfiBindings classes
          preOptions opts
 preOptions (_ :: opts) = preOptions opts
 

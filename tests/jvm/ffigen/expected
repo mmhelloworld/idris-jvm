@@ -1,0 +1,6 @@
+Generated Java/Util.idr: PRESENT
+Marker: data ArrayList : Type -> Type
+Typed return: get : ArrayList e -> Int -> io e
+Subtyping: Inherits (ArrayList e) (List e)
+2
+hello

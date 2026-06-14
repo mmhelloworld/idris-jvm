@@ -9,6 +9,7 @@ import Idris.Pretty
 import Core.Options
 
 import Data.List
+import Data.List1
 import Data.Maybe
 import Data.String
 import Data.Either
@@ -91,6 +92,8 @@ data CLOpt
   BuildDir String |
    ||| Set output directory
   OutputDir String |
+   ||| Generate JVM FFI bindings for the given classes (internal names) before compiling
+  JvmFfiImport (List String) |
    ||| Generate profile data when compiling (backend dependent)
   Profile |
    ||| Display Idris version
@@ -255,6 +258,9 @@ options = [MkOpt ["--check", "-c"] [] [CheckOnly]
               (Just $ "Set build directory"),
            MkOpt ["--output-dir"] [Required "dir"] (\d => [OutputDir d])
               (Just $ "Set output directory"),
+           MkOpt ["--jvm-ffi-import"] [Required "classes"]
+              (\cs => [JvmFfiImport (forget (split (== ',') cs))])
+              (Just $ "Generate JVM FFI bindings for comma-separated classes (e.g. java/util/ArrayList)"),
            MkOpt ["--profile"] [] [Profile]
               (Just "Generate profile data when compiling, if supported"),
            MkOpt ["--no-cse"] [] [NoCSE]

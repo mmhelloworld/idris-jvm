@@ -6,7 +6,8 @@ Leaf implements Tree$F: OK
 sumLeft$sp(int, Tree$F) -> int: PRESENT
 sumLeft$sp Node alt: family checkcast + typed getRef1
 sumLeft$sp tail-rec: no Tree$F checkcast
-build construction: checkcast Tree$F before Node ctor
+build returns Tree$F: YES
+build recursion: typed self-call + Leaf-only cast
 IdrisList$Cons still present: OK
 11
 5050

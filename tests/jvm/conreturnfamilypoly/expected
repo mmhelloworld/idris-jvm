@@ -1,0 +1,8 @@
+Family interface Tree$F$I: PRESENT
+mkTree (natural, polymorphic): eliminated (dead)
+mkTree$sp0 returns Tree$F$I: YES
+sumTree$sp0(Tree$F$I) -> int: PRESENT
+sumTree$sp0 reads: typed (getInt0/getRef, no getProperty)
+sumTree$sp0 recursion: stays specialised
+natural Node: never constructed
+7

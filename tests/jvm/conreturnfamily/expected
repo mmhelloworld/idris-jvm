@@ -5,5 +5,9 @@ Full$I$I$I accessors: getInt0 + getInt1 + getInt2
 mkBox returns Box$F: YES
 useBox$sp(Box$F) -> int: PRESENT
 useBox$sp Full alt: family checkcast + typed getInt (no getProperty)
+wrap (parametric record) spec return: Object (not refined)
+mkRec (non-param record) return: Object (not refined)
 IdrisList$Cons still present: OK
 18
+10
+30

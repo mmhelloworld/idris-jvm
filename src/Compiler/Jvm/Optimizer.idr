@@ -1371,8 +1371,24 @@ mutual
         -- runs specialised (zipWith/takeUntil kept allocating boxed CONS
         -- cells from their second element on).
         let normalizedArgTypes = map (\ty => if ty == IUnknown then inferredObjectType else ty) inferredArgTypes
-        updateState { callSiteLog $= ((fc, idrisName, MkInferredFunctionType retType normalizedArgTypes) :: ) }
-        pure retType
+        -- Spec-return propagation (design doc §14).  If a registered spec of
+        -- this callee matches the call's argument types, the call WILL be
+        -- rewritten to that spec by `rewriteSpecCalls` (same parameter-type
+        -- match), so this expression's runtime type is the spec's
+        -- (possibly family-refined) return — not the natural Object return.
+        -- Using it here is how a parametric producer's concrete-instantiation
+        -- family interface (`Tree$F$I` for `mkTree$sp0(int)`) reaches the
+        -- consumer's call-site log and earns the consumer a family-typed
+        -- parameter spec.  Inference and emission agree: emission lowers the
+        -- already-rewritten `f$sp0` head and reads the same refined type via
+        -- `findFunctionType`.
+        plan <- getSpecialisationPlan
+        let effectiveRet = fromMaybe retType $ do
+              specs <- SortedMap.lookup idrisName plan
+              spec  <- find (\s => s.type.parameterTypes == normalizedArgTypes) specs
+              pure spec.type.returnType
+        updateState { callSiteLog $= ((fc, idrisName, MkInferredFunctionType effectiveRet normalizedArgTypes) :: ) }
+        pure effectiveRet
     inferExprApp (NmApp _ inner@(NmApp _ lambdaVariable@(NmLocal _ var) [x]) [y]) = do
         -- Inference mirror of the arity-2 typed-apply emission: `f x y`
         -- (nested unary application) on a variable statically typed as a
@@ -1772,6 +1788,29 @@ namespace TermType
           Ref _ _ tyName => Just tyName
           _ => Nothing
 
+  -- Count the Pi binders of a TCon's type — its parameter+index arity
+  -- (`Box : Type` -> 0, `WithBounds : Type -> Type` -> 1, `Vect : Nat ->
+  -- Type -> Type` -> 2).  `refineNaturalReturn` (Codegen.idr) only refines
+  -- a return type when this is 0: a non-parametric, non-indexed TCon has
+  -- exactly ONE runtime instantiation, so the natural function, every spec
+  -- that inherits its refined return via the call-site log, and every
+  -- caller all agree on the single family/spec class.  A parametric TCon
+  -- (`WithBounds ty`) can have a spec build a different instantiation
+  -- (`MkBounded$I$I$L`) than the natural's refined return
+  -- (`MkBounded$L$I$L`) — a `Bad return type` VerifyError.  `Nothing` when
+  -- the type is missing.
+  export
+  getTypeConArity : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                  -> Name -> Core (Maybe Nat)
+  getTypeConArity name = do
+      Just term <- getTypeTerm name
+        | Nothing => pure Nothing
+      pure $ Just $ countPis term
+    where
+      countPis : {vars : _} -> Term vars -> Nat
+      countPis (Bind _ _ (Pi _ _ _ _) sc) = S (countPis sc)
+      countPis _ = Z
+
   -- Look up all data constructors of a type constructor.  Returns the
   -- empty list when the name isn't a TCon or has no recorded datacons.
   export
@@ -2086,6 +2125,7 @@ inferFunctionType (Just initialFunctionType) (MkNmFun args expr) = do
   coreLift $ addFunction jname function
   resetScope
   resetCallSiteLog
+  setInferredReturnType IUnknown
   scopeIndex <- newScopeIndex
   let (_, lineStart, lineEnd) = getSourceLocation expr
   allVariableTypes <- coreLift $ Map.newTreeMap {key=Int} {value=InferredType}
@@ -2163,7 +2203,12 @@ inferDef = do
         resetScope
         size <- coreLift $ Collection.size {elemTy=Scope, obj=Collection Scope} $ believe_me (scopes function)
         setScopeCounter size
-        ignore $ inferExpr expr
+        -- Capture the body's inferred return type (otherwise discarded) so
+        -- family-typed return refinement can use it — it already reflects the
+        -- spec plan via inferExprApp, covering pass-through producers
+        -- (`f x = g x`) the construction-site scan can't see.
+        bodyReturnType <- inferExpr expr
+        setInferredReturnType bodyReturnType
         updateScopeVariableTypes
         -- Rewire any call site whose inferred argument types match a $sp
         -- variant from the plan.  Persists the rewritten body BOTH on the

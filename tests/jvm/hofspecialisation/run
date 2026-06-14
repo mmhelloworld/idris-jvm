@@ -58,12 +58,16 @@ else
   echo "Typed lambda implementation: MISSING"
 fi
 
-# 5. The natural method is retained alongside the spec (callers without a
-#    matching spec — polymorphic or external — keep invoking it).
+# 5. Dead-function elimination (design doc §14.3): every `applyN` caller in
+#    this program is rewritten to the typed spec, so the natural method is
+#    unreachable in the rewritten graph and is not emitted.  (The natural is
+#    retained whenever a LIVE caller — polymorphic, unspecialised, or
+#    external — still invokes it; e.g. monomorphic producers in
+#    conrecursiveslots, and every reachable natural in the self-host.)
 if echo "$methods" | grep -qE 'public static int applyN\(int, java.util.function.Function, int\);'; then
-  echo "Natural applyN retained: OK"
+  echo "Natural applyN (dead): NOT ELIMINATED"
 else
-  echo "Natural applyN retained: MISSING"
+  echo "Natural applyN (dead): eliminated"
 fi
 
 ./build/exec/spec${IDRIS_EXEC_EXT}

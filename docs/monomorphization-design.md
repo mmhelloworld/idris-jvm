@@ -343,9 +343,11 @@ v2 (§13) lifts this: a typed callback interface is generated and the HOF gets a
 | `assembleSpec` per-spec emission     | ✅ done     | `src/Compiler/Jvm/Codegen.idr`                     |
 | Call-forest reachability             | ✅ done     | `src/Compiler/Jvm/FunctionTree.idr`, `Codegen.idr` |
 | Test (`tests/jvm/specialisation`)    | ✅ done     | `tests/jvm/specialisation/`                        |
-| Higher-order specialisation (v2, §13) | ✅ done (decl-driven + polymorphic, arity 1) | `Asm.idr`, `Optimizer.idr`, `Codegen.idr`, `Assembler.java` |
+| Higher-order specialisation (v2, §13) | ✅ done (decl-driven + polymorphic, arity 1 **and 2**) | `Asm.idr`, `Optimizer.idr`, `Codegen.idr`, `Assembler.java` |
+| FC-collision miscompile fix (§7)     | ✅ done     | `src/Compiler/Jvm/Optimizer.idr`                   |
+| Family-typed return refinement (§14) | ✅ done     | `Codegen.idr` (`refineNaturalReturn`), `Optimizer.idr` (`getResultTypeCon`) |
 | Reference-type narrowing (e.g. `String`) | ❌ planned | —                                                |
-| Benchmarks vs main                   | ❌ planned  | —                                                  |
+| Benchmarks vs main (JMH)             | ✅ done (`benchmark/jmh`, §13.2) | `benchmark/jmh/`                       |
 
 ---
 
@@ -364,6 +366,10 @@ v2 (§13) lifts this: a typed callback interface is generated and the HOF gets a
 - **Plan is updated mid-pass.** `step` writes back into `plan` and the same iteration's later names use the updated plan. The outer `iterate'` continues until `scan` reports no change.
 
 - **AsmState reuse.** The original function's `AsmState` is the same one created up-front in `inferFunctionTypes`. `buildSpecialisationPlan` and the final `assembleNameFcStateRefs` both call `setSpecialisationPlan` on it before re-running inference / assembly, so the latest plan is always visible.
+
+- **Site logs must be keyed by a *unique* FC, not the raw frontend FC** (`uniquifySiteFcs`). Both `conSiteLog` and `callSiteLog` associate inferred argument types to a site by `FC`, but frontend inlining duplicates *definition-site* FCs — every inlined `pure x` carries the FC of the `Right x` inside `pure`'s own definition. Without uniquification, `assembleCon` / `rewriteSpecCalls` resolve a site against an entry logged by an *unrelated* sibling call that happened to share the FC, and emit the wrong spec class. The self-hosted compiler miscompiled `pure $ partitionOpts opts` as the `Right$I` (int-slot) spec — `Conversion.toInt` on a `MkPFR` record → `NumberFormatException` while installing the prelude. **Fix:** `markUniqueFc` / `uniquifySiteFcs` / `uniquifyDefSiteFcs` (Optimizer.idr), run at the *end* of `optimize`, stamp a per-definition counter into the **start column** of every `NmCon`/`NmApp` FC. Start columns are ignored by `getLineNumbers`, so debug line info is preserved; `EmptyFC` becomes `MkVirtualFC (Virtual Interactive) (0, counter) (0, 0)`. Applied-lambda sentinel FCs (`appliedLambdaSwitchIndicator` / `appliedLambdaLetIndicator`) are left untouched — they are matched by FC equality in `getAppliedLambdaType`. `rewriteSpecCalls.lookupSiteType` additionally filters by callee `Name` (FC alone is insufficient even after uniquification). If wrong-spec crashes (`toInt`/`ClassCast` on constructor values) recur, check FC-keyed lookups first.
+
+- **`IUnknown` must normalise to `Object` at `callSiteLog` time** (in `inferExprApp`). Spec bodies' interior recursive calls log `IUnknown` for con-case binder arguments. `rewriteSpecCalls` matches a site against a spec by *exact* parameter-type equality, and `IUnknown` ≠ the spec's `Object` slot — so the spec recursed back into the **natural** variant after the first element (bytecode even `checkcast`s the typed `Fn$…` interface down to `Function`). Normalising `IUnknown → Object` when the entry is logged closes a pre-existing gap that affected **all** non-tail-recursive specs, not just arity-2 callbacks.
 
 ---
 
@@ -552,7 +558,7 @@ A higher-order parameter is `java.util.function.Function` with a boxed `apply(Ob
 
 ### Typed callback interfaces (`Fn$I$I`)
 
-One generated JVM interface per distinct typed callback signature, named parameter-chars-then-return-char with the `specConDescriptorChar` letters (`L` = exactly `java/lang/Object`): `int apply(int)` → `<programName>/Fn$I$I`. The name is injective over the signature, so **the name is the registry**: `parseCallbackIfaceType` (Asm.idr) decodes any `IRef …/Fn$…` back to its `InferredFunctionType`, and no plan-threading is needed — the `mkConSpecClassName` precedent. The interface lives directly under the program root, where no user constructor class can appear (usernames are namespace-qualified into `M_`-prefixed segments by `getIdrisConstructorClassName`). Eligibility (`mkCallbackSig`): arity 1, refs normalised to Object, at least one primitive among parameter/return.
+One generated JVM interface per distinct typed callback signature, named parameter-chars-then-return-char with the `specConDescriptorChar` letters (`L` = exactly `java/lang/Object`): `int apply(int)` → `<programName>/Fn$I$I`. The name is injective over the signature, so **the name is the registry**: `parseCallbackIfaceType` (Asm.idr) decodes any `IRef …/Fn$…` back to its `InferredFunctionType`, and no plan-threading is needed — the `mkConSpecClassName` precedent. The interface lives directly under the program root, where no user constructor class can appear (usernames are namespace-qualified into `M_`-prefixed segments by `getIdrisConstructorClassName`). Eligibility (`mkCallbackSig`): **arity 1 or 2**, refs normalised to Object, at least one primitive among parameter/return. An arity-2 signature decodes to `Fn$D$D$D` (`apply(DD)D`) and so on — the same injective parameter-chars-then-return-char scheme; `parseCallbackIfaceType` accepts up to two parameter slots (`length params <= 2`). See §13.1 for the arity-2 extension.
 
 **The interface extends `Function` with a default bridge** (`Assembler.createIdrisFunctionInterface`):
 
@@ -572,8 +578,8 @@ The bridge is the load-bearing soundness decision: a typed callback value is ass
 A call-site slot is logged as `IRef Fn$…` (instead of `Function`) only when the argument is a **literal `NmLam`** and a typed signature is derivable. `getTermCallbackSigs` (Optimizer.idr) classifies each unerased parameter slot once per program (needs Ctxt) into `AsmState.callbackSlotSigs`, installed on every state before any `inferDef` runs:
 
 - **`CallbackConcrete sig`** — the slot's declared type is a concrete arity-1 function with a primitive (e.g. the `(Int -> Int)` slot of `applyN`); every literal lambda at the slot uses `sig`.
-- **`CallbackPoly`** — an arity-1 function slot that doesn't pin a primitive (type variables like `a -> b` of `map`, or all-reference types). Type arguments are erased in `NamedCExp`, so the signature is derived from the lambda itself: `findLambdaCallbackSig` is a **purely syntactic scan of the lambda body** — the parameter is pinned to a primitive only when every primitive-op observation of it (`NmOp` argument positions with known primitive types) agrees, the return type is read off the body's root expression shape, and anything unclear (no primitive, conflicting observations, shadowed binders) yields nothing. Pure means inference and emission share it verbatim, and it is stable under `rewriteSpecCalls` (which only renames `NmRef` heads).
-- **`CallbackNone`** — everything else (arity ≥2, non-function slots, and **any slot type containing an erased Pi binder**). The erased-binder refusal is load-bearing: a rank-2 slot like `(forall vs . Term vs -> Bool)` is coerced via a lambda that takes the erased argument as a REAL runtime application stage (the caller applies an erased placeholder before the actual argument — see `lambda$shaped$2` in `TTImp.ProcessData`), so the outer stage returns a function; typing it as `Fn$L$I` emits a primitive cast on a function value. `getFnType` skips erased binders, which is why the slot walks like arity-1 — the classification checks for them separately. Found in the stage-2 self-host soak (`NumberFormatException`/`VerifyError` via `shaped`/`calcNaty`); pinned by the `shapedR` case in `tests/jvm/hofspecialisation`.
+- **`CallbackPoly arity`** — a function slot of arity 1 or 2 that doesn't pin a primitive from its declared type (type variables like `a -> b` of `map`, `a -> b -> c` of `zipWith`, or all-reference types). `CallbackPoly` carries the arity (`CallbackPoly Nat`). Type arguments are erased in `NamedCExp`, so the signature is derived from the lambda itself: `findLambdaCallbackSig` is a **purely syntactic scan of the lambda body** — the parameter is pinned to a primitive only when every primitive-op observation of it (`NmOp` argument positions with known primitive types) agrees, the return type is read off the body's root expression shape, and anything unclear (no primitive, conflicting observations, shadowed binders) yields nothing. Pure means inference and emission share it verbatim, and it is stable under `rewriteSpecCalls` (which only renames `NmRef` heads).
+- **`CallbackNone`** — everything else (arity ≥3, non-function slots, and **any slot type containing an erased Pi binder**). The erased-binder refusal is load-bearing: a rank-2 slot like `(forall vs . Term vs -> Bool)` is coerced via a lambda that takes the erased argument as a REAL runtime application stage (the caller applies an erased placeholder before the actual argument — see `lambda$shaped$2` in `TTImp.ProcessData`), so the outer stage returns a function; typing it as `Fn$L$I` emits a primitive cast on a function value. `getFnType` skips erased binders, which is why the slot walks like arity-1 — the classification checks for them separately. Found in the stage-2 self-host soak (`NumberFormatException`/`VerifyError` via `shaped`/`calcNaty`); pinned by the `shapedR` case in `tests/jvm/hofspecialisation`.
 - **Spec-callee slots** (rewritten bodies at emission, recursive self-calls through the spec's own `Fn$…`-typed parameter): the slot already carries the interface type and `parseCallbackIfaceType` fires with zero extra bookkeeping.
 
 Variables, partial applications, `NmDelay`, non-lambda arguments log their natural types → never match a typed spec slot → conservatively stay on the boxed path. (Note Idris eta-expands under-applied function arguments into literal lambdas, so function-valued arguments like `applyN 3 (mkAdder 2) 10` route through the typed path as `\x => mkAdder 2 x`.)
@@ -593,21 +599,121 @@ Two hazards need explicit mirroring (the v1.3 lesson — inference/emission disa
 
 ### Typed apply
 
-Inside a spec body the callback parameter is statically `IRef Fn$…`. `assembleExpr`'s variable-application case (`NmApp _ (NmLocal f) [arg]`) emits `invokeinterface Fn$….apply` with the typed descriptor — argument cast to the typed parameter, primitive result, no boxing. `inferExprApp` mirrors it (returns the sig's return type instead of `IUnknown`). Every other application shape (non-local heads, multi-arg) stays on the boxed path, which remains correct for typed callbacks through the bridge.
+Inside a spec body the callback parameter is statically `IRef Fn$…`. **Arity 1**: `assembleExpr`'s variable-application case (`NmApp _ (NmLocal f) [arg]`) emits `invokeinterface Fn$….apply` with the typed descriptor — argument cast to the typed parameter, primitive result, no boxing. `inferExprApp` mirrors it (returns the sig's return type instead of `IUnknown`). **Arity 2**: a two-argument call `f x y` surfaces as a nested unary application `NmApp (NmApp (NmLocal f) [x]) [y]`; new inference and emission cases collapse the nesting and emit a single `invokeinterface Fn$….apply(t1,t2)` call. The unary case stays arity-1-guarded — a *partial* application of an arity-2 interface (`f x` alone) falls through to the boxed bridge (see §13.1). Every other application shape (non-local heads, over-application) stays on the boxed path, which remains correct for typed callbacks through the bridge.
 
 ### Where the win is
 
 - Numeric HOFs (`applyN`, `iterate`): all four box/unbox operations per callback call disappear and the lambda implementation method is statically `int(int)`.
 - `map`-style HOFs over lists: synthetic CONS slots are never refined (§12 Phase 2d), so the element is Object in the spec body and the typed apply costs one explicit unbox on the argument — but the primitive result flows unboxed into a `CONS$I$L` typed construction and the implementation-internal unbox+box disappears.
+- Arity-2 numeric HOFs (`zipWith`, `foldl`): the two-argument callback (`(+)`, `(*)`) becomes a single `Fn$D$D$D.apply(DD)D` interface call, and a primitive result flows unboxed into the synthetic `CONS$D$L` result cell (§13.1).
+
+### 13.1 Arity-2 callbacks
+
+The arity-1 machinery described above left two-argument callbacks (`zipWith`, `foldl` accumulators) on the boxed `Function` path. The machinery now extends to arity 2, reusing the same name-is-the-registry interface scheme:
+
+- **Type layer (`Asm.idr`).** `CallbackPoly` carries arity (`CallbackPoly Nat`); `mkCallbackSig` / `parseCallbackIfaceType` accept up to two parameter slots. Interface naming is unchanged — `Fn$D$D$D` is `apply(DD)D`.
+- **Nested two-lambda shape rule.** An arity-2 signature requires the literal argument to be the nested shape `NmLam p1 (NmLam p2 body)`. `sigMatchesLambdaShape` (Optimizer.idr) guards the inference dispatch; emission `asmCrash`es on a mismatch (which cannot happen — `rewriteSpecCalls` only fires when the logged type already matched the shape). Both parameters live in **one** lambda scope: `inferCallbackLambda` dissolves the inner `NmLam`, and emission collapses to a single 2-parameter implementation method.
+- **Partial-application bridge (`Assembler.java`).** The arity-2 interface's default boxed `apply(Object)` cannot perform the whole 2-arg call from one argument, so it returns a companion **`<iface>$P`** partial-application class (`createIdrisFunctionPartialClass`) holding the typed callback and the typed first argument; that object's own `apply` supplies the second argument and invokes the typed SAM. This keeps an arity-2 typed callback behaviourally identical to the curried natural `Function` chain it replaces, so it stays sound wherever a generic `Function` flows.
+- **CSE interaction (`inlineCallbackLambdas`).** Common-subexpression elimination lifts a lambda shared across call sites (e.g. `(+)` used twice) into a nil-arity `csegen` CAF, so the callback slot sees `NmApp cse []` rather than a literal `NmLam` — and no spec is discovered. `inlineCallbackLambdas` (run at the **start** of `optimize`, before tail-rec and `uniquifySiteFcs`) inlines a nil-arity literal-lambda CAF back at direct-call argument positions when the lambda derives a typed signature. Allocation-neutral: non-capturing `invokedynamic` closures are singletons, so re-inlining doesn't multiply allocations.
+- **CONS unboxing falls out for free.** Once `zipWith$sp0`'s CONS head infers `IDouble` through the typed apply, the existing constructor plan emits `CONS$D$L` with an unboxed `double` field (synthetic List family, §11–§12). No new constructor machinery is needed.
+
+Covered by `tests/jvm/hofspecialisation` (decl-driven: typed interface shape — extends `Function`, typed SAM, default bridge — `$sp` variants with `Fn$I$I` slots for `applyN`/`twice`/`hof`/`countdown`, typed apply with no boxing in the recursive spec body, primitive-typed lambda implementation methods, natural method retention, and a runtime bridge escape through an Object constructor slot) and `tests/jvm/hofpolyspecialisation` (polymorphic: `myMap$sp0` with a lambda-derived `Fn$I$I` slot, typed apply, the int result flowing unboxed into `CONS$I$L` construction, and an all-reference lambda staying natural). Arity-2 is exercised by the JMH `matMul`/`zipWith` paths (§13.2): bytecode confirms `Fn$D$D$D.apply:(DD)D` and `new CONS$D$L` inside `zipWith$sp0`.
+
+### 13.2 Benchmarks (JMH)
+
+A JMH harness (`benchmark/jmh`, `BenchmarkMain` with `matMul` and `sievePrimes`) measures allocation rate and throughput against the 0.8.0 baseline. Against that baseline, `matMul` allocation dropped from **10.48 → 5.47 MB/op (−48%)** with throughput roughly flat (768 → 720 ops/s, −6%); `sieve` allocation is flat. JFR profiling of the post-optimisation `matMul` shows the remaining cost is now dominated by `countFrom`/`takeUntil` `MemoizedDelayed` stream thunks for range generation (~50%) and the irreducible `CONS$D$L` result cells (~39%) — both separate optimisation targets (stream fusion / direct range loops), not callback boxing.
+
+### Remaining boxing (future work)
+
+- **Spec bodies still read list cells via the natural `IdrisObject.getProperty`**, which boxes the primitive slots of `CONS$D$L`, because list parameters stay `Object`-typed. Family-typed parameters (`List$D$L` + `getDouble0` accessors) would require spec **return** types to be refined to family interfaces across whole call chains — a strictly stronger mechanism than today's single-slot narrowing.
+- **Range generation** (`countFrom` / `takeUntil` streams) allocates a `MemoizedDelayed` plus a closure per element; stream fusion or direct range loops would address the new #1 site in both benchmarks.
 
 ### Scope and deferred work
 
-Arity-1 callbacks only (arity ≥2 surfaces partly as curried `Function` chains through `Functions.curry`); `DelayedLambda` out of scope. Deferred: arity-2 (`BiFunction`, fold accumulators — the naming scheme already accommodates), let-bound local lambdas typed as callback interfaces, `NmRef`-callee observations in `findLambdaCallbackSig` (currently primitive ops only).
+Arity 1 and 2 only (arity ≥3 surfaces partly as curried `Function` chains through `Functions.curry`); `DelayedLambda` out of scope. Deferred: let-bound local lambdas typed as callback interfaces, and `NmRef`-callee observations in `findLambdaCallbackSig` (currently primitive ops only).
 
-Covered by `tests/jvm/hofspecialisation` (decl-driven: typed interface shape — extends `Function`, typed SAM, default bridge — `$sp` variants with `Fn$I$I` slots for `applyN`/`twice`/`hof`/`countdown`, typed apply with no boxing in the recursive spec body, primitive-typed lambda implementation methods, natural method retention, and a runtime bridge escape through an Object constructor slot) and `tests/jvm/hofpolyspecialisation` (polymorphic: `myMap$sp0` with a lambda-derived `Fn$I$I` slot, typed apply, the int result flowing unboxed into `CONS$I$L` construction, and an all-reference lambda staying natural).
+## 14. Family-typed return refinement (v2.1)
 
-## 14. Future work (v3 and beyond)
+### Problem
+
+The parameter-narrowing machinery (§11–§12) only fires when a call site's
+argument is logged as a family interface — which `inferExprCon` does for a
+**direct construction** (`Cons 5 acc` → `List$I$L`).  When the argument is
+instead a **function result** (`useBox (mkBox 5)`), the call logs `mkBox`'s
+return type, which is the natural `Object` — so the consumer never earns a
+family-typed parameter spec and its pattern match keeps reading fields with
+boxed `IdrisObject.getProperty` + `Conversion.toInt`.  This was the largest
+remaining boxing site for user data types.
+
+### Refinement (`refineNaturalReturn`, Codegen.idr)
+
+When a natural producer's declared result is a single TCon `T` and every
+data-carrying construction in its body belongs to **one** family
+instantiation of `T`, the function's return type is refined from `Object`
+to that family interface (`Box$F`, `Tree$F`) — or, for a RECORD/UNIT
+producer, the lone DCon spec class.  The refined type:
+
+- persists on the per-name `AsmState` (`getCurrentFunction`), so it is read
+  back by the next plan pass, by the `naturalConsLive` fixpoint, and by
+  final assembly (`assembleNameFcStateRefs` seeds the natural method from
+  `getCurrentFunction`, not the term type — so no extra threading is
+  needed), and
+- propagates to callers via `findFunctionType`: `inferExprApp` returns the
+  refined type as the call's inferred type, so `useBox (mkBox 5)` now logs
+  `Box$F` for `useBox`'s slot and earns `useBox$sp(Box$F)`, whose `Full`
+  alt reads with the typed `getInt0/1/2` accessors.
+
+Run as a step in the `buildSpecialisationPlan` fixpoint right after
+`inferDef`; it sets `naturalTypeChanged`, so a producer's refinement
+re-dirties its consumers until the plan converges (idempotent —
+`isObjectType` is false once refined).
+
+### Why type-directed, and the soundness gate
+
+The naive alternative — read the body's inferred type — fails because
+`combineSwitchTypes` collapses any `case` with differing branch types to
+`Object`, so a producer with a nullary base case (`Empty`/`Leaf`) infers
+`Object`.  Instead the **declared result type** is the soundness gate
+(`getResultTypeCon`, Optimizer.idr): when the result is a single TCon `T`,
+every value the function returns is a `T`, and every member of an active
+family instantiation implements its interface (data-carrying spec cells
+directly; nullary/sibling naturals via `computeNaturalToTConIfaces`).  So
+an `Object`-typed tail (a returned `Leaf`, a parameter) is cast to the
+interface at `areturn` by the existing `asmCast`/`loadVar` return path and
+succeeds at runtime.  The body's construction sites (`conSiteLog`) only
+choose **which** instantiation; the type gate guarantees soundness.
+
+Conservative refusals: synthetic shapes (CONS/JUST/...) are skipped — their
+natural class is essentially always live program-wide (boxed prelude
+lists), so the family-interface typed read is blocked by `naturalConsLive`
+anyway (this is the §12 "recursive slots for synthetic shapes" limitation);
+a body building more than one instantiation of `T`; a non-TCon result head;
+and ordinary DCons that haven't pinned an instantiation interface
+(`tconClassName == ""`).
+
+### Effect
+
+`mkBox`'s descriptor becomes `Box$F mkBox(int)`; the consumer
+`useBox (mkBox 5)`, whose argument is a *call* (not a literal
+construction), routes through `useBox$sp(Box$F)` and reads `Full`'s fields
+with `getInt0/1/2` — no boxing.  For a recursive producer (`build : Int ->
+Tree`), the self-call returns `Tree$F` directly and feeds the `Node` ctor's
+recursive slot cast-free; only the nullary `Leaf` branches pay the single
+`Object → Tree$F` cast.  Covered by `tests/jvm/conreturnfamily` (the
+`Box`/`mkBox`/`useBox` chain) and the updated `tests/jvm/conrecursiveslots`
+(`build` now returns `Tree$F`).
+
+### Scope and deferred work
+
+Natural producers only — a **spec's** refined return does not reach its
+callers (callers infer against the natural callee; `rewriteSpecCalls` only
+renames the head afterward), so cross-spec-chain propagation is out of
+scope.  Synthetic-shape lists still read boxed (needs the CONS/RCONS
+split-by-recursion of §12).
+
+## 15. Future work (v3 and beyond)
 
 - **Multi-class spec placement.** Spec currently shares the natural method's class; consider moving very-hot specs to a sibling class to keep the main class size bounded.
-- **Benchmarks.** Add a numeric microbenchmark (sieve, matrix mul) and measure allocation rate before/after with JFR or async-profiler.
+- **Synthetic-shape family reads.** Splitting the intrinsic `_builtin/CONS` per source type (or proving per-instance recursion) would let prelude-`List` spec bodies use typed accessors — the boxing §14 leaves on the table for lists.  Full analysis in [recursive-slots-synthetic-shapes.md](recursive-slots-synthetic-shapes.md).
+- **Stream/range fusion.** The JMH profiles (§13.2) now show `countFrom`/`takeUntil` `MemoizedDelayed` thunks dominating; direct range loops or stream fusion is the next allocation win, orthogonal to specialisation.
 - **Configurable spec budget.** A flag to cap the number of specs per function or per class for users who want predictable compile times over peak runtime.

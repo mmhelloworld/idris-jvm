@@ -76,13 +76,24 @@ else
   echo "sumLeft\$sp tail-rec: no Tree\$F checkcast"
 fi
 
-# The construction site pays the (single) cast instead: build's untyped
-# recursive result is checkcast to Tree$F before the Node ctor.
-build_body=$(echo "$disassembly" | awk '/static java.lang.Object build\(/,/^$/')
-if echo "$build_body" | grep -qE 'checkcast.*Tree\$F'; then
-  echo "build construction: checkcast Tree\$F before Node ctor"
+# Family-typed return refinement (design doc §14): `build`'s result is the
+# single TCon `Tree` and its body builds only the `Node$I$L$L` family, so
+# its return type narrows from Object to the family interface `Tree$F`.
+build_body=$(echo "$disassembly" | awk '/Tree\$F build\(int\)/,/^$/')
+if echo "$build_body" | grep -qE 'Tree\$F build\(int\)'; then
+  echo "build returns Tree\$F: YES"
 else
-  echo "build construction: NO CONSTRUCTION CAST"
+  echo "build returns Tree\$F: NO (still Object)"
+fi
+
+# The recursive self-call now returns Tree$F directly, so it feeds the
+# Node ctor's recursive slot with NO checkcast — only the nullary `Leaf`
+# branches pay the Object->Tree$F cast (at areturn / into the Leaf slot).
+if echo "$build_body" | grep -qE 'invokestatic.*build:\(I\)LM_Main/Tree\$F' \
+   && echo "$build_body" | grep -qE 'checkcast.*Tree\$F'; then
+  echo "build recursion: typed self-call + Leaf-only cast"
+else
+  echo "build recursion: UNEXPECTED SHAPE"
 fi
 
 # Bootstrap-compat smoke test.

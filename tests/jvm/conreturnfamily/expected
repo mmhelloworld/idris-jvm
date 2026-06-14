@@ -1,0 +1,9 @@
+Family interface Box$F: PRESENT
+Empty implements Box$F: OK
+Full$I$I$I fields: int x3
+Full$I$I$I accessors: getInt0 + getInt1 + getInt2
+mkBox returns Box$F: YES
+useBox$sp(Box$F) -> int: PRESENT
+useBox$sp Full alt: family checkcast + typed getInt (no getProperty)
+IdrisList$Cons still present: OK
+18

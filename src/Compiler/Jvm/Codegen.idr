@@ -3406,6 +3406,92 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate
     Plans : Type
     Plans = (SpecialisationPlan, ConSpecialisationPlan)
 
+    -- The family interface (or RECORD/UNIT spec class) a single
+    -- construction site contributes to its enclosing function's return
+    -- type, paired with the construction's parent TCon.  `Nothing` for
+    -- synthetic shapes (skipped — their natural class is always live, so a
+    -- family-typed read is never sound; see §12/§14), sites with no
+    -- matching spec, and ordinary DCons that haven't pinned an
+    -- instantiation interface (`tconClassName == ""`).
+    returnFamilyOf : ConSpecialisationPlan -> ConInfo -> Name -> List InferredType
+                  -> Core (Maybe (Name, InferredType))
+    returnFamilyOf conPlan conInfo conName paramTypes =
+      if isJust (syntheticTConName conInfo) then pure Nothing
+      else case matchConSpec conName paramTypes conPlan of
+        Nothing => pure Nothing
+        Just sc =>
+          let mR = if isRecordCon conInfo
+                     then Just (IRef sc.specClassName Class [])
+                     else if sc.tconClassName /= ""
+                            then Just (IRef sc.tconClassName Interface [])
+                            else Nothing
+          in case mR of
+            Nothing => pure Nothing
+            Just r => do
+              mTc <- findTConForDCon conName
+              pure $ (\tc => (tc, r)) <$> mTc
+      where
+        slotMatch : InferredType -> InferredType -> Bool
+        slotMatch spec arg = if isPrimitive spec then spec == arg else not (isPrimitive arg)
+        matchConSpec : Name -> List InferredType -> ConSpecialisationPlan
+                    -> Maybe SpecialisedConstructor
+        matchConSpec n argTypes plan = do
+          entries <- SortedMap.lookup n plan
+          find (\sc => length sc.paramTypes == length argTypes
+                       && all (uncurry slotMatch) (zip sc.paramTypes argTypes)) entries
+
+    -- Family-typed return refinement (design doc §14).  When a natural
+    -- producer's declared result is a single TCon `T` and every
+    -- data-carrying construction in its body belongs to ONE family
+    -- instantiation of `T`, refine the function's return type from Object
+    -- to that family interface (or, for a RECORD/UNIT producer, the lone
+    -- DCon spec class).  The refined type persists on the per-name
+    -- AsmState — read back next pass, by the natLive fixpoint, and by
+    -- final assembly (`assembleNameFcStateRefs` seeds from
+    -- `getCurrentFunction`) — and propagates to callers via
+    -- `findFunctionType`, so a consumer of `f`'s result earns a
+    -- family-typed parameter spec whose pattern match reads with typed
+    -- accessors instead of boxed `getProperty`.
+    --
+    -- Soundness rests on the result-type gate: every value the function
+    -- returns is a `T`, and every member of an active family
+    -- instantiation implements its interface (siblings via
+    -- `computeNaturalToTConIfaces`), so an Object-typed tail (a returned
+    -- `Nil`/parameter) is cast to the interface at `areturn` and succeeds.
+    -- Conservative: a body building more than one instantiation of `T`, a
+    -- non-TCon result head, or any synthetic-shape construction leaves the
+    -- return unrefined.  Idempotent, so the fixpoint converges.
+    refineNaturalReturn : {auto stateRef : Ref AsmState AsmState}
+                       -> ConSpecialisationPlan -> Name -> Core ()
+    refineNaturalReturn conPlan name = do
+      fn <- getCurrentFunction
+      let fty = inferredFunctionType fn
+      -- Only the generic Object return is a refinement candidate;
+      -- `isObjectType` is true for `inferredObjectType`/`IUnknown` and
+      -- false once already refined to an `IRef T$F`, so this is idempotent
+      -- and the fixpoint converges.
+      when (isObjectType (returnType fty)) $ do
+        conLog <- getConSiteLog
+        -- Dedup construction sites by (DCon, paramTypes): cross-pass
+        -- accumulation re-adds each site, and `paramTypes` is ref-
+        -- normalised so the keys are stable.
+        let sites = nubBy (\(n1, _, p1), (n2, _, p2) => n1 == n2 && p1 == p2)
+                          (map (\(_, n, ci, _, ps) => (n, ci, ps)) conLog)
+        candidates <- traverse (\(n, ci, ps) => returnFamilyOf conPlan ci n ps) sites
+        case mapMaybe id candidates of
+          [] => pure ()
+          families => do
+            Just retTcon <- getResultTypeCon name
+              | Nothing => pure ()
+            let matching = nub $ mapMaybe (\(tc, r) => if tc == retTcon then Just r else Nothing) families
+            case matching of
+              [r] => do
+                let fn' = { inferredFunctionType := { returnType := r } fty } fn
+                setCurrentFunction fn'
+                jname <- getRootMethodName
+                coreLift $ addFunction jname fn'
+              _ => pure ()
+
     step : PlanState -> Name -> Core (PlanState, StepEffects)
     step ps name = do
       let nameStr = jvmSimpleName name
@@ -3421,6 +3507,11 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate
       setConSpecialisationPlan {stateRef = asmStateRef} ps.conPlan
       inferFunctionType (Just initialFunctionType) def
       inferDef
+      -- Refine the natural return type to a family interface when the body
+      -- provably produces one TCon instantiation; mutates the per-name
+      -- AsmState so the change is observed by `functionType` below (=>
+      -- naturalTypeChanged => re-iterate) and propagates to callers.
+      refineNaturalReturn ps.conPlan name
       let functionType = inferredFunctionType !getCurrentFunction
       let naturalTypeChanged = functionType /= initialFunctionType
       -- Function-spec discovery from the natural's call sites.  Previously

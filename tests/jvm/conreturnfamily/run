@@ -1,0 +1,77 @@
+rm -rf build
+
+$1 --no-banner --no-color --console-width 0 -o retfamily Spec.idr > /dev/null 2>&1
+
+app=build/exec/retfamily_app
+
+full_spec=$(find "$app" -name 'Full$I$I$I.class' -print -quit 2>/dev/null)
+box_iface=$(find "$app" -name 'Box$F.class' -print -quit 2>/dev/null)
+empty_class=$(find "$app" -name 'Empty.class' -print -quit 2>/dev/null)
+
+# Family interface exists and the nullary sibling implements it.
+if [ -f "$box_iface" ] && javap "$box_iface" 2>/dev/null | grep -q 'interface'; then
+  echo "Family interface Box\$F: PRESENT"
+else
+  echo "Family interface Box\$F: MISSING"
+fi
+
+if javap "$empty_class" 2>/dev/null | grep -q 'Box\$F'; then
+  echo "Empty implements Box\$F: OK"
+else
+  echo "Empty implements Box\$F: MISSING"
+fi
+
+# Full spec class: three int fields + typed accessors.
+full_members=$(javap -p "$full_spec" 2>/dev/null)
+if echo "$full_members" | grep -qE 'int property0;' \
+   && echo "$full_members" | grep -qE 'int property1;' \
+   && echo "$full_members" | grep -qE 'int property2;'; then
+  echo "Full\$I\$I\$I fields: int x3"
+else
+  echo "Full\$I\$I\$I fields: NOT TYPED"
+fi
+if echo "$full_members" | grep -qE 'public int getInt0\(\)' \
+   && echo "$full_members" | grep -qE 'public int getInt1\(\)' \
+   && echo "$full_members" | grep -qE 'public int getInt2\(\)'; then
+  echo "Full\$I\$I\$I accessors: getInt0 + getInt1 + getInt2"
+else
+  echo "Full\$I\$I\$I accessors: MISSING"
+fi
+
+main_class=$(find "$app" -path '*retfamily/Main.class' -print -quit)
+disassembly=$(javap -c -p "$main_class" 2>/dev/null)
+
+# THE KEY ASSERTION: `mkBox` returns the family interface, not Object.
+# Without return-type refinement this descriptor is `java.lang.Object`.
+if echo "$disassembly" | grep -qE 'Box\$F mkBox\(int\)'; then
+  echo "mkBox returns Box\$F: YES"
+else
+  echo "mkBox returns Box\$F: NO (still Object)"
+fi
+
+# The consumer spec exists, fed purely by `mkBox`'s refined return.
+usebox_body=$(echo "$disassembly" | awk '/static int useBox\$sp[0-9]+\(.*Box\$F\)/,/^$/')
+if [ -n "$usebox_body" ]; then
+  echo "useBox\$sp(Box\$F) -> int: PRESENT"
+else
+  echo "useBox\$sp(Box\$F) -> int: MISSING"
+fi
+
+# ...and its Full alt reads the fields via typed accessors (no boxed
+# getProperty / Conversion.toInt on the field path).
+if echo "$usebox_body" | grep -q 'checkcast.*Full\$I\$I\$I' \
+   && echo "$usebox_body" | grep -qE 'getInt0:\(\)' \
+   && ! echo "$usebox_body" | grep -qE 'getProperty'; then
+  echo "useBox\$sp Full alt: family checkcast + typed getInt (no getProperty)"
+else
+  echo "useBox\$sp Full alt: NO TYPED READ"
+fi
+
+# Bootstrap-compat smoke test.
+if find "$app" -name 'IdrisList$Cons.class' -print -quit 2>/dev/null | grep -q .; then
+  echo "IdrisList\$Cons still present: OK"
+else
+  echo "IdrisList\$Cons MISSING (broke bootstrap compat)"
+fi
+
+./build/exec/retfamily${IDRIS_EXEC_EXT}

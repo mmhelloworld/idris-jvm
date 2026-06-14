@@ -1747,6 +1747,31 @@ namespace TermType
           Ref _ _ tyName => Just tyName
           _ => Nothing
 
+  -- Walk the binders of any name's type term to its result type, then
+  -- return the head `Ref` — for a FUNCTION that's the type constructor of
+  -- its return type (`Int -> Tree` -> `Tree`).  Used by the family-typed
+  -- return-type refinement (`refineNaturalReturn` in Codegen.idr) as the
+  -- soundness gate: when a producer's result is a single TCon `T`, every
+  -- value it returns is a `T`, so the return may be typed as a family
+  -- interface that every member of `T` implements.  `Nothing` when the
+  -- type is missing or the result head isn't a `Ref` (type variable,
+  -- function type, primitive).
+  export
+  getResultTypeCon : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
+                   -> Name -> Core (Maybe Name)
+  getResultTypeCon name = do
+      Just term <- getTypeTerm name
+        | Nothing => pure Nothing
+      pure $ extractTCon term
+    where
+      extractTCon : {vars : _} -> Term vars -> Maybe Name
+      extractTCon (Bind _ _ (Pi _ _ _ _) sc) = extractTCon sc
+      extractTCon term =
+        let (fn, _) = getFnArgs term
+        in case fn of
+          Ref _ _ tyName => Just tyName
+          _ => Nothing
+
   -- Look up all data constructors of a type constructor.  Returns the
   -- empty list when the name isn't a TCon or has no recorded datacons.
   export

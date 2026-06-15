@@ -2055,7 +2055,11 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
     jvmExtPrim _ returnType JvmStaticMethodCall [ret, NmPrimVal fc (Str fn), fargs, _] = do
         args <- getFArgs fargs
         argTypes <- traverse tySpec (map fst args)
-        let (cname, mnameWithDot) = break (== '.') fn
+        let (cname0, mnameWithDot) = break (== '.') fn
+        -- An "i:" owner prefix marks a static method declared on an interface, which the
+        -- JVM requires to be invoked via an InterfaceMethodref rather than a Methodref.
+        let isInterfaceStatic = isPrefixOf "i:" cname0
+        let cname = if isInterfaceStatic then substr 2 (length cname0) cname0 else cname0
         let (_, mname) = break (/= '.') mnameWithDot
         let isConstructor = mname == "<init>"
         when isConstructor $ do
@@ -2069,7 +2073,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         let methodDescriptor = getMethodDescriptor $ MkInferredFunctionType descriptorReturnType argTypes
         let invocationType = if isConstructor || isSuper then InvokeSpecial else InvokeStatic
         let mname = if isSuper then "<init>" else mname
-        invokeMethod invocationType cname mname methodDescriptor False
+        invokeMethod invocationType cname mname methodDescriptor isInterfaceStatic
         asmCast methodReturnType returnType
     jvmExtPrim _ returnType SetInstanceField [ret, NmPrimVal fc (Str fn), fargs, _] = do
         (obj :: value :: []) <- getFArgs fargs

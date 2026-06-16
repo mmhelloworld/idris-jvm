@@ -11,10 +11,14 @@ main = do
   -- annotate the element type once; the type parameter then flows through (a bare
   -- literal into a fresh generic container needs a hint, as with any parametric FFI).
   xs <- the (IO (ArrayList String)) ArrayList.new
-  _  <- ArrayList.add xs "hello"
-  _  <- ArrayList.add xs "world"
+  _  <- ArrayList.add xs "banana"
+  _  <- ArrayList.add xs "apple"
+  _  <- ArrayList.add xs "cherry"
   n  <- ArrayList.size xs
+  printLn n
+  -- sort : ArrayList e -> (e -> e -> Int) -> io ()  — an Idris function is bridged to a
+  -- java.util.Comparator via `jlambda` (the functional-interface binding).
+  ArrayList.sort xs (\a, b => if a < b then -1 else if a > b then 1 else 0)
   -- get : ArrayList e -> Int -> io e  — returns String here, no Object/cast
   first <- ArrayList.get xs 0
-  printLn n
   putStrLn first

@@ -13,11 +13,40 @@ else
   echo "Generated Java/Util.idr: MISSING"
 fi
 
+# 1b. Generated-code header comment (do not edit by hand).
+if head -1 Java/Util.idr 2>/dev/null | grep -q '@generated'; then
+  echo "Header: GENERATED MARKER PRESENT"
+else
+  echo "Header: MISSING"
+fi
+
 # 2. Parameterised marker type, derived from the class's generic arity.
 if grep -q '^data ArrayList : Type -> Type where' Java/Util.idr 2>/dev/null; then
   echo "Marker: data ArrayList : Type -> Type"
 else
   echo "Marker: NOT PARAMETERIZED"
+fi
+
+# 2b. A referenced supertype is parameterised from its own generic arity (not bare).
+if grep -q '^data AbstractList : Type -> Type where' Java/Util.idr 2>/dev/null; then
+  echo "Supertype: data AbstractList : Type -> Type"
+else
+  echo "Supertype: NOT PARAMETERIZED"
+fi
+
+# 2c. A functional interface becomes a Struct-pair synonym that jlambda targets.
+if grep -q '^Comparator ty0 = (Struct "java/util/Comparator compare"' Java/Util.idr 2>/dev/null; then
+  echo "Functional: Comparator = Struct-pair synonym"
+else
+  echo "Functional: NOT A SAM SYNONYM"
+fi
+
+# 2d. The functional-interface wrapper accepts an Idris function and bridges it via jlambda.
+if grep -qE '^  sort : .*ArrayList e -> \(e -> e -> Int\) -> io \(\)' Java/Util.idr 2>/dev/null \
+   && grep -q 'sort {e} arg0 arg1 = primIO (prim__sort arg0 (jlambda arg1))' Java/Util.idr 2>/dev/null; then
+  echo "Lambda: sort accepts (e -> e -> Int), passes (jlambda arg1)"
+else
+  echo "Lambda: MISSING"
 fi
 
 # 3. get returns the element type (not Object) — generics preserved through the signature.

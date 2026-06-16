@@ -1,6 +1,10 @@
 Generated Java/Util.idr: PRESENT
+Header: GENERATED MARKER PRESENT
 Marker: data ArrayList : Type -> Type
+Supertype: data AbstractList : Type -> Type
+Functional: Comparator = Struct-pair synonym
+Lambda: sort accepts (e -> e -> Int), passes (jlambda arg1)
 Typed return: get : ArrayList e -> Int -> io e
 Subtyping: Inherits (ArrayList e) (List e)
-2
-hello
+3
+apple

@@ -51,6 +51,19 @@ record MemberInfo where
   throws  : Bool
   genSig  : String         -- raw JVM generic method signature ("" when non-generic)
 
+||| A referenced Java functional interface (single abstract method, e.g. `Comparator`),
+||| detected by the reflector. Drives the `jlambda`-based binding so an Idris function can
+||| be passed where the interface is expected, instead of constructing the interface value.
+public export
+record FuncIface where
+  constructor MkFuncIface
+  fiBinary   : String        -- interface internal name, e.g. "java/util/Comparator"
+  fiSam      : String        -- single-abstract-method name, e.g. "compare"
+  fiParams   : List JType    -- SAM erased param types
+  fiRet      : JType         -- SAM erased return type
+  fiGenSig   : String        -- SAM generic signature when declared on this interface ("" otherwise)
+  fiTyParams : List String   -- this interface's own formal type params (for signature threading)
+
 public export
 record ClassInfo where
   constructor MkClass
@@ -58,6 +71,8 @@ record ClassInfo where
   isIface    : Bool
   members    : List MemberInfo
   supers     : List String    -- transitive supertypes (internal names, excl. Object)
+  superArities : List (String, Nat)  -- arity of each supertype's own generic params (for parameterised markers)
+  funcIfaces : List FuncIface  -- referenced functional interfaces (for jlambda bindings)
   typeParams : List String    -- generic type-parameter names, e.g. ["K","V"] (arity)
 
 --------------------------------------------------------------------------------
@@ -363,8 +378,11 @@ arityOf tbl n = foldl (\acc, (k, v) => if k == n then max acc v else acc) 0 tbl
 arityTable : List ClassInfo -> List (String, Nat)
 arityTable classes =
   let declared = map (\ci => (binary ci, length (typeParams ci))) classes
+      -- supertypes are referenced but not reflected as full classes; the reflector reports
+      -- their own generic arity so a marker like `AbstractList` is parameterised, not bare.
+      fromSupers = concatMap superArities classes
       used = concatMap (\ci => concatMap memberUses (members ci)) classes
-  in declared ++ used
+  in declared ++ fromSupers ++ used
   where memberUses : MemberInfo -> List (String, Nat)
         memberUses m = case methodGTypes m of
           Just (ps, r) => concatMap collectGArities (r :: ps)
@@ -390,6 +408,52 @@ renderErased ar seed (JRef _ n) =
   if isBuiltinRef n then "String"
   else applyTy (qualName n) (map (\j => seed ++ show j) (rangeN (ar n)))
 
+--------------------------------------------------------------------------------
+-- Functional-interface (SAM) threading
+--------------------------------------------------------------------------------
+
+-- substitute type variables (by name) in a parsed generic type
+substG : List (String, GType) -> GType -> GType
+substG sub (GVar k)    = case lookup k sub of
+                           Just t  => t
+                           Nothing => GVar k
+substG sub (GCls n as) = GCls n (map (substG sub) as)
+substG sub (GArr t)    = GArr (substG sub t)
+substG _   t           = t
+
+-- head reference-type binary of a shape (used to spot a functional-interface argument)
+gHead : GType -> Maybe String
+gHead (GCls n _) = Just n
+gHead _          = Nothing
+
+gArgs : GType -> List GType
+gArgs (GCls _ as) = as
+gArgs _           = []
+
+jHead : JType -> Maybe String
+jHead (JRef _ n) = Just n
+jHead _          = Nothing
+
+-- type variables (Idris-cased) referenced by a parsed generic type
+gVars : GType -> List String
+gVars (GVar k)    = [lowerName k]
+gVars (GCls _ as) = concatMap gVars as
+gVars (GArr t)    = gVars t
+gVars _           = []
+
+-- The Idris function type a callback parameter accepts, e.g. "e -> e -> Int" for
+-- `Comparator<e>`. When the SAM's own generic signature is known we thread the call-site
+-- type arguments through it; otherwise we fall back to the erased (Object-typed) form.
+samFnType : (String -> Nat) -> FuncIface -> (callArgs : List GType) -> String
+samFnType ar fi callArgs =
+  case (callArgs, parseMethodGSig (fiGenSig fi)) of
+    (_ :: _, Just (ps, r)) =>
+      let sub = zip (fiTyParams fi) callArgs
+          ps' = map (substG sub) ps
+      in joinBy " -> " (map (paren . renderG) ps' ++ [paren (renderG (substG sub r))])
+    _ =>
+      joinBy " -> " (map (renderErased ar "s_") (fiParams fi) ++ [renderErased ar "s_" (fiRet fi)])
+
 -- per-argument plan for the wrapper
 record Spec where
   constructor MkSpec
@@ -398,8 +462,18 @@ record Spec where
   cl  : String        -- how the wrapper passes the arg to the prim
   cs  : List String   -- Inherits constraints introduced
 
-mkSpec : Nat -> (String, Bool) -> Spec
-mkSpec i (concrete, subtyped) =
+-- A wrapper argument is either an ordinary (possibly subtyped) value, or a functional
+-- interface that accepts an Idris function bridged to the SAM via `jlambda`.
+data ArgPlan
+  = Plain (String, Bool)   -- (concrete type, should-subtype?)
+  | Lambda String String   -- (prim's marker param type, wrapper's function type)
+
+isLambdaPlan : ArgPlan -> Bool
+isLambdaPlan (Lambda _ _) = True
+isLambdaPlan _            = False
+
+mkSpec : Nat -> ArgPlan -> Spec
+mkSpec i (Plain (concrete, subtyped)) =
   let an = "arg" ++ show i in
   if subtyped
     -- ascribe the upcast to the prim's concrete type: this both discharges the in-scope
@@ -408,6 +482,10 @@ mkSpec i (concrete, subtyped) =
                ("(the " ++ paren concrete ++ " (subtyping " ++ an ++ "))")
                ["Inherits a" ++ show i ++ " " ++ paren concrete]
     else MkSpec concrete concrete an []
+mkSpec i (Lambda primTy fnTy) =
+  -- pass an Idris function where a Java functional interface is expected; `jlambda`
+  -- bridges it to the SAM at the JVM level (see `prim__javaLambda`).
+  MkSpec primTy (paren fnTy) ("(jlambda arg" ++ show i ++ ")") []
 
 -- (concrete type, should-subtype?) for a generic-signature argument
 gShape : GType -> (String, Bool)
@@ -430,50 +508,88 @@ eShape ar (i, JRef _ n) = if isBuiltinRef n then ("String", False)
 --------------------------------------------------------------------------------
 
 -- one member -> its %foreign prim + subtype-polymorphic wrapper (unindented)
-renderMember : (String -> Nat) -> ClassInfo -> (String, MemberInfo) -> String
-renderMember ar ci (nm, m) =
+renderMember : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> (String, MemberInfo) -> String
+renderMember ar fi ci (nm, m) =
   let classVars = map lowerName (typeParams ci)
       recvTy    = applyTy (qualName (binary ci)) classVars     -- e.g. "Java.Util.Map k v"
       isInst    = isInstanceKind (kind m)
-      -- parameter shapes from the generic signature when present, else the erased descriptor
-      paramShapes : List (String, Bool)
-      paramShapes = case methodGTypes m of
-        Just (ps, _) => map gShape ps
-        Nothing      => map (eShape ar) (indexed (params m))
+      -- a functional-interface argument accepts an Idris function (bridged by `jlambda`);
+      -- any other reference falls back to the ordinary subtyping plan.
+      gPlan : GType -> ArgPlan
+      gPlan g = case maybe Nothing fi (gHead g) of
+        Just info => Lambda (renderG g) (samFnType ar info (gArgs g))
+        Nothing   => Plain (gShape g)
+      ePlan : (Nat, JType) -> ArgPlan
+      ePlan (i, t) = case maybe Nothing fi (jHead t) of
+        -- only bridge via jlambda when the marker takes no type parameters; otherwise (a raw
+        -- generic interface, no signature to thread) its params are undeterminable, so keep
+        -- the ordinary subtyping plan and let the caller supply a built interface value.
+        Just info => case jHead t of
+                       Just n => if ar n == 0
+                                   then Lambda (renderErased ar ("p" ++ show i ++ "_") t) (samFnType ar info [])
+                                   else Plain (eShape ar (i, t))
+                       Nothing => Plain (eShape ar (i, t))
+        Nothing   => Plain (eShape ar (i, t))
+      -- parameter plans from the generic signature when present, else the erased descriptor
+      paramPlans : List ArgPlan
+      paramPlans = case methodGTypes m of
+        Just (ps, _) => map gPlan ps
+        Nothing      => map ePlan (indexed (params m))
       -- The receiver is the class's own parameterised type (direct, not subtyped): this
       -- threads the type parameters cleanly from construction through use. Subtyping is
       -- still available on parameters and via an explicit `subtyping` upcast.
-      allShapes = (if isInst then [(recvTy, False)] else []) ++ paramShapes
-      specs     = map (\(i, sh) => mkSpec i sh) (indexed allShapes)
+      allPlans  = (if isInst then [Plain (recvTy, False)] else []) ++ paramPlans
+      specs     = map (\(i, p) => mkSpec i p) (indexed allPlans)
       retTy     = case methodGTypes m of
                     Just (_, r) => renderG r
                     Nothing     => renderErased ar "rt_" (ret m)
       cons      = "HasIO io" :: concatMap cs specs
       prim      = "prim__" ++ nm
-      names     = countNames (length allShapes)
-      lhs       = nm ++ (if null names then "" else " " ++ joinBy " " names)
+      names     = countNames (length allPlans)
+      -- `jlambda` passes the interface type as a *runtime* `Type`, so any type variable in
+      -- it must be bound explicitly (and non-erased) — auto-bound implicits are inaccessible.
+      methodVars = case methodGTypes m of
+                     Just (ps, r) => concatMap gVars (r :: ps)
+                     Nothing      => []
+      tyVars    = if any isLambdaPlan allPlans then nub (classVars ++ methodVars) else []
+      tyBind    = concatMap (\v => "{" ++ v ++ " : Type} -> ") tyVars
+      lhsBinds  = concatMap (\v => " {" ++ v ++ "}") tyVars
+      lhs       = nm ++ lhsBinds ++ (if null names then "" else " " ++ joinBy " " names)
       callArgs  = map cl specs
       rhs       = if null callArgs then prim else "(" ++ prim ++ " " ++ joinBy " " callArgs ++ ")"
   in joinBy "\n"
        [ "%foreign \"" ++ descriptor ci m ++ "\""
        , prim ++ " : " ++ joinBy " -> " (map prT specs ++ ["PrimIO " ++ paren retTy])
        , "export %inline"
-       , nm ++ " : (" ++ joinBy ", " cons ++ ") => "
+       , nm ++ " : " ++ tyBind ++ "(" ++ joinBy ", " cons ++ ") => "
               ++ joinBy " -> " (map sgT specs ++ ["io " ++ paren retTy])
        , lhs ++ " = primIO " ++ rhs
        ]
 
-renderClass : (String -> Nat) -> ClassInfo -> String
-renderClass ar ci =
+renderClass : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> String
+renderClass ar fi ci =
   let named = uniquify (members ci)
-      body  = joinBy "\n\n" (map (\p => indentBlock (renderMember ar ci p)) named)
+      body  = joinBy "\n\n" (map (\p => indentBlock (renderMember ar fi ci p)) named)
   in "namespace " ++ simpleType (binary ci) ++ "\n" ++ body
 
--- parameterised marker: `data Map : Type -> Type -> Type where [external]`
-markerDecl : (String -> Nat) -> String -> String
-markerDecl ar bin =
+-- A marker is either an opaque parameterised external type
+-- (`data Map : Type -> Type -> Type where [external]`) or, for a functional interface, a
+-- `Struct`-pair synonym that `jlambda` targets:
+--   `Comparator a = (Struct "java/util/Comparator compare" [], Object -> Object -> Int)`
+markerDecl : (String -> Nat) -> (String -> Maybe FuncIface) -> String -> String
+markerDecl ar fi bin =
   let kind = joinBy " -> " (replicate (S (ar bin)) "Type")
-  in "public export\ndata " ++ simpleType bin ++ " : " ++ kind ++ " where [external]"
+  in case fi bin of
+       Just info =>
+         let vars = map (\j => "ty" ++ show j) (rangeN (ar bin))
+             lhs  = applyTy (simpleType bin) vars
+             fnTy = joinBy " -> " (map (renderErased ar "s_") (fiParams info)
+                                   ++ [renderErased ar "s_" (fiRet info)])
+             body = "(Struct \"" ++ bin ++ " " ++ fiSam info ++ "\" [], " ++ fnTy ++ ")"
+         in "public export %inline\n" ++ simpleType bin ++ " : " ++ kind ++ "\n"
+              ++ lhs ++ " = " ++ body
+       Nothing =>
+         "public export\ndata " ++ simpleType bin ++ " : " ++ kind ++ " where [external]"
 
 -- `Inherits (Child cv..) (Parent sv..)` instances from the reflected hierarchy, plus an
 -- explicit `Inherits (Child cv..) Object`. The supertype's type vars are taken from the
@@ -490,12 +606,16 @@ inheritsInstances ar ci =
                in "public export\nInherits " ++ paren childTy ++ " " ++ paren superTy ++ " where"
   in map inst (supers ci ++ objectSup)
 
--- The subtyping infrastructure, emitted once into Java.Lang (alongside the Object marker).
+-- The subtyping + lambda-bridging infrastructure, emitted once into Java.Lang (alongside
+-- the Object marker). `prim__javaLambda` is matched by the backend on its unqualified name
+-- (see ExtPrim.idr), so this self-contained copy drives `jlambda` for the generated world.
 infraLines : List String
 infraLines =
   [ "public export\ninterface Inherits child parent where\n  constructor MkInherits\n  export %inline\n  subtyping : child -> parent\n  subtyping = believe_me"
   , "public export\nInherits a a where"
   , "public export\nInherits String Object where"
+  , "export\n%extern prim__javaLambda : (lambdaTy : Type) -> (intfTy : Type) -> (f : lambdaTy) -> intfTy"
+  , "public export %inline\njlambda : {fTy : Type} -> (f : fTy) -> {intfTy : Type} -> intfTy\njlambda {fTy} f {intfTy} = prim__javaLambda fTy intfTy f"
   ]
 
 -- reference-type binaries used by a class's signatures (excludes builtins). Includes
@@ -519,18 +639,24 @@ refsOf ci = concatMap memberRefs (members ci)
                       Nothing      => [])
 
 -- render one module (package) -> (relative .idr path, contents)
-renderModule : (String -> Nat) -> List ClassInfo -> List String -> List String -> String -> (String, String)
-renderModule ar classes imported allBins pkg =
+renderModule : (String -> Nat) -> (String -> Maybe FuncIface) -> List ClassInfo -> List String -> List String -> String -> (String, String)
+renderModule ar fi classes imported allBins pkg =
   let binsHere     = filter (\b => packageOf b == pkg) allBins
       boundClasses = filter (\ci => (binary ci `elem` binsHere) && (binary ci `elem` imported)) classes
       depPkgs     = map packageOf (concatMap (\ci => refsOf ci ++ supers ci) boundClasses)
       importPkgs  = nub (filter (/= pkg) ("java/lang" :: depPkgs))
+      -- functional-interface markers are `Struct`-pair synonyms, so pull in System.FFI
+      needsStruct = not (null (mapMaybe fi binsHere))
       importLines = map (\p => "import " ++ moduleName p) importPkgs
-      markers     = map (markerDecl ar) binsHere
+                 ++ (if needsStruct then ["import System.FFI"] else [])
+      markers     = map (markerDecl ar fi) binsHere
       infra       = if pkg == "java/lang" then infraLines else []
       instances   = concatMap (inheritsInstances ar) boundClasses
-      nsBlocks    = map (renderClass ar) boundClasses
-      sections    = ["module " ++ moduleName pkg]
+      nsBlocks    = map (renderClass ar fi) boundClasses
+      header      = "-- @generated by `idris2 --jvm-ffi-import` from JVM classpath reflection.\n"
+                 ++ "-- Do not edit by hand; regenerate instead."
+      sections    = [header]
+                 ++ ["module " ++ moduleName pkg]
                  ++ (if null importLines then [] else [joinBy "\n" importLines])
                  ++ markers
                  ++ infra
@@ -548,7 +674,9 @@ renderAll classes =
                         ++ concatMap refsOf classes ++ concatMap supers classes)
       pkgs     = nub ("java/lang" :: map packageOf allBins)
       ar       = arityOf (arityTable classes)
-  in map (renderModule ar classes imported allBins) pkgs
+      allFis   = concatMap funcIfaces classes
+      fi       = \n => find (\f => fiBinary f == n) allFis
+  in map (renderModule ar fi classes imported allBins) pkgs
 
 --------------------------------------------------------------------------------
 -- Parsing the reflector's line-protocol dump (see ClasspathReflector.java)
@@ -606,10 +734,31 @@ parseMemberLine bin line = case splitOn '|' line of
     Nothing     => Nothing
   _ => Nothing
 
-parseSuperLine : String -> Maybe String
+-- small decimal parser (arities are tiny; avoid Cast String Nat for boot-safety)
+parseNat : String -> Nat
+parseNat s = foldl step 0 (unpack s)
+  where digit : Char -> Nat
+        digit c = case c of
+                    '0' => 0; '1' => 1; '2' => 2; '3' => 3; '4' => 4
+                    '5' => 5; '6' => 6; '7' => 7; '8' => 8; '9' => 9; _ => 0
+        step : Nat -> Char -> Nat
+        step acc c = acc * 10 + digit c
+
+-- "X|<name>" (legacy) or "X|<name>|<arity>" — arity is the supertype's own generic-param count
+parseSuperLine : String -> Maybe (String, Nat)
 parseSuperLine line = case splitOn '|' line of
-  ["X", n] => Just n
-  _        => Nothing
+  ["X", n]     => Just (n, 0)
+  ["X", n, ar] => Just (n, parseNat ar)
+  _            => Nothing
+
+-- "S|<binary>|<sam>|<samDescriptor>|<samGenSig>|<ifaceFormalParams>" — a referenced
+-- functional interface and its single abstract method (for the jlambda binding).
+parseSamLine : String -> Maybe FuncIface
+parseSamLine line = case splitOn '|' line of
+  ["S", bin, sam, desc, gsig, tps] => case parseMethodDesc desc of
+    Just (ps, r) => Just (MkFuncIface bin sam ps r gsig (if tps == "" then [] else splitOn ',' tps))
+    Nothing      => Nothing
+  _ => Nothing
 
 ||| Parse one class's reflector dump into a `ClassInfo`, or `Left` with the message
 ||| (including the reflector's own `ERR|...` failures).
@@ -619,8 +768,11 @@ parseDump dump = case filter (/= "") (splitOn '\n' dump) of
   []           => Left "empty reflector output"
   (hdr :: rest) => case splitOn '|' hdr of
     ("ERR" :: msg)       => Left (joinBy "|" msg)
-    ["C", bin, flg, tps] => Right (MkClass bin (flg == "1")
+    ["C", bin, flg, tps] => let superPairs = mapMaybe parseSuperLine rest in
+                            Right (MkClass bin (flg == "1")
                                     (mapMaybe (parseMemberLine bin) rest)
-                                    (mapMaybe parseSuperLine rest)
+                                    (map fst superPairs)
+                                    superPairs
+                                    (mapMaybe parseSamLine rest)
                                     (if tps == "" then [] else splitOn ',' tps))
     _                    => Left ("unexpected reflector header: " ++ hdr)

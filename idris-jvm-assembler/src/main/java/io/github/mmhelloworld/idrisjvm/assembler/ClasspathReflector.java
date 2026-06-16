@@ -5,16 +5,14 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.signature.SignatureReader;
 import org.objectweb.asm.signature.SignatureVisitor;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
-import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
  * Reflects JVM class metadata off the compiler's classpath using ASM, for the FFI
@@ -29,7 +27,9 @@ import java.nio.file.Path;
  *   C|&lt;internalName&gt;|&lt;isInterface 0|1&gt;
  *   M|&lt;name&gt;|&lt;jvmMethodDescriptor&gt;|&lt;isStatic 0|1&gt;|&lt;throws 0|1&gt;
  *   F|&lt;name&gt;|&lt;jvmTypeDescriptor&gt;|&lt;isStatic 0|1&gt;
- *   X|&lt;internalName&gt;     -- a transitive supertype (superclass or interface), excl. Object
+ *   X|&lt;internalName&gt;|&lt;arity&gt;  -- a transitive supertype (superclass/interface, excl. Object) and its generic arity
+ *   S|&lt;internalName&gt;|&lt;samName&gt;|&lt;samDescriptor&gt;|&lt;samGenericSignature&gt;|&lt;formalTypeParams&gt;
+ *                                -- a referenced functional interface and its single abstract method
  * </pre>
  *
  * Constructors appear as {@code M} lines named {@code <init>}. On any failure a
@@ -48,10 +48,23 @@ public final class ClasspathReflector {
      */
     public static String reflect(String className) {
         try {
-            byte[] bytes = readClassBytes(className);
-            StringBuilder sb = new StringBuilder(dump(bytes));
-            for (String supertype : transitiveSupertypes(className)) {
-                sb.append("X|").append(supertype).append('\n');
+            var bytes = readClassBytes(className);
+            var referenced = new java.util.LinkedHashSet<String>();
+            var sb = new StringBuilder(dump(bytes, referenced));
+            for (var supertype : transitiveSupertypes(className).entrySet()) {
+                // X|<name>|<arity>: arity is the supertype's own generic-param count, so the
+                // generated marker (e.g. AbstractList) is parameterised rather than bare.
+                sb.append("X|").append(supertype.getKey()).append('|').append(supertype.getValue()).append('\n');
+            }
+            // S|<name>|...: any referenced reference type that is a functional interface, so the
+            // generated binding can accept an Idris function (bridged via jlambda).
+            for (var ref : referenced) {
+                var sam = functionalInterfaceInfo(ref);
+                if (sam != null) {
+                    sb.append("S|").append(ref).append('|').append(sam.name).append('|')
+                        .append(sam.descriptor).append('|').append(sam.genericSignature).append('|')
+                        .append(sam.formalTypeParams).append('\n');
+                }
             }
             return sb.toString();
         } catch (Throwable t) {
@@ -59,14 +72,14 @@ public final class ClasspathReflector {
         }
     }
 
-    private static String dump(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        ClassReader reader = new ClassReader(bytes);
+    private static String dump(byte[] bytes, java.util.Set<String> referenced) {
+        var sb = new StringBuilder();
+        var reader = new ClassReader(bytes);
         reader.accept(new ClassVisitor(Opcodes.ASM9) {
             @Override
             public void visit(int version, int access, String name, String signature,
                               String superName, String[] interfaces) {
-                boolean isInterface = (access & Opcodes.ACC_INTERFACE) != 0;
+                var isInterface = (access & Opcodes.ACC_INTERFACE) != 0;
                 // Trailing field = comma-separated generic type-parameter names (e.g. "K,V");
                 // empty for a non-generic class. Its length is the marker type's arity.
                 sb.append("C|").append(name).append('|').append(isInterface ? 1 : 0)
@@ -77,13 +90,17 @@ public final class ClasspathReflector {
             public MethodVisitor visitMethod(int access, String name, String descriptor,
                                              String signature, String[] exceptions) {
                 if (isPublicApi(access) && !name.equals("<clinit>")) {
-                    boolean isStatic = (access & Opcodes.ACC_STATIC) != 0;
-                    boolean throwsChecked = exceptions != null && exceptions.length > 0;
+                    var isStatic = (access & Opcodes.ACC_STATIC) != 0;
+                    var throwsChecked = exceptions != null && exceptions.length > 0;
                     // Trailing field = raw generic signature (empty when the method is non-generic),
                     // from which Idris derives shared type variables / parameterized types.
                     sb.append("M|").append(name).append('|').append(descriptor).append('|')
                         .append(isStatic ? 1 : 0).append('|').append(throwsChecked ? 1 : 0)
                         .append('|').append(signature == null ? "" : signature).append('\n');
+                    for (var arg : Type.getArgumentTypes(descriptor)) {
+                        addReferencedType(referenced, arg);
+                    }
+                    addReferencedType(referenced, Type.getReturnType(descriptor));
                 }
                 return null;
             }
@@ -92,7 +109,7 @@ public final class ClasspathReflector {
             public FieldVisitor visitField(int access, String name, String descriptor,
                                            String signature, Object value) {
                 if (isPublicApi(access)) {
-                    boolean isStatic = (access & Opcodes.ACC_STATIC) != 0;
+                    var isStatic = (access & Opcodes.ACC_STATIC) != 0;
                     sb.append("F|").append(name).append('|').append(descriptor).append('|')
                         .append(isStatic ? 1 : 0).append('\n');
                 }
@@ -102,26 +119,29 @@ public final class ClasspathReflector {
         return sb.toString();
     }
 
-    // All superclasses and interfaces, transitively, excluding the class itself and
-    // java/lang/Object (which is handled by a universal `Inherits a Object` instance).
-    // ClassReader exposes the header directly, so ancestors need no full visit.
-    private static java.util.Set<String> transitiveSupertypes(String className) {
-        String start = className.replace('.', '/');
-        java.util.LinkedHashSet<String> result = new java.util.LinkedHashSet<>();
-        java.util.Set<String> visited = new java.util.HashSet<>();
-        java.util.Deque<String> queue = new java.util.ArrayDeque<>();
+    // All superclasses and interfaces, transitively (mapped to their own generic arity),
+    // excluding the class itself and java/lang/Object (handled by a universal
+    // `Inherits a Object` instance). Each node's bytes are read once, both to walk its
+    // parents and to record its formal-type-parameter count for the parameterised marker.
+    private static java.util.Map<String, Integer> transitiveSupertypes(String className) {
+        var start = className.replace('.', '/');
+        var result = new java.util.LinkedHashSet<String>();
+        var arity = new java.util.HashMap<String, Integer>();
+        var visited = new java.util.HashSet<String>();
+        var queue = new java.util.ArrayDeque<String>();
         queue.add(start);
         visited.add(start);
         while (!queue.isEmpty()) {
-            String current = queue.poll();
+            var current = queue.poll();
             try {
-                ClassReader reader = new ClassReader(readClassBytes(current));
-                java.util.List<String> parents = new java.util.ArrayList<>();
+                var reader = new ClassReader(readClassBytes(current));
+                arity.put(current, classArity(reader));
+                var parents = new java.util.ArrayList<String>();
                 if (reader.getSuperName() != null) {
                     parents.add(reader.getSuperName());
                 }
                 java.util.Collections.addAll(parents, reader.getInterfaces());
-                for (String parent : parents) {
+                for (var parent : parents) {
                     if (visited.add(parent)) {
                         queue.add(parent);
                         if (!parent.equals("java/lang/Object")) {
@@ -133,7 +153,135 @@ public final class ClasspathReflector {
                 // An unreadable ancestor just truncates that branch of the hierarchy.
             }
         }
-        return result;
+        var out = new java.util.LinkedHashMap<String, Integer>();
+        for (var name : result) {
+            out.put(name, arity.getOrDefault(name, 0));
+        }
+        return out;
+    }
+
+    // Number of generic formal type parameters a class declares (its marker arity).
+    private static int classArity(ClassReader reader) {
+        var formals = formalTypeParams(classSignature(reader));
+        return formals.isEmpty() ? 0 : formals.split(",").length;
+    }
+
+    // The class file's generic signature header (null when the class is non-generic).
+    private static String classSignature(ClassReader reader) {
+        var sig = new String[]{null};
+        reader.accept(new ClassVisitor(Opcodes.ASM9) {
+            @Override
+            public void visit(int version, int access, String name, String signature,
+                              String superName, String[] interfaces) {
+                sig[0] = signature;
+            }
+        }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        return sig[0];
+    }
+
+    // Record the internal name of an object (or object-array) type for later SAM probing.
+    private static void addReferencedType(java.util.Set<String> referenced, Type type) {
+        if (type.getSort() == Type.OBJECT) {
+            referenced.add(type.getInternalName());
+        } else if (type.getSort() == Type.ARRAY && type.getElementType().getSort() == Type.OBJECT) {
+            referenced.add(type.getElementType().getInternalName());
+        }
+    }
+
+    // SAM metadata for one functional interface.
+    private static final class SamInfo {
+        final String name;
+        final String descriptor;
+        final String genericSignature;
+        final String formalTypeParams;
+
+        SamInfo(String name, String descriptor, String genericSignature, String formalTypeParams) {
+            this.name = name;
+            this.descriptor = descriptor;
+            this.genericSignature = genericSignature == null ? "" : genericSignature;
+            this.formalTypeParams = formalTypeParams;
+        }
+    }
+
+    // One abstract method discovered while walking an interface hierarchy.
+    private static final class AbstractMethod {
+        final String owner;
+        final String name;
+        final String descriptor;
+        final String signature;
+
+        AbstractMethod(String owner, String name, String descriptor, String signature) {
+            this.owner = owner;
+            this.name = name;
+            this.descriptor = descriptor;
+            this.signature = signature;
+        }
+    }
+
+    // If {@code name} is a functional interface (exactly one abstract method, ignoring the
+    // public methods of Object), return its SAM; otherwise null. The single abstract method may
+    // be inherited from a super-interface (as for UnaryOperator extends Function).
+    private static SamInfo functionalInterfaceInfo(String name) {
+        byte[] bytes;
+        try {
+            bytes = readClassBytes(name);
+        } catch (Exception ignored) {
+            return null;
+        }
+        var reader = new ClassReader(bytes);
+        if ((reader.getAccess() & Opcodes.ACC_INTERFACE) == 0) {
+            return null;
+        }
+        var abstracts = new java.util.LinkedHashMap<String, AbstractMethod>();
+        collectAbstractMethods(name, abstracts, new java.util.HashSet<>());
+        if (abstracts.size() != 1) {
+            return null;
+        }
+        var sam = abstracts.values().iterator().next();
+        // Keep the SAM's generic signature only when it is declared on this very interface, so
+        // its type variables line up with this interface's formal type parameters; otherwise the
+        // Idris side falls back to the erased (Object-typed) callback signature.
+        var genericSignature = name.equals(sam.owner) ? sam.signature : "";
+        return new SamInfo(sam.name, sam.descriptor, genericSignature, formalTypeParams(classSignature(reader)));
+    }
+
+    private static void collectAbstractMethods(String current, java.util.Map<String, AbstractMethod> abstracts,
+                                               java.util.Set<String> visited) {
+        if (!visited.add(current)) {
+            return;
+        }
+        byte[] bytes;
+        try {
+            bytes = readClassBytes(current);
+        } catch (Exception ignored) {
+            return;
+        }
+        var reader = new ClassReader(bytes);
+        reader.accept(new ClassVisitor(Opcodes.ASM9) {
+            @Override
+            public MethodVisitor visitMethod(int access, String methodName, String descriptor,
+                                             String signature, String[] exceptions) {
+                var isStatic = (access & Opcodes.ACC_STATIC) != 0;
+                var isAbstract = (access & Opcodes.ACC_ABSTRACT) != 0;
+                if (!isStatic && isAbstract && !isObjectMethod(methodName, descriptor)) {
+                    // dedup by name+descriptor: a re-declaration in a sub-interface wins (first seen)
+                    abstracts.putIfAbsent(methodName + descriptor,
+                        new AbstractMethod(current, methodName, descriptor, signature));
+                }
+                return null;
+            }
+        }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        for (var parent : reader.getInterfaces()) {
+            collectAbstractMethods(parent, abstracts, visited);
+        }
+    }
+
+    // The public methods of java.lang.Object do not count toward the single-abstract-method
+    // tally (an interface may legally re-declare them, e.g. Comparator.equals).
+    private static boolean isObjectMethod(String name, String descriptor) {
+        return ("equals".equals(name) && "(Ljava/lang/Object;)Z".equals(descriptor))
+            || ("hashCode".equals(name) && "()I".equals(descriptor))
+            || ("toString".equals(name) && "()Ljava/lang/String;".equals(descriptor));
     }
 
     // Comma-separated generic formal type-parameter names declared by a class signature.
@@ -141,11 +289,11 @@ public final class ClasspathReflector {
         if (signature == null) {
             return "";
         }
-        StringBuilder names = new StringBuilder();
+        var names = new StringBuilder();
         new SignatureReader(signature).accept(new SignatureVisitor(Opcodes.ASM9) {
             @Override
             public void visitFormalTypeParameter(String name) {
-                if (names.length() > 0) {
+                if (!names.isEmpty()) {
                     names.append(',');
                 }
                 names.append(name);
@@ -161,30 +309,30 @@ public final class ClasspathReflector {
     }
 
     private static byte[] readClassBytes(String className) throws IOException, ClassNotFoundException {
-        String internalName = className.replace('.', '/');
-        String resourcePath = internalName + ".class";
+        var internalName = className.replace('.', '/');
+        var resourcePath = internalName + ".class";
 
         // 1. Application / user classpath via the classloaders.
-        ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+        var contextLoader = Thread.currentThread().getContextClassLoader();
         if (contextLoader != null) {
-            byte[] bytes = readResource(contextLoader, resourcePath);
+            var bytes = readResource(contextLoader, resourcePath);
             if (bytes != null) {
                 return bytes;
             }
         }
-        byte[] systemBytes = readResource(ClassLoader.getSystemClassLoader(), resourcePath);
+        var systemBytes = readResource(ClassLoader.getSystemClassLoader(), resourcePath);
         if (systemBytes != null) {
             return systemBytes;
         }
 
         // 2. JDK platform classes live in modules (not on the classpath on JDK 9+);
         //    read them out of the jrt: filesystem.
-        String binaryName = internalName.replace('/', '.');
-        Module module = Class.forName(binaryName).getModule();
-        String moduleName = module.getName();
+        var binaryName = internalName.replace('/', '.');
+        var module = Class.forName(binaryName).getModule();
+        var moduleName = module.getName();
         if (moduleName != null) {
-            FileSystem jrt = FileSystems.getFileSystem(URI.create("jrt:/"));
-            Path path = jrt.getPath("/modules", moduleName, resourcePath);
+            var jrt = FileSystems.getFileSystem(URI.create("jrt:/"));
+            var path = jrt.getPath("/modules", moduleName, resourcePath);
             if (Files.exists(path)) {
                 return Files.readAllBytes(path);
             }
@@ -194,7 +342,7 @@ public final class ClasspathReflector {
     }
 
     private static byte[] readResource(ClassLoader loader, String resourcePath) throws IOException {
-        try (InputStream in = loader.getResourceAsStream(resourcePath)) {
+        try (var in = loader.getResourceAsStream(resourcePath)) {
             return in == null ? null : in.readAllBytes();
         }
     }

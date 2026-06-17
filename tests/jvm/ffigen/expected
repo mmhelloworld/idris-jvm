@@ -6,5 +6,9 @@ Functional: Comparator = Struct-pair synonym
 Lambda: sort accepts (e -> e -> Int), passes (jlambda arg1)
 Typed return: get : ArrayList e -> Int -> io e
 Subtyping: Inherits (ArrayList e) (List e)
+Nullable: HashMap.get : ... -> io (Maybe v)
+Pruned: referenced size kept, unreferenced clear omitted
 3
 apple
+apple
+veg: Nothing

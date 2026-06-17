@@ -402,18 +402,58 @@ writeBindingModule root (relPath, contents)
            | Left err => throw (FileErr path err)
          pure ()
 
-||| Reflect the named JVM classes off the classpath and write generated Idris FFI
-||| binding modules (one Idris module per Java package) so user code can import
-||| them. Runs in `preOptions`, before the main file is loaded.
-generateJvmFfiBindings : {auto c : Ref Ctxt Defs} -> List String -> Core ()
-generateJvmFfiBindings classes
+-- Recursively collect every `.idr` source path under `dir`. A leaf (file) lists as empty via
+-- `listDirOrEmpty`, so we recurse into anything that is not itself an `.idr` file; this avoids a
+-- separate is-directory check. Bounded by the project tree, and only runs under --jvm-ffi-import.
+covering
+gatherIdrSources : String -> IO (List String)
+gatherIdrSources dir
+    = do entries <- listDirOrEmpty dir
+         concat <$> traverse visit entries
+  where
+    visit : String -> IO (List String)
+    visit entry = let path = dir </> entry in
+                  if extension entry == Just "idr"
+                     then pure [path]
+                     else gatherIdrSources path
+
+-- Source files to scan for `Class.member` references: the entry files named on the command line,
+-- plus every `.idr` under their directories (so references in helper modules are seen too).
+covering
+ffiScanSources : (root : String) -> List CLOpt -> IO (List String)
+ffiScanSources root opts
+    = do let inputs = mapMaybe (\o => case o of InputFile f => Just f; _ => Nothing) opts
+         let dirs   = nub (if null inputs then [root] else map ffiDirOf inputs)
+         walked <- concat <$> traverse gatherIdrSources dirs
+         pure (nub (inputs ++ walked))
+
+||| Reflect the named JVM classes off the classpath and write generated Idris FFI binding
+||| modules (one Idris module per Java package) so user code can import them. Runs in
+||| `preOptions`, before the main file is loaded.
+|||
+||| Demand-driven: the user's sources are scanned for `Class.member` references and only the
+||| referenced members are emitted (markers/`Inherits`/infra are always emitted), so compiling
+||| against a few JDK classes does not elaborate their entire public API. Generated modules are
+||| excluded from the scan (their `@generated` header marker) so a stale prior generation does
+||| not pin every member.
+generateJvmFfiBindings : {auto c : Ref Ctxt Defs} -> List CLOpt -> List String -> Core ()
+generateJvmFfiBindings opts classes
     = do infos <- for classes $ \cn => do
                     Right ci <- coreLift (reflectClass cn)
                       | Left err => throw (UserError ("JVM FFI import failed for " ++ cn ++ ": " ++ err))
                     pure ci
          dirs <- getDirs
          let root = fromMaybe "." (source_dir dirs)
-         traverse_ (writeBindingModule root) (renderAll infos)
+         sources <- coreLift (ffiScanSources root opts)
+         contents <- for sources $ \f => do
+                       Right s <- coreLift (readFile f)
+                         | Left _ => pure ""
+                       -- skip generated binding modules: they reference everything and would
+                       -- defeat the scan.
+                       pure (if isInfixOf "@generated" s then "" else s)
+         let classNames = map (\ci => simpleType (binary ci)) infos
+         let refs = nub (concatMap (scanReferences classNames) contents)
+         traverse_ (writeBindingModule root) (renderAll (Just refs) infos)
 
 ||| Options to be processed before type checking. Return whether to continue.
 export
@@ -571,7 +611,7 @@ preOptions (NoCSE :: opts)
     = do updateSession ({ noCSE := True })
          preOptions opts
 preOptions (JvmFfiImport classes :: opts)
-    = do generateJvmFfiBindings classes
+    = do generateJvmFfiBindings opts classes
          preOptions opts
 preOptions (_ :: opts) = preOptions opts
 

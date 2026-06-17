@@ -1,0 +1,5 @@
+Umbrella: module Java with namespaces Lang/Util
+Stub: Java.Util re-exports Java (no inline decls)
+Builtin: no data String marker
+SAM erase: Iterable returns Iterator Object (no unbound var)
+2

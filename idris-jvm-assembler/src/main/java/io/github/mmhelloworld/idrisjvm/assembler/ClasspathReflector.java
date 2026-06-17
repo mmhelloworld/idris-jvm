@@ -1,11 +1,14 @@
 package io.github.mmhelloworld.idrisjvm.assembler;
 
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.TypePath;
+import org.objectweb.asm.TypeReference;
 import org.objectweb.asm.signature.SignatureReader;
 import org.objectweb.asm.signature.SignatureVisitor;
 
@@ -25,7 +28,7 @@ import java.nio.file.Files;
  *
  * <pre>
  *   C|&lt;internalName&gt;|&lt;isInterface 0|1&gt;
- *   M|&lt;name&gt;|&lt;jvmMethodDescriptor&gt;|&lt;isStatic 0|1&gt;|&lt;throws 0|1&gt;
+ *   M|&lt;name&gt;|&lt;jvmMethodDescriptor&gt;|&lt;isStatic 0|1&gt;|&lt;throws 0|1&gt;|&lt;genericSig&gt;|&lt;nullableReturn 0|1&gt;
  *   F|&lt;name&gt;|&lt;jvmTypeDescriptor&gt;|&lt;isStatic 0|1&gt;
  *   X|&lt;internalName&gt;|&lt;arity&gt;  -- a transitive supertype (superclass/interface, excl. Object) and its generic arity
  *   S|&lt;internalName&gt;|&lt;samName&gt;|&lt;samDescriptor&gt;|&lt;samGenericSignature&gt;|&lt;formalTypeParams&gt;
@@ -89,20 +92,55 @@ public final class ClasspathReflector {
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor,
                                              String signature, String[] exceptions) {
-                if (isPublicApi(access) && !name.equals("<clinit>")) {
-                    var isStatic = (access & Opcodes.ACC_STATIC) != 0;
-                    var throwsChecked = exceptions != null && exceptions.length > 0;
-                    // Trailing field = raw generic signature (empty when the method is non-generic),
-                    // from which Idris derives shared type variables / parameterized types.
-                    sb.append("M|").append(name).append('|').append(descriptor).append('|')
-                        .append(isStatic ? 1 : 0).append('|').append(throwsChecked ? 1 : 0)
-                        .append('|').append(signature == null ? "" : signature).append('\n');
-                    for (var arg : Type.getArgumentTypes(descriptor)) {
-                        addReferencedType(referenced, arg);
-                    }
-                    addReferencedType(referenced, Type.getReturnType(descriptor));
+                if (!isPublicApi(access) || name.equals("<clinit>")) {
+                    return null;
                 }
-                return null;
+                var isStatic = (access & Opcodes.ACC_STATIC) != 0;
+                var throwsChecked = exceptions != null && exceptions.length > 0;
+                for (var arg : Type.getArgumentTypes(descriptor)) {
+                    addReferencedType(referenced, arg);
+                }
+                var returnType = Type.getReturnType(descriptor);
+                addReferencedType(referenced, returnType);
+                // Only a reference-typed return can be null; primitive/void returns are never wrapped.
+                var refReturn = returnType.getSort() == Type.OBJECT || returnType.getSort() == Type.ARRAY;
+                // Defer emitting the M| line to visitEnd so we can fold in any @Nullable annotation
+                // on the return (visited after visitMethod returns). Trailing fields: raw generic
+                // signature (for shared type variables / parameterized types) then nullable-return.
+                return new MethodVisitor(Opcodes.ASM9) {
+                    boolean nullableReturn = false;
+
+                    @Override
+                    public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
+                        // Method-level nullness annotation (JSR-305, JetBrains): @Nullable Foo m().
+                        if (refReturn && isNullableAnnotation(desc)) {
+                            nullableReturn = true;
+                        }
+                        return null;
+                    }
+
+                    @Override
+                    public AnnotationVisitor visitTypeAnnotation(int typeRef, TypePath typePath,
+                                                                 String desc, boolean visible) {
+                        // TYPE_USE nullness annotation on the return type (jspecify): Foo m() with
+                        // @Nullable applied to the return. typePath != null targets a nested type
+                        // argument (e.g. List<@Nullable T>), which does not make the return nullable.
+                        if (refReturn && typePath == null
+                            && new TypeReference(typeRef).getSort() == TypeReference.METHOD_RETURN
+                            && isNullableAnnotation(desc)) {
+                            nullableReturn = true;
+                        }
+                        return null;
+                    }
+
+                    @Override
+                    public void visitEnd() {
+                        sb.append("M|").append(name).append('|').append(descriptor).append('|')
+                            .append(isStatic ? 1 : 0).append('|').append(throwsChecked ? 1 : 0)
+                            .append('|').append(signature == null ? "" : signature)
+                            .append('|').append(nullableReturn ? 1 : 0).append('\n');
+                    }
+                };
             }
 
             @Override
@@ -300,6 +338,20 @@ public final class ClasspathReflector {
             }
         });
         return names.toString();
+    }
+
+    // Any annotation whose simple name marks nullability, regardless of package, so the common
+    // conventions all work: javax.annotation (JSR-305), org.jetbrains.annotations, jspecify, etc.
+    private static boolean isNullableAnnotation(String descriptor) {
+        var simpleName = descriptor;
+        var lastSlash = simpleName.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            simpleName = simpleName.substring(lastSlash + 1);
+        }
+        if (simpleName.endsWith(";")) {
+            simpleName = simpleName.substring(0, simpleName.length() - 1);
+        }
+        return simpleName.equals("Nullable") || simpleName.equals("CheckForNull");
     }
 
     private static boolean isPublicApi(int access) {

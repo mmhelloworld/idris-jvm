@@ -3,7 +3,7 @@ rm -rf build Java
 # One invocation: --jvm-ffi-import reflects the class (and its generic signatures) off the
 # classpath and writes the binding modules before Main.idr is compiled.
 $1 --no-banner --no-color --console-width 0 \
-   --jvm-ffi-import java/util/ArrayList \
+   --jvm-ffi-import java/util/ArrayList,java/util/HashMap \
    -o ffigen Main.idr > /dev/null 2>&1
 
 # 1. The package module was generated.
@@ -63,5 +63,21 @@ else
   echo "Subtyping: MISSING"
 fi
 
-# 5. Runtime: build a list, read back a typed element.
+# 6. Null-safety: a curated JDK nullable method (HashMap <: java.util.Map) returns io (Maybe v),
+#    so a missing key is `Nothing` rather than a raw null leaking into Idris.
+if grep -qE '^  get : .*HashMap k v -> .* -> io \(Maybe v\)' Java/Util.idr 2>/dev/null; then
+  echo "Nullable: HashMap.get : ... -> io (Maybe v)"
+else
+  echo "Nullable: NOT WRAPPED"
+fi
+
+# 7. Demand-driven generation: only members referenced by Main are emitted. Main uses
+#    ArrayList.{new,add,size,sort,get} but never `clear`, so `clear` is pruned (size kept).
+if grep -qE '^  size :' Java/Util.idr 2>/dev/null && ! grep -qE '^  clear :' Java/Util.idr 2>/dev/null; then
+  echo "Pruned: referenced size kept, unreferenced clear omitted"
+else
+  echo "Pruned: NOT DEMAND-DRIVEN"
+fi
+
+# 5. Runtime: build a list, read back a typed element; then a HashMap hit/miss as Maybe.
 ./build/exec/ffigen${IDRIS_EXEC_EXT}

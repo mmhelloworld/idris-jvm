@@ -1,0 +1,44 @@
+rm -rf build Java Java.idr
+
+# `java/lang/String` pulls in `java.lang`, whose classes reference `java.util` and vice versa:
+# a cyclic package graph. The generator condenses the cycle into one umbrella module + stubs.
+$1 --no-banner --no-color --console-width 0 \
+   --jvm-ffi-import java/util/ArrayList,java/lang/String \
+   -o ffigencycle Main.idr > /dev/null 2>&1
+
+# 1. The cyclic packages are merged into a single umbrella module `Java` (module + namespaces).
+if grep -q '^module Java$' Java.idr 2>/dev/null \
+   && grep -q '^namespace Lang' Java.idr 2>/dev/null \
+   && grep -q '^namespace Util' Java.idr 2>/dev/null; then
+  echo "Umbrella: module Java with namespaces Lang/Util"
+else
+  echo "Umbrella: MISSING"
+fi
+
+# 2. The per-package module name still resolves, as a thin re-export stub of the umbrella.
+if grep -q '^module Java.Util$' Java/Util.idr 2>/dev/null \
+   && grep -q '^import public Java$' Java/Util.idr 2>/dev/null \
+   && ! grep -q '^  data ArrayList' Java/Util.idr 2>/dev/null; then
+  echo "Stub: Java.Util re-exports Java (no inline decls)"
+else
+  echo "Stub: NOT A RE-EXPORT"
+fi
+
+# 3. A builtin-modeled type (java.lang.String -> Idris String) gets no `data` marker
+#    (`String` is reserved; the builtin stands in for it).
+if ! grep -qE 'data String ' Java.idr 2>/dev/null; then
+  echo "Builtin: no data String marker"
+else
+  echo "Builtin: STRING MARKER EMITTED"
+fi
+
+# 4. A functional-interface synonym whose SAM returns a parameterised type erases the element
+#    to Object rather than leaking an unbound type variable (regression: stray `s_0`).
+if grep -q 'Iterable ty0 = (Struct "java/lang/Iterable iterator" \[\], Java.Util.Iterator Java.Lang.Object)' Java.idr 2>/dev/null; then
+  echo "SAM erase: Iterable returns Iterator Object (no unbound var)"
+else
+  echo "SAM erase: UNBOUND VAR OR MISSING"
+fi
+
+# 5. Runtime: the merged umbrella compiles and runs; build an ArrayList, read back its size.
+./build/exec/ffigencycle${IDRIS_EXEC_EXT}

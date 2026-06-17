@@ -156,6 +156,47 @@ Note the renderer used `i:java/util/List` (interface receiver →
 `invokeinterface`) for `List`, but plain `java/util/ArrayList` (class receiver) for
 `ArrayList`, driven by each owner's `ACC_INTERFACE` flag.
 
+### Cyclic packages: umbrella module + re-export stubs
+
+The "one module per package" layout above assumes the cross-package import graph is a
+DAG. It is not in general: the JVM package graph is genuinely cyclic — e.g.
+`java.lang.Iterable.iterator()` returns `java.util.Iterator`, while `java.util` types
+name `java.lang.Object`, so `Java.Lang` and `Java.Util` would import each other. Idris
+forbids cyclic module imports (there is no `.hs-boot`/forward-declaration escape hatch),
+so the cyclic packages must share one compilation unit.
+
+The renderer condenses the import graph into **strongly-connected components** and emits
+one module per SCC:
+
+- A **singleton** SCC (no cycle) renders exactly as the per-package module above — the
+  common case (e.g. `--jvm-ffi-import java/util/ArrayList,java/util/List`) is unchanged.
+- A **multi-package** SCC renders as a single **umbrella module**, named after the
+  members' common path prefix (e.g. `Java`), with each package's declarations in a nested
+  `namespace` (`namespace Lang`, `namespace Util`, `namespace Util.Function`). Nesting
+  keeps fully-qualified names identical (`Java.Util.List` etc.), and the module imports
+  only packages *outside* its SCC — an SCC is closed under mutual reachability, so the
+  condensed graph (and the stub re-exports below) stay acyclic.
+- For each member package a thin **re-export stub** is emitted so user `import Java.Util`
+  keeps resolving: `module Java.Util` / `import public Java`.
+
+Within the umbrella, declarations are emitted in **kind-grouped passes** (all opaque
+`data` markers, then the functional-interface synonyms + `Inherits`/lambda infra, then the
+`Inherits` instances, then the methods), each pass reopening every namespace. Because the
+package graph is cyclic, no per-namespace ordering avoids forward references; grouping by
+declaration kind makes every cross-namespace reference *backward*. (`mutual` is
+insufficient on its own — it does not resolve forward references in interface-
+implementation headers.)
+
+Two related details, independent of cycles but exercised by the same imports:
+
+- **Builtin-modeled types** (`java.lang.String` → Idris `String`) get no marker, namespace
+  or `Inherits` instances — `String` is reserved and the builtin stands in for it (the
+  `Inherits String Object` infra connects it). They still drive the import graph.
+- A functional-interface synonym whose SAM returns a *parameterised* type (e.g.
+  `Iterable.iterator() : Iterator<T>`) erases the element to `Object`
+  (`Iterator Java.Lang.Object`) rather than leaking an unbound type variable into the
+  synonym's right-hand side.
+
 ## 5. Components
 
 ### 5.1 `ClasspathReflector.java` — the introspection half
@@ -201,9 +242,10 @@ reflectClass : HasIO io => String -> io ClassInfo   -- parse line-protocol → A
   header, cross-package imports, marker `data` decls, then a `namespace <Class>`
   block per class with each member's low-level `%foreign` prim **plus** an idiomatic
   wrapper.
-- Wrapper layer: `void→IO ()`; intra-class overload disambiguation; and **subtyping
-  via `Inherits`** (see below). Further marshalling (nullable ref → `IO (Maybe a)`,
-  `java.util` collections ⇄ `List`, `throws` → `IO (Either JThrowable a)`) is future work.
+- Wrapper layer: `void→IO ()`; intra-class overload disambiguation; **subtyping
+  via `Inherits`** (see below); and **null-safety** — a reference return that may be
+  null is surfaced as `io (Maybe a)` (see §5.8). Further marshalling
+  (`java.util` collections ⇄ `List`, `throws` → `IO (Either JThrowable a)`) is future work.
 
 ### 5.6 Parametric types from Java generics
 
@@ -250,6 +292,60 @@ Note: a bare `String`/numeric literal into a freshly-constructed generic contain
 a type hint (annotate the constructor — `the (IO (ArrayList String)) ArrayList.new` — or
 the first element). This is the usual literal-defaulting interaction with parameterised
 FFI types, not specific to the generator.
+
+Cross-package imports are emitted as **`import public`**: a generated module's API surfaces
+other packages' types (`Java.Lang.Object`) and the `Inherits` interface/instances, so importers
+— user code and sibling generated modules — must see them transitively to discharge those
+constraints. (A plain `import` left `Inherits` invisible at the call site: `Undefined name
+Java.Lang.Inherits`.)
+
+### 5.8 Null-safety (`io (Maybe a)`)
+
+A Java method may return `null`; if its binding is typed as a bare reference, the null leaks
+into Idris as a non-`Maybe` value and crashes far from the cause. Reference returns judged
+nullable are surfaced as `io (Maybe a)`:
+
+- **Detection** is *annotation + curated list*. The reflector (`ClasspathReflector`) reads any
+  return annotation whose simple name is `Nullable`/`CheckForNull` — method-level
+  (`visitAnnotation`, JSR-305 / JetBrains) and TYPE_USE on the return (`visitTypeAnnotation` with
+  `METHOD_RETURN`, jspecify) — and emits a trailing nullable field on the `M|` line. Because
+  vanilla JDK bytecode carries no such annotations, the generator additionally consults a small
+  curated list (`jdkNullableMethods`: `Map.{get,put,remove,putIfAbsent,replace}`,
+  `Queue.{poll,peek}`, `Deque.*`, `NavigableSet.*`), matched against the class **and its
+  reflected supertypes** so concrete subclasses (`HashMap`, `ArrayDeque`, …) inherit the policy.
+- **Marshalling** reuses the existing idiom from `Asm.idr`: the prim keeps the raw return
+  (`PrimIO a`, possibly null) and the wrapper maps `nullableToMaybe` over it
+  (`nullableToMaybe <$> primIO …`), where `nullableToMaybe value = if isNull (believe_me value)
+  then Nothing else Just value`. `isNull`/`nullableToMaybe` are emitted once into `Java.Lang`
+  alongside the `Inherits`/`jlambda` infra. Only reference returns are wrapped — primitives/void
+  never are.
+
+So `HashMap.get : HashMap k v -> a -> io (Maybe v)`: a present key yields `Just v`, a missing
+key `Nothing`.
+
+### 5.9 Demand-driven generation (source reference-scan)
+
+Emitting each imported class's *entire* public API made compiling against a few JDK classes slow
+(whole-program elaboration of dozens of unused members). The generator now emits **only the
+members user code references**:
+
+- Before rendering, the driver (`generateJvmFfiBindings`) scans the project sources — the entry
+  files named on the command line plus every `.idr` under their directories — for `Class.member`
+  tokens (`scanReferences`, lexical and deliberately over-approximating; qualified uses like
+  `Java.Util.ArrayList.add` are matched too). Generated modules are excluded from the scan (their
+  `@generated` header) so a stale prior generation does not re-pin every member.
+- Members are uniquified over the **full** member list first (so generated names like `add_2`
+  stay stable regardless of what is pruned) and only then filtered. A namespace with nothing kept
+  is dropped. **Markers, `Inherits` instances, and the `Java.Lang` infra are always emitted** —
+  only member bindings are pruned.
+- For `tests/jvm/ffigen` (`ArrayList` using only `new`/`add`/`size`/`sort`/`get`) this cut the
+  generated `Java.Util` from ~290 lines to ~100.
+
+Tradeoff: the generated source now depends on usage, so it is less stable as a committed
+artifact, and a reference the scan cannot see (member used fully unqualified, or reached only
+through re-export) would be pruned and break the build. The scan is intentionally generous, and
+over-approximation (emitting a spare member) is the safe direction. `renderAll`'s `refs`
+parameter is `Maybe`: `Nothing` restores the unfiltered whole-API form.
 
 ### 5.4 CLI flag — `src/Idris/CommandLine.idr`
 
@@ -315,10 +411,12 @@ jvm:<spec>(<type> <type> … <ret>),<owner>
 - **High-arity subtyping cap.** Wrappers genericize each reference arg into an `Inherits`
   constraint; beyond `maxGenericArgs` (8) the member falls back to concrete types so the
   elaborator's implicit binder does not overflow (e.g. `Map.of`'s 20-parameter overload).
-- **Cost.** The generator emits each class's *entire* public API plus all transitive
-  supertype markers; combined with idris-jvm's whole-program compilation this makes
-  compiling against a few JDK classes slow. A production version should generate only the
-  members actually referenced by user code.
+- **Cost.** *Largely addressed* (§5.9). The generator now emits only the members user code
+  references (source reference-scan), rather than each class's entire public API, which is the
+  dominant cost under idris-jvm's whole-program compilation. Transitive supertype *markers* are
+  still all emitted (they are one line each and needed for `Inherits`). Remaining gap: the scan
+  is lexical and over-approximating, and does not see fully-unqualified or re-exported references
+  — such a reference would be pruned and break the build, so qualified member access is assumed.
 
 ## 8. Verification
 
@@ -330,5 +428,9 @@ jvm:<spec>(<type> <type> … <ret>),<owner>
    `Java.Util`, namespaces `ArrayList`/`List`) before `Main` compiles, and
    `import Java.Util` resolves.
 4. **Runtime:** `Main` builds an `ArrayList`, `add`s via generated wrappers, reads
-   `size`, prints; diff against `tests/jvm/ffigen/expected`.
-5. Build with `IDRIS2_BOOT=~/bin/idris2-0.8.3/exec/idris2`.
+   `size`, sorts via a `jlambda` `Comparator`, reads a typed element; then exercises
+   **null-safety** — `HashMap.get` returns `io (Maybe v)`, a hit prints `Just`'s value and a
+   miss prints on `Nothing`. The `run` script also asserts **demand-driven pruning** (referenced
+   `size` kept, unreferenced `clear` omitted). Diff against `tests/jvm/ffigen/expected`.
+5. Build with `IDRIS2_BOOT=~/bin/idris2-0.8.3/exec/idris2`. Reflector (Java) changes need the
+   assembler jar rebuilt and copied into `build/exec/idris2_app/` (`make` does not refresh it).

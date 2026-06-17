@@ -22,3 +22,14 @@ main = do
   -- get : ArrayList e -> Int -> io e  — returns String here, no Object/cast
   first <- ArrayList.get xs 0
   putStrLn first
+
+  -- Null-safety: HashMap.get is a curated JDK nullable method (HashMap <: java.util.Map), so it
+  -- is generated as `... -> io (Maybe v)` — a missing key surfaces as `Nothing`, not a raw null.
+  m <- the (IO (HashMap String String)) HashMap.new
+  _ <- HashMap.put m "fruit" "apple"
+  Just hit <- HashMap.get m "fruit"
+    | Nothing => putStrLn "unexpected miss"
+  putStrLn hit
+  Nothing <- HashMap.get m "veg"
+    | Just _ => putStrLn "unexpected hit"
+  putStrLn "veg: Nothing"

@@ -50,6 +50,7 @@ record MemberInfo where
   ret     : JType          -- erased return type
   throws  : Bool
   genSig  : String         -- raw JVM generic method signature ("" when non-generic)
+  nullable : Bool          -- return may be null (from a reflected @Nullable, OR a curated JDK method)
 
 ||| A referenced Java functional interface (single abstract method, e.g. `Comparator`),
 ||| detected by the reflector. Drives the `jlambda`-based binding so an Idris function can
@@ -111,6 +112,7 @@ splitBinary s = case reverse (splitOn '/' s) of
 packageOf : String -> String
 packageOf s = joinBy "/" (fst (splitBinary s))
 
+export
 simpleType : String -> String
 simpleType s = sanitizeType (snd (splitBinary s))
 
@@ -408,6 +410,18 @@ renderErased ar seed (JRef _ n) =
   if isBuiltinRef n then "String"
   else applyTy (qualName n) (map (\j => seed ++ show j) (rangeN (ar n)))
 
+-- Like `renderErased` but fills a referenced type's parameter slots with `Object` rather than
+-- fresh `seedN` type variables. Used where the surrounding term has nowhere to bind those
+-- variables — notably the functional-interface synonym RHS, whose SAM may return a
+-- parameterised type (`Iterable`'s `iterator() : Iterator<T>`) that would otherwise leak an
+-- unbound `s_0`. The element type is erased to `Object`, matching the descriptor.
+renderErasedObj : (String -> Nat) -> JType -> String
+renderErasedObj ar (JPrim p)  = idrisPrim p
+renderErasedObj ar (JArray _) = "Object"
+renderErasedObj ar (JRef _ n) =
+  if isBuiltinRef n then "String"
+  else applyTy (qualName n) (replicate (ar n) (qualName "java/lang/Object"))
+
 --------------------------------------------------------------------------------
 -- Functional-interface (SAM) threading
 --------------------------------------------------------------------------------
@@ -507,6 +521,36 @@ eShape ar (i, JRef _ n) = if isBuiltinRef n then ("String", False)
 -- Source rendering
 --------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
+-- Nullability: a reference return that may be null is surfaced as `io (Maybe a)`
+-- (the prim still returns the raw reference; the wrapper applies `nullableToMaybe`).
+--------------------------------------------------------------------------------
+
+-- Methods of well-known JDK interfaces that legitimately return null. Vanilla JDK bytecode
+-- carries no @Nullable annotations, so these are recognised by (declaring interface, method
+-- name) and matched against the class plus its reflected supertypes — so concrete subclasses
+-- (HashMap, ArrayDeque, TreeSet, …) inherit the policy from Map / Queue / Deque / NavigableSet.
+jdkNullableMethods : List (String, List String)
+jdkNullableMethods =
+  [ ("java/util/Map",         ["get", "put", "remove", "putIfAbsent", "replace"])
+  , ("java/util/Queue",       ["poll", "peek"])
+  , ("java/util/Deque",       ["poll", "peek", "pollFirst", "pollLast", "peekFirst", "peekLast"])
+  , ("java/util/NavigableSet", ["ceiling", "floor", "higher", "lower", "pollFirst", "pollLast"])
+  ]
+
+isKnownNullable : ClassInfo -> MemberInfo -> Bool
+isKnownNullable ci m = any matches (binary ci :: supers ci)
+  where matches : String -> Bool
+        matches owner = case lookup owner jdkNullableMethods of
+          Just names => jname m `elem` names
+          Nothing    => False
+
+-- Only a reference-typed return can be null; primitives/void are never wrapped in Maybe.
+isRefReturn : JType -> Bool
+isRefReturn (JPrim _)  = False
+isRefReturn (JRef _ _) = True
+isRefReturn (JArray _) = True
+
 -- one member -> its %foreign prim + subtype-polymorphic wrapper (unindented)
 renderMember : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> (String, MemberInfo) -> String
 renderMember ar fi ci (nm, m) =
@@ -543,6 +587,10 @@ renderMember ar fi ci (nm, m) =
       retTy     = case methodGTypes m of
                     Just (_, r) => renderG r
                     Nothing     => renderErased ar "rt_" (ret m)
+      -- A reference return flagged nullable (reflected @Nullable or curated JDK method) is
+      -- surfaced as `io (Maybe a)`; the prim keeps the raw return and the wrapper unwraps null.
+      nullableRet = isRefReturn (ret m) && (nullable m || isKnownNullable ci m)
+      wrapRet   = if nullableRet then "Maybe " ++ paren retTy else retTy
       cons      = "HasIO io" :: concatMap cs specs
       prim      = "prim__" ++ nm
       names     = countNames (length allPlans)
@@ -557,20 +605,29 @@ renderMember ar fi ci (nm, m) =
       lhs       = nm ++ lhsBinds ++ (if null names then "" else " " ++ joinBy " " names)
       callArgs  = map cl specs
       rhs       = if null callArgs then prim else "(" ++ prim ++ " " ++ joinBy " " callArgs ++ ")"
+      -- `nullableToMaybe : a -> Maybe a` (from Java.Lang infra) turns a possibly-null reference
+      -- into `Nothing`/`Just`; mapped over the io action for a nullable return.
+      body      = (if nullableRet then "nullableToMaybe <$> primIO " else "primIO ") ++ rhs
   in joinBy "\n"
        [ "%foreign \"" ++ descriptor ci m ++ "\""
        , prim ++ " : " ++ joinBy " -> " (map prT specs ++ ["PrimIO " ++ paren retTy])
        , "export %inline"
        , nm ++ " : " ++ tyBind ++ "(" ++ joinBy ", " cons ++ ") => "
-              ++ joinBy " -> " (map sgT specs ++ ["io " ++ paren retTy])
-       , lhs ++ " = primIO " ++ rhs
+              ++ joinBy " -> " (map sgT specs ++ ["io " ++ paren wrapRet])
+       , lhs ++ " = " ++ body
        ]
 
-renderClass : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> String
-renderClass ar fi ci =
-  let named = uniquify (members ci)
-      body  = joinBy "\n\n" (map (\p => indentBlock (renderMember ar fi ci p)) named)
-  in "namespace " ++ simpleType (binary ci) ++ "\n" ++ body
+-- `keep cn nm` decides whether the member rendered as `cn.nm` is emitted (demand-driven
+-- generation: only members the user code references). Members are uniquified over the FULL
+-- list first so the generated names stay stable regardless of what is pruned, THEN filtered.
+-- An empty namespace (nothing kept) renders as "" and is dropped by `renderModule`.
+renderClass : (String -> Nat) -> (String -> Maybe FuncIface) -> (keep : String -> String -> Bool) -> ClassInfo -> String
+renderClass ar fi keep ci =
+  let cn    = simpleType (binary ci)
+      named = filter (\(nm, _) => keep cn nm) (uniquify (members ci))
+  in if null named then ""
+     else let body = joinBy "\n\n" (map (\p => indentBlock (renderMember ar fi ci p)) named)
+          in "namespace " ++ cn ++ "\n" ++ body
 
 -- A marker is either an opaque parameterised external type
 -- (`data Map : Type -> Type -> Type where [external]`) or, for a functional interface, a
@@ -583,8 +640,8 @@ markerDecl ar fi bin =
        Just info =>
          let vars = map (\j => "ty" ++ show j) (rangeN (ar bin))
              lhs  = applyTy (simpleType bin) vars
-             fnTy = joinBy " -> " (map (renderErased ar "s_") (fiParams info)
-                                   ++ [renderErased ar "s_" (fiRet info)])
+             fnTy = joinBy " -> " (map (renderErasedObj ar) (fiParams info)
+                                   ++ [renderErasedObj ar (fiRet info)])
              body = "(Struct \"" ++ bin ++ " " ++ fiSam info ++ "\" [], " ++ fnTy ++ ")"
          in "public export %inline\n" ++ simpleType bin ++ " : " ++ kind ++ "\n"
               ++ lhs ++ " = " ++ body
@@ -616,6 +673,8 @@ infraLines =
   , "public export\nInherits String Object where"
   , "export\n%extern prim__javaLambda : (lambdaTy : Type) -> (intfTy : Type) -> (f : lambdaTy) -> intfTy"
   , "public export %inline\njlambda : {fTy : Type} -> (f : fTy) -> {intfTy : Type} -> intfTy\njlambda {fTy} f {intfTy} = prim__javaLambda fTy intfTy f"
+  , "public export\n%foreign \"jvm:isNull(java/lang/Object boolean),java/util/Objects\"\nisNull : Object -> Bool"
+  , "public export\nnullableToMaybe : a -> Maybe a\nnullableToMaybe value = if isNull (believe_me value) then Nothing else Just value"
   ]
 
 -- reference-type binaries used by a class's signatures (excludes builtins). Includes
@@ -638,45 +697,221 @@ refsOf ci = concatMap memberRefs (members ci)
                       Just (ps, r) => concatMap gRef (r :: ps)
                       Nothing      => [])
 
--- render one module (package) -> (relative .idr path, contents)
-renderModule : (String -> Nat) -> (String -> Maybe FuncIface) -> List ClassInfo -> List String -> List String -> String -> (String, String)
-renderModule ar fi classes imported allBins pkg =
-  let binsHere     = filter (\b => packageOf b == pkg) allBins
-      boundClasses = filter (\ci => (binary ci `elem` binsHere) && (binary ci `elem` imported)) classes
-      depPkgs     = map packageOf (concatMap (\ci => refsOf ci ++ supers ci) boundClasses)
-      importPkgs  = nub (filter (/= pkg) ("java/lang" :: depPkgs))
-      -- functional-interface markers are `Struct`-pair synonyms, so pull in System.FFI
-      needsStruct = not (null (mapMaybe fi binsHere))
-      importLines = map (\p => "import " ++ moduleName p) importPkgs
-                 ++ (if needsStruct then ["import System.FFI"] else [])
-      markers     = map (markerDecl ar fi) binsHere
-      infra       = if pkg == "java/lang" then infraLines else []
-      instances   = concatMap (inheritsInstances ar) boundClasses
-      nsBlocks    = map (renderClass ar fi) boundClasses
-      header      = "-- @generated by `idris2 --jvm-ffi-import` from JVM classpath reflection.\n"
-                 ++ "-- Do not edit by hand; regenerate instead."
-      sections    = [header]
-                 ++ ["module " ++ moduleName pkg]
-                 ++ (if null importLines then [] else [joinBy "\n" importLines])
-                 ++ markers
-                 ++ infra
-                 ++ instances
-                 ++ nsBlocks
-  in (modulePath pkg ++ ".idr", joinBy "\n\n" sections ++ "\n")
+genHeader : String
+genHeader = "-- @generated by `idris2 --jvm-ffi-import` from JVM classpath reflection.\n"
+         ++ "-- Do not edit by hand; regenerate instead."
 
-||| Render bindings for the given reflected classes, one Idris module per package.
-||| Returns `(relativeFilePath, moduleSource)` pairs for the driver to write.
+--------------------------------------------------------------------------------
+-- Package import graph & cycle handling
+--
+-- One Idris module per Java package fails when the packages reference each other:
+-- `java.lang.Iterable.iterator()` returns `java.util.Iterator` while `java.util`
+-- types name `java.lang.Object`, so `Java.Lang` and `Java.Util` would import each
+-- other — and Idris forbids cyclic module imports.
+--
+-- The JVM package graph is genuinely cyclic, so the cyclic packages must share one
+-- compilation unit. We condense the import graph into strongly-connected components
+-- (SCCs) and emit one module per SCC:
+--   * a singleton SCC (no cycle) renders exactly as a plain per-package module;
+--   * a multi-package SCC renders as a single *umbrella* module — module named after
+--     the packages' common path prefix (e.g. `Java`), with each package's content in
+--     a nested `namespace` (`namespace Lang`, `namespace Util`) so fully-qualified
+--     names like `Java.Util.List` are unchanged — plus a thin re-export *stub* module
+--     per package (`module Java.Util; import public Java`) so user `import Java.Util`
+--     keeps resolving. The umbrella imports only packages outside its SCC, and an SCC
+--     is closed under mutual reachability, so the condensed graph (and the stub
+--     re-exports) stay acyclic.
+--------------------------------------------------------------------------------
+
+-- classes declared in `pkg` (every class binary is in `allBins`/`imported`, so this is
+-- just the per-package partition of the reflected classes).
+boundClassesOf : List ClassInfo -> String -> List ClassInfo
+boundClassesOf classes pkg = filter (\ci => packageOf (binary ci) == pkg) classes
+
+-- packages `pkg` references and hence must import (mirrors the emitted import set):
+-- the `java/lang` seed (Object marker / infra) plus every referenced/super package.
+importPkgsOf : List ClassInfo -> String -> List String
+importPkgsOf classes pkg =
+  let depPkgs = map packageOf (concatMap (\ci => refsOf ci ++ supers ci) (boundClassesOf classes pkg))
+  in nub (filter (/= pkg) ("java/lang" :: depPkgs))
+
+-- longest common path-prefix (segment-wise) of the given packages, e.g.
+-- [["java","util"],["java","lang"]] -> ["java"].
+commonPrefixSegs : List (List String) -> List String
+commonPrefixSegs []          = []
+commonPrefixSegs (xs :: xss) = foldl lcp2 xs xss
+  where lcp2 : List String -> List String -> List String
+        lcp2 (a :: as) (b :: bs) = if a == b then a :: lcp2 as bs else []
+        lcp2 _         _         = []
+
+-- one closure step: current frontier plus everything it points at
+reachStep : (String -> List String) -> List String -> List String
+reachStep succ fs = nub (fs ++ concatMap succ fs)
+
+-- transitive reachability from a node (incl. self), fuel-bounded for obvious termination
+reachable : (String -> List String) -> Nat -> String -> List String
+reachable succ fuel u = go fuel [u]
+  where go : Nat -> List String -> List String
+        go Z     fs = fs
+        go (S k) fs = let fs' = reachStep succ fs
+                      in if length fs' == length fs then fs else go k fs'
+
+-- strongly-connected components of the package graph: `u` and `v` share a component iff
+-- each reaches the other. The graph is tiny (a handful of packages), so the O(n^2)
+-- mutual-reachability test is fine.
+sccsOf : List String -> (String -> List String) -> List (List String)
+sccsOf nodes succ = go nodes []
+  where
+    comp : String -> List String
+    comp u = let ru = reachable succ (length nodes) u
+             in filter (\v => u `elem` reachable succ (length nodes) v) ru
+    go : List String -> List String -> List (List String)
+    go []        _    = []
+    go (u :: us) done = if u `elem` done then go us done
+                                         else let c = comp u in c :: go us (done ++ c)
+
+-- Per-package declaration sections (no module/import/namespace framing) — assembled by
+-- `renderScc` into kind-grouped passes. Builtin-modeled types (`java.lang.String` -> Idris
+-- `String`) are dropped throughout: `String` is reserved and the builtin stands in for it
+-- (the `Inherits String Object` infra connects it). They still drive the import graph.
+pkgBins : List String -> String -> List String
+pkgBins allBins pkg = filter (\b => packageOf b == pkg && not (isBuiltinRef b)) allBins
+
+pkgBound : List ClassInfo -> String -> List ClassInfo
+pkgBound classes pkg = filter (not . isBuiltinRef . binary) (boundClassesOf classes pkg)
+
+-- opaque `data ... where [external]` markers (reference nothing else)
+pkgDataMarkers : (String -> Nat) -> (String -> Maybe FuncIface) -> List String -> String -> List String
+pkgDataMarkers ar fi allBins pkg =
+  map (markerDecl ar fi) (filter (\b => case fi b of Nothing => True; _ => False) (pkgBins allBins pkg))
+
+-- functional-interface `Struct`-pair synonyms (reference the opaque markers above)
+pkgSynonyms : (String -> Nat) -> (String -> Maybe FuncIface) -> List String -> String -> List String
+pkgSynonyms ar fi allBins pkg =
+  map (markerDecl ar fi) (filter (\b => case fi b of Just _ => True; _ => False) (pkgBins allBins pkg))
+
+pkgInstances : (String -> Nat) -> List ClassInfo -> String -> List String
+pkgInstances ar classes pkg = concatMap (inheritsInstances ar) (pkgBound classes pkg)
+
+pkgMethods : (String -> Nat) -> (String -> Maybe FuncIface) -> (keep : String -> String -> Bool)
+          -> List ClassInfo -> String -> List String
+pkgMethods ar fi keep classes pkg = filter (/= "") (map (renderClass ar fi keep) (pkgBound classes pkg))
+
+-- render one SCC -> the umbrella module file plus a re-export stub per member package
+-- (no stub for the member whose module name *is* the umbrella, e.g. the common-prefix package).
+renderScc : (String -> Nat) -> (String -> Maybe FuncIface) -> (keep : String -> String -> Bool)
+         -> List ClassInfo -> List String -> (String -> List String) -> List String
+         -> List (String, String)
+renderScc ar fi keep classes allBins importsOf members =
+  let prefixSegs  = commonPrefixSegs (map (splitOn '/') members)
+      prefixPkg   = joinBy "/" prefixSegs
+      umbrella    = moduleName prefixPkg
+      -- packages referenced from inside the SCC but living outside it (the condensed-graph
+      -- edges); same-SCC references are internal namespaces, so they need no import.
+      extImports  = nub (filter (\p => not (p `elem` members)) (concatMap importsOf members))
+      binsHere    = filter (\b => packageOf b `elem` members) allBins
+      -- functional-interface markers are `Struct`-pair synonyms, so pull in System.FFI.
+      needsStruct = not (null (mapMaybe fi binsHere))
+      -- Cross-package imports are `public`: the API surfaces other packages' types
+      -- (`Java.Lang.Object`) and the `Inherits` instances, so importers can discharge them.
+      importLines = map (\p => "import public " ++ moduleName p) extImports
+                 ++ (if needsStruct then ["import public System.FFI"] else [])
+      -- wrap one package's section lines in its `namespace <suffix-after-prefix>` (none for the
+      -- prefix package itself, so a singleton SCC renders as a plain top-level module).
+      wrapNs : String -> List String -> Maybe String
+      wrapNs pkg ls =
+        if null ls then Nothing
+        else let body    = joinBy "\n\n" ls
+                 remSegs = drop (length prefixSegs) (splitOn '/' pkg)
+             in Just (if null remSegs
+                        then body
+                        else "namespace " ++ joinBy "." (map capitalize remSegs)
+                               ++ "\n" ++ indentBlock body)
+      pass : (String -> List String) -> List String
+      pass extract = mapMaybe (\pkg => wrapNs pkg (extract pkg)) members
+      -- Declarations are grouped into global passes so every cross-namespace reference is
+      -- *backward*: all opaque markers precede the `Struct`-pair synonyms + infra, which precede
+      -- the `Inherits` instances, which precede the methods. The package graph is cyclic, so no
+      -- per-namespace ordering avoids forward references — but grouping by declaration kind does,
+      -- and Idris reopens each `namespace` across passes. (`mutual` cannot fix forward references
+      -- in interface-implementation headers, so it is not enough on its own.)
+      bodyBlocks = pass (pkgDataMarkers ar fi allBins)
+                ++ pass (\p => pkgSynonyms ar fi allBins p ++ (if p == "java/lang" then infraLines else []))
+                ++ pass (pkgInstances ar classes)
+                ++ pass (pkgMethods ar fi keep classes)
+      umbrellaSecs = [genHeader, "module " ++ umbrella]
+                  ++ (if null importLines then [] else [joinBy "\n" importLines])
+                  ++ bodyBlocks
+      umbrellaFile = (modulePath prefixPkg ++ ".idr", joinBy "\n\n" umbrellaSecs ++ "\n")
+      stubFor : String -> Maybe (String, String)
+      stubFor pkg = if moduleName pkg == umbrella
+                      then Nothing
+                      else Just (modulePath pkg ++ ".idr",
+                                 joinBy "\n\n"
+                                   [genHeader, "module " ++ moduleName pkg, "import public " ++ umbrella]
+                                   ++ "\n")
+  in umbrellaFile :: mapMaybe stubFor members
+
+--------------------------------------------------------------------------------
+-- Demand-driven generation: scan user source for `Class.member` references
+--------------------------------------------------------------------------------
+
+isIdentChar : Char -> Bool
+isIdentChar c = isAlpha c || isDigit c || c == '_' || c == '\''
+
+-- maximal runs of identifier-or-dot characters, e.g. "ArrayList.add" / "Java.Util.List.size"
+identRuns : String -> List String
+identRuns s = filter (/= "") (go [] [] (unpack s))
+  where go : List Char -> List String -> List Char -> List String
+        go cur acc []        = reverse (pack (reverse cur) :: acc)
+        go cur acc (c :: cs) =
+          if isIdentChar c || c == '.'
+            then go (c :: cur) acc cs
+            else go [] (pack (reverse cur) :: acc) cs
+
+adjacentPairs : List a -> List (a, a)
+adjacentPairs (x :: y :: rest) = (x, y) :: adjacentPairs (y :: rest)
+adjacentPairs _                = []
+
+-- (qualifier, member) pairs in a dotted run: "Java.Util.ArrayList.new" yields
+-- (Java,Util) (Util,ArrayList) (ArrayList,new); only the class-qualified ones are kept below.
+runPairs : String -> List (String, String)
+runPairs run = adjacentPairs (filter (/= "") (splitOn '.' run))
+
+||| The `(className, member)` references appearing in a source string, restricted to the given
+||| generated class simple names. Drives demand-driven generation: a member is emitted only when
+||| its qualified use (`ArrayList.add`, even via `Java.Util.ArrayList.add`) appears in user code.
+||| Lexical and deliberately over-approximating (matches inside comments/strings too) — emitting a
+||| spare member is harmless, whereas missing a referenced one would break the build.
 export
-renderAll : List ClassInfo -> List (String, String)
-renderAll classes =
-  let imported = map binary classes
-      allBins  = nub ("java/lang/Object" :: imported
+scanReferences : (classNames : List String) -> (src : String) -> List (String, String)
+scanReferences classNames src =
+  nub (filter (\(q, _) => q `elem` classNames) (concatMap runPairs (identRuns src)))
+
+||| Render bindings for the given reflected classes. Returns `(relativeFilePath,
+||| moduleSource)` pairs for the driver to write — normally one module per Java package,
+||| but mutually-referencing packages (a cycle in the import graph) are merged into one
+||| umbrella module plus re-export stubs (see `renderScc`).
+|||
+||| `refs` is the demand-driven member filter: `Just pairs` emits only the `(className,
+||| memberName)` members the user code references (markers/`Inherits`/infra are always
+||| emitted); `Nothing` emits every member (the unfiltered, whole-API form).
+export
+renderAll : (refs : Maybe (List (String, String))) -> List ClassInfo -> List (String, String)
+renderAll refs classes =
+  let imported  = map binary classes
+      allBins   = nub ("java/lang/Object" :: imported
                         ++ concatMap refsOf classes ++ concatMap supers classes)
-      pkgs     = nub ("java/lang" :: map packageOf allBins)
-      ar       = arityOf (arityTable classes)
-      allFis   = concatMap funcIfaces classes
-      fi       = \n => find (\f => fiBinary f == n) allFis
-  in map (renderModule ar fi classes imported allBins) pkgs
+      pkgs      = nub ("java/lang" :: map packageOf allBins)
+      ar        = arityOf (arityTable classes)
+      allFis    = concatMap funcIfaces classes
+      fi        = \n => find (\f => fiBinary f == n) allFis
+      keep      = case refs of
+                    Nothing    => \_, _ => True
+                    Just pairs => \cn, nm => (cn, nm) `elem` pairs
+      importsOf = importPkgsOf classes
+      comps     = sccsOf pkgs importsOf
+  in concatMap (renderScc ar fi keep classes allBins importsOf) comps
 
 --------------------------------------------------------------------------------
 -- Parsing the reflector's line-protocol dump (see ClasspathReflector.java)
@@ -721,16 +956,19 @@ parseMethodDesc s = case unpack s of
 
 parseMemberLine : (binary : String) -> String -> Maybe MemberInfo
 parseMemberLine bin line = case splitOn '|' line of
-  ["M", name, desc, st, th, sig] => case parseMethodDesc desc of
+  ("M" :: name :: desc :: st :: th :: sig :: rest) => case parseMethodDesc desc of
     Nothing       => Nothing
     Just (ps, r)  =>
       let kindOf = if name == "<init>" then Ctor
                    else if st == "1" then Static else Instance
           -- the JVM ctor descriptor returns V; the jvm: form wants the class itself
           retOf  = if name == "<init>" then JRef False bin else r
-      in Just (MkMember name kindOf ps retOf (th == "1") sig)
+          -- trailing nullable-return field (1 = the reflected @Nullable was present); a
+          -- ctor never returns null. Older 6-field dumps (no field) default to not-null.
+          nul    = name /= "<init>" && rest == ["1"]
+      in Just (MkMember name kindOf ps retOf (th == "1") sig nul)
   ["F", name, desc, st] => case parseType (unpack desc) of
-    Just (t, _) => Just (MkMember name (FieldGet (st == "1")) [] t False "")
+    Just (t, _) => Just (MkMember name (FieldGet (st == "1")) [] t False "" False)
     Nothing     => Nothing
   _ => Nothing
 

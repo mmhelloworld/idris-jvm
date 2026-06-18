@@ -214,7 +214,14 @@ descriptor ci m =
 
 --------------------------------------------------------------------------------
 -- Member name disambiguation (only needed within a class — namespaces separate
--- classes, so cross-class clashes cannot happen)
+-- classes, so cross-class clashes cannot happen).
+--
+-- Java overloads share a name, but Idris forbids two declarations with the same
+-- fully-qualified name. Rather than suffix the extras with unguessable numbers
+-- (`add_2`), we exploit Idris's namespace-based overloading: every overload keeps
+-- the SAME function name, and the extras are pushed into a sub-namespace, so an
+-- *unqualified* call (`add x y`) resolves by argument/return type at the call site
+-- — the caller never needs to know which overload they want. See `layout`.
 --------------------------------------------------------------------------------
 
 -- Idris reserved words that can legally be Java member names (e.g. List.of); a
@@ -232,25 +239,56 @@ sanitizeName n = if n `elem` idrisKeywords then n ++ "_" else n
 
 -- Constructors become `new` (no-arg) / `newN` (N-arg) so the zero-arg ctor reliably
 -- gets the clean `new` name regardless of declaration order; collisions among
--- same-arity ctors fall through to `uniquify`.
+-- same-arity ctors are overloaded like any other member (see `layout`).
 idrisMemberName : MemberInfo -> String
 idrisMemberName m = case kind m of
   Ctor => let n = length (params m) in if n == 0 then "new" else "new" ++ show n
   _    => sanitizeName (jname m)
 
-uniquify : List MemberInfo -> List (String, MemberInfo)
-uniquify = go []
+-- drop a single trailing '_' (keyword-sanitised names like "of_") for a tidy sub-namespace tag
+dropTrailingUnderscore : String -> String
+dropTrailingUnderscore s = case reverse (unpack s) of
+  ('_' :: cs) => pack (reverse cs)
+  _           => s
+
+-- make `cand` unique against `used` by appending _2/_3…
+uniqueIn : List String -> String -> String
+uniqueIn used cand = if cand `elem` used then bump 2 else cand
+  where bump : Nat -> String
+        bump n = let c = cand ++ "_" ++ show n in if c `elem` used then bump (S n) else c
+
+-- Where a member sits inside its class namespace.
+public export
+record Placement where
+  constructor MkPlacement
+  callName : String          -- the (shared) function name used at the call site
+  subNs    : Maybe String    -- Nothing = directly under the class namespace (canonical/singleton)
+  minfo    : MemberInfo
+
+-- Group a class's members by their base idris name. A name shared by >1 member is
+-- *overloaded*: the first (declaration order) keeps the bare name directly under the class
+-- namespace — so `Class.member` and the unqualified `member` both resolve to it — and every
+-- later overload goes into an arity-tagged sub-namespace (`namespace Member2`) under the SAME
+-- name. Idris then disambiguates an unqualified `member` call by argument/return type; the
+-- fully-qualified `Class.MemberN.member` is the predictable escape hatch for the rare case
+-- where two overloads erase to the same Idris signature (e.g. int vs long → Int).
+layout : List MemberInfo -> List Placement
+layout ms = go [] [] ms
   where
-    free : List String -> String -> Nat -> String
-    free seen base n =
-      let cand = base ++ "_" ++ show n in
-      if cand `elem` seen then free seen base (S n) else cand
-    pick : List String -> String -> String
-    pick seen base = if base `elem` seen then free seen base 2 else base
-    go : List String -> List MemberInfo -> List (String, MemberInfo)
-    go _    []          = []
-    go seen (m :: rest) = let nm = pick seen (idrisMemberName m)
-                          in (nm, m) :: go (nm :: seen) rest
+    base : MemberInfo -> String
+    base = idrisMemberName
+    multiplicity : String -> Nat
+    multiplicity b = length (filter (== b) (map base ms))
+    go : (seenBare : List String) -> (usedTags : List String) -> List MemberInfo -> List Placement
+    go _    _    []          = []
+    go seen used (m :: rest) =
+      let b = base m in
+      if multiplicity b <= 1
+        then MkPlacement b Nothing m :: go seen used rest
+        else if not (b `elem` seen)
+          then MkPlacement b Nothing m :: go (b :: seen) used rest
+          else let tag = uniqueIn used (capitalize (dropTrailingUnderscore b) ++ show (length (params m)))
+               in MkPlacement b (Just tag) m :: go seen (tag :: used) rest
 
 --------------------------------------------------------------------------------
 -- Source rendering
@@ -617,17 +655,33 @@ renderMember ar fi ci (nm, m) =
        , lhs ++ " = " ++ body
        ]
 
--- `keep cn nm` decides whether the member rendered as `cn.nm` is emitted (demand-driven
--- generation: only members the user code references). Members are uniquified over the FULL
--- list first so the generated names stay stable regardless of what is pruned, THEN filtered.
--- An empty namespace (nothing kept) renders as "" and is dropped by `renderModule`.
-renderClass : (String -> Nat) -> (String -> Maybe FuncIface) -> (keep : String -> String -> Bool) -> ClassInfo -> String
+-- `keep cn name overloaded?` decides whether a member is emitted (demand-driven generation:
+-- only members the user code references). The class's members are laid out into placements
+-- (overloads pushed into sub-namespaces) over the FULL list first, so names stay stable
+-- regardless of what is pruned, THEN filtered. An empty namespace (nothing kept) renders as ""
+-- and is dropped by `renderModule`.
+renderClass : (String -> Nat) -> (String -> Maybe FuncIface)
+           -> (keep : (cn : String) -> (callName : String) -> (overloaded : Bool) -> Bool)
+           -> ClassInfo -> String
 renderClass ar fi keep ci =
-  let cn    = simpleType (binary ci)
-      named = filter (\(nm, _) => keep cn nm) (uniquify (members ci))
-  in if null named then ""
-     else let body = joinBy "\n\n" (map (\p => indentBlock (renderMember ar fi ci p)) named)
-          in "namespace " ++ cn ++ "\n" ++ body
+  let cn        = simpleType (binary ci)
+      placed    = layout (members ci)
+      -- a call name shared by >1 placement is an overloaded group (kept on a bare-name
+      -- reference too, since the intended call site is the unqualified `member`).
+      overloaded = \nm => length (filter (\pl => callName pl == nm) placed) > 1
+      kept      = filter (\pl => keep cn (callName pl) (overloaded (callName pl))) placed
+      renderOne = \pl => renderMember ar fi ci (callName pl, minfo pl)
+      bareMs    = filter (\pl => case subNs pl of Nothing => True;  _ => False) kept
+      taggedMs  = filter (\pl => case subNs pl of Just _  => True;  _ => False) kept
+      -- canonical/singleton members sit directly under the class namespace; each extra
+      -- overload gets its own `namespace <Tag>` block (one member each).
+      bareBlock = joinBy "\n\n" (map (indentBlock . renderOne) bareMs)
+      tagBlock  = \pl => case subNs pl of
+                    Just tag => indentBlock ("namespace " ++ tag ++ "\n" ++ indentBlock (renderOne pl))
+                    Nothing  => ""
+      bodyParts = (if null bareMs then [] else [bareBlock]) ++ map tagBlock taggedMs
+  in if null kept then ""
+     else "namespace " ++ cn ++ "\n" ++ joinBy "\n\n" bodyParts
 
 -- A marker is either an opaque parameterised external type
 -- (`data Map : Type -> Type -> Type where [external]`) or, for a functional interface, a
@@ -793,13 +847,14 @@ pkgSynonyms ar fi allBins pkg =
 pkgInstances : (String -> Nat) -> List ClassInfo -> String -> List String
 pkgInstances ar classes pkg = concatMap (inheritsInstances ar) (pkgBound classes pkg)
 
-pkgMethods : (String -> Nat) -> (String -> Maybe FuncIface) -> (keep : String -> String -> Bool)
+pkgMethods : (String -> Nat) -> (String -> Maybe FuncIface)
+          -> (keep : String -> String -> Bool -> Bool)
           -> List ClassInfo -> String -> List String
 pkgMethods ar fi keep classes pkg = filter (/= "") (map (renderClass ar fi keep) (pkgBound classes pkg))
 
 -- render one SCC -> the umbrella module file plus a re-export stub per member package
 -- (no stub for the member whose module name *is* the umbrella, e.g. the common-prefix package).
-renderScc : (String -> Nat) -> (String -> Maybe FuncIface) -> (keep : String -> String -> Bool)
+renderScc : (String -> Nat) -> (String -> Maybe FuncIface) -> (keep : String -> String -> Bool -> Bool)
          -> List ClassInfo -> List String -> (String -> List String) -> List String
          -> List (String, String)
 renderScc ar fi keep classes allBins importsOf members =
@@ -878,26 +933,43 @@ adjacentPairs _                = []
 runPairs : String -> List (String, String)
 runPairs run = adjacentPairs (filter (/= "") (splitOn '.' run))
 
-||| The `(className, member)` references appearing in a source string, restricted to the given
-||| generated class simple names. Drives demand-driven generation: a member is emitted only when
-||| its qualified use (`ArrayList.add`, even via `Java.Util.ArrayList.add`) appears in user code.
+||| References to generated members appearing in a source string. Drives demand-driven generation.
 ||| Lexical and deliberately over-approximating (matches inside comments/strings too) — emitting a
 ||| spare member is harmless, whereas missing a referenced one would break the build.
+|||
+||| Two reference forms are collected, because overloaded members are called unqualified:
+|||   * `qualified` — `(className, member)` pairs from `Class.member` runs (incl. `Java.Util.X.m`),
+|||     restricted to the generated class simple names. Keeps a singleton (non-overloaded) member.
+|||   * `bare` — the trailing identifier of every dotted run (so unqualified `add`, `Class.add`, and
+|||     the escape-hatch `Class.Add2.add` all register `add`). Keeps an overloaded member group.
+public export
+record ScanRefs where
+  constructor MkScanRefs
+  qualified : List (String, String)
+  bare      : List String
+
 export
-scanReferences : (classNames : List String) -> (src : String) -> List (String, String)
+scanReferences : (classNames : List String) -> (src : String) -> ScanRefs
 scanReferences classNames src =
-  nub (filter (\(q, _) => q `elem` classNames) (concatMap runPairs (identRuns src)))
+  let runs  = identRuns src
+      pairs = filter (\(q, _) => q `elem` classNames) (concatMap runPairs runs)
+  in MkScanRefs (nub pairs) (nub (mapMaybe lastComp runs))
+  where lastComp : String -> Maybe String
+        lastComp run = case reverse (filter (/= "") (splitOn '.' run)) of
+                         []       => Nothing
+                         (x :: _) => Just x
 
 ||| Render bindings for the given reflected classes. Returns `(relativeFilePath,
 ||| moduleSource)` pairs for the driver to write — normally one module per Java package,
 ||| but mutually-referencing packages (a cycle in the import graph) are merged into one
 ||| umbrella module plus re-export stubs (see `renderScc`).
 |||
-||| `refs` is the demand-driven member filter: `Just pairs` emits only the `(className,
-||| memberName)` members the user code references (markers/`Inherits`/infra are always
-||| emitted); `Nothing` emits every member (the unfiltered, whole-API form).
+||| `refs` is the demand-driven member filter: `Just scan` emits only the members the user code
+||| references — a singleton member on a qualified `Class.member` reference, an overloaded group
+||| on a qualified OR bare-name reference (markers/`Inherits`/infra are always emitted); `Nothing`
+||| emits every member (the unfiltered, whole-API form).
 export
-renderAll : (refs : Maybe (List (String, String))) -> List ClassInfo -> List (String, String)
+renderAll : (refs : Maybe ScanRefs) -> List ClassInfo -> List (String, String)
 renderAll refs classes =
   let imported  = map binary classes
       allBins   = nub ("java/lang/Object" :: imported
@@ -907,8 +979,9 @@ renderAll refs classes =
       allFis    = concatMap funcIfaces classes
       fi        = \n => find (\f => fiBinary f == n) allFis
       keep      = case refs of
-                    Nothing    => \_, _ => True
-                    Just pairs => \cn, nm => (cn, nm) `elem` pairs
+                    Nothing => \_, _, _ => True
+                    Just r  => \cn, nm, over =>
+                                 ((cn, nm) `elem` qualified r) || (over && (nm `elem` bare r))
       importsOf = importPkgsOf classes
       comps     = sccsOf pkgs importsOf
   in concatMap (renderScc ar fi keep classes allBins importsOf) comps

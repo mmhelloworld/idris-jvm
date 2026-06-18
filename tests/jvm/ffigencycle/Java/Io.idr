@@ -3,7 +3,4 @@
 
 module Java.Io
 
-import public Java.Lang
-
-public export
-data Serializable : Type where [external]
+import public Java

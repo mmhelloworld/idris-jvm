@@ -7,9 +7,6 @@ public export
 data Object : Type where [external]
 
 public export
-data Cloneable : Type where [external]
-
-public export
 data Iterable : Type -> Type where [external]
 
 public export

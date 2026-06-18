@@ -452,7 +452,8 @@ generateJvmFfiBindings opts classes
                        -- defeat the scan.
                        pure (if isInfixOf "@generated" s then "" else s)
          let classNames = map (\ci => simpleType (binary ci)) infos
-         let refs = nub (concatMap (scanReferences classNames) contents)
+         let scans = map (scanReferences classNames) contents
+         let refs = MkScanRefs (nub (concatMap qualified scans)) (nub (concatMap bare scans))
          traverse_ (writeBindingModule root) (renderAll (Just refs) infos)
 
 ||| Options to be processed before type checking. Return whether to continue.

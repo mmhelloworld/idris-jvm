@@ -3,8 +3,8 @@
 
 module Java.Util.Function
 
-import Java.Lang
-import System.FFI
+import public Java.Lang
+import public System.FFI
 
 public export %inline
 Consumer : Type -> Type
@@ -17,3 +17,15 @@ Predicate ty0 = (Struct "java/util/function/Predicate test" [], Java.Lang.Object
 public export %inline
 UnaryOperator : Type -> Type
 UnaryOperator ty0 = (Struct "java/util/function/UnaryOperator apply" [], Java.Lang.Object -> Java.Lang.Object)
+
+public export %inline
+Function : Type -> Type -> Type
+Function ty0 ty1 = (Struct "java/util/function/Function apply" [], Java.Lang.Object -> Java.Lang.Object)
+
+public export %inline
+BiFunction : Type -> Type -> Type -> Type
+BiFunction ty0 ty1 ty2 = (Struct "java/util/function/BiFunction apply" [], Java.Lang.Object -> Java.Lang.Object -> Java.Lang.Object)
+
+public export %inline
+BiConsumer : Type -> Type -> Type
+BiConsumer ty0 ty1 = (Struct "java/util/function/BiConsumer accept" [], Java.Lang.Object -> Java.Lang.Object -> ())

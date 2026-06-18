@@ -3,13 +3,16 @@
 
 module Java.Util
 
-import Java.Lang
-import Java.Util.Function
-import Java.Io
-import System.FFI
+import public Java.Lang
+import public Java.Util.Function
+import public Java.Io
+import public System.FFI
 
 public export
 data ArrayList : Type -> Type where [external]
+
+public export
+data HashMap : Type -> Type -> Type where [external]
 
 public export
 data Collection : Type -> Type where [external]
@@ -26,9 +29,14 @@ data List : Type -> Type where [external]
 public export
 data Spliterator : Type -> Type where [external]
 
-public export %inline
-Comparator : Type -> Type
-Comparator ty0 = (Struct "java/util/Comparator compare" [], Java.Lang.Object -> Java.Lang.Object -> Int)
+public export
+data Map : Type -> Type -> Type where [external]
+
+public export
+data Set : Type -> Type where [external]
+
+public export
+data Map_Entry : Type -> Type -> Type where [external]
 
 public export
 data AbstractList : Type -> Type where [external]
@@ -41,6 +49,13 @@ data AbstractCollection : Type -> Type where [external]
 
 public export
 data SequencedCollection : Type -> Type where [external]
+
+public export
+data AbstractMap : Type -> Type -> Type where [external]
+
+public export %inline
+Comparator : Type -> Type
+Comparator ty0 = (Struct "java/util/Comparator compare" [], Java.Lang.Object -> Java.Lang.Object -> Int)
 
 public export
 Inherits (Java.Util.ArrayList e) (Java.Util.AbstractList e) where
@@ -72,36 +87,27 @@ Inherits (Java.Util.ArrayList e) (Java.Lang.Iterable e) where
 public export
 Inherits (Java.Util.ArrayList e) Java.Lang.Object where
 
-namespace ArrayList
-  %foreign "jvm:<init>(int java/util/ArrayList),java/util/ArrayList"
-  prim__new1 : Int -> PrimIO (Java.Util.ArrayList rt_0)
-  export %inline
-  new1 : (HasIO io) => Int -> io (Java.Util.ArrayList rt_0)
-  new1 arg0 = primIO (prim__new1 arg0)
+public export
+Inherits (Java.Util.HashMap k v) (Java.Util.AbstractMap k v) where
 
+public export
+Inherits (Java.Util.HashMap k v) (Java.Util.Map k v) where
+
+public export
+Inherits (Java.Util.HashMap k v) Java.Lang.Cloneable where
+
+public export
+Inherits (Java.Util.HashMap k v) Java.Io.Serializable where
+
+public export
+Inherits (Java.Util.HashMap k v) Java.Lang.Object where
+
+namespace ArrayList
   %foreign "jvm:<init>(java/util/ArrayList),java/util/ArrayList"
   prim__new : PrimIO (Java.Util.ArrayList rt_0)
   export %inline
   new : (HasIO io) => io (Java.Util.ArrayList rt_0)
   new = primIO prim__new
-
-  %foreign "jvm:<init>(java/util/Collection java/util/ArrayList),java/util/ArrayList"
-  prim__new1_2 : Java.Util.Collection e -> PrimIO ()
-  export %inline
-  new1_2 : (HasIO io, Inherits a0 (Java.Util.Collection e)) => a0 -> io ()
-  new1_2 arg0 = primIO (prim__new1_2 (the (Java.Util.Collection e) (subtyping arg0)))
-
-  %foreign "jvm:.trimToSize(java/util/ArrayList void),java/util/ArrayList"
-  prim__trimToSize : Java.Util.ArrayList e -> PrimIO ()
-  export %inline
-  trimToSize : (HasIO io) => Java.Util.ArrayList e -> io ()
-  trimToSize arg0 = primIO (prim__trimToSize arg0)
-
-  %foreign "jvm:.ensureCapacity(java/util/ArrayList int void),java/util/ArrayList"
-  prim__ensureCapacity : Java.Util.ArrayList e -> Int -> PrimIO ()
-  export %inline
-  ensureCapacity : (HasIO io) => Java.Util.ArrayList e -> Int -> io ()
-  ensureCapacity arg0 arg1 = primIO (prim__ensureCapacity arg0 arg1)
 
   %foreign "jvm:.size(java/util/ArrayList int),java/util/ArrayList"
   prim__size : Java.Util.ArrayList e -> PrimIO Int
@@ -109,71 +115,11 @@ namespace ArrayList
   size : (HasIO io) => Java.Util.ArrayList e -> io Int
   size arg0 = primIO (prim__size arg0)
 
-  %foreign "jvm:.isEmpty(java/util/ArrayList boolean),java/util/ArrayList"
-  prim__isEmpty : Java.Util.ArrayList e -> PrimIO Bool
-  export %inline
-  isEmpty : (HasIO io) => Java.Util.ArrayList e -> io Bool
-  isEmpty arg0 = primIO (prim__isEmpty arg0)
-
-  %foreign "jvm:.contains(java/util/ArrayList java/lang/Object boolean),java/util/ArrayList"
-  prim__contains : Java.Util.ArrayList e -> Java.Lang.Object -> PrimIO Bool
-  export %inline
-  contains : (HasIO io, Inherits a1 Java.Lang.Object) => Java.Util.ArrayList e -> a1 -> io Bool
-  contains arg0 arg1 = primIO (prim__contains arg0 (the Java.Lang.Object (subtyping arg1)))
-
-  %foreign "jvm:.indexOf(java/util/ArrayList java/lang/Object int),java/util/ArrayList"
-  prim__indexOf : Java.Util.ArrayList e -> Java.Lang.Object -> PrimIO Int
-  export %inline
-  indexOf : (HasIO io, Inherits a1 Java.Lang.Object) => Java.Util.ArrayList e -> a1 -> io Int
-  indexOf arg0 arg1 = primIO (prim__indexOf arg0 (the Java.Lang.Object (subtyping arg1)))
-
-  %foreign "jvm:.lastIndexOf(java/util/ArrayList java/lang/Object int),java/util/ArrayList"
-  prim__lastIndexOf : Java.Util.ArrayList e -> Java.Lang.Object -> PrimIO Int
-  export %inline
-  lastIndexOf : (HasIO io, Inherits a1 Java.Lang.Object) => Java.Util.ArrayList e -> a1 -> io Int
-  lastIndexOf arg0 arg1 = primIO (prim__lastIndexOf arg0 (the Java.Lang.Object (subtyping arg1)))
-
-  %foreign "jvm:.clone(java/util/ArrayList java/lang/Object),java/util/ArrayList"
-  prim__clone : Java.Util.ArrayList e -> PrimIO Java.Lang.Object
-  export %inline
-  clone : (HasIO io) => Java.Util.ArrayList e -> io Java.Lang.Object
-  clone arg0 = primIO (prim__clone arg0)
-
-  %foreign "jvm:.toArray(java/util/ArrayList [java/lang/Object),java/util/ArrayList"
-  prim__toArray : Java.Util.ArrayList e -> PrimIO Object
-  export %inline
-  toArray : (HasIO io) => Java.Util.ArrayList e -> io Object
-  toArray arg0 = primIO (prim__toArray arg0)
-
-  %foreign "jvm:.toArray(java/util/ArrayList [java/lang/Object [java/lang/Object),java/util/ArrayList"
-  prim__toArray_2 : Java.Util.ArrayList e -> Object -> PrimIO Object
-  export %inline
-  toArray_2 : (HasIO io) => Java.Util.ArrayList e -> Object -> io Object
-  toArray_2 arg0 arg1 = primIO (prim__toArray_2 arg0 arg1)
-
   %foreign "jvm:.get(java/util/ArrayList int java/lang/Object),java/util/ArrayList"
   prim__get : Java.Util.ArrayList e -> Int -> PrimIO e
   export %inline
   get : (HasIO io) => Java.Util.ArrayList e -> Int -> io e
   get arg0 arg1 = primIO (prim__get arg0 arg1)
-
-  %foreign "jvm:.getFirst(java/util/ArrayList java/lang/Object),java/util/ArrayList"
-  prim__getFirst : Java.Util.ArrayList e -> PrimIO e
-  export %inline
-  getFirst : (HasIO io) => Java.Util.ArrayList e -> io e
-  getFirst arg0 = primIO (prim__getFirst arg0)
-
-  %foreign "jvm:.getLast(java/util/ArrayList java/lang/Object),java/util/ArrayList"
-  prim__getLast : Java.Util.ArrayList e -> PrimIO e
-  export %inline
-  getLast : (HasIO io) => Java.Util.ArrayList e -> io e
-  getLast arg0 = primIO (prim__getLast arg0)
-
-  %foreign "jvm:.set(java/util/ArrayList int java/lang/Object java/lang/Object),java/util/ArrayList"
-  prim__set : Java.Util.ArrayList e -> Int -> e -> PrimIO e
-  export %inline
-  set : (HasIO io) => Java.Util.ArrayList e -> Int -> e -> io e
-  set arg0 arg1 arg2 = primIO (prim__set arg0 arg1 arg2)
 
   %foreign "jvm:.add(java/util/ArrayList java/lang/Object boolean),java/util/ArrayList"
   prim__add : Java.Util.ArrayList e -> e -> PrimIO Bool
@@ -181,140 +127,34 @@ namespace ArrayList
   add : (HasIO io) => Java.Util.ArrayList e -> e -> io Bool
   add arg0 arg1 = primIO (prim__add arg0 arg1)
 
-  %foreign "jvm:.add(java/util/ArrayList int java/lang/Object void),java/util/ArrayList"
-  prim__add_2 : Java.Util.ArrayList e -> Int -> e -> PrimIO ()
-  export %inline
-  add_2 : (HasIO io) => Java.Util.ArrayList e -> Int -> e -> io ()
-  add_2 arg0 arg1 arg2 = primIO (prim__add_2 arg0 arg1 arg2)
-
-  %foreign "jvm:.addFirst(java/util/ArrayList java/lang/Object void),java/util/ArrayList"
-  prim__addFirst : Java.Util.ArrayList e -> e -> PrimIO ()
-  export %inline
-  addFirst : (HasIO io) => Java.Util.ArrayList e -> e -> io ()
-  addFirst arg0 arg1 = primIO (prim__addFirst arg0 arg1)
-
-  %foreign "jvm:.addLast(java/util/ArrayList java/lang/Object void),java/util/ArrayList"
-  prim__addLast : Java.Util.ArrayList e -> e -> PrimIO ()
-  export %inline
-  addLast : (HasIO io) => Java.Util.ArrayList e -> e -> io ()
-  addLast arg0 arg1 = primIO (prim__addLast arg0 arg1)
-
-  %foreign "jvm:.remove(java/util/ArrayList int java/lang/Object),java/util/ArrayList"
-  prim__remove : Java.Util.ArrayList e -> Int -> PrimIO e
-  export %inline
-  remove : (HasIO io) => Java.Util.ArrayList e -> Int -> io e
-  remove arg0 arg1 = primIO (prim__remove arg0 arg1)
-
-  %foreign "jvm:.removeFirst(java/util/ArrayList java/lang/Object),java/util/ArrayList"
-  prim__removeFirst : Java.Util.ArrayList e -> PrimIO e
-  export %inline
-  removeFirst : (HasIO io) => Java.Util.ArrayList e -> io e
-  removeFirst arg0 = primIO (prim__removeFirst arg0)
-
-  %foreign "jvm:.removeLast(java/util/ArrayList java/lang/Object),java/util/ArrayList"
-  prim__removeLast : Java.Util.ArrayList e -> PrimIO e
-  export %inline
-  removeLast : (HasIO io) => Java.Util.ArrayList e -> io e
-  removeLast arg0 = primIO (prim__removeLast arg0)
-
-  %foreign "jvm:.equals(java/util/ArrayList java/lang/Object boolean),java/util/ArrayList"
-  prim__equals : Java.Util.ArrayList e -> Java.Lang.Object -> PrimIO Bool
-  export %inline
-  equals : (HasIO io, Inherits a1 Java.Lang.Object) => Java.Util.ArrayList e -> a1 -> io Bool
-  equals arg0 arg1 = primIO (prim__equals arg0 (the Java.Lang.Object (subtyping arg1)))
-
-  %foreign "jvm:.hashCode(java/util/ArrayList int),java/util/ArrayList"
-  prim__hashCode : Java.Util.ArrayList e -> PrimIO Int
-  export %inline
-  hashCode : (HasIO io) => Java.Util.ArrayList e -> io Int
-  hashCode arg0 = primIO (prim__hashCode arg0)
-
-  %foreign "jvm:.remove(java/util/ArrayList java/lang/Object boolean),java/util/ArrayList"
-  prim__remove_2 : Java.Util.ArrayList e -> Java.Lang.Object -> PrimIO Bool
-  export %inline
-  remove_2 : (HasIO io, Inherits a1 Java.Lang.Object) => Java.Util.ArrayList e -> a1 -> io Bool
-  remove_2 arg0 arg1 = primIO (prim__remove_2 arg0 (the Java.Lang.Object (subtyping arg1)))
-
-  %foreign "jvm:.clear(java/util/ArrayList void),java/util/ArrayList"
-  prim__clear : Java.Util.ArrayList e -> PrimIO ()
-  export %inline
-  clear : (HasIO io) => Java.Util.ArrayList e -> io ()
-  clear arg0 = primIO (prim__clear arg0)
-
-  %foreign "jvm:.addAll(java/util/ArrayList java/util/Collection boolean),java/util/ArrayList"
-  prim__addAll : Java.Util.ArrayList e -> Java.Util.Collection e -> PrimIO Bool
-  export %inline
-  addAll : (HasIO io, Inherits a1 (Java.Util.Collection e)) => Java.Util.ArrayList e -> a1 -> io Bool
-  addAll arg0 arg1 = primIO (prim__addAll arg0 (the (Java.Util.Collection e) (subtyping arg1)))
-
-  %foreign "jvm:.addAll(java/util/ArrayList int java/util/Collection boolean),java/util/ArrayList"
-  prim__addAll_2 : Java.Util.ArrayList e -> Int -> Java.Util.Collection e -> PrimIO Bool
-  export %inline
-  addAll_2 : (HasIO io, Inherits a2 (Java.Util.Collection e)) => Java.Util.ArrayList e -> Int -> a2 -> io Bool
-  addAll_2 arg0 arg1 arg2 = primIO (prim__addAll_2 arg0 arg1 (the (Java.Util.Collection e) (subtyping arg2)))
-
-  %foreign "jvm:.removeAll(java/util/ArrayList java/util/Collection boolean),java/util/ArrayList"
-  prim__removeAll : Java.Util.ArrayList e -> Java.Util.Collection Java.Lang.Object -> PrimIO Bool
-  export %inline
-  removeAll : (HasIO io, Inherits a1 (Java.Util.Collection Java.Lang.Object)) => Java.Util.ArrayList e -> a1 -> io Bool
-  removeAll arg0 arg1 = primIO (prim__removeAll arg0 (the (Java.Util.Collection Java.Lang.Object) (subtyping arg1)))
-
-  %foreign "jvm:.retainAll(java/util/ArrayList java/util/Collection boolean),java/util/ArrayList"
-  prim__retainAll : Java.Util.ArrayList e -> Java.Util.Collection Java.Lang.Object -> PrimIO Bool
-  export %inline
-  retainAll : (HasIO io, Inherits a1 (Java.Util.Collection Java.Lang.Object)) => Java.Util.ArrayList e -> a1 -> io Bool
-  retainAll arg0 arg1 = primIO (prim__retainAll arg0 (the (Java.Util.Collection Java.Lang.Object) (subtyping arg1)))
-
-  %foreign "jvm:.listIterator(java/util/ArrayList int java/util/ListIterator),java/util/ArrayList"
-  prim__listIterator : Java.Util.ArrayList e -> Int -> PrimIO (Java.Util.ListIterator e)
-  export %inline
-  listIterator : (HasIO io) => Java.Util.ArrayList e -> Int -> io (Java.Util.ListIterator e)
-  listIterator arg0 arg1 = primIO (prim__listIterator arg0 arg1)
-
-  %foreign "jvm:.listIterator(java/util/ArrayList java/util/ListIterator),java/util/ArrayList"
-  prim__listIterator_2 : Java.Util.ArrayList e -> PrimIO (Java.Util.ListIterator e)
-  export %inline
-  listIterator_2 : (HasIO io) => Java.Util.ArrayList e -> io (Java.Util.ListIterator e)
-  listIterator_2 arg0 = primIO (prim__listIterator_2 arg0)
-
-  %foreign "jvm:.iterator(java/util/ArrayList java/util/Iterator),java/util/ArrayList"
-  prim__iterator : Java.Util.ArrayList e -> PrimIO (Java.Util.Iterator e)
-  export %inline
-  iterator : (HasIO io) => Java.Util.ArrayList e -> io (Java.Util.Iterator e)
-  iterator arg0 = primIO (prim__iterator arg0)
-
-  %foreign "jvm:.subList(java/util/ArrayList int int java/util/List),java/util/ArrayList"
-  prim__subList : Java.Util.ArrayList e -> Int -> Int -> PrimIO (Java.Util.List e)
-  export %inline
-  subList : (HasIO io) => Java.Util.ArrayList e -> Int -> Int -> io (Java.Util.List e)
-  subList arg0 arg1 arg2 = primIO (prim__subList arg0 arg1 arg2)
-
-  %foreign "jvm:.forEach(java/util/ArrayList java/util/function/Consumer void),java/util/ArrayList"
-  prim__forEach : Java.Util.ArrayList e -> Java.Util.Function.Consumer e -> PrimIO ()
-  export %inline
-  forEach : {e : Type} -> (HasIO io) => Java.Util.ArrayList e -> (e -> ()) -> io ()
-  forEach {e} arg0 arg1 = primIO (prim__forEach arg0 (jlambda arg1))
-
-  %foreign "jvm:.spliterator(java/util/ArrayList java/util/Spliterator),java/util/ArrayList"
-  prim__spliterator : Java.Util.ArrayList e -> PrimIO (Java.Util.Spliterator e)
-  export %inline
-  spliterator : (HasIO io) => Java.Util.ArrayList e -> io (Java.Util.Spliterator e)
-  spliterator arg0 = primIO (prim__spliterator arg0)
-
-  %foreign "jvm:.removeIf(java/util/ArrayList java/util/function/Predicate boolean),java/util/ArrayList"
-  prim__removeIf : Java.Util.ArrayList e -> Java.Util.Function.Predicate e -> PrimIO Bool
-  export %inline
-  removeIf : {e : Type} -> (HasIO io) => Java.Util.ArrayList e -> (e -> Bool) -> io Bool
-  removeIf {e} arg0 arg1 = primIO (prim__removeIf arg0 (jlambda arg1))
-
-  %foreign "jvm:.replaceAll(java/util/ArrayList java/util/function/UnaryOperator void),java/util/ArrayList"
-  prim__replaceAll : Java.Util.ArrayList e -> Java.Util.Function.UnaryOperator e -> PrimIO ()
-  export %inline
-  replaceAll : {e : Type} -> (HasIO io) => Java.Util.ArrayList e -> (Java.Lang.Object -> Java.Lang.Object) -> io ()
-  replaceAll {e} arg0 arg1 = primIO (prim__replaceAll arg0 (jlambda arg1))
-
   %foreign "jvm:.sort(java/util/ArrayList java/util/Comparator void),java/util/ArrayList"
   prim__sort : Java.Util.ArrayList e -> Java.Util.Comparator e -> PrimIO ()
   export %inline
   sort : {e : Type} -> (HasIO io) => Java.Util.ArrayList e -> (e -> e -> Int) -> io ()
   sort {e} arg0 arg1 = primIO (prim__sort arg0 (jlambda arg1))
+
+  namespace Add2
+    %foreign "jvm:.add(java/util/ArrayList int java/lang/Object void),java/util/ArrayList"
+    prim__add : Java.Util.ArrayList e -> Int -> e -> PrimIO ()
+    export %inline
+    add : (HasIO io) => Java.Util.ArrayList e -> Int -> e -> io ()
+    add arg0 arg1 arg2 = primIO (prim__add arg0 arg1 arg2)
+
+namespace HashMap
+  %foreign "jvm:<init>(java/util/HashMap),java/util/HashMap"
+  prim__new : PrimIO (Java.Util.HashMap rt_0 rt_1)
+  export %inline
+  new : (HasIO io) => io (Java.Util.HashMap rt_0 rt_1)
+  new = primIO prim__new
+
+  %foreign "jvm:.get(java/util/HashMap java/lang/Object java/lang/Object),java/util/HashMap"
+  prim__get : Java.Util.HashMap k v -> Java.Lang.Object -> PrimIO v
+  export %inline
+  get : (HasIO io, Inherits a1 Java.Lang.Object) => Java.Util.HashMap k v -> a1 -> io (Maybe v)
+  get arg0 arg1 = nullableToMaybe <$> primIO (prim__get arg0 (the Java.Lang.Object (subtyping arg1)))
+
+  %foreign "jvm:.put(java/util/HashMap java/lang/Object java/lang/Object java/lang/Object),java/util/HashMap"
+  prim__put : Java.Util.HashMap k v -> k -> v -> PrimIO v
+  export %inline
+  put : (HasIO io) => Java.Util.HashMap k v -> k -> v -> io (Maybe v)
+  put arg0 arg1 arg2 = nullableToMaybe <$> primIO (prim__put arg0 arg1 arg2)

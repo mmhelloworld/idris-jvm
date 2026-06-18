@@ -1,0 +1,34 @@
+rm -rf build Java
+
+# Reflect java.util.List off the classpath and generate the binding module before Main compiles.
+$1 --no-banner --no-color --console-width 0 \
+   --jvm-ffi-import java/util/List \
+   -o ffigenoverload Main.idr > /dev/null 2>&1
+
+# 1. The canonical (first) overload keeps the bare name directly under `namespace List`.
+if grep -qE '^  of_ : .*io \(Java.Util.List e\)' Java/Util.idr 2>/dev/null; then
+  echo "Canonical: of_ directly under namespace List"
+else
+  echo "Canonical: MISSING"
+fi
+
+# 2. Later overloads land in arity-tagged sub-namespaces, sharing the SAME name `of_`.
+if grep -q '^  namespace Of2' Java/Util.idr 2>/dev/null \
+   && grep -q '^  namespace Of3' Java/Util.idr 2>/dev/null; then
+  echo "Overloads: namespace Of2 / Of3 (shared name of_)"
+else
+  echo "Overloads: MISSING"
+fi
+
+# 3. The overload group is kept by a BARE-name reference (unqualified `of_` in Main), not a
+#    qualified `List.of_` (which would not resolve). The whole group is emitted as a unit.
+if grep -qE '^    of_ : .*-> .*-> io \(Java.Util.List e\)' Java/Util.idr 2>/dev/null; then
+  echo "Demand: overload group kept via bare reference"
+else
+  echo "Demand: NOT KEPT"
+fi
+
+# 4. Runtime: unqualified `of_` resolves the 2-arg overload by arity; the `List.Of3.of_`
+#    escape hatch names the 3-arg overload. Static factories on an interface are invoked via
+#    InterfaceMethodref.
+./build/exec/ffigenoverload${IDRIS_EXEC_EXT}

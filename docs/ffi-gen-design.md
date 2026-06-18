@@ -109,6 +109,40 @@ Generated bindings are organized by Java package and class:
   → `import Java.Lang`, used as `Object` (qualified `Java.Lang.Object` on clash).
 - Because each class is its own namespace, **method-name overloading only needs
   disambiguation within a class** — `List.add` and `ArrayList.add` never collide.
+- **Within-class overloads keep the same name** (see §4.1) — `add(E)` and `add(int,E)`
+  are both `add`; the caller writes the unqualified `add …` and Idris picks by type.
+
+### 4.1 Overloaded members: namespace-based overloading
+
+A Java class often declares several methods with one name (`List.of` has 12 overloads).
+Idris forbids two declarations sharing a fully-qualified name, but it *does* resolve an
+**unqualified** name against every same-named candidate in scope, picking by argument and
+return type at the call site. The generator leans on exactly that, so the user never has to
+know a generated suffix:
+
+- The **first** overload (declaration order) keeps the bare name directly under the class
+  namespace. So `ArrayList.add` (qualified) and `add` (unqualified) both still resolve to it —
+  backward-compatible with the "reads like Java" call form.
+- Every **later** overload goes into an arity-tagged sub-namespace under the class
+  (`namespace Add2`, `namespace Of1`, …), reusing the **same** member name. They are reachable
+  unqualified, so `add xs i x` (3 args) resolves to `add(int,E)` purely by shape.
+- The fully-qualified `Class.TagN.member` (e.g. `ArrayList.Add2.add`) is the **predictable
+  escape hatch** for the one case unqualified resolution cannot handle: two overloads that
+  *erase to the same Idris signature* (e.g. Java `int` vs `long`, both → `Int`), where an
+  unqualified call is a genuine `Ambiguous elaboration` error. The tag is `<Member><arity>`,
+  derived from the call site, not an opaque counter.
+
+```idris
+namespace Demo
+  add  : Demo -> Object -> io Bool          -- add(E)        ← Demo.add / unqualified add
+  size : Demo -> io Int
+  namespace Add2
+    add : Demo -> Int -> Object -> io ()     -- add(int,E)    ← unqualified add / Demo.Add2.add
+```
+
+This replaces the earlier scheme of numeric suffixes (`add_2`), whose names were
+ordering-dependent and unguessable — and which the demand-driven scan (§5.9) could not even
+surface, since the user could not predict the token to write.
 
 ### Generated module example
 
@@ -330,14 +364,20 @@ Emitting each imported class's *entire* public API made compiling against a few 
 members user code references**:
 
 - Before rendering, the driver (`generateJvmFfiBindings`) scans the project sources — the entry
-  files named on the command line plus every `.idr` under their directories — for `Class.member`
-  tokens (`scanReferences`, lexical and deliberately over-approximating; qualified uses like
-  `Java.Util.ArrayList.add` are matched too). Generated modules are excluded from the scan (their
-  `@generated` header) so a stale prior generation does not re-pin every member.
-- Members are uniquified over the **full** member list first (so generated names like `add_2`
-  stay stable regardless of what is pruned) and only then filtered. A namespace with nothing kept
-  is dropped. **Markers, `Inherits` instances, and the `Java.Lang` infra are always emitted** —
-  only member bindings are pruned.
+  files named on the command line plus every `.idr` under their directories — for two reference
+  forms (`scanReferences`, lexical and deliberately over-approximating). Generated modules are
+  excluded from the scan (their `@generated` header) so a stale prior generation does not re-pin
+  every member. The two forms mirror the two call styles of §4.1:
+  - **qualified** `(Class, member)` pairs from `Class.member` runs (including `Java.Util.X.m`) —
+    keeps a **singleton** (non-overloaded) member; and
+  - **bare** member names (the trailing identifier of every dotted run, so `add`, `Class.add`
+    and `Class.Add2.add` all register `add`) — keeps an **overloaded** member *group*, since the
+    intended call site is the unqualified `member`.
+- Members are laid out over the **full** member list first (overloads pushed into sub-namespaces,
+  §4.1) so generated names stay stable regardless of what is pruned, and only then filtered. A
+  whole overload group is kept as a unit (so unqualified resolution sees every candidate). A
+  namespace with nothing kept is dropped. **Markers, `Inherits` instances, and the `Java.Lang`
+  infra are always emitted** — only member bindings are pruned.
 - For `tests/jvm/ffigen` (`ArrayList` using only `new`/`add`/`size`/`sort`/`get`) this cut the
   generated `Java.Util` from ~290 lines to ~100.
 

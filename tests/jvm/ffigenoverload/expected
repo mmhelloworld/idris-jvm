@@ -1,0 +1,5 @@
+Canonical: of_ directly under namespace List
+Overloads: namespace Of2 / Of3 (shared name of_)
+Demand: overload group kept via bare reference
+2
+3

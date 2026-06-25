@@ -1,0 +1,30 @@
+rm -rf build Java Java.idr
+
+# Generate StringBuilder bindings (a class with same-erased-type `append` overloads) and compile.
+$1 --no-banner --no-color --console-width 0 \
+   --jvm-ffi-import java/lang/StringBuilder \
+   -o ffigenoverloaderased Main.idr > /dev/null 2>&1
+
+# All generated binding source (cycle handling may emit an umbrella Java.idr plus per-package stubs).
+gen=$(cat Java.idr Java/*.idr 2>/dev/null)
+
+# 1. Overloads get DISTINCT prim names: the canonical `prim__append` plus tagged `prim__Append1`,
+#    never a second `prim__append` (which would be the ambiguity that broke compilation).
+appendPrims=$(printf '%s\n' "$gen" | grep -oE 'prim__[A-Za-z0-9_]*' | grep -iE '^prim__append' | sort -u)
+if printf '%s\n' "$appendPrims" | grep -qx 'prim__append' \
+   && printf '%s\n' "$appendPrims" | grep -qx 'prim__Append1' \
+   && [ "$(printf '%s\n' "$gen" | grep -cE '^\s*prim__append :')" -eq 1 ]; then
+  echo "Distinct prims: prim__append and prim__Append1 (no reuse)"
+else
+  echo "Distinct prims: COLLISION"
+fi
+
+# 2. Each wrapper body calls its own prim (the String overload uses prim__Append1, not prim__append).
+if printf '%s\n' "$gen" | grep -qE 'append arg0 arg1 = primIO \(prim__Append1 arg0 arg1\)'; then
+  echo "Body: String overload calls prim__Append1"
+else
+  echo "Body: MISWIRED"
+fi
+
+# 3. The group compiles and runs: appending then reversing "idris" + "-on-jvm".
+./build/exec/ffigenoverloaderased${IDRIS_EXEC_EXT}

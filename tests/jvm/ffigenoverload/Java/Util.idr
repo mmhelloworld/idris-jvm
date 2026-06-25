@@ -56,77 +56,77 @@ namespace List
 
   namespace Of1
     %foreign "jvm:of(java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> PrimIO (Java.Util.List e)
+    prim__Of1 : e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> io (Java.Util.List e)
-    of_ arg0 = primIO (prim__of_ arg0)
+    of_ arg0 = primIO (prim__Of1 arg0)
 
   namespace Of2
     %foreign "jvm:of(java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> PrimIO (Java.Util.List e)
+    prim__Of2 : e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 = primIO (prim__of_ arg0 arg1)
+    of_ arg0 arg1 = primIO (prim__Of2 arg0 arg1)
 
   namespace Of3
     %foreign "jvm:of(java/lang/Object java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> e -> PrimIO (Java.Util.List e)
+    prim__Of3 : e -> e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 arg2 = primIO (prim__of_ arg0 arg1 arg2)
+    of_ arg0 arg1 arg2 = primIO (prim__Of3 arg0 arg1 arg2)
 
   namespace Of4
     %foreign "jvm:of(java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> e -> e -> PrimIO (Java.Util.List e)
+    prim__Of4 : e -> e -> e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 arg2 arg3 = primIO (prim__of_ arg0 arg1 arg2 arg3)
+    of_ arg0 arg1 arg2 arg3 = primIO (prim__Of4 arg0 arg1 arg2 arg3)
 
   namespace Of5
     %foreign "jvm:of(java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
+    prim__Of5 : e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> e -> e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 arg2 arg3 arg4 = primIO (prim__of_ arg0 arg1 arg2 arg3 arg4)
+    of_ arg0 arg1 arg2 arg3 arg4 = primIO (prim__Of5 arg0 arg1 arg2 arg3 arg4)
 
   namespace Of6
     %foreign "jvm:of(java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
+    prim__Of6 : e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> e -> e -> e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 arg2 arg3 arg4 arg5 = primIO (prim__of_ arg0 arg1 arg2 arg3 arg4 arg5)
+    of_ arg0 arg1 arg2 arg3 arg4 arg5 = primIO (prim__Of6 arg0 arg1 arg2 arg3 arg4 arg5)
 
   namespace Of7
     %foreign "jvm:of(java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
+    prim__Of7 : e -> e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> e -> e -> e -> e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 = primIO (prim__of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6)
+    of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 = primIO (prim__Of7 arg0 arg1 arg2 arg3 arg4 arg5 arg6)
 
   namespace Of8
     %foreign "jvm:of(java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
+    prim__Of8 : e -> e -> e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> e -> e -> e -> e -> e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 = primIO (prim__of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7)
+    of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 = primIO (prim__Of8 arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7)
 
   namespace Of9
     %foreign "jvm:of(java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> e -> e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
+    prim__Of9 : e -> e -> e -> e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> e -> e -> e -> e -> e -> e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8 = primIO (prim__of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8)
+    of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8 = primIO (prim__Of9 arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8)
 
   namespace Of10
     %foreign "jvm:of(java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : e -> e -> e -> e -> e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
+    prim__Of10 : e -> e -> e -> e -> e -> e -> e -> e -> e -> e -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => e -> e -> e -> e -> e -> e -> e -> e -> e -> e -> io (Java.Util.List e)
-    of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8 arg9 = primIO (prim__of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8 arg9)
+    of_ arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8 arg9 = primIO (prim__Of10 arg0 arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8 arg9)
 
   namespace Of1_2
     %foreign "jvm:of([java/lang/Object java/util/List),i:java/util/List"
-    prim__of_ : Object -> PrimIO (Java.Util.List e)
+    prim__Of1_2 : Object -> PrimIO (Java.Util.List e)
     export %inline
     of_ : (HasIO io) => Object -> io (Java.Util.List e)
-    of_ arg0 = primIO (prim__of_ arg0)
+    of_ arg0 = primIO (prim__Of1_2 arg0)

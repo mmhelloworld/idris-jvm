@@ -1,0 +1,6 @@
+-- com/example/Greeter  (import Com.Example)
+namespace Greeter
+  new1 : (HasIO io) => String -> io Com.Example.Greeter
+  greet : (HasIO io) => Com.Example.Greeter -> String -> io String
+  nameLength : (HasIO io) => Com.Example.Greeter -> io Int
+  of_ : (HasIO io) => String -> io Com.Example.Greeter

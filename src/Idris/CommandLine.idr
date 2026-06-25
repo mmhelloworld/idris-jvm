@@ -94,6 +94,10 @@ data CLOpt
   OutputDir String |
    ||| Generate JVM FFI bindings for the given classes (internal names) before compiling
   JvmFfiImport (List String) |
+   ||| Print the callable member catalog (signatures only) for the given classes, then exit
+  JvmFfiList (List String) |
+   ||| Classpath (jars/dirs) the JVM FFI reflector resolves project classes against
+  JvmClasspath String |
    ||| Generate profile data when compiling (backend dependent)
   Profile |
    ||| Display Idris version
@@ -261,6 +265,12 @@ options = [MkOpt ["--check", "-c"] [] [CheckOnly]
            MkOpt ["--jvm-ffi-import"] [Required "classes"]
               (\cs => [JvmFfiImport (forget (split (== ',') cs))])
               (Just $ "Generate JVM FFI bindings for comma-separated classes (e.g. java/util/ArrayList)"),
+           MkOpt ["--jvm-ffi-list"] [Required "classes"]
+              (\cs => [JvmFfiList (forget (split (== ',') cs))])
+              (Just $ "List callable members (signatures only) for comma-separated classes, then exit"),
+           MkOpt ["--jvm-classpath"] [Required "classpath"]
+              (\cp => [JvmClasspath cp])
+              (Just $ "Classpath (jars/dirs) to resolve project classes for --jvm-ffi-import/--jvm-ffi-list"),
            MkOpt ["--profile"] [] [Profile]
               (Just "Generate profile data when compiling, if supported"),
            MkOpt ["--no-cse"] [] [NoCSE]

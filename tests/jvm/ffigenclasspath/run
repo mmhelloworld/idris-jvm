@@ -1,0 +1,34 @@
+rm -rf build Com classes greeter.jar list.txt nocp.txt compile.txt
+
+# A project dependency the idris2 compiler does NOT have on its own classpath.
+mkdir -p classes
+javac -d classes Greeter.java
+jar cf greeter.jar -C classes .
+
+# 1. Reflect the non-JDK class off an explicit --jvm-classpath jar.
+$1 --no-banner --no-color --console-width 0 \
+   --jvm-classpath "$PWD/greeter.jar" \
+   --jvm-ffi-list com/example/Greeter > list.txt 2>&1
+if grep -qE '^  greet : .*Greeter -> String -> io String' list.txt \
+   && grep -qE '^  of_ : .*String -> io Com.Example.Greeter' list.txt; then
+  echo "List: project class reflected via --jvm-classpath"
+else
+  echo "List: FAILED"; cat list.txt
+fi
+
+# 2. Without the classpath, the same class cannot be located (proves the flag is what enables it).
+$1 --no-banner --no-color --console-width 0 \
+   --jvm-ffi-list com/example/Greeter > nocp.txt 2>&1
+if grep -qiE 'ClassNotFound|could not locate|JVM FFI list failed' nocp.txt; then
+  echo "Negative: not found without --jvm-classpath"
+else
+  echo "Negative: UNEXPECTEDLY FOUND"; cat nocp.txt
+fi
+
+# 3. Generate bindings + compile against the jar, then run via the generated launcher with the
+#    project jar supplied through IDRIS2_JVM_CLASSPATH (folded into the launcher's -cp).
+$1 --no-banner --no-color --console-width 0 \
+   --jvm-classpath "$PWD/greeter.jar" \
+   --jvm-ffi-import com/example/Greeter \
+   -o ffigenclasspath Main.idr > compile.txt 2>&1
+IDRIS2_JVM_CLASSPATH="$PWD/greeter.jar" ./build/exec/ffigenclasspath

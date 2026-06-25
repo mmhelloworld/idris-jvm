@@ -267,16 +267,26 @@ public final class Assembler {
     File exe = new File(directoryName, fileName + ".bat");
     String batHeader = "@echo off";
     String classpath = "%~dp0\\" + fileName + "_app;" + "%~dp0\\" + fileName + "_app\\*";
-    String javaCommand = Stream.of("java", "%JAVA_OPTS%", javaOpts, "-cp", classpath, mainClass, "%*")
+    // Build the classpath into a variable so IDRIS2_JVM_CLASSPATH (project dependency jars resolved by
+    // Maven/Gradle/the IDE) can be appended only when set — avoiding a trailing ';' that would put the
+    // CWD on the classpath. Quote the final -cp value so a %~dp0 install path with spaces survives.
+    String setClasspath = "set \"IDRIS2_CLASSPATH=" + classpath + "\"";
+    String appendClasspath =
+      "if not \"%IDRIS2_JVM_CLASSPATH%\"==\"\" set \"IDRIS2_CLASSPATH=%IDRIS2_CLASSPATH%;%IDRIS2_JVM_CLASSPATH%\"";
+    String javaCommand = Stream.of("java", "%JAVA_OPTS%", javaOpts, "-cp", "\"%IDRIS2_CLASSPATH%\"", mainClass, "%*")
       .filter(Assembler::isNotNullOrEmpty)
       .collect(joining(" "));
-    Files.write(exe.toPath(), createExecutableFileContent(batHeader, javaCommand));
+    Files.write(exe.toPath(), createExecutableFileContent(batHeader, setClasspath, appendClasspath, javaCommand));
   }
 
   private static void createPosixExecutable(String directoryName, String fileName, String mainClass, String javaOpts) throws IOException {
     File shExe = new File(directoryName, fileName);
     String shHeader = "#!/bin/sh";
-    String classpath = "\"`dirname $0`/" + fileName + "_app:" + "`dirname $0`/" + fileName + "_app/*\"";
+    // `${IDRIS2_JVM_CLASSPATH:+:$IDRIS2_JVM_CLASSPATH}` appends `:<value>` only when the env var is
+    // set and non-empty (so no stray trailing ':'), letting a project's dependency jars (resolved by
+    // Maven/Gradle/the IDE) join the runtime classpath without editing the generated launcher.
+    String classpath = "\"`dirname $0`/" + fileName + "_app:" + "`dirname $0`/" + fileName
+      + "_app/*${IDRIS2_JVM_CLASSPATH:+:$IDRIS2_JVM_CLASSPATH}\"";
     String javaCommand = Stream.of("java", "$JAVA_OPTS", javaOpts, "-cp", classpath, mainClass, "\"$@\"")
       .filter(Assembler::isNotNullOrEmpty)
       .collect(joining(" "));

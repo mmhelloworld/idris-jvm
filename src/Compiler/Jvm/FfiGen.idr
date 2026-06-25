@@ -290,6 +290,19 @@ layout ms = go [] [] ms
           else let tag = uniqueIn used (capitalize (dropTrailingUnderscore b) ++ show (length (params m)))
                in MkPlacement b (Just tag) m :: go seen (tag :: used) rest
 
+-- A member's prim name, unique within the class namespace. A non-overloaded member, and the
+-- canonical member of an overloaded group, keep the clean `prim__<name>`; each extra overload
+-- uses its (already-uniquified) sub-namespace tag instead. This matters because the wrapper
+-- names of a group are intentionally shared (overloading resolves them by type), but their prims
+-- must not be — two overloads can erase to the SAME prim type, so a shared `prim__<name>` would
+-- resolve ambiguously from inside a wrapper body. The tag (e.g. `Append1_4`) differs in case from
+-- the canonical lowercase name, so the canonical `prim__append` never clashes with `prim__Append1_4`.
+export
+primNameOf : Placement -> String
+primNameOf pl = case subNs pl of
+  Nothing  => "prim__" ++ callName pl
+  Just tag => "prim__" ++ tag
+
 --------------------------------------------------------------------------------
 -- Source rendering
 --------------------------------------------------------------------------------
@@ -589,9 +602,23 @@ isRefReturn (JPrim _)  = False
 isRefReturn (JRef _ _) = True
 isRefReturn (JArray _) = True
 
--- one member -> its %foreign prim + subtype-polymorphic wrapper (unindented)
-renderMember : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> (String, MemberInfo) -> String
-renderMember ar fi ci (nm, m) =
+-- The parts of a wrapper that depend only on the member, not on the call name: shared by
+-- `renderMember` (which adds the %foreign prim + body) and `renderMemberSig` (the
+-- `--jvm-ffi-list` catalog, which shows only the signature line). Keeping this in one place
+-- guarantees the catalog signatures match what generation actually emits.
+record Wrapper where
+  constructor MkWrapper
+  allPlans : List ArgPlan
+  specs    : List Spec
+  retTy    : String       -- the prim's concrete return type
+  wrapRet  : String       -- the wrapper's return type (retTy, or `Maybe retTy` when nullable)
+  nullRet  : Bool         -- return surfaced as `io (Maybe a)`
+  tyVars   : List String  -- explicitly-bound type vars (needed when an arg is a jlambda)
+  tyBind   : String       -- the `{v : Type} -> ` prefix for those vars
+  cons     : List String  -- the `=>` constraints (HasIO + any Inherits)
+
+wrapperOf : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> MemberInfo -> Wrapper
+wrapperOf ar fi ci m =
   let classVars = map lowerName (typeParams ci)
       recvTy    = applyTy (qualName (binary ci)) classVars     -- e.g. "Java.Util.Map k v"
       isInst    = isInstanceKind (kind m)
@@ -630,8 +657,6 @@ renderMember ar fi ci (nm, m) =
       nullableRet = isRefReturn (ret m) && (nullable m || isKnownNullable ci m)
       wrapRet   = if nullableRet then "Maybe " ++ paren retTy else retTy
       cons      = "HasIO io" :: concatMap cs specs
-      prim      = "prim__" ++ nm
-      names     = countNames (length allPlans)
       -- `jlambda` passes the interface type as a *runtime* `Type`, so any type variable in
       -- it must be bound explicitly (and non-erased) — auto-bound implicits are inaccessible.
       methodVars = case methodGTypes m of
@@ -639,21 +664,42 @@ renderMember ar fi ci (nm, m) =
                      Nothing      => []
       tyVars    = if any isLambdaPlan allPlans then nub (classVars ++ methodVars) else []
       tyBind    = concatMap (\v => "{" ++ v ++ " : Type} -> ") tyVars
-      lhsBinds  = concatMap (\v => " {" ++ v ++ "}") tyVars
+  in MkWrapper allPlans specs retTy wrapRet nullableRet tyVars tyBind cons
+
+-- the wrapper's type-signature line: `name : {vars} -> (constraints) => arg -> ... -> io ret`
+sigLine : String -> Wrapper -> String
+sigLine nm w =
+  nm ++ " : " ++ tyBind w ++ "(" ++ joinBy ", " (cons w) ++ ") => "
+     ++ joinBy " -> " (map sgT (specs w) ++ ["io " ++ paren (wrapRet w)])
+
+-- one member -> its %foreign prim + subtype-polymorphic wrapper (unindented).
+-- `nm` is the (overload-shared) wrapper name; `prim` is the member's OWN prim name, which must be
+-- unique within the class — overloads share `nm` but each needs a distinct prim, since two
+-- overloads can erase to the same prim Idris type (e.g. StringBuilder.append's char[] vs Object
+-- both → `StringBuilder -> Object -> PrimIO StringBuilder`), which would make a bare `prim__append`
+-- call ambiguous. See `primNameOf`.
+renderMember : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> (nm : String) -> (prim : String) -> MemberInfo -> String
+renderMember ar fi ci nm prim m =
+  let w         = wrapperOf ar fi ci m
+      names     = countNames (length (allPlans w))
+      lhsBinds  = concatMap (\v => " {" ++ v ++ "}") (tyVars w)
       lhs       = nm ++ lhsBinds ++ (if null names then "" else " " ++ joinBy " " names)
-      callArgs  = map cl specs
+      callArgs  = map cl (specs w)
       rhs       = if null callArgs then prim else "(" ++ prim ++ " " ++ joinBy " " callArgs ++ ")"
       -- `nullableToMaybe : a -> Maybe a` (from Java.Lang infra) turns a possibly-null reference
       -- into `Nothing`/`Just`; mapped over the io action for a nullable return.
-      body      = (if nullableRet then "nullableToMaybe <$> primIO " else "primIO ") ++ rhs
+      body      = (if nullRet w then "nullableToMaybe <$> primIO " else "primIO ") ++ rhs
   in joinBy "\n"
        [ "%foreign \"" ++ descriptor ci m ++ "\""
-       , prim ++ " : " ++ joinBy " -> " (map prT specs ++ ["PrimIO " ++ paren retTy])
+       , prim ++ " : " ++ joinBy " -> " (map prT (specs w) ++ ["PrimIO " ++ paren (retTy w)])
        , "export %inline"
-       , nm ++ " : " ++ tyBind ++ "(" ++ joinBy ", " cons ++ ") => "
-              ++ joinBy " -> " (map sgT specs ++ ["io " ++ paren wrapRet])
+       , sigLine nm w
        , lhs ++ " = " ++ body
        ]
+
+-- one member -> just its wrapper signature (no prim/body), for the `--jvm-ffi-list` catalog.
+renderMemberSig : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> (String, MemberInfo) -> String
+renderMemberSig ar fi ci (nm, m) = sigLine nm (wrapperOf ar fi ci m)
 
 -- `keep cn name overloaded?` decides whether a member is emitted (demand-driven generation:
 -- only members the user code references). The class's members are laid out into placements
@@ -670,7 +716,7 @@ renderClass ar fi keep ci =
       -- reference too, since the intended call site is the unqualified `member`).
       overloaded = \nm => length (filter (\pl => callName pl == nm) placed) > 1
       kept      = filter (\pl => keep cn (callName pl) (overloaded (callName pl))) placed
-      renderOne = \pl => renderMember ar fi ci (callName pl, minfo pl)
+      renderOne = \pl => renderMember ar fi ci (callName pl) (primNameOf pl) (minfo pl)
       bareMs    = filter (\pl => case subNs pl of Nothing => True;  _ => False) kept
       taggedMs  = filter (\pl => case subNs pl of Just _  => True;  _ => False) kept
       -- canonical/singleton members sit directly under the class namespace; each extra
@@ -985,6 +1031,41 @@ renderAll refs classes =
       importsOf = importPkgsOf classes
       comps     = sccsOf pkgs importsOf
   in concatMap (renderScc ar fi keep classes allBins importsOf) comps
+
+--------------------------------------------------------------------------------
+-- Catalog (`--jvm-ffi-list`): the full callable surface of the requested classes as
+-- signatures only — no prims, bodies, markers, or elaboration. This breaks the
+-- chicken-and-egg of demand-driven generation: the user (or the IDE) can see what is
+-- callable on a class *before* writing any reference for the importer to pick up.
+--------------------------------------------------------------------------------
+
+-- one class's members laid out as signature lines under its namespace (overloads in
+-- arity-tagged sub-namespaces, exactly as `renderClass` places them — but unpruned).
+renderClassSig : (String -> Nat) -> (String -> Maybe FuncIface) -> ClassInfo -> String
+renderClassSig ar fi ci =
+  let placed    = layout (members ci)
+      sigOf     = \pl => renderMemberSig ar fi ci (callName pl, minfo pl)
+      bareMs    = filter (\pl => case subNs pl of Nothing => True; _ => False) placed
+      taggedMs  = filter (\pl => case subNs pl of Just _  => True; _ => False) placed
+      bareBlock = joinBy "\n" (map (indentBlock . sigOf) bareMs)
+      tagBlock  = \pl => case subNs pl of
+                    Just tag => indentBlock ("namespace " ++ tag ++ "\n" ++ indentBlock (sigOf pl))
+                    Nothing  => ""
+      body      = joinBy "\n" ((if null bareMs then [] else [bareBlock]) ++ map tagBlock taggedMs)
+      header    = "-- " ++ binary ci ++ "  (import " ++ moduleName (packageOf (binary ci)) ++ ")"
+  in header ++ "\nnamespace " ++ simpleType (binary ci) ++ "\n" ++ body
+
+||| Render a human-readable catalog of the FULL member surface of the given reflected classes:
+||| each class's callable members as their Idris wrapper signatures (`renderMemberSig`), grouped
+||| under the namespace they would be generated into. No markers/infra/prims/bodies and nothing
+||| elaborated — this is for discovery, not compilation. Drives `--jvm-ffi-list`.
+export
+renderCatalog : List ClassInfo -> String
+renderCatalog classes =
+  let ar     = arityOf (arityTable classes)
+      allFis = concatMap funcIfaces classes
+      fi     = \n => find (\f => fiBinary f == n) allFis
+  in joinBy "\n\n" (map (renderClassSig ar fi) classes)
 
 --------------------------------------------------------------------------------
 -- Parsing the reflector's line-protocol dump (see ClasspathReflector.java)

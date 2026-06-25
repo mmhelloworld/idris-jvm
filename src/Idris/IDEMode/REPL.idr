@@ -21,6 +21,8 @@ import Idris.IDEMode.Parser
 import Idris.IDEMode.SyntaxHighlight
 import Idris.IDEMode.Pretty
 
+import Compiler.Jvm.Reflection
+
 import Protocol.Hex
 import Libraries.Utils.Path
 
@@ -130,6 +132,7 @@ data IDEResult
   | Term String   -- should be a PTerm + metadata, or SExp.
   | TTTerm String -- should be a TT Term + metadata, or perhaps SExp
   | NameLocList (List (Name, FC))
+  | JvmCatalog String -- raw JVM-FFI member catalog text, sent verbatim (no doc layout/wrapping)
 
 replWrap : Core REPLResult -> Core IDEResult
 replWrap m = pure $ REPL !m
@@ -232,6 +235,15 @@ process (ReplCompletions line)
     = do Just (ctxt, compl) <- completion line
            | Nothing => pure (REPL $ REPLError $ vcat [ "I can't make sense of the completion task:", pretty0 line])
          pure (CompletionList compl ctxt)
+-- Reflect one Java class (internal name) off the given classpath and return its full callable
+-- member catalog (the `--jvm-ffi-list` signatures-only rendering). The IDE drives discovery with
+-- this: it can list a class's members before any reference is written. The classpath is supplied
+-- per call (a fresh loader is built each time — see ClasspathReflector), so it always reflects the
+-- caller's current project dependencies.
+process (JvmFfiList classpath className)
+    = do Right ci <- coreLift (reflectClass classpath className)
+           | Left err => pure (REPL $ REPLError (pretty0 err))
+         pure (JvmCatalog (renderCatalog [ci]))
 process (EnableSyntax b)
     = do setSynHighlightOn b
          pure $ REPL $ Printed (reflow "Syntax highlight option changed to" <++> byShow b)
@@ -396,6 +408,8 @@ displayIDEResult outf i (CompletionList ns r)
   = printIDEResult outf i $ ACompletionList ns r
 displayIDEResult outf i (NameList ns)
   = printIDEResult outf i $ ANameList (map show ns)
+displayIDEResult outf i (JvmCatalog s)
+  = printIDEResult outf i $ AString s
 displayIDEResult outf i (Term t)
   = printIDEResult outf i $ AString t
 displayIDEResult outf i (TTTerm t)

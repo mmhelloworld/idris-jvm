@@ -1,0 +1,70 @@
+# `--jvm-ffi-list` prints the FULL callable surface of the requested classes as Idris
+# signatures only (no modules written, nothing elaborated) — a discovery aid so a member
+# can be found before it is referenced. Contrast with `--jvm-ffi-import`, which writes
+# modules and prunes to referenced members.
+out=$($1 --no-banner --no-color --console-width 0 \
+        --jvm-ffi-list java/util/ArrayList,java/util/HashMap 2>&1)
+
+# 1. Per-class header naming the class and the module to import.
+if printf '%s\n' "$out" | grep -qE '^-- java/util/ArrayList  \(import Java.Util\)$'; then
+  echo "Header: ArrayList -> import Java.Util"
+else
+  echo "Header: MISSING"
+fi
+
+# 2. Members are grouped under the class namespace.
+if printf '%s\n' "$out" | grep -qxE 'namespace ArrayList'; then
+  echo "Namespace: namespace ArrayList"
+else
+  echo "Namespace: MISSING"
+fi
+
+# 3. Signatures only — no %foreign / prim / primIO leaks into the catalog.
+if printf '%s\n' "$out" | grep -qE 'prim__|%foreign|primIO'; then
+  echo "Signatures-only: PRIM LEAKED"
+else
+  echo "Signatures-only: no prim/foreign"
+fi
+
+# 4. Typed return preserved through generics: get returns the element type.
+if printf '%s\n' "$out" | grep -qE '^  get : .*ArrayList e -> Int -> io e$'; then
+  echo "Typed return: get : ArrayList e -> Int -> io e"
+else
+  echo "Typed return: MISSING"
+fi
+
+# 5. Functional-interface method shows the Idris function type it accepts.
+if printf '%s\n' "$out" | grep -qE '^  sort : .*ArrayList e -> \(e -> e -> Int\) -> io \(\)$'; then
+  echo "Lambda: sort accepts (e -> e -> Int)"
+else
+  echo "Lambda: MISSING"
+fi
+
+# 6. Overloads are placed in arity-tagged sub-namespaces, just as generation would.
+if printf '%s\n' "$out" | grep -qE '^  namespace Add2$'; then
+  echo "Overload: namespace Add2"
+else
+  echo "Overload: MISSING"
+fi
+
+# 7. Unpruned: a member nothing references (clear) is still listed — the whole surface is shown.
+if printf '%s\n' "$out" | grep -qE '^  clear : .*ArrayList e -> io \(\)$'; then
+  echo "Unpruned: clear listed"
+else
+  echo "Unpruned: MISSING"
+fi
+
+# 8. Multiple classes in one invocation; nullable JDK method surfaced as io (Maybe v).
+if printf '%s\n' "$out" | grep -qE '^-- java/util/HashMap  \(import Java.Util\)$' \
+   && printf '%s\n' "$out" | grep -qE '^  get : .*HashMap k v -> .* -> io \(Maybe v\)$'; then
+  echo "Multi-class: HashMap.get : ... -> io (Maybe v)"
+else
+  echo "Multi-class: MISSING"
+fi
+
+# 9. No binding modules are written (pure query — unlike --jvm-ffi-import).
+if [ -d Java ]; then
+  echo "No-write: UNEXPECTED Java/ DIRECTORY"
+else
+  echo "No-write: nothing generated"
+fi

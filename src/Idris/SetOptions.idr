@@ -438,8 +438,9 @@ ffiScanSources root opts
 ||| not pin every member.
 generateJvmFfiBindings : {auto c : Ref Ctxt Defs} -> List CLOpt -> List String -> Core ()
 generateJvmFfiBindings opts classes
-    = do infos <- for classes $ \cn => do
-                    Right ci <- coreLift (reflectClass cn)
+    = do cp <- jvmClasspath <$> getSession
+         infos <- for classes $ \cn => do
+                    Right ci <- coreLift (reflectClass cp cn)
                       | Left err => throw (UserError ("JVM FFI import failed for " ++ cn ++ ": " ++ err))
                     pure ci
          dirs <- getDirs
@@ -455,6 +456,19 @@ generateJvmFfiBindings opts classes
          let scans = map (scanReferences classNames) contents
          let refs = MkScanRefs (nub (concatMap qualified scans)) (nub (concatMap bare scans))
          traverse_ (writeBindingModule root) (renderAll (Just refs) infos)
+
+||| Reflect the named JVM classes and print their callable member catalog (signatures only) to
+||| stdout, then stop. Unlike `--jvm-ffi-import`, this generates no modules and elaborates
+||| nothing — it is a discovery aid (and the data source for IDE completion) so a member can be
+||| found *before* it is referenced, breaking the demand-driven importer's chicken-and-egg.
+generateJvmFfiCatalog : {auto c : Ref Ctxt Defs} -> List String -> Core ()
+generateJvmFfiCatalog classes
+    = do cp <- jvmClasspath <$> getSession
+         infos <- for classes $ \cn => do
+                    Right ci <- coreLift (reflectClass cp cn)
+                      | Left err => throw (UserError ("JVM FFI list failed for " ++ cn ++ ": " ++ err))
+                    pure ci
+         coreLift $ putStrLn (renderCatalog infos)
 
 ||| Options to be processed before type checking. Return whether to continue.
 export
@@ -611,9 +625,15 @@ preOptions (Total :: opts)
 preOptions (NoCSE :: opts)
     = do updateSession ({ noCSE := True })
          preOptions opts
+preOptions (JvmClasspath cp :: opts)
+    = do setSession ({ jvmClasspath := cp } !getSession)
+         preOptions opts
 preOptions (JvmFfiImport classes :: opts)
     = do generateJvmFfiBindings opts classes
          preOptions opts
+preOptions (JvmFfiList classes :: opts)
+    = do generateJvmFfiCatalog classes
+         pure False
 preOptions (_ :: opts) = preOptions opts
 
 -- Options to be processed after type checking. Returns whether execution

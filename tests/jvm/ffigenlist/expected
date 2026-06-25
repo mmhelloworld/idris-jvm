@@ -1,0 +1,9 @@
+Header: ArrayList -> import Java.Util
+Namespace: namespace ArrayList
+Signatures-only: no prim/foreign
+Typed return: get : ArrayList e -> Int -> io e
+Lambda: sort accepts (e -> e -> Int)
+Overload: namespace Add2
+Unpruned: clear listed
+Multi-class: HashMap.get : ... -> io (Maybe v)
+No-write: nothing generated

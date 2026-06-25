@@ -135,10 +135,10 @@ namespace ArrayList
 
   namespace Add2
     %foreign "jvm:.add(java/util/ArrayList int java/lang/Object void),java/util/ArrayList"
-    prim__add : Java.Util.ArrayList e -> Int -> e -> PrimIO ()
+    prim__Add2 : Java.Util.ArrayList e -> Int -> e -> PrimIO ()
     export %inline
     add : (HasIO io) => Java.Util.ArrayList e -> Int -> e -> io ()
-    add arg0 arg1 arg2 = primIO (prim__add arg0 arg1 arg2)
+    add arg0 arg1 arg2 = primIO (prim__Add2 arg0 arg1 arg2)
 
 namespace HashMap
   %foreign "jvm:<init>(java/util/HashMap),java/util/HashMap"

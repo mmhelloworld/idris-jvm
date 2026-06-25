@@ -12,10 +12,14 @@ import org.objectweb.asm.TypeReference;
 import org.objectweb.asm.signature.SignatureReader;
 import org.objectweb.asm.signature.SignatureVisitor;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 
 /**
  * Reflects JVM class metadata off the compiler's classpath using ASM, for the FFI
@@ -45,11 +49,27 @@ public final class ClasspathReflector {
     }
 
     /**
+     * @param classpath the target classpath to resolve {@code className} (and its supertypes /
+     *                  referenced types) against: a {@link File#pathSeparator}-separated list of
+     *                  jar files and directories. May be empty/blank, in which case only the
+     *                  compiler's own classpath and the JDK platform modules are searched (so JDK
+     *                  classes always resolve, but project dependencies do not). A fresh loader is
+     *                  built per call, so a long-lived process always sees the current jars on disk.
      * @param className internal ({@code java/util/ArrayList}) or binary
      *                  ({@code java.util.ArrayList}) class name.
      * @return the line-protocol dump described above, or {@code ERR|...} on failure.
      */
-    public static String reflect(String className) {
+    public static String reflect(String classpath, String className) {
+        var previous = Thread.currentThread().getContextClassLoader();
+        // readClassBytes consults the context classloader first, so installing a loader over the
+        // target classpath transparently routes every nested read (supertypes, SAM probing) through
+        // it — no parameter threading. Parent is the platform loader, NOT the compiler's own loader,
+        // so the target classpath is authoritative for application classes (decoupled from idris2's
+        // classpath) while JDK platform classes still resolve.
+        var loader = classpathClassLoader(classpath);
+        if (loader != null) {
+            Thread.currentThread().setContextClassLoader(loader);
+        }
         try {
             var bytes = readClassBytes(className);
             var referenced = new java.util.LinkedHashSet<String>();
@@ -72,7 +92,40 @@ public final class ClasspathReflector {
             return sb.toString();
         } catch (Throwable t) {
             return "ERR|" + className + ": " + t.getClass().getSimpleName() + ": " + t.getMessage();
+        } finally {
+            if (loader != null) {
+                Thread.currentThread().setContextClassLoader(previous);
+                try {
+                    loader.close();
+                } catch (IOException ignored) {
+                    // best-effort: nothing actionable if the loader's jars fail to close
+                }
+            }
         }
+    }
+
+    /**
+     * A loader over the given {@link File#pathSeparator}-separated classpath (jars and directories),
+     * or {@code null} when the classpath is blank or has no usable entries. Parent is the platform
+     * loader so only JDK classes are inherited; everything else comes from the listed entries.
+     */
+    private static URLClassLoader classpathClassLoader(String classpath) {
+        if (classpath == null || classpath.isBlank()) {
+            return null;
+        }
+        var urls = new java.util.ArrayList<URL>();
+        for (var entry : classpath.split(java.util.regex.Pattern.quote(File.pathSeparator))) {
+            if (entry.isBlank()) {
+                continue;
+            }
+            try {
+                urls.add(Paths.get(entry).toUri().toURL());
+            } catch (Exception ignored) {
+                // skip a malformed entry; a missing jar/dir simply won't resolve its classes
+            }
+        }
+        return urls.isEmpty() ? null : new URLClassLoader(urls.toArray(new URL[0]),
+            ClassLoader.getPlatformClassLoader());
     }
 
     private static String dump(byte[] bytes, java.util.Set<String> referenced) {

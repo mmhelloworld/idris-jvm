@@ -52,6 +52,7 @@ data IDECommand
      | ElaborateTerm     String -- then change String to Term, as in idris1
      | PrintDefinition String
      | ReplCompletions String
+     | JvmFfiList String String -- classpath, comma-separated internal class names
      | EnableSyntax Bool
      | Version
      | GetOptions
@@ -138,6 +139,8 @@ getIDECommand (SExpList [SymbolAtom "print-definition", StringAtom n])
     = Just $ PrintDefinition n
 getIDECommand (SExpList [SymbolAtom "repl-completions", StringAtom n])
     = Just $ ReplCompletions n
+getIDECommand (SExpList [SymbolAtom "jvm-ffi-list", StringAtom cp, StringAtom classes])
+    = Just $ JvmFfiList cp classes
 getIDECommand (SExpList [SymbolAtom "enable-syntax", BoolAtom b])
     = Just $ EnableSyntax b
 getIDECommand (SymbolAtom "version") = Just Version
@@ -188,6 +191,7 @@ putIDECommand (HideTermImplicits tm)          = (SExpList [SymbolAtom "hide-term
 putIDECommand (ElaborateTerm     tm)          = (SExpList [SymbolAtom "elaborate-term", StringAtom tm])
 putIDECommand (PrintDefinition n)             = (SExpList [SymbolAtom "print-definition", StringAtom n])
 putIDECommand (ReplCompletions n)             = (SExpList [SymbolAtom "repl-completions", StringAtom n])
+putIDECommand (JvmFfiList cp classes)         = (SExpList [SymbolAtom "jvm-ffi-list", StringAtom cp, StringAtom classes])
 putIDECommand (Directive n)             = (SExpList [SymbolAtom "directive", StringAtom n])
 putIDECommand (EnableSyntax b)                = (SExpList [SymbolAtom "enable-syntax", BoolAtom b])
 putIDECommand GetOptions                      = (SExpList [SymbolAtom "get-options"])

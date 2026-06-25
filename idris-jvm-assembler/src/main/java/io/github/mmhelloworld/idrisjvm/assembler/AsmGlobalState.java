@@ -177,6 +177,12 @@ public final class AsmGlobalState {
     public static void interpret(String mainClass, String outputDirectory) throws IOException, InterruptedException {
         String classpath = String.join(pathSeparator, outputDirectory,
             outputDirectory + File.separator + RUNTIME_JAR_NAME, System.getProperty("java.class.path"));
+        // Project dependency jars (Maven/Gradle/IDE-resolved) for code run via the REPL / --exec,
+        // mirroring the IDRIS2_JVM_CLASSPATH fold in the compiled-executable launcher.
+        String extraClasspath = getProperty("IDRIS2_JVM_CLASSPATH", "");
+        if (!extraClasspath.isEmpty()) {
+            classpath = classpath + pathSeparator + extraClasspath;
+        }
         List<String> command = Stream.concat(
                 Stream.concat(Stream.of("java"), JAVA_OPTIONS.stream()),
                 Stream.of("-cp", classpath, mainClass))

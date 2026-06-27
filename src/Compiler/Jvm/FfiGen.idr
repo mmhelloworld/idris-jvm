@@ -133,7 +133,12 @@ countNames Z     = []
 countNames (S k) = countNames k ++ ["arg" ++ show k]
 
 indentBlock : String -> String
-indentBlock s = joinBy "\n" (map ("  " ++) (splitOn '\n' s))
+indentBlock s = joinBy "\n" (map indentLine (splitOn '\n' s))
+  where
+    -- Leave blank lines empty; indenting them emits trailing whitespace.
+    indentLine : String -> String
+    indentLine "" = ""
+    indentLine l  = "  " ++ l
 
 --------------------------------------------------------------------------------
 -- Type rendering

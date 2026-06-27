@@ -8,56 +8,56 @@ import public System.FFI
 namespace Lang
   public export
   data Object : Type where [external]
-  
+
   public export
   data StringBuffer : Type where [external]
-  
+
   public export
   data StringBuilder : Type where [external]
-  
+
   public export
   data CharSequence : Type where [external]
-  
+
   public export
   data Cloneable : Type where [external]
-  
+
   public export
   data Comparable : Type -> Type where [external]
 
 namespace Util
   public export
   data ArrayList : Type -> Type where [external]
-  
+
   public export
   data Collection : Type -> Type where [external]
-  
+
   public export
   data ListIterator : Type -> Type where [external]
-  
+
   public export
   data Iterator : Type -> Type where [external]
-  
+
   public export
   data List : Type -> Type where [external]
-  
+
   public export
   data Spliterator : Type -> Type where [external]
-  
+
   public export
   data Locale : Type where [external]
-  
+
   public export
   data Optional : Type -> Type where [external]
-  
+
   public export
   data AbstractList : Type -> Type where [external]
-  
+
   public export
   data RandomAccess : Type where [external]
-  
+
   public export
   data AbstractCollection : Type -> Type where [external]
-  
+
   public export
   data SequencedCollection : Type -> Type where [external]
 
@@ -68,7 +68,7 @@ namespace Nio.Charset
 namespace Util.Stream
   public export
   data Stream : Type -> Type where [external]
-  
+
   public export
   data IntStream : Type where [external]
 
@@ -83,7 +83,7 @@ namespace Io
 namespace Lang.Constant
   public export
   data Constable : Type where [external]
-  
+
   public export
   data ConstantDesc : Type where [external]
 
@@ -91,31 +91,31 @@ namespace Lang
   public export %inline
   Iterable : Type -> Type
   Iterable ty0 = (Struct "java/lang/Iterable iterator" [], Java.Util.Iterator Java.Lang.Object)
-  
+
   public export
   interface Inherits child parent where
     constructor MkInherits
     export %inline
     subtyping : child -> parent
     subtyping = believe_me
-  
+
   public export
   Inherits a a where
-  
+
   public export
   Inherits String Object where
-  
+
   export
   %extern prim__javaLambda : (lambdaTy : Type) -> (intfTy : Type) -> (f : lambdaTy) -> intfTy
-  
+
   public export %inline
   jlambda : {fTy : Type} -> (f : fTy) -> {intfTy : Type} -> intfTy
   jlambda {fTy} f {intfTy} = prim__javaLambda fTy intfTy f
-  
+
   public export
   %foreign "jvm:isNull(java/lang/Object boolean),java/util/Objects"
   isNull : Object -> Bool
-  
+
   public export
   nullableToMaybe : a -> Maybe a
   nullableToMaybe value = if isNull (believe_me value) then Nothing else Just value
@@ -129,15 +129,15 @@ namespace Util.Function
   public export %inline
   Consumer : Type -> Type
   Consumer ty0 = (Struct "java/util/function/Consumer accept" [], Java.Lang.Object -> ())
-  
+
   public export %inline
   Predicate : Type -> Type
   Predicate ty0 = (Struct "java/util/function/Predicate test" [], Java.Lang.Object -> Bool)
-  
+
   public export %inline
   UnaryOperator : Type -> Type
   UnaryOperator ty0 = (Struct "java/util/function/UnaryOperator apply" [], Java.Lang.Object -> Java.Lang.Object)
-  
+
   public export %inline
   Function : Type -> Type -> Type
   Function ty0 ty1 = (Struct "java/util/function/Function apply" [], Java.Lang.Object -> Java.Lang.Object)
@@ -145,31 +145,31 @@ namespace Util.Function
 namespace Util
   public export
   Inherits (Java.Util.ArrayList e) (Java.Util.AbstractList e) where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) (Java.Util.List e) where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) Java.Util.RandomAccess where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) Java.Lang.Cloneable where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) Java.Io.Serializable where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) (Java.Util.AbstractCollection e) where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) (Java.Util.SequencedCollection e) where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) (Java.Util.Collection e) where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) (Java.Lang.Iterable e) where
-  
+
   public export
   Inherits (Java.Util.ArrayList e) Java.Lang.Object where
 
@@ -180,19 +180,19 @@ namespace Util
     export %inline
     new : (HasIO io) => io (Java.Util.ArrayList rt_0)
     new = primIO prim__new
-  
+
     %foreign "jvm:.size(java/util/ArrayList int),java/util/ArrayList"
     prim__size : Java.Util.ArrayList e -> PrimIO Int
     export %inline
     size : (HasIO io) => Java.Util.ArrayList e -> io Int
     size arg0 = primIO (prim__size arg0)
-  
+
     %foreign "jvm:.add(java/util/ArrayList java/lang/Object boolean),java/util/ArrayList"
     prim__add : Java.Util.ArrayList e -> e -> PrimIO Bool
     export %inline
     add : (HasIO io) => Java.Util.ArrayList e -> e -> io Bool
     add arg0 arg1 = primIO (prim__add arg0 arg1)
-  
+
     namespace Add2
       %foreign "jvm:.add(java/util/ArrayList int java/lang/Object void),java/util/ArrayList"
       prim__Add2 : Java.Util.ArrayList e -> Int -> e -> PrimIO ()

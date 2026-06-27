@@ -31,4 +31,4 @@ $1 --no-banner --no-color --console-width 0 \
    --jvm-classpath "$PWD/greeter.jar" \
    --jvm-ffi-import com/example/Greeter \
    -o ffigenclasspath Main.idr > compile.txt 2>&1
-IDRIS2_JVM_CLASSPATH="$PWD/greeter.jar" ./build/exec/ffigenclasspath
+IDRIS2_JVM_CLASSPATH="$PWD/greeter.jar" ./build/exec/ffigenclasspath${IDRIS_EXEC_EXT}

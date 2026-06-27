@@ -161,7 +161,7 @@ public final class ClasspathReflector {
                 // on the return (visited after visitMethod returns). Trailing fields: raw generic
                 // signature (for shared type variables / parameterized types) then nullable-return.
                 return new MethodVisitor(Opcodes.ASM9) {
-                    boolean nullableReturn = false;
+                    private boolean nullableReturn = false;
 
                     @Override
                     public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
@@ -281,10 +281,10 @@ public final class ClasspathReflector {
 
     // SAM metadata for one functional interface.
     private static final class SamInfo {
-        final String name;
-        final String descriptor;
-        final String genericSignature;
-        final String formalTypeParams;
+        private final String name;
+        private final String descriptor;
+        private final String genericSignature;
+        private final String formalTypeParams;
 
         SamInfo(String name, String descriptor, String genericSignature, String formalTypeParams) {
             this.name = name;
@@ -296,10 +296,10 @@ public final class ClasspathReflector {
 
     // One abstract method discovered while walking an interface hierarchy.
     private static final class AbstractMethod {
-        final String owner;
-        final String name;
-        final String descriptor;
-        final String signature;
+        private final String owner;
+        private final String name;
+        private final String descriptor;
+        private final String signature;
 
         AbstractMethod(String owner, String name, String descriptor, String signature) {
             this.owner = owner;

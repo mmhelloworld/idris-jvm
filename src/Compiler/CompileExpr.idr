@@ -68,6 +68,24 @@ etaExpand i (S k) exp args
                   (first :: map weakenVar args))
 
 export
+setRootFC : FC -> CExp vars -> CExp vars
+setRootFC fc (CLocal _ p) = CLocal fc p
+setRootFC fc (CRef _ n) = CRef fc n
+setRootFC fc (CLam _ x sc) = CLam fc x sc
+setRootFC fc (CLet _ x inl val sc) = CLet fc x inl val sc
+setRootFC fc (CApp _ f args) = CApp fc f args
+setRootFC fc (CCon _ n ci tag args) = CCon fc n ci tag args
+setRootFC fc (COp _ op args) = COp fc op args
+setRootFC fc (CExtPrim _ p args) = CExtPrim fc p args
+setRootFC fc (CForce _ lr e) = CForce fc lr e
+setRootFC fc (CDelay _ lr e) = CDelay fc lr e
+setRootFC fc (CConCase _ sc alts def) = CConCase fc sc alts def
+setRootFC fc (CConstCase _ sc alts def) = CConstCase fc sc alts def
+setRootFC fc (CPrimVal _ c) = CPrimVal fc c
+setRootFC fc (CErased _) = CErased fc
+setRootFC fc (CCrash _ msg) = CCrash fc msg
+
+export
 expandToArity : Nat -> CExp vars -> List (CExp vars) -> CExp vars
 -- No point in applying to anything
 expandToArity _ (CErased fc) _ = CErased fc
@@ -203,13 +221,21 @@ toCExp n tm
               do args' <- traverse (toCExp n) args
                  defs <- get Ctxt
                  f' <- toCExpTm n f
-                 case !(numArgs defs f) of
+                 na <- numArgs defs f
+                 let res : CExp vars = case na of
                       NewTypeBy arity pos =>
-                        pure $ applyNewType arity pos f' args'
+                        applyNewType arity pos f' args'
                       EraseArgs arity epos =>
-                        pure $ eraseConArgs arity epos f' args'
+                        eraseConArgs arity epos f' args'
                       Arity a =>
-                        pure $ expandToArity a f' args'
+                        expandToArity a f' args'
+                 -- expandToArity rebuilds the application spine with the
+                 -- head's location; when the head has none (e.g. resolved
+                 -- interface-method references), restore the application
+                 -- term's own location so debug info can place the call.
+                 pure $ case getFC res of
+                     EmptyFC => setRootFC (getLoc tm) res
+                     _ => res
 
 mutual
   conCases : {vars : _} ->

@@ -443,6 +443,30 @@ nextName root
          put PName (x + 1)
          pure (MN root x)
 
+userRoot : String -> Name -> String
+userRoot dflt (PV n _) = userRoot dflt n
+userRoot dflt (MN root _) =
+    -- machine roots carry a user name only when they read as an identifier
+    -- (close's fallback roots like "pat0:" do not)
+    let chars = unpack root
+    in if chars /= [] && all (\c => isAlphaNum c || c == '_' || c == '\'') chars
+        then root
+        else dflt
+userRoot dflt n = case userNameRoot n of
+    Just (Basic userName) => userName
+    _ => dflt
+
+-- Derive a case-tree binder's name root from the pattern it binds: a
+-- variable pattern contributes the user's name (still made unique through
+-- the MN counter), so downstream debug info (JVM LocalVariableTable) can
+-- show `radius` instead of `e$1` for `area (Circle radius) = ...`. The
+-- names reaching pattern compilation are the machine names `close`
+-- created from the clause environment, whose roots carry the user names.
+patRoot : String -> Pat -> String
+patRoot dflt (PLoc _ n) = userRoot dflt n
+patRoot dflt (PAs _ n _) = userRoot dflt n
+patRoot dflt _ = dflt
+
 nextNames : {vars : _} ->
             {auto i : Ref PName Int} ->
             {auto c : Ref Ctxt Defs} ->
@@ -452,7 +476,7 @@ nextNames fc root [] fty = pure ([] ** (zero, []))
 nextNames fc root (p :: pats) fty
      = do defs <- get Ctxt
           empty <- clearDefs defs
-          n <- nextName root
+          n <- nextName (patRoot root p)
           let env = mkEnv fc vars
           fa_tys <- the (Core (Maybe (NF vars), ArgType vars)) $
               case fty of
@@ -473,6 +497,29 @@ nextNames fc root (p :: pats) fty
                            Known rig t => Known rig (weakenNs (suc l) t)
                            Stuck t => Stuck (weakenNs (suc l) t)
           pure (n :: args ** (suc l, MkInfo p First argTy :: weaken ps))
+
+setRootLoc : FC -> Term vars -> Term vars
+setRootLoc fc (Local _ isLet idx p) = Local fc isLet idx p
+setRootLoc fc (Ref _ nt n) = Ref fc nt n
+setRootLoc fc (Meta _ n i args) = Meta fc n i args
+setRootLoc fc (Bind _ x b scope) = Bind fc x b scope
+setRootLoc fc (App _ fn arg) = App fc fn arg
+setRootLoc fc (As _ side as pat) = As fc side as pat
+setRootLoc fc (TDelayed _ r tm) = TDelayed fc r tm
+setRootLoc fc (TDelay _ r ty tm) = TDelay fc r ty tm
+setRootLoc fc (TForce _ r tm) = TForce fc r tm
+setRootLoc fc (PrimVal _ c) = PrimVal fc c
+setRootLoc fc (Erased _ why) = Erased fc why
+setRootLoc fc (TType _ u) = TType fc u
+
+-- Attribute a clause's right-hand side to the clause: when the RHS root
+-- carries no location (operator-application spines are elaborated without
+-- one), give it the matched pattern's location so the code generators'
+-- debug line tables can place the clause body on its source line.
+stampRhsLoc : FC -> Term vars -> Term vars
+stampRhsLoc fc rhs = case getLoc rhs of
+    EmptyFC => setRootLoc fc rhs
+    _ => rhs
 
 -- replace the prefix of patterns with 'pargs'
 newPats : (pargs : List Pat) -> LengthMatch pargs ns ->
@@ -623,11 +670,11 @@ groupCons fc fn pvars (x :: xs) {isCons = p :: ps}
          = addGroup p pprf pats pid (substName n (Local fc (Just True) idx pprf) rhs) acc
     addGroup (PCon cfc n t a pargs) pprf pats pid rhs acc
          = if a == length pargs
-              then addConG n t pargs pats pid rhs acc
+              then addConG n t pargs pats pid (stampRhsLoc cfc rhs) acc
               else throw (CaseCompile cfc fn (NotFullyApplied n))
     addGroup (PTyCon cfc n a pargs) pprf pats pid rhs acc
          = if a == length pargs
-           then addConG n 0 pargs pats pid rhs acc
+           then addConG n 0 pargs pats pid (stampRhsLoc cfc rhs) acc
            else throw (CaseCompile cfc fn (NotFullyApplied n))
     addGroup (PArrow _ _ s t) pprf pats pid rhs acc
          = addConG (UN $ Basic "->") 0 [s, t] pats pid rhs acc
@@ -635,8 +682,8 @@ groupCons fc fn pvars (x :: xs) {isCons = p :: ps}
     -- scrutinee (need to check in 'caseGroups below)
     addGroup (PDelay _ _ pty parg) pprf pats pid rhs acc
          = addDelayG pty parg pats pid rhs acc
-    addGroup (PConst _ c) pprf pats pid rhs acc
-         = addConstG c pats pid rhs acc
+    addGroup (PConst cfc c) pprf pats pid rhs acc
+         = addConstG c pats pid (stampRhsLoc cfc rhs) acc
 
     gc : {a, vars, todo : _} ->
          List01 ne (Group todo vars) ->

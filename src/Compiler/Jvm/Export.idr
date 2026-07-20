@@ -174,7 +174,10 @@ loadArguments typeExports typesByIndex functionName arity idrisTypes = go 0 idri
       Just jvmType <- coreLift $ nullableToMaybe <$> Map.get typesByIndex varIndex
         | Nothing => do -- World type only exists for Idris functions
            iconst 0 -- Load "world" for PrimIO functions
-           invokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
+           -- The world slot's type comes from the function's inferred signature:
+           -- box only when the compiled method expects a reference there.
+           when (idrisType /= IInt) $
+             invokeMethod InvokeStatic "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;" False
       loadJavaVar functionName typesByIndex varIndex idrisType typeExports jvmType
       go (varIndex + 1) rest
 

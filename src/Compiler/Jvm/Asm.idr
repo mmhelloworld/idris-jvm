@@ -663,6 +663,12 @@ record AsmState where
     labelCounter : Int
     lambdaCounter : Int
     lineNumberLabels : Map Int String
+    -- Where each scope variable becomes live, keyed "<scopeIndex>:<name>":
+    -- the label visited just after the variable's store instruction. Used as
+    -- the LocalVariableTable start so debuggers don't see (and reject reading)
+    -- a slot before it is written; variables with no entry (parameters) are
+    -- live from their scope's start label.
+    variableLiveLabels : Map String String
     assembler : Assembler
     callSiteLog : List (FC, Name, InferredFunctionType)
     conSiteLog : List (FC, Name, ConInfo, Maybe Int, List InferredType)
@@ -702,8 +708,9 @@ namespace AsmState
     assembler <- getAssembler (className name)
     scopes <- ArrayList.new {elemTy=Scope}
     lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
+    variableLiveLabels <- Map.newTreeMap {key=String} {value=String}
     let function = MkFunction name (MkInferredFunctionType IUnknown []) (subtyping scopes) 0 (NmCrash emptyFC "uninitialized function")
-    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels assembler [] [] SortedSet.empty SortedMap.empty SortedMap.empty IUnknown
+    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels variableLiveLabels assembler [] [] SortedSet.empty SortedMap.empty SortedMap.empty IUnknown
 
   export
   fromIdrisName : Name -> IO AsmState
@@ -2843,7 +2850,9 @@ hasLabelAtLine lineNumber = do
 
 export
 addLineNumber : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core ()
-addLineNumber number label = do
+addLineNumber number label = when (number > 0) $ do
+    -- Non-positive lines mean "no source location" (EmptyFC fallback):
+    -- emitting them would attribute generated code to a bogus line 1.
     hasLabel <- hasLabelAtLine number
     when (not hasLabel) $ do
         state <- getState
@@ -3003,6 +3012,37 @@ retrieveVariableIndexAtScope currentScopeIndex name = go currentScopeIndex where
 export
 retrieveVariableIndex : {auto stateRef: Ref AsmState AsmState} -> String -> Core Int
 retrieveVariableIndex name = retrieveVariableIndexAtScope !getCurrentScopeIndex name
+
+||| Record that a scope variable is live (stored) from the given label for the
+||| LocalVariableTable. The owner scope is found like variable resolution does:
+||| the nearest enclosing scope declaring the name. First store wins so a
+||| variable reassigned on several paths keeps its earliest live point.
+export
+markVariableLiveFrom : {auto stateRef: Ref AsmState AsmState} -> String -> String -> Core ()
+markVariableLiveFrom variableName label = do
+    ownerScopeIndex <- findOwner !getCurrentScopeIndex
+    state <- getState
+    let key = show ownerScopeIndex ++ ":" ++ variableName
+    exists <- coreLift $ Map.containsKey {value=String} (variableLiveLabels state) key
+    when (not exists) $ ignore $ coreLift $ Map.put (variableLiveLabels state) key label
+  where
+    findOwner : Int -> Core Int
+    findOwner scopeIndex = do
+        scope <- getScope scopeIndex
+        optIndex <- coreLift $ Map.get {value=Int} (variableIndices scope) variableName
+        case nullableToMaybe optIndex of
+            Just _ => pure scopeIndex
+            Nothing => case parentIndex scope of
+                Just parentScopeIndex => findOwner parentScopeIndex
+                Nothing => pure scopeIndex
+
+export
+getVariableLiveLabel : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core (Maybe String)
+getVariableLiveLabel scopeIndex variableName = do
+    state <- getState
+    optLabel <- coreLift $ Map.get {value=String} (variableLiveLabels state)
+                    (show scopeIndex ++ ":" ++ variableName)
+    pure $ nullableToMaybe optLabel
 
 export
 retrieveVariableTypeAtScope : {auto stateRef: Ref AsmState AsmState} -> Int -> String -> Core InferredType

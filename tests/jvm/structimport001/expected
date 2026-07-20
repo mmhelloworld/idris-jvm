@@ -1,0 +1,12 @@
+1/2: Building Alias (Alias.idr)
+2/2: Building Consumer (Consumer.idr)
+Error: System.FFI.Struct is not in scope. It is referred to by a definition in an imported module, but its own defining module has not been loaded. Import the module defining System.FFI.Struct here, or re-export it from the module that uses it with `import public`.
+
+Consumer:5:1--5:30
+ 1 | module Consumer
+ 2 | 
+ 3 | import Alias
+ 4 | 
+ 5 | data Value = MkValue JsonNode
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+

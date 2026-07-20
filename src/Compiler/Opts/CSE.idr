@@ -99,6 +99,50 @@ record St where
   idx : Int
   inDelay : Bool
 
+-- Terms that create or thread a %World perform side effects when they are
+-- evaluated. Lifting such a term into a shared toplevel constant (a CAF,
+-- evaluated once) merges the effect executions of structurally equal but
+-- semantically distinct occurrences: two `unsafePerformIO (newIORef Nothing)`
+-- definitions would collapse into a single shared IORef. Detect the world
+-- literal that effect execution requires (a closed term cannot receive a
+-- world from an argument), plus the unsafe world-introducing functions in
+-- case they are not inlined.
+isWorldName : Name -> Bool
+isWorldName n = case dropAllNS n of
+  UN (Basic name) =>
+    name == "unsafePerformIO" || name == "unsafeCreateWorld" || name == "unsafeDestroyWorld"
+  _ => False
+
+mutual
+  containsEffects : CExp vars -> Bool
+  containsEffects (CLocal {}) = False
+  containsEffects (CRef _ n) = isWorldName n
+  containsEffects (CLam _ _ sc) = containsEffects sc
+  containsEffects (CLet _ _ _ val sc) = containsEffects val || containsEffects sc
+  containsEffects (CApp _ f args) = containsEffects f || anyContainsEffects args
+  containsEffects (CCon _ _ _ _ args) = anyContainsEffects args
+  containsEffects (COp _ _ args) = anyContainsEffects (toList args)
+  containsEffects (CExtPrim _ _ args) = anyContainsEffects args
+  containsEffects (CForce _ _ t) = containsEffects t
+  containsEffects (CDelay _ _ t) = containsEffects t
+  containsEffects (CConCase _ sc alts def) =
+    containsEffects sc || any conAltContainsEffects alts || maybe False containsEffects def
+  containsEffects (CConstCase _ sc alts def) =
+    containsEffects sc || any constAltContainsEffects alts || maybe False containsEffects def
+  containsEffects (CPrimVal _ WorldVal) = True
+  containsEffects (CPrimVal _ _) = False
+  containsEffects (CErased _) = False
+  containsEffects (CCrash _ _) = False
+
+  anyContainsEffects : List (CExp vars) -> Bool
+  anyContainsEffects = any containsEffects
+
+  conAltContainsEffects : CConAlt vars -> Bool
+  conAltContainsEffects (MkConAlt _ _ _ _ sc) = containsEffects sc
+
+  constAltContainsEffects : CConstAlt vars -> Bool
+  constAltContainsEffects (MkConstAlt _ sc) = containsEffects sc
+
 -- Adds a new closed expression to the `UsageMap`
 -- returning a new machine generated name to be used
 -- if the expression should be lifted to the toplevel.
@@ -215,6 +259,10 @@ mutual
     (sze, exp') <- analyzeSubExp exp
     case dropCExp zero exp' of
       Just e0 => do
+        -- Never share effectful closed terms: as memoized toplevel constants
+        -- they would run their effect once instead of once per occurrence.
+        let False = containsEffects e0
+          | True => pure (sze, exp')
         Just nm <- store sze e0
           | Nothing => pure (sze, exp')
         pure (sze, CRef EmptyFC nm)

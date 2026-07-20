@@ -18,7 +18,10 @@ import Data.Maybe
 import Data.List
 import Data.List.Quantifiers
 import Data.SnocList
+import Data.String
 import Data.Vect
+
+import System
 
 import Libraries.Data.List.LengthMatch
 import Libraries.Data.NameMap
@@ -53,6 +56,31 @@ getArity (MkFun args _) = length args
 getArity (MkCon _ arity _) = arity
 getArity (MkForeign _ args _) = length args
 getArity (MkError _) = 0
+
+replaceRootFC : FC -> CExp vars -> CExp vars
+replaceRootFC fc (CLocal _ p) = CLocal fc p
+replaceRootFC fc (CRef _ n) = CRef fc n
+replaceRootFC fc (CLam _ x sc) = CLam fc x sc
+replaceRootFC fc (CLet _ x inl val sc) = CLet fc x inl val sc
+replaceRootFC fc (CApp _ f args) = CApp fc f args
+replaceRootFC fc (CCon _ n ci tag args) = CCon fc n ci tag args
+replaceRootFC fc (COp _ op args) = COp fc op args
+replaceRootFC fc (CExtPrim _ p args) = CExtPrim fc p args
+replaceRootFC fc (CForce _ lr e) = CForce fc lr e
+replaceRootFC fc (CDelay _ lr e) = CDelay fc lr e
+replaceRootFC fc (CConCase _ sc alts def) = CConCase fc sc alts def
+replaceRootFC fc (CConstCase _ sc alts def) = CConstCase fc sc alts def
+replaceRootFC fc (CPrimVal _ c) = CPrimVal fc c
+replaceRootFC fc (CErased _) = CErased fc
+replaceRootFC fc (CCrash _ msg) = CCrash fc msg
+
+-- Attribute an inlined body to its call site: the callee's own locations are
+-- meaningless in the caller (debug line tables are per-source-file), and for
+-- primitive wrappers there is no location at all. Only the root is stamped —
+-- nested nodes keep callee locations for later inlining rounds to restamp.
+stampInlined : FC -> CExp vars -> CExp vars
+stampInlined fc@(MkFC _ _ _) exp = replaceRootFC fc exp
+stampInlined _ exp = exp
 
 takeFromStack : EEnv free vars -> Stack free -> (args : Scope) ->
                 Maybe (EEnv free (Scope.addInner vars args), Stack free)
@@ -194,7 +222,7 @@ mutual
                     && (not (n `elem` rec))
                     && (not (NoInline `elem` gdefFlags))
                    then do ap <- tryApply (n :: rec) stk env def
-                           pure $ fromMaybe (unloadApp arity stk (CRef fc n)) ap
+                           pure $ maybe (unloadApp arity stk (CRef fc n)) (stampInlined fc) ap
                    else pure $ unloadApp arity stk (CRef fc n)
   eval {vars} {free} rec env [] (CLam fc x sc)
       = do xn <- genName "lamv"
@@ -225,9 +253,18 @@ mutual
                 | Nothing => do args' <- traverse (eval rec env []) args
                                 pure (unload stk
                                           (CApp fc (CRef nfc n) args'))
-           eval rec env (!(traverse (eval rec env []) args) ++ stk) f
+           res <- eval rec env (!(traverse (eval rec env []) args) ++ stk) f
+           -- An inlined body whose root has no location (e.g. a primitive
+           -- wrapper reached through an elaborator-synthesized reference)
+           -- takes this application's location; see stampInlined.
+           pure $ case getFC res of
+               EmptyFC => stampInlined fc res
+               _ => res
   eval rec env stk (CApp fc f args)
-      = eval rec env (!(traverse (eval rec env []) args) ++ stk) f
+      = do res <- eval rec env (!(traverse (eval rec env []) args) ++ stk) f
+           pure $ case getFC res of
+               EmptyFC => stampInlined fc res
+               _ => res
   eval rec env stk (CCon fc n ci t args)
       = pure $ unload stk $ CCon fc n ci t !(traverse (eval rec env []) args)
   eval rec env stk (COp fc p args)
@@ -570,6 +607,63 @@ addArityHash n
               Private => pure ()
               _ => addHash (n, length args)
 
+-- TEMPORARY debugging: IDRIS_INLINE_DEBUG=<name-fragment> dumps the FC tree
+-- of matching defs after each frontend pass.
+inlineDebugName : Maybe String
+inlineDebugName = unsafePerformIO $ getEnv "IDRIS_INLINE_DEBUG"
+
+showFcTreeC : Nat -> CExp vars -> String
+showFcTreeC depth expr =
+    let indent = pack (replicate (2 * depth) ' ')
+        node = indent ++ nodeName expr ++ " @ " ++ show (getFC expr) ++ "\n"
+    in fastConcat (node :: childTrees expr)
+  where
+    nodeName : forall vars . CExp vars -> String
+    nodeName (CLocal _ _) = "CLocal"
+    nodeName (CRef _ n) = "CRef " ++ show n
+    nodeName (CLam _ n _) = "CLam " ++ show n
+    nodeName (CLet _ n _ _ _) = "CLet " ++ show n
+    nodeName (CApp _ _ _) = "CApp"
+    nodeName (CCon _ n _ _ _) = "CCon " ++ show n
+    nodeName (COp _ op _) = "COp " ++ show op
+    nodeName (CExtPrim _ n _) = "CExtPrim " ++ show n
+    nodeName (CForce _ _ _) = "CForce"
+    nodeName (CDelay _ _ _) = "CDelay"
+    nodeName (CConCase _ _ _ _) = "CConCase"
+    nodeName (CConstCase _ _ _ _) = "CConstCase"
+    nodeName (CPrimVal _ c) = "CPrimVal " ++ show c
+    nodeName (CErased _) = "CErased"
+    nodeName (CCrash _ m) = "CCrash " ++ m
+
+    childTrees : forall vars . CExp vars -> List String
+    childTrees (CLam _ _ sc) = [showFcTreeC (S depth) sc]
+    childTrees (CLet _ _ _ val sc) = [showFcTreeC (S depth) val, showFcTreeC (S depth) sc]
+    childTrees (CApp _ f args) = showFcTreeC (S depth) f :: (showFcTreeC (S depth) <$> args)
+    childTrees (CCon _ _ _ _ args) = showFcTreeC (S depth) <$> args
+    childTrees (COp _ _ args) = showFcTreeC (S depth) <$> toList args
+    childTrees (CExtPrim _ _ args) = showFcTreeC (S depth) <$> args
+    childTrees (CForce _ _ sc) = [showFcTreeC (S depth) sc]
+    childTrees (CDelay _ _ sc) = [showFcTreeC (S depth) sc]
+    childTrees (CConCase _ sc alts def) =
+        showFcTreeC (S depth) sc :: ((\(MkConAlt _ _ _ _ b) => showFcTreeC (S depth) b) <$> alts)
+            ++ (showFcTreeC (S depth) <$> toList def)
+    childTrees (CConstCase _ sc alts def) =
+        showFcTreeC (S depth) sc :: ((\(MkConstAlt _ b) => showFcTreeC (S depth) b) <$> alts)
+            ++ (showFcTreeC (S depth) <$> toList def)
+    childTrees _ = []
+
+dumpFcTrees : {auto c : Ref Ctxt Defs} -> String -> List Name -> Core ()
+dumpFcTrees stage cns = case inlineDebugName of
+    Nothing => pure ()
+    Just marker => for_ cns $ \n =>
+        when (marker `isInfixOf` show n) $ do
+            defs <- get Ctxt
+            Just gdef <- lookupCtxtExact n (gamma defs)
+                | Nothing => pure ()
+            let Just (MkFun args body) = compexpr gdef
+                | _ => pure ()
+            coreLift $ putStrLn $ "[inline-debug] " ++ stage ++ " " ++ show n ++ ":\n" ++ showFcTreeC 0 body
+
 export
 compileAndInlineAll : {auto c : Ref Ctxt Defs} ->
                       Core ()
@@ -579,6 +673,7 @@ compileAndInlineAll
          cns <- filterM nonErased ns
 
          traverse_ compileDef cns
+         dumpFcTrees "compileDef" cns
          traverse_ rewriteIdentityFlag cns
          transform 3 cns -- number of rounds to run transformations.
                          -- This seems to be the point where not much useful
@@ -594,12 +689,18 @@ compileAndInlineAll
     transform Z cns = pure ()
     transform (S k) cns
         = do traverse_ inlineDef cns
+             dumpFcTrees "inlineDef" cns
              traverse_ mergeLamDef cns
+             dumpFcTrees "mergeLamDef" cns
              traverse_ caseLamDef cns
+             dumpFcTrees "caseLamDef" cns
              traverse_ fixArityDef cns
+             dumpFcTrees "fixArityDef" cns
              traverse_ inlineHeuristics cns
              traverse_ constantFold cns
+             dumpFcTrees "constantFold" cns
              traverse_ setIdentity cns
+             dumpFcTrees "setIdentity" cns
              transform k cns
 
     nonErased : Name -> Core Bool

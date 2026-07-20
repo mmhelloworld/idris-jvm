@@ -352,14 +352,23 @@ allVarsNoLet env = go env [<] where
   go (v :: vs) p = mkVarChiply p :: go vs (p :< _)
 
 export
-close : FC -> String -> Env Term vars -> Term vars -> ClosedTerm
+close : {vars : _} -> FC -> String -> Env Term vars -> Term vars -> ClosedTerm
 close fc nm env tm
   = let (s, env) = mkSubstEnv 0 env in
     substs s env (rewrite appendNilRightNeutral vars in tm)
 
   where
-    mkSubstEnv : Int -> Env Term vs -> (SizeOf vs, SubstEnv vs Scope.empty)
+    -- Keep the binder's user-facing name as the machine name's root (the
+    -- counter keeps it unique): the case-tree binders — and ultimately the
+    -- code generators' debug variable tables — inherit these names, so
+    -- `area (Circle radius)` binds `radius` rather than an anonymous slot.
+    boundName : Name -> Int -> Name
+    boundName n i = case userNameRoot n of
+        Just (Basic userName) => MN userName i
+        _ => MN nm i
+
+    mkSubstEnv : {vs : _} -> Int -> Env Term vs -> (SizeOf vs, SubstEnv vs Scope.empty)
     mkSubstEnv i [] = (zero, Subst.empty)
-    mkSubstEnv i (v :: vs)
+    mkSubstEnv {vs = n :: _} i (v :: vs)
        = let (s, env) = mkSubstEnv (i + 1) vs in
-         (suc s, Ref fc Bound (MN nm i) :: env)
+         (suc s, Ref fc Bound (boundName n i) :: env)

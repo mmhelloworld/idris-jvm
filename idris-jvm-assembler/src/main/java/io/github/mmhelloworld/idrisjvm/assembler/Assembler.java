@@ -18,10 +18,12 @@ import java.util.AbstractMap.SimpleEntry;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -210,6 +212,12 @@ public final class Assembler {
   private final Map<String, ClassWriter> cws;
   private final Deque<ClassMethodVisitor> classMethodVisitorStack = new LinkedList<>();
   private Map<String, Object> env;
+  // Bytecode offsets that already carry a LineNumberTable entry in the method
+  // being assembled. Scope-based emission can attach two source lines to the
+  // same offset (function entry + first let/case scope); debuggers keep only
+  // one entry per offset, so the later one would silently shadow the first
+  // and its line would stop being a valid breakpoint target.
+  private Set<Integer> lineNumberOffsets = new HashSet<>();
   private ClassWriter cw;
   private MethodVisitor mv;
   private FieldVisitor fv;
@@ -539,8 +547,10 @@ public final class Assembler {
                            List<Annotation> annotations,
                            List<List<Annotation>> paramAnnotations) {
     if (mv != null) {
-      classMethodVisitorStack.addFirst(new ClassMethodVisitor(this.className, this.methodName, cw, mv, env));
+      classMethodVisitorStack.addFirst(
+        new ClassMethodVisitor(this.className, this.methodName, cw, mv, env, lineNumberOffsets));
       env = new HashMap<>();
+      lineNumberOffsets = new HashSet<>();
     }
     this.className = newClassName;
     this.methodName = newMethodName;
@@ -1707,11 +1717,13 @@ public final class Assembler {
       cw = classMethodVisitor.getClassVisitor();
       mv = classMethodVisitor.getMethodVisitor();
       env = classMethodVisitor.getEnv();
+      lineNumberOffsets = classMethodVisitor.getLineNumberOffsets();
       className = classMethodVisitor.getClassName();
       methodName = classMethodVisitor.getMethodName();
     } else {
       mv = null;
       env.clear();
+      lineNumberOffsets.clear();
     }
   }
 
@@ -1744,7 +1756,17 @@ public final class Assembler {
   }
 
   public void lineNumber(int lineNumber, String label) {
-    mv.visitLineNumber(lineNumber, getLabel(label));
+    Label asmLabel = getLabel(label);
+    int offset;
+    try {
+      offset = asmLabel.getOffset();
+    } catch (IllegalStateException unresolvedLabel) {
+      mv.visitLineNumber(lineNumber, asmLabel);
+      return;
+    }
+    if (lineNumberOffsets.add(offset)) {
+      mv.visitLineNumber(lineNumber, asmLabel);
+    }
   }
 
   public void localVariable(String name, String typeDescriptor, String signature, String lineNumberStartLabel,
@@ -1763,8 +1785,37 @@ public final class Assembler {
   private ClassWriter createClassWriter(String sourceFile, String cname) {
     ClassWriter classWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
     classWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_FINAL, cname, null, "java/lang/Object", null);
-    classWriter.visitSource(sourceFile, null);
+    classWriter.visitSource(inferSourceFile(sourceFile, cname), null);
     return classWriter;
+  }
+
+  /**
+   * The SourceFile attribute for a class. The passed source file is whichever
+   * definition happened to create the class writer first, which for a class
+   * shared by many definitions (or first touched by a generated definition
+   * with no source location) can name a different module's file. The class
+   * name itself always encodes the module — `M_Data/M_Helper` is module
+   * `Data.Helper` (file Helper.idr), `<program>/Foo` is module `Foo`, and a
+   * constructor class nests under its module's package — so derive from it
+   * and keep the passed value only for generated classes with no module.
+   */
+  private static String inferSourceFile(String sourceFile, String cname) {
+    int slash = cname.lastIndexOf('/');
+    String leaf = slash < 0 ? cname : cname.substring(slash + 1);
+    if (leaf.contains("$") || "JvmMain".equals(leaf)) {
+      return sourceFile;
+    }
+    if (leaf.startsWith("M_")) {
+      return leaf.substring(2) + ".idr";
+    }
+    String parentPackage = slash < 0 ? "" : cname.substring(0, slash);
+    int parentSlash = parentPackage.lastIndexOf('/');
+    String parentLeaf = parentSlash < 0 ? parentPackage : parentPackage.substring(parentSlash + 1);
+    if (parentLeaf.startsWith("M_")) {
+      // Constructor class below its module's package, e.g. M_Prelude/M_Show/PrefixMinus
+      return parentLeaf.substring(2) + ".idr";
+    }
+    return leaf + ".idr";
   }
 
   private MethodVisitor getOrCreateClassInitMethodVisitor() {

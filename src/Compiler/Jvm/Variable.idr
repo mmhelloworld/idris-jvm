@@ -15,6 +15,12 @@ getLocTy typesByIndex varIndex = do
     optTy <- Map.get typesByIndex varIndex
     pure $ fromMaybe IUnknown $ nullableToMaybe optTy
 
+||| Physical JVM local slot for a logical variable index: doubles and longs
+||| occupy two slots, so every variable after one is shifted. Load/store go
+||| through this; debug info (LocalVariableTable) must use it too, or a
+||| variable following a wide one is reported at the wide variable's second
+||| slot and debuggers show garbage.
+export
 getVarIndex : Map Int InferredType -> Int -> IO Int
 getVarIndex types index = go 0 0 where
   go : Int -> Int -> IO Int

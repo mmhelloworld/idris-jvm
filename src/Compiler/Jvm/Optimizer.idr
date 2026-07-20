@@ -82,17 +82,131 @@ getSourceLocation expr = case getFC expr of
     EmptyFC => case expr of
         (NmExtPrim _ _ (arg :: args)) => getSourceLocation arg
         (NmOp _ _ (arg :: _)) => getSourceLocation arg
-        _ => ("Main.idr", 1, 1)
+        -- Line 0 = no source location: addLineNumber skips it, so generated
+        -- code doesn't masquerade as line 1 of Main.idr in debuggers.
+        _ => ("Main.idr", 0, 0)
     (MkVirtualFC originDesc startPos endPos) => getSourceLocationFromOriginDesc originDesc startPos endPos
     (MkFC originDesc startPos endPos) => getSourceLocationFromOriginDesc originDesc startPos endPos
 
 export
 getSourceLocationFromFc : FC -> (String, Int, Int)
-getSourceLocationFromFc EmptyFC = ("Main.idr", 1, 1)
+getSourceLocationFromFc EmptyFC = ("Main.idr", 0, 0)
 getSourceLocationFromFc (MkVirtualFC originDesc startPos endPos) =
     getSourceLocationFromOriginDesc originDesc startPos endPos
 getSourceLocationFromFc (MkFC originDesc startPos endPos) =
     getSourceLocationFromOriginDesc originDesc startPos endPos
+
+||| The file whose lines may appear in the current function's method: derived
+||| from the class name the same way the assembler derives the class's
+||| SourceFile attribute (`M_Data/M_Helper` -> `Helper.idr`). Empty when the
+||| class has no module file (generated classes).
+export
+functionSourceFile : {auto stateRef: Ref AsmState AsmState} -> Core String
+functionSourceFile = do
+    functionClassName <- getClassName
+    let leaf = last $ split (== '/') functionClassName
+    pure $ if elem '$' (unpack leaf) || leaf == "JvmMain"
+        then ""
+        else (if "M_" `isPrefixOf` leaf then substr 2 (length leaf) leaf else leaf) ++ ".idr"
+
+export
+linesInFile : String -> FC -> Maybe (Int, Int)
+linesInFile fileName (MkFC originDesc startPos endPos) =
+    let (file, lineStart, lineEnd) = getSourceLocationFromOriginDesc originDesc startPos endPos
+    in if file == fileName then Just (lineStart, lineEnd) else Nothing
+linesInFile fileName (MkVirtualFC originDesc startPos endPos) =
+    linesInFile fileName (MkFC originDesc startPos endPos)
+linesInFile _ EmptyFC = Nothing
+
+mutual
+    ||| Pre-order search for the first source location belonging to the given
+    ||| file: the root's own location when it is in-file, else the nearest
+    ||| descendant's. Inlining substitutes cross-module bodies (carrying their
+    ||| original foreign FCs) around the in-file argument expressions, so an
+    ||| expression whose root FC is foreign or empty — e.g. a clause body that
+    ||| is just inlined Prelude arithmetic over the clause's pattern variables
+    ||| — usually still has in-file locations right below the root.
+    findLinesInFile : String -> NamedCExp -> Maybe (Int, Int)
+    findLinesInFile fileName expr = linesInFile fileName (getFC expr) <|> descend expr where
+        first : List NamedCExp -> Maybe (Int, Int)
+        first = foldr (\e, acc => findLinesInFile fileName e <|> acc) Nothing
+
+        descend : NamedCExp -> Maybe (Int, Int)
+        descend (NmLam _ _ sc) = findLinesInFile fileName sc
+        descend (NmLet _ _ value sc) = first [value, sc]
+        descend (NmApp _ f args) = first (f :: args)
+        descend (NmCon _ _ _ _ args) = first args
+        descend (NmOp _ _ args) = first (toList args)
+        descend (NmExtPrim _ _ args) = first args
+        descend (NmForce _ _ sc) = findLinesInFile fileName sc
+        descend (NmDelay _ _ sc) = findLinesInFile fileName sc
+        descend (NmConCase _ sc alts def) =
+            first (sc :: (conAltBody <$> alts)) <|> (def >>= findLinesInFile fileName)
+        descend (NmConstCase _ sc alts def) =
+            first (sc :: (constAltBody <$> alts)) <|> (def >>= findLinesInFile fileName)
+        descend _ = Nothing
+
+    conAltBody : NamedConAlt -> NamedCExp
+    conAltBody (MkNConAlt _ _ _ _ body) = body
+
+    constAltBody : NamedConstAlt -> NamedCExp
+    constAltBody (MkNConstAlt _ body) = body
+
+||| Scope line numbers for an expression: the first location in it that
+||| belongs to the function's own source file, else the line-0 sentinel that
+||| `addLineNumber` drops. A method's LineNumberTable is interpreted against
+||| its class's single SourceFile, so lines of cross-module inlined code would
+||| send debuggers to arbitrary positions in the wrong file (e.g. a Prelude
+||| line number far beyond the end of a short Main.idr).
+||| Render an expression as a tree of node kinds with each node's FC —
+||| debug-info work needs to see where source locations survive or vanish
+||| in the compiled tree. Printed for scope creation under IDRIS_JVM_DEBUG.
+export
+showFcTree : Nat -> NamedCExp -> String
+showFcTree depth expr =
+    let indent = pack (replicate (2 * depth) ' ')
+        node = indent ++ nodeName expr ++ " @ " ++ show (getFC expr)
+        children = case expr of
+            NmLam _ _ sc => [sc]
+            NmLet _ _ v sc => [v, sc]
+            NmApp _ f args => f :: args
+            NmCon _ _ _ _ args => args
+            NmOp _ _ args => toList args
+            NmExtPrim _ _ args => args
+            NmForce _ _ sc => [sc]
+            NmDelay _ _ sc => [sc]
+            NmConCase _ sc alts def => sc :: ((\(MkNConAlt _ _ _ _ b) => b) <$> alts) ++ toList def
+            NmConstCase _ sc alts def => sc :: ((\(MkNConstAlt _ b) => b) <$> alts) ++ toList def
+            _ => []
+    in fastConcat (node :: "\n" :: ((showFcTree (S depth)) <$> children))
+  where
+    nodeName : NamedCExp -> String
+    nodeName (NmLocal _ n) = "NmLocal " ++ show n
+    nodeName (NmRef _ n) = "NmRef " ++ show n
+    nodeName (NmLam _ n _) = "NmLam " ++ show n
+    nodeName (NmLet _ n _ _) = "NmLet " ++ show n
+    nodeName (NmApp _ _ _) = "NmApp"
+    nodeName (NmCon _ n _ _ _) = "NmCon " ++ show n
+    nodeName (NmOp _ op _) = "NmOp " ++ show op
+    nodeName (NmExtPrim _ n _) = "NmExtPrim " ++ show n
+    nodeName (NmForce _ _ _) = "NmForce"
+    nodeName (NmDelay _ _ _) = "NmDelay"
+    nodeName (NmConCase _ _ _ _) = "NmConCase"
+    nodeName (NmConstCase _ _ _ _) = "NmConstCase"
+    nodeName (NmPrimVal _ c) = "NmPrimVal " ++ show c
+    nodeName (NmErased _) = "NmErased"
+    nodeName (NmCrash _ m) = "NmCrash " ++ m
+
+export
+getScopeLines : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core (Int, Int)
+getScopeLines expr = do
+    jname <- getRootMethodName
+    when (shouldDebugFunction jname) $
+        coreLift $ putStrLn ("getScopeLines:\n" ++ showFcTree 0 expr)
+    functionFile <- functionSourceFile
+    if functionFile == ""
+        then pure $ let (_, lineStart, lineEnd) = getSourceLocation expr in (lineStart, lineEnd)
+        else pure $ fromMaybe (0, 0) (findLinesInFile functionFile expr)
 
 mutual
     export
@@ -829,6 +943,15 @@ getJavaLambdaType fc [functionType, javaInterfaceType, _] =
           restInferredTypes <- go acc lambdaTy
           pure (restInferredTypes ++ (argInferredTy :: acc))
         go acc (NmLam fc arg expr) = go acc expr
+        go acc expr@(NmApp _ (NmRef _ name) []) = do
+          -- CSE can lift the function type into a shared nil-arity definition
+          -- (it occurs both as the lambda type and inside the interface tuple
+          -- of a jlambda call): parse through it to keep the SAM descriptor's
+          -- precise types.
+          programName <- getProgramName
+          Just (_, MkNmFun _ def) <- nullableToMaybe <$> getFcAndDefinition (getSimpleName (jvmName programName name))
+            | _ => pure (!(tySpec expr) :: acc)
+          go acc def
         go acc expr@(NmApp _ (NmRef _ name) [arg]) = go (IInt :: acc) (if name == primio "PrimIO" then arg else expr)
         go acc expr = pure (!(tySpec expr) :: acc)
 
@@ -857,9 +980,17 @@ getJavaLambdaType fc [functionType, javaInterfaceType, _] =
             _ => throwExpectedStructAtPos
         else asmCrash ("Expected a tuple containing interface type and method type but found: " ++ showNamedCExp 0 expr)
     parseJavaInterfaceType (NmApp _ (NmRef _ name) _) = do
-        (_, MkNmFun _ def) <- getFcAndDefinition (jvmSimpleName name)
+        -- Look up with the same program-qualified key the definitions map is
+        -- built with (getNameStrFcDef): the unqualified simple name misses for
+        -- machine names such as the csegen definitions CSE introduces when it
+        -- shares an interface-tuple type across jlambda sites. The lookup
+        -- answers null for names with no compiled body: report it instead of
+        -- crashing on the null.
+        programName <- getProgramName
+        let functionKey = getSimpleName (jvmName programName name)
+        Just (_, MkNmFun _ def) <- nullableToMaybe <$> getFcAndDefinition functionKey
           | _ => asmCrash ("Expected a function returning a tuple containing interface type and method type at " ++
-                   show fc)
+                   show fc ++ " for " ++ show name)
         parseJavaInterfaceType def
     parseJavaInterfaceType (NmDelay _ _ expr) = parseJavaInterfaceType expr
     parseJavaInterfaceType expr = asmCrash ("Expected a tuple containing interface type and method type but found: " ++ showNamedCExp 0 expr)
@@ -966,8 +1097,7 @@ mutual
 
     inferExprWithNewScope : {auto stateRef: Ref AsmState AsmState} -> NamedCExp -> Core InferredType
     inferExprWithNewScope expr = do
-         let fc = getFC expr
-         let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
+         (lineStart, lineEnd) <- getScopeLines expr
          withInferenceScope lineStart lineEnd $ inferExpr expr
 
     inferConCaseExpr : {auto stateRef: Ref AsmState AsmState} -> String -> Name -> ConInfo -> List Name -> NamedCExp -> Core InferredType
@@ -1063,8 +1193,7 @@ mutual
 
     inferExprConAlt : {auto stateRef: Ref AsmState AsmState} -> String -> NamedConAlt -> Core InferredType
     inferExprConAlt discriminantVar (MkNConAlt name conInfo _ args expr) = do
-      let fc = getFC expr
-      let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
+      (lineStart, lineEnd) <- getScopeLines expr
       withInferenceScope lineStart lineEnd $ inferConCaseExpr discriminantVar name conInfo args expr
 
     inferBinaryOp : {auto stateRef: Ref AsmState AsmState} -> InferredType -> NamedCExp -> NamedCExp -> Core InferredType
@@ -1167,7 +1296,7 @@ mutual
                                   -> (parameterValueExpr: Maybe (Core InferredType)) -> NamedCExp -> Core InferredType
     inferExprLamWithParameterType parameterName parameterValueExpr expr = do
         let hasParameterValue = isJust parameterValueExpr
-        let (_, lineStart, lineEnd) = getSourceLocation expr
+        (lineStart, lineEnd) <- getScopeLines expr
         let jvmParameterName = jvmSimpleName <$> parameterName
         let lambdaType = getLambdaTypeByParameter parameterName
         lambdaBodyReturnType <- withInferenceLambdaScope lineStart lineEnd parameterName expr $ do
@@ -1238,14 +1367,13 @@ mutual
 
     inferExprLet : {auto stateRef: Ref AsmState AsmState} -> FC -> (x : Name) -> NamedCExp -> NamedCExp -> Core InferredType
     inferExprLet fc var value expr = do
-        let (lineStart, lineEnd) = getLineNumbers (startPos (toNonEmptyFC fc)) (endPos (toNonEmptyFC fc))
         let varName = jvmSimpleName var
         createVariable varName
-        let (_, lineStart, lineEnd) = getSourceLocation value
-        valueTy <- withInferenceScope lineStart lineEnd $ inferExpr value
+        (valueLineStart, valueLineEnd) <- getScopeLines value
+        valueTy <- withInferenceScope valueLineStart valueLineEnd $ inferExpr value
         addVariableType varName valueTy
-        let (_, lineStart, lineEnd) = getSourceLocation expr
-        withInferenceScope lineStart lineEnd $ inferExpr expr
+        (exprLineStart, exprLineEnd) <- getScopeLines expr
+        withInferenceScope exprLineStart exprLineEnd $ inferExpr expr
 
     -- Infer a literal lambda argument destined for a typed callback slot
     -- (higher-order specialisation).  Mirrors inferExprLamWithParameterType
@@ -1260,7 +1388,7 @@ mutual
     inferCallbackLambda : {auto stateRef: Ref AsmState AsmState} -> InferredFunctionType
                         -> (parameterName : Name) -> NamedCExp -> Core InferredType
     inferCallbackLambda sig parameterName expr = do
-        let (_, lineStart, lineEnd) = getSourceLocation expr
+        (lineStart, lineEnd) <- getScopeLines expr
         let jvmParameterName = jvmSimpleName parameterName
         let paramType = fromMaybe inferredObjectType (head' sig.parameterTypes)
         -- An arity-2 signature comes with the nested two-lambda shape
@@ -2127,7 +2255,7 @@ inferFunctionType (Just initialFunctionType) (MkNmFun args expr) = do
   resetCallSiteLog
   setInferredReturnType IUnknown
   scopeIndex <- newScopeIndex
-  let (_, lineStart, lineEnd) = getSourceLocation expr
+  (lineStart, lineEnd) <- getScopeLines expr
   allVariableTypes <- coreLift $ Map.newTreeMap {key=Int} {value=InferredType}
   allVariableIndices <- coreLift $ Map.newTreeMap {key=String} {value=Int}
   let arity = length args

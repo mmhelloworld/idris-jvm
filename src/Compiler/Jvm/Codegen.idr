@@ -51,20 +51,76 @@ import Idris.Syntax
 %hide Core.Name.Scoped.Scope
 %hide System.FFI.runtimeClass
 
+-- Emit a LineNumberTable entry at the current position for a call site: a
+-- method whose lines exist only at scope starts steps over a whole clause
+-- body at once, so each application whose location belongs to the
+-- function's own source file contributes its line, giving statement-level
+-- step-over. Per-offset and per-line dedup in the assembler keep the table
+-- small.
+markCallSiteLine : {auto stateRef: Ref AsmState AsmState} -> FC -> Core ()
+markCallSiteLine fc = do
+    functionFile <- functionSourceFile
+    when (functionFile /= "") $ case linesInFile functionFile fc of
+        Just (lineStart, _) => do
+            label <- newLabel
+            createLabel label
+            labelStart label
+            addLineNumber lineStart label
+        Nothing => pure ()
+
+-- Visit a fresh label at the current position (just after a variable's store)
+-- and record it as the variable's LocalVariableTable start. Declaring a
+-- variable live before its store makes JVMTI reject reading the slot
+-- (JDWP INVALID_SLOT), which breaks the whole locals view in debuggers.
+markVariableLive : {auto stateRef: Ref AsmState AsmState} -> String -> Core ()
+markVariableLive variableName = do
+    label <- newLabel
+    createLabel label
+    labelStart label
+    markVariableLiveFrom variableName label
+
+-- Strip a trailing `$<digits>` uniqueness counter from a variable name for
+-- display: case-tree binders derive their machine names from the pattern
+-- variable (`radius$17` for `Circle radius`), and the counter is noise in a
+-- debugger's variables view. Nothing to strip (or a leading-$ synthetic
+-- name) yields Nothing.
+stripIndexSuffix : String -> Maybe String
+stripIndexSuffix name = case span isDigit (reverse (unpack name)) of
+    (_ :: _, '$' :: baseReversed@(baseLast :: _)) =>
+        let base = pack (reverse baseReversed)
+        in if isAlphaNum baseLast && not ("$" `isPrefixOf` base)
+            then Just base
+            else Nothing
+    _ => Nothing
+
 addScopeLocalVariables : {auto stateRef: Ref AsmState AsmState} -> Scope -> Core ()
 addScopeLocalVariables scope = do
     let scopeIndex = index scope
     let (lineNumberStart, lineNumberEnd) = lineNumbers scope
     let (labelStart, labelEnd) = labels scope
     nameAndIndices <- coreLift $ Map.toList $ variableIndices scope
-    go labelStart labelEnd nameAndIndices
+    let rawNames = fst <$> nameAndIndices
+    let strippedBases = mapMaybe stripIndexSuffix rawNames
+    -- Only display the stripped name when it stays unambiguous within the
+    -- scope: not equal to another variable's raw name and not produced by
+    -- stripping a second variable (e.g. machine binders e$1/e$2 both = "e").
+    let displayName = \name => case stripIndexSuffix name of
+            Just base =>
+                if elem base rawNames || count (== base) strippedBases > 1
+                    then name
+                    else base
+            Nothing => name
+    go displayName labelStart labelEnd nameAndIndices
   where
-    go : String -> String -> List (String, Int) -> Core ()
-    go _ _ [] = pure ()
-    go labelStart labelEnd ((name, varIndex) :: rest) = do
+    go : (String -> String) -> String -> String -> List (String, Int) -> Core ()
+    go _ _ _ [] = pure ()
+    go displayName labelStart labelEnd ((name, varIndex) :: rest) = do
         variableType <- getVariableTypeAtScope (index scope) name
-        localVariable name (getJvmTypeDescriptor variableType) Nothing labelStart labelEnd varIndex
-        go labelStart labelEnd rest
+        liveFromLabel <- fromMaybe labelStart <$> getVariableLiveLabel (index scope) name
+        variableTypes <- getVariableTypesAtScope (index scope)
+        physicalIndex <- coreLift $ getVarIndex variableTypes varIndex
+        localVariable (displayName name) (getJvmTypeDescriptor variableType) Nothing liveFromLabel labelEnd physicalIndex
+        go displayName labelStart labelEnd rest
 
 addLocalVariables : {auto stateRef: Ref AsmState AsmState} -> Int -> Core ()
 addLocalVariables scopeIndex = do
@@ -671,6 +727,10 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             assembleExpr False variableType value
             storeVar variableType variableType variableIndex
 
+        -- The let variable is stored right before the target expression's
+        -- start label, so it is live in the LVT exactly from that label.
+        markVariableLiveFrom variableName targetExprScopeStartLabel
+
         withScope $ do
             targetExprScopeIndex <- getCurrentScopeIndex
             scope <- getScope targetExprScopeIndex
@@ -682,7 +742,8 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             assembleExpr isTailCall returnType expr
 
     -- Tail recursion. Store arguments and recur to the beginning of the method
-    assembleExpr _ returnType app@(NmApp fc (NmRef _ (UN (Basic "$idrisTailRec"))) args) =
+    assembleExpr _ returnType app@(NmApp fc (NmRef _ (UN (Basic "$idrisTailRec"))) args) = do
+        markCallSiteLine fc
         case length args of
             Z => goto methodStartLabel
             (S lastArgIndex) => do
@@ -701,11 +762,13 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                         loadVar types ty ty targetVariableIndex
                         storeVar ty ty argIndex
 
-    assembleExpr isTailCall returnType (NmApp _ (NmRef _ idrisName) []) =
+    assembleExpr isTailCall returnType (NmApp fc (NmRef _ idrisName) []) = do
+        markCallSiteLine fc
         assembleNmAppNilArity isTailCall returnType idrisName
-    assembleExpr isTailCall returnType (NmApp _ (NmRef _ idrisName) args) =
+    assembleExpr isTailCall returnType (NmApp fc (NmRef _ idrisName) args) =
       if isSuperCall idrisName args then do aconstnull; when isTailCall $ asmReturn returnType
       else do
+        markCallSiteLine fc
         let jname = jvmName !getProgramName idrisName
         functionType <- case !(findFunctionType jname) of
             Just ty => pure ty
@@ -730,13 +793,14 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                 asmCast methodReturnType returnType
                 when isTailCall $ asmReturn returnType
 
-    assembleExpr isTailCall returnType (NmApp _ inner@(NmApp _ lambdaVariable@(NmLocal _ _) [x]) [y]) = do
+    assembleExpr isTailCall returnType (NmApp fc inner@(NmApp _ lambdaVariable@(NmLocal _ _) [x]) [y]) = do
         -- Typed apply (arity-2 higher-order specialisation): `f x y` —
         -- nested unary application — on a variable statically typed as a
         -- two-parameter callback interface invokes the typed `apply` in
         -- one call: no intermediate partial-application closure, no
         -- boxing.  Mirrors inferExprApp's nested variable-head case;
         -- every other shape replays the nested boxed path.
+        markCallSiteLine fc
         case !(callbackSigOfVariableWithArity 2 lambdaVariable) of
           Just (ifaceName, sig) => do
             createIdrisFunctionInterface ifaceName (getMethodDescriptor sig)
@@ -755,7 +819,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             asmCast inferredObjectType returnType
         when isTailCall $ asmReturn returnType
 
-    assembleExpr isTailCall returnType (NmApp _ lambdaVariable [arg]) = do
+    assembleExpr isTailCall returnType (NmApp fc lambdaVariable [arg]) = do
         -- Typed apply (higher-order specialisation): when the applied
         -- value is a variable statically typed as an arity-1 callback
         -- interface (e.g. a spec's callback parameter), invoke the typed
@@ -765,6 +829,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         -- application of an arity-2 typed callback — stays on the boxed
         -- `Function.apply` path, which remains correct for typed
         -- callbacks through the interface's default bridge method.
+        markCallSiteLine fc
         case !(callbackSigOfVariableWithArity 1 lambdaVariable) of
           Just (ifaceName, sig) => do
             createIdrisFunctionInterface ifaceName (getMethodDescriptor sig)
@@ -992,9 +1057,11 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
     assembleConstructorSwitchExpr : NamedCExp -> Core Int
     assembleConstructorSwitchExpr (NmLocal _ loc) = getVariableIndex $ jvmSimpleName loc
     assembleConstructorSwitchExpr sc = do
-        idrisObjectVariableIndex <- getVariableIndex $ "constructorSwitchValue" ++ show !newDynamicVariableIndex
+        let variableName = "constructorSwitchValue" ++ show !newDynamicVariableIndex
+        idrisObjectVariableIndex <- getVariableIndex variableName
         assembleExpr False idrisObjectType sc
         storeVar idrisObjectType idrisObjectType idrisObjectVariableIndex
+        markVariableLive variableName
         pure idrisObjectVariableIndex
 
     assembleExprBinaryOp : InferredType -> InferredType -> Core () -> NamedCExp -> NamedCExp -> Core ()
@@ -1625,9 +1692,11 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         let hashCodePositionVariableName = "hashCodePosition" ++ show hashCodePositionVariableSuffixIndex
         hashCodePositionVariableIndex <- getVariableIndex hashCodePositionVariableName
         storeVar constantType constantType constantExprVariableIndex
+        markVariableLive constantExprVariableName
         constantClass <- getHashCodeSwitchClass fc constantType
         iconst (-1)
         storeVar IInt IInt hashCodePositionVariableIndex
+        markVariableLive hashCodePositionVariableName
         loadVar !getVariableTypes constantType constantType constantExprVariableIndex
         let isLong = constantClass == "java/lang/Long"
         let invocationType = if isLong then InvokeStatic else InvokeVirtual
@@ -1863,6 +1932,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                     invokeMethod InvokeInterface idrisObjectClass "getProperty" "(I)Ljava/lang/Object;" True
                     variableIndex <- getVariableIndex variableName
                     storeVar inferredObjectType !(getVariableType variableName) variableIndex
+                markVariableLive variableName
               bindArg forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes (index + 1) vars
 
     assembleConstructorSwitch : InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()
@@ -1881,6 +1951,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         let constantExprVariableName = "constructorCaseExpr" ++ show constantExprVariableSuffixIndex
         constantExprVariableIndex <- getVariableIndex constantExprVariableName
         storeVar inferredStringType inferredStringType constantExprVariableIndex
+        markVariableLive constantExprVariableName
         hashCodePositionVariableSuffixIndex <- newDynamicVariableIndex
         let hashCodePositionVariableName = "hashCodePosition" ++ show hashCodePositionVariableSuffixIndex
         hashCodePositionVariableIndex <- getVariableIndex hashCodePositionVariableName
@@ -1897,6 +1968,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         constantClass <- getHashCodeSwitchClass fc constantType
         iconst (-1)
         storeVar IInt IInt hashCodePositionVariableIndex
+        markVariableLive hashCodePositionVariableName
         loadVar !getVariableTypes constantType constantType constantExprVariableIndex
         invokeMethod InvokeVirtual constantClass "hashCode" "()I" False
         lookupSwitch switchEndLabel labels exprs
@@ -2084,8 +2156,10 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         assembleExpr False fieldType (snd value)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#' && c /= '=') fnameWithDot
         field PutField cname fieldName (getJvmTypeDescriptor fieldType)
-        aconstnull
-        asmCast inferredObjectType returnType
+        -- Like a void method call: nothing is on the stack, so cast from IVoid
+        -- (unit-as-int gets iconst 0). Casting a pushed null from Object NPEs in
+        -- Conversion.toInt when the return type is the unit int.
+        asmCast IVoid returnType
     jvmExtPrim _ returnType SetStaticField [ret, NmPrimVal fc (Str fn), fargs, _] = do
         (value :: []) <- getFArgs fargs
             | _ => asmCrash ("Setting a static field should have one argument for " ++ fn)
@@ -2094,8 +2168,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         assembleExpr False fieldType (snd value)
         let (_, fieldName) = break (\c => c /= '.' && c /= '#' && c /= '=') fnameWithDot
         field PutStatic cname fieldName (getJvmTypeDescriptor fieldType)
-        aconstnull
-        asmCast inferredObjectType returnType
+        asmCast IVoid returnType
     jvmExtPrim _ returnType GetInstanceField [ret, NmPrimVal fc (Str fn), fargs, _] = do
         (obj :: []) <- getFArgs fargs
             | _ => asmCrash ("Getting an instance field should have one argument for " ++ fn)
@@ -2352,8 +2425,12 @@ exportFunction typeExports (MkMethodExport jvmFunctionName idrisName type should
     (_, MkNmFun idrisFunctionArgs _) <- getFcAndDefinition (getSimpleName jvmIdrisName)
       | _ => asmCrash ("Unknown idris function " ++ show idrisName)
     let idrisFunctionArity = length idrisFunctionArgs
-    let idrisArgumentTypes = replicate idrisFunctionArity inferredObjectType
-    let idrisFunctionType = MkInferredFunctionType inferredObjectType idrisArgumentTypes
+    -- Use the function's actual inferred signature: parameters can be primitives
+    -- (notably the trailing %World compiles to int), so a fabricated all-Object
+    -- descriptor would not link against the compiled method.
+    idrisFunctionType <- case !(findFunctionType jvmIdrisName) of
+        Just functionType => pure functionType
+        Nothing => pure $ MkInferredFunctionType inferredObjectType (replicate idrisFunctionArity inferredObjectType)
     let isField = idrisFunctionArity == 0
     let isConstructor = jvmFunctionName == "<init>"
     if isConstructor
@@ -2363,8 +2440,11 @@ exportFunction typeExports (MkMethodExport jvmFunctionName idrisName type should
         let idrisMethodDescriptor = getMethodDescriptor idrisFunctionType
         programName <- getProgramName
         invokeMethod InvokeStatic (className jvmIdrisName) (methodName jvmIdrisName) idrisMethodDescriptor False
-        when shouldPerformIO $ invokeMethod InvokeStatic (programName ++ "/PrimIO") "unsafePerformIO" "(Ljava/lang/Object;)Ljava/lang/Object;" False
-        toJava idrisName typeExports jvmReturnType (returnType idrisFunctionType)
+        let idrisReturnType = returnType idrisFunctionType
+        when shouldPerformIO $ do
+            asmCast idrisReturnType inferredObjectType
+            invokeMethod InvokeStatic (programName ++ "/PrimIO") "unsafePerformIO" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+        toJava idrisName typeExports jvmReturnType (if shouldPerformIO then inferredObjectType else idrisReturnType)
         asmReturn jvmReturnType
         maxStackAndLocal (-1) (-1)
         methodCodeEnd

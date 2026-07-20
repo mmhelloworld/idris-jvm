@@ -70,10 +70,12 @@ mul (Unsigned n) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/ru
 
 export
 div : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
-div (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "divide"
-                           "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-div (Signed (P 64)) = ldiv
-div (Signed (P 32)) = idiv
+div (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidDiv"
+                           "(Ljava/math/BigInteger;Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+div (Signed (P 64)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidDiv"
+                        "(JJ)J" False
+div (Signed (P 32)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidDiv"
+                        "(II)I" False
 div (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("div" ++ show n)
                        "(II)I" False
 div (Unsigned 64) = longDivideUnsigned
@@ -82,10 +84,12 @@ div (Unsigned n) = idiv
 
 export
 mod : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
-mod (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "remainder"
-                           "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
-mod (Signed (P 64)) = lrem
-mod (Signed (P n)) = irem
+mod (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidMod"
+                           "(Ljava/math/BigInteger;Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+mod (Signed (P 64)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidMod"
+                        "(JJ)J" False
+mod (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidMod"
+                       "(II)I" False
 mod (Unsigned 64) = longRemainderUnsigned
 mod (Unsigned 32) = integerRemainderUnsigned
 mod (Unsigned n) = irem

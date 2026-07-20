@@ -61,6 +61,15 @@ should target this file (`CHANGELOG_NEXT`).
 
 ### JVM backend changes
 
+* `div` and `mod` on signed integer types now follow Euclidean semantics,
+  matching the Chez and other reference backends: the remainder is always
+  non-negative (`-11 `mod` 10` is `9`, not `-1`; `-11 `div` 10` is `-2`,
+  not `-1`). Previously the backend emitted the JVM's truncated
+  division/remainder instructions (`idiv`/`irem`/`ldiv`/`lrem` and
+  `BigInteger.divide`/`remainder`), whose results take the dividend's sign.
+  Signed division and modulo now call `IdrisMath.euclidDiv`/`euclidMod`;
+  unsigned types are unaffected.
+
 * Fixed Java lambda (`jlambda`) type derivation when common-subexpression
   elimination lifts the shared functional-interface tuple type or the lambda's
   function type into a `csegen` definition: the definition lookup now uses the

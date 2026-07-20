@@ -1,5 +1,7 @@
 package io.github.mmhelloworld.idrisjvm.runtime;
 
+import java.math.BigInteger;
+
 public final class IdrisMath {
     private IdrisMath() {
     }
@@ -53,11 +55,62 @@ public final class IdrisMath {
     }
 
     public static int div8(int x, int y) {
-        return (byte) (x / y);
+        return (byte) euclidDiv(x, y);
     }
 
     public static int div16(int x, int y) {
-        return (short) (x / y);
+        return (short) euclidDiv(x, y);
+    }
+
+    // Division and modulo on signed types follow Euclidean semantics (remainder is always non-negative),
+    // matching "blodwen-euclidDiv"/"blodwen-euclidMod" in the reference backends.
+    public static int euclidDiv(int x, int y) {
+        var quotient = x / y;
+        if (x % y < 0) {
+            return y > 0 ? quotient - 1 : quotient + 1;
+        }
+        return quotient;
+    }
+
+    public static int euclidMod(int x, int y) {
+        var remainder = x % y;
+        if (remainder < 0) {
+            return y > 0 ? remainder + y : remainder - y;
+        }
+        return remainder;
+    }
+
+    public static long euclidDiv(long x, long y) {
+        var quotient = x / y;
+        if (x % y < 0) {
+            return y > 0 ? quotient - 1 : quotient + 1;
+        }
+        return quotient;
+    }
+
+    public static long euclidMod(long x, long y) {
+        var remainder = x % y;
+        if (remainder < 0) {
+            return y > 0 ? remainder + y : remainder - y;
+        }
+        return remainder;
+    }
+
+    public static BigInteger euclidDiv(BigInteger x, BigInteger y) {
+        var quotientAndRemainder = x.divideAndRemainder(y);
+        var quotient = quotientAndRemainder[0];
+        if (quotientAndRemainder[1].signum() < 0) {
+            return y.signum() > 0 ? quotient.subtract(BigInteger.ONE) : quotient.add(BigInteger.ONE);
+        }
+        return quotient;
+    }
+
+    public static BigInteger euclidMod(BigInteger x, BigInteger y) {
+        var remainder = x.remainder(y);
+        if (remainder.signum() < 0) {
+            return y.signum() > 0 ? remainder.add(y) : remainder.subtract(y);
+        }
+        return remainder;
     }
 
     public static int ushl8(int num, int bits) {

@@ -38,7 +38,7 @@ should target this file (`CHANGELOG_NEXT`).
     of matching definitions after each frontend pass; on the JVM backend
     `IDRIS_JVM_DEBUG` additionally dumps location trees during scope
     inference.
-* Pattern-bound variables keep their user names through case-tree
+* Pattern-bound variables keep their usernames through case-tree
   compilation: `Core.Env.close` now derives each machine name's root from
   the clause binder it closes over (`{radius:0}` instead of `{pat0::0}`),
   and the case-tree builder's `nextNames` propagates those roots into the
@@ -69,6 +69,15 @@ should target this file (`CHANGELOG_NEXT`).
   `BigInteger.divide`/`remainder`), whose results take the dividend's sign.
   Signed division and modulo now call `IdrisMath.euclidDiv`/`euclidMod`;
   unsigned types are unaffected.
+
+* Fixed `Bool` conversions at the Java boundary when the Java side uses boxed
+  `java/lang/Boolean`: exported functions returning `Boolean` failed class
+  verification (`VerifyError: Bad return type` — the Idris `Bool`, an `int` at
+  the JVM level, was boxed with `Integer.valueOf`), and foreign calls passing a
+  `Bool` to a `Boolean` parameter threw `ClassCastException` at runtime.
+  `Bool` in a foreign signature now maps to the JVM `boolean` type instead of
+  `Object`, and an `int` converted to a `Boolean` target boxes via
+  `Boolean.valueOf`.
 
 * Fixed Java lambda (`jlambda`) type derivation when common-subexpression
   elimination lifts the shared functional-interface tuple type or the lambda's

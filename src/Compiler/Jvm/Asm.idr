@@ -1054,7 +1054,7 @@ mkCallbackSig _ = Nothing
 -- The name is injective over the signature, so it doubles as the
 -- registry: parseCallbackIfaceType below decodes it back.  Lives directly
 -- under the program root, where no user constructor class can appear
--- (user names are namespace-qualified, so getIdrisConstructorClassName
+-- (usernames are namespace-qualified, so getIdrisConstructorClassName
 -- always routes them under `M_`-prefixed segments).
 export
 mkCallbackIfaceName : (programName : String) -> InferredFunctionType -> String
@@ -3237,7 +3237,9 @@ asmReturn _        = areturn
 export
 throwIo: Error -> IO a
 throwIo err = do
-  printLn err
+  case err of
+    GenericMsg EmptyFC message => putStrLn ("Error: " ++ message)
+    _ => printLn err
   exitWith (ExitFailure 1)
 
 export

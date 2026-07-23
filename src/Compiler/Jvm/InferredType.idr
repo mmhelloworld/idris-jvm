@@ -118,6 +118,10 @@ inferredStringType : InferredType
 inferredStringType = IRef stringClass Class []
 
 export
+inferredBooleanType : InferredType
+inferredBooleanType = IRef "java/lang/Boolean" Class []
+
+export
 inferredLambdaType : InferredType
 inferredLambdaType = IRef "java/util/function/Function" Interface []
 

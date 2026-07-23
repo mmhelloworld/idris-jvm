@@ -179,6 +179,8 @@ asmCast IInt ty =
     if ty == inferredBigIntegerType then do
         i2l
         invokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
+    -- Idris Bool is an int at the JVM level, so a Boolean target means box the 0/1 as Boolean, not Integer
+    else if ty == inferredBooleanType then boxBool
     else boxInt
 
 asmCast ILong ty = boxLong

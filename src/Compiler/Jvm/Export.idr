@@ -309,9 +309,13 @@ parseClassExport name parts descriptor annotations = do
   fieldExportDescriptors <- parseClassFieldExports name classExport descriptor
   pure $ (classExportDescriptor :: (MkFieldExportDescriptor <$> fieldExportDescriptors))
 
-getReferenceTypeName : {auto stateRef: Ref AsmState AsmState} -> String -> InferredType -> Core String
+getReferenceTypeName : {auto stateRef: Ref AsmState AsmState} -> (errorMessage: Lazy String) -> InferredType -> Core String
 getReferenceTypeName _ (IRef name _ _) = pure name
-getReferenceTypeName functionName _ = asmCrash ("Expected a reference type to export function " ++ functionName)
+getReferenceTypeName errorMessage _ = throw $ GenericMsg emptyFC errorMessage
+
+instanceExportHint : String
+instanceExportHint = "An instance method's first argument must be its enclosing class type. " ++
+  "To export a static method instead, add the 'static' modifier and an 'enclosingType' property."
 
 makePublicByDefault : List Access -> List Access
 makePublicByDefault modifiers =
@@ -347,8 +351,11 @@ parseMethodExport idrisName javaName parts descriptor annotations = do
     let adjustedParameterAnnotations = if isInstance then drop 1 parameterAnnotations else parameterAnnotations
     enclosingTypeName <- if isInstance
       then case jvmArgumentTypes of
-        [] => asmCrash ("Expected first argument to be a reference type for instance member in " ++ javaName)
-        (enclosingType :: _) => getReferenceTypeName javaName enclosingType
+        [] => throw $ GenericMsg emptyFC ("Cannot export " ++ methodName ++
+                " as an instance method as it has no arguments. " ++ instanceExportHint)
+        (enclosingType :: _) => getReferenceTypeName ("Cannot export " ++ methodName ++
+            " as an instance method: expected the first argument to be the enclosing class but found '" ++
+            show enclosingType ++ "'. " ++ instanceExportHint) enclosingType
       else case lookup "enclosingType" descriptor of
         Nothing => asmCrash ("Missing 'enclosingType' for " ++ javaName)
         Just enclosingTypeJson => parseString ("Invalid enclosing type for function " ++ javaName) enclosingTypeJson
@@ -413,7 +420,8 @@ parseMethodSimpleExport functionName descriptor = case String.break (\c => c == 
       let javaName = if shouldPerformIO then stripLastChar javaName else javaName
       let instanceType = parse instanceTypeString
       let functionType = MkInferredFunctionType (parse (last types)) (instanceType :: (parse <$> (init types)))
-      className <- getReferenceTypeName ("Invalid instance type in export for " ++ show functionName) instanceType
+      className <- getReferenceTypeName ("Invalid instance type '" ++ show instanceType ++ "' in export for " ++
+                     show functionName ++ ": expected a class or interface type") instanceType
       let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
       pure $ MkMethodExport javaName functionName functionType shouldPerformIO encloser [Public] [] []
   (className, staticMethodNameAndArgs) => case words staticMethodNameAndArgs of
@@ -433,8 +441,9 @@ parseFieldSimpleExport functionName descriptor = case String.break (\c => c == '
     (_ :: []) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (_ :: _ :: []) => asmCrash ("Invalid foreign export descriptor for " ++ show functionName)
     (javaName :: instanceType :: type :: _) => do
-      className <- getReferenceTypeName ("Invalid instance type in export for " ++ show functionName)
-                     (parse instanceType)
+      let instanceJvmType = parse instanceType
+      className <- getReferenceTypeName ("Invalid instance type '" ++ show instanceJvmType ++ "' in export for " ++
+                     show functionName ++ ": expected a class or interface type") instanceJvmType
       let encloser = MkClassExport className functionName inferredObjectType [] [Public] []
       pure $ MkFieldExport javaName (parse type) encloser [Public] []
   (className, staticFieldNameAndType) => case words staticFieldNameAndType of

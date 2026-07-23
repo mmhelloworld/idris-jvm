@@ -59,6 +59,7 @@ parse fc (CFUser name (ty :: _)) =
       _ => pure inferredObjectType
   else if name == arrayName then pure $ IArray !(parse fc ty)
   else pure inferredObjectType
+parse _ (CFUser name []) = pure $ if isBoolTySpec name then IBool else inferredObjectType
 parse _ ty = pure inferredObjectType
 
 export

@@ -1,0 +1,1 @@
+Error: Cannot export isPositive as an instance method: expected the first argument to be the enclosing class but found 'int'. An instance method's first argument must be its enclosing class type. To export a static method instead, add the 'static' modifier and an 'enclosingType' property.

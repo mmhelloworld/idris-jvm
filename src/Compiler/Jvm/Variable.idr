@@ -269,6 +269,11 @@ loadVar sourceLocTys IByte IInt  var = opWithWordSize sourceLocTys iload var
 loadVar sourceLocTys IChar IInt  var = opWithWordSize sourceLocTys iload var
 loadVar sourceLocTys IShort IInt  var = opWithWordSize sourceLocTys iload var
 loadVar sourceLocTys IInt IInt  var = opWithWordSize sourceLocTys iload var
+-- boolean and int share the JVM int stack representation, so an int variable
+-- feeding a boolean slot (e.g. a Bool foreign parameter) loads with plain
+-- iload.  Without this the `IInt ty` catch-all below boxes it to Integer,
+-- which fails to verify against the `Z` descriptor.
+loadVar sourceLocTys IInt IBool  var = opWithWordSize sourceLocTys iload var
 loadVar sourceLocTys IInt IChar  var = opWithWordSize sourceLocTys (\var => do iload var; i2c) var
 loadVar sourceLocTys IInt IByte  var = opWithWordSize sourceLocTys (\var => do iload var; i2b) var
 loadVar sourceLocTys IInt IShort  var = opWithWordSize sourceLocTys (\var => do iload var; i2s) var

@@ -79,6 +79,16 @@ should target this file (`CHANGELOG_NEXT`).
   `Object`, and an `int` converted to a `Boolean` target boxes via
   `Boolean.valueOf`.
 
+* Fixed loading an `int` variable into a `boolean` slot: `loadVar` had no
+  `int -> boolean` case, so an `int`-typed variable feeding a primitive
+  `boolean` parameter (e.g. a `Bool` foreign argument) fell through to the
+  boxing catch-all and was boxed with `Integer.valueOf`, failing verification
+  (`VerifyError: Bad type on operand stack`) against the `Z` descriptor. Since `Bool` foreign parameters now map to `boolean`, this
+  surfaced when the compiler compiled itself — an interface-method wrapper
+  passing its `Bool` parameter to a `boolean` foreign method — breaking the
+  self-hosting build. `int` and `boolean` share the JVM int stack
+  representation, so the load is now a plain `iload`.
+
 * Fixed Java lambda (`jlambda`) type derivation when common-subexpression
   elimination lifts the shared functional-interface tuple type or the lambda's
   function type into a `csegen` definition: the definition lookup now uses the

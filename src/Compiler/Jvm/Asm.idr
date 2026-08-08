@@ -2617,11 +2617,16 @@ loadBigInteger : {auto stateRef: Ref AsmState AsmState} -> Integer -> Core ()
 loadBigInteger 0 = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
 loadBigInteger 1 = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
 loadBigInteger 10 = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
-loadBigInteger value = do
-    new "java/math/BigInteger"
-    dup
-    ldc $ StringConst $ show value
-    invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
+loadBigInteger value =
+    if value >= -9223372036854775808 && value <= 9223372036854775807
+        then do
+            ldc $ Int64Const $ cast value
+            invokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
+        else do
+            new "java/math/BigInteger"
+            dup
+            ldc $ StringConst $ show value
+            invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export
 asmInvokeDynamic : {auto stateRef: Ref AsmState AsmState} -> (implClassName: String) -> (implMethodName: String)
@@ -2637,17 +2642,6 @@ asmInvokeDynamic implClassName implMethodName interfaceMethodName invokeDynamicD
                         , BsmArgGetType instantiatedMethodDesc
                         ]
     in invokeDynamic interfaceMethodName invokeDynamicDesc metafactoryHandle metafactoryArgs
-
-export
-newBigInteger : {auto stateRef: Ref AsmState AsmState} -> String -> Core ()
-newBigInteger "0" = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-newBigInteger "1" = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-newBigInteger "10" = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
-newBigInteger i = do
-    new "java/math/BigInteger"
-    dup
-    ldc $ StringConst i
-    invokeMethod InvokeSpecial "java/math/BigInteger" "<init>" "(Ljava/lang/String;)V" False
 
 export
 findFunction : Jname -> Core (Maybe Function)

@@ -240,7 +240,7 @@ getHashCodeSwitchClass fc ILong = pure"java/lang/Long"
 getHashCodeSwitchClass fc constantType = asmCrash ("Constant type " ++ show constantType ++ " cannot be compiled to 'Switch'.")
 
 assembleHashCodeSwitchConstant : {auto stateRef: Ref AsmState AsmState} -> FC -> Primitive.Constant -> Core ()
-assembleHashCodeSwitchConstant _ (BI value) = newBigInteger $ show value
+assembleHashCodeSwitchConstant _ (BI value) = loadBigInteger value
 assembleHashCodeSwitchConstant _ (I64 value) = ldc $ Int64Const value
 assembleHashCodeSwitchConstant _ (B64 value) = ldc $ Bits64Const value
 assembleHashCodeSwitchConstant _ (Str value) = ldc $ StringConst value
@@ -306,6 +306,20 @@ toUnsignedInt bits = do
   iconst bits
   invokeMethod InvokeStatic conversionClass "toUnsignedInt" "(II)I" False
 
+||| Low bits of `value` as a non-negative residue in [0, modulus), matching
+||| Conversion.toUnsignedLong(BigInteger, bits) where modulus is 2^bits.
+truncUnsigned : Integer -> Integer -> Integer
+truncUnsigned value modulus =
+    let r = value `mod` modulus
+    in if r < 0 then r + modulus else r
+
+||| Low bits of `value` reinterpreted as signed two's complement, matching
+||| BigInteger.intValue/longValue truncation where modulus is 2^bits.
+truncSigned : Integer -> Integer -> Integer
+truncSigned value modulus =
+    let r = truncUnsigned value modulus
+    in if r >= modulus `div` 2 then r - modulus else r
+
 assembleInt : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> Int -> Core ()
 assembleInt isTailCall returnType value = do
     iconst value
@@ -323,6 +337,28 @@ assembleBits64 isTailCall returnType value = do
     ldc $ Bits64Const value
     asmCast ILong returnType
     when isTailCall $ asmReturn returnType
+
+isIntWideType : InferredType -> Bool
+isIntWideType IBool = True
+isIntWideType IByte = True
+isIntWideType IChar = True
+isIntWideType IShort = True
+isIntWideType IInt = True
+isIntWideType _ = False
+
+||| Integer literals reaching a primitive-typed context are emitted as
+||| primitive constants instead of runtime BigInteger values so that hot
+||| paths never construct a BigInteger just to immediately narrow it.
+assembleInteger : {auto stateRef: Ref AsmState AsmState} -> (isTailCall: Bool) -> InferredType -> Integer -> Core ()
+assembleInteger isTailCall returnType value =
+    if isIntWideType returnType && value >= -2147483648 && value <= 2147483647
+        then assembleInt isTailCall returnType (cast value)
+    else if returnType == ILong && value >= -9223372036854775808 && value <= 9223372036854775807
+        then assembleInt64 isTailCall returnType (cast value)
+    else do
+        loadBigInteger value
+        asmCast inferredBigIntegerType returnType
+        when isTailCall $ asmReturn returnType
 
 isInterfaceInvocation : InferredType -> Bool
 isInterfaceInvocation (IRef _ Interface _) = True
@@ -886,10 +922,8 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
     assembleExpr isTailCall returnType (NmPrimVal fc (B16 value)) = assembleInt isTailCall returnType (cast value)
     assembleExpr isTailCall returnType (NmPrimVal fc (B32 value)) = assembleInt isTailCall returnType (cast value)
     assembleExpr isTailCall returnType (NmPrimVal fc (B64 value)) = assembleBits64 isTailCall returnType value
-    assembleExpr isTailCall returnType (NmPrimVal fc (BI value)) = do
-        loadBigInteger value
-        asmCast inferredBigIntegerType returnType
-        when isTailCall $ asmReturn returnType
+    assembleExpr isTailCall returnType (NmPrimVal fc (BI value)) =
+        assembleInteger isTailCall returnType value
     assembleExpr isTailCall returnType (NmPrimVal fc (Str value)) = do
         ldc $ StringConst value
         asmCast inferredStringType returnType
@@ -1141,7 +1175,31 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
         invokeMethod InvokeVirtual "java/lang/StringBuilder" "toString" "()Ljava/lang/String;" False
         asmCast inferredStringType returnType
 
+    -- Casts of Integer literals are folded to primitive constants at compile
+    -- time (with the same truncation the runtime conversions apply) so hot
+    -- paths never materialize a BigInteger for a literal.
     assembleCast : InferredType -> FC -> PrimType -> PrimType -> NamedCExp -> Core ()
+    assembleCast returnType fc IntegerType IntType (NmPrimVal _ (BI value)) =
+        assembleInt False returnType (cast (truncSigned value 4294967296))
+    assembleCast returnType fc IntegerType Int32Type (NmPrimVal _ (BI value)) =
+        assembleInt False returnType (cast (truncSigned value 4294967296))
+    assembleCast returnType fc IntegerType Int16Type (NmPrimVal _ (BI value)) =
+        assembleInt False returnType (cast (truncSigned value 65536))
+    assembleCast returnType fc IntegerType Int8Type (NmPrimVal _ (BI value)) =
+        assembleInt False returnType (cast (truncSigned value 256))
+    assembleCast returnType fc IntegerType Int64Type (NmPrimVal _ (BI value)) =
+        assembleInt64 False returnType (cast (truncSigned value 18446744073709551616))
+    assembleCast returnType fc IntegerType Bits8Type (NmPrimVal _ (BI value)) =
+        assembleInt False returnType (cast (truncUnsigned value 256))
+    assembleCast returnType fc IntegerType Bits16Type (NmPrimVal _ (BI value)) =
+        assembleInt False returnType (cast (truncUnsigned value 65536))
+    assembleCast returnType fc IntegerType Bits32Type (NmPrimVal _ (BI value)) =
+        assembleInt False returnType (cast (truncSigned value 4294967296))
+    assembleCast returnType fc IntegerType Bits64Type (NmPrimVal _ (BI value)) =
+        assembleBits64 False returnType (cast (truncUnsigned value 18446744073709551616))
+    assembleCast returnType fc IntegerType StringType (NmPrimVal _ (BI value)) = do
+        ldc $ StringConst $ show value
+        asmCast inferredStringType returnType
     assembleCast returnType fc from to x =
       jassembleCast returnType (getInferredType from) (getInferredType to) (getCastAsmOp from to) x
 

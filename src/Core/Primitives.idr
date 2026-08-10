@@ -261,19 +261,33 @@ mul (I64 x) (I64 y) = pure $ I64 (x * y)
 mul (Db x) (Db y) = pure $ Db (x * y)
 mul _ _ = Nothing
 
+-- Constant folding must not inherit the host compiler's div/mod semantics:
+-- a self-hosted compiler built before a semantics change would otherwise
+-- fold signed div/mod with the old behaviour, making the evaluator disagree
+-- with generated code. Normalise to Euclidean semantics (remainder always
+-- non-negative) regardless of whether the host's operators are truncated,
+-- floored or already Euclidean.
+euclidMod : Integral a => Ord a => Neg a => a -> a -> a
+euclidMod x y =
+    let r = assert_total (x `mod` y) in
+    if r < 0 then (if y > 0 then r + y else r - y) else r
+
+euclidDiv : Integral a => Ord a => Neg a => a -> a -> a
+euclidDiv x y = assert_total ((x - euclidMod x y) `div` y)
+
 div : Constant -> Constant -> Maybe Constant
 div (BI x) (BI 0) = Nothing
-div (BI x) (BI y) = pure $ BI (assert_total (x `div` y))
+div (BI x) (BI y) = pure $ BI (euclidDiv x y)
 div (I x) (I 0) = Nothing
-div (I x) (I y) = pure $ I (assert_total (x `div` y))
+div (I x) (I y) = pure $ I (euclidDiv x y)
 div (I8 x) (I8 0) = Nothing
-div (I8 x) (I8 y) = pure $ I8 (assert_total (x `div` y))
+div (I8 x) (I8 y) = pure $ I8 (euclidDiv x y)
 div (I16 x) (I16 0) = Nothing
-div (I16 x) (I16 y) = pure $ I16 (assert_total (x `div` y))
+div (I16 x) (I16 y) = pure $ I16 (euclidDiv x y)
 div (I32 x) (I32 0) = Nothing
-div (I32 x) (I32 y) = pure $ I32 (assert_total (x `div` y))
+div (I32 x) (I32 y) = pure $ I32 (euclidDiv x y)
 div (I64 x) (I64 0) = Nothing
-div (I64 x) (I64 y) = pure $ I64 (assert_total (x `div` y))
+div (I64 x) (I64 y) = pure $ I64 (euclidDiv x y)
 div (B8 x) (B8 0) = Nothing
 div (B8 x) (B8 y) = pure $ B8 (assert_total (x `div` y))
 div (B16 x) (B16 0) = Nothing
@@ -287,17 +301,17 @@ div _ _ = Nothing
 
 mod : Constant -> Constant -> Maybe Constant
 mod (BI x) (BI 0) = Nothing
-mod (BI x) (BI y) = pure $ BI (assert_total (x `mod` y))
+mod (BI x) (BI y) = pure $ BI (euclidMod x y)
 mod (I x) (I 0) = Nothing
-mod (I x) (I y) = pure $ I (assert_total (x `mod` y))
+mod (I x) (I y) = pure $ I (euclidMod x y)
 mod (I8 x) (I8 0) = Nothing
-mod (I8 x) (I8 y) = pure $ I8 (assert_total (x `mod` y))
+mod (I8 x) (I8 y) = pure $ I8 (euclidMod x y)
 mod (I16 x) (I16 0) = Nothing
-mod (I16 x) (I16 y) = pure $ I16 (assert_total (x `mod` y))
+mod (I16 x) (I16 y) = pure $ I16 (euclidMod x y)
 mod (I32 x) (I32 0) = Nothing
-mod (I32 x) (I32 y) = pure $ I32 (assert_total (x `mod` y))
+mod (I32 x) (I32 y) = pure $ I32 (euclidMod x y)
 mod (I64 x) (I64 0) = Nothing
-mod (I64 x) (I64 y) = pure $ I64 (assert_total (x `mod` y))
+mod (I64 x) (I64 y) = pure $ I64 (euclidMod x y)
 mod (B8 x) (B8 0) = Nothing
 mod (B8 x) (B8 y) = pure $ B8 (assert_total (x `mod` y))
 mod (B16 x) (B16 0) = Nothing

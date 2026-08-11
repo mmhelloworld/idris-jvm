@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.AbstractMap.SimpleEntry;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -164,6 +163,7 @@ import static org.objectweb.asm.Opcodes.NEW;
 import static org.objectweb.asm.Opcodes.NEWARRAY;
 import static org.objectweb.asm.Opcodes.POP;
 import static org.objectweb.asm.Opcodes.PUTFIELD;
+import static org.objectweb.asm.Opcodes.PUTSTATIC;
 import static org.objectweb.asm.Opcodes.RETURN;
 import static org.objectweb.asm.Opcodes.SALOAD;
 import static org.objectweb.asm.Opcodes.SASTORE;
@@ -764,35 +764,26 @@ public final class Assembler {
     }
   }
 
-  public void createIdrisConstructorClass(String newClassName, Object isStringConstructor,
-                                          int constructorParameterCount) {
-    createIdrisConstructorClass(newClassName, intToBoolean((int) isStringConstructor),
-      constructorParameterCount, Collections.emptyList());
-  }
-
-  public void createIdrisConstructorClass(String newClassName, boolean isStringConstructor,
-                                          int constructorParameterCount) {
-    createIdrisConstructorClass(newClassName, isStringConstructor, constructorParameterCount,
-      Collections.emptyList());
-  }
-
   // FFI entry-point for the variant accepting extra TCon-family interfaces.
+  // The constructor id arrives at class-creation time: one generated class
+  // corresponds to exactly one Idris constructor, so the id is a per-class
+  // constant baked into getConstructorId/toString rather than stored as a
+  // field in every instance. String-constructor ids are the class name.
   public void createIdrisConstructorClassWithIfaces(String newClassName, Object isStringConstructor,
-                                                     int constructorParameterCount,
+                                                     int constructorId, int constructorParameterCount,
                                                      List<String> tconInterfaces) {
-    createIdrisConstructorClass(newClassName, intToBoolean((int) isStringConstructor),
+    createIdrisConstructorClass(newClassName, intToBoolean((int) isStringConstructor), constructorId,
       constructorParameterCount, tconInterfaces);
   }
 
   public void createIdrisConstructorClass(String newClassName, boolean isStringConstructor,
-                                          int constructorParameterCount,
+                                          int constructorId, int constructorParameterCount,
                                           List<String> tconInterfaces) {
     if (!cws.containsKey(newClassName)) {
-      ClassWriter newClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-      FieldVisitor newFieldVisitor;
+      var newClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
       MethodVisitor newMethodVisitor;
 
-      String[] interfaces = new String[1 + tconInterfaces.size()];
+      var interfaces = new String[1 + tconInterfaces.size()];
       interfaces[0] = "io/github/mmhelloworld/idrisjvm/runtime/IdrisObject";
       for (int i = 0; i < tconInterfaces.size(); i++) {
         interfaces[i + 1] = tconInterfaces.get(i);
@@ -802,18 +793,12 @@ public final class Assembler {
 
       newClassWriter.visitSource(format("IdrisGenerated$%s.idr", newClassName.replaceAll("/", "\\$")), null);
 
-      String constructorFieldDescriptor = isStringConstructor ? "Ljava/lang/String;" : "I";
-      newFieldVisitor = newClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "constructorId",
-        constructorFieldDescriptor, null, null);
-      newFieldVisitor.visitEnd();
-
       for (int index = 0; index < constructorParameterCount; index++) {
-        newFieldVisitor = newClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "property" + index,
-          "Ljava/lang/Object;", null, null);
-        newFieldVisitor.visitEnd();
+        newClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "property" + index, "Ljava/lang/Object;", null, null)
+          .visitEnd();
       }
 
-      String constructorDescriptor = format("(%s%s)V", constructorFieldDescriptor,
+      var constructorDescriptor = format("(%s)V",
         IntStream.range(0, constructorParameterCount)
           .mapToObj(index -> "Ljava/lang/Object;")
           .collect(joining()));
@@ -821,27 +806,19 @@ public final class Assembler {
       newMethodVisitor.visitCode();
       newMethodVisitor.visitVarInsn(ALOAD, 0);
       newMethodVisitor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
-      newMethodVisitor.visitVarInsn(ALOAD, 0);
-      newMethodVisitor.visitVarInsn(isStringConstructor ? ALOAD : ILOAD, 1);
-      newMethodVisitor.visitFieldInsn(PUTFIELD, newClassName, "constructorId", constructorFieldDescriptor);
       for (int index = 0; index < constructorParameterCount; index++) {
         newMethodVisitor.visitVarInsn(ALOAD, 0);
-        newMethodVisitor.visitVarInsn(ALOAD, index + 2);
+        newMethodVisitor.visitVarInsn(ALOAD, index + 1);
         newMethodVisitor.visitFieldInsn(PUTFIELD, newClassName, "property" + index, "Ljava/lang/Object;");
       }
       newMethodVisitor.visitInsn(RETURN);
       newMethodVisitor.visitMaxs(-1, -1);
       newMethodVisitor.visitEnd();
 
-      String constructorGetter = isStringConstructor ? "getStringConstructorId" : "getConstructorId";
-      newMethodVisitor = newClassWriter.visitMethod(ACC_PUBLIC, constructorGetter, format("()%s",
-        constructorFieldDescriptor), null, null);
-      newMethodVisitor.visitCode();
-      newMethodVisitor.visitVarInsn(ALOAD, 0);
-      newMethodVisitor.visitFieldInsn(GETFIELD, newClassName, "constructorId", constructorFieldDescriptor);
-      newMethodVisitor.visitInsn(isStringConstructor ? ARETURN : IRETURN);
-      newMethodVisitor.visitMaxs(-1, -1);
-      newMethodVisitor.visitEnd();
+      visitConstructorIdGetter(newClassWriter, newClassName, isStringConstructor, constructorId);
+      if (constructorParameterCount == 0) {
+        visitSingleton(newClassWriter, newClassName);
+      }
 
       if (constructorParameterCount > 0) {
         newMethodVisitor = newClassWriter.visitMethod(ACC_PUBLIC, "getProperty", "(I)Ljava/lang/Object;",
@@ -849,11 +826,11 @@ public final class Assembler {
         newMethodVisitor.visitCode();
 
         newMethodVisitor.visitVarInsn(ILOAD, 1);
-        IntStream propertyIndices = IntStream.range(0, constructorParameterCount);
-        List<Entry<Integer, Label>> labels = IntStream.range(0, constructorParameterCount)
+        var propertyIndices = IntStream.range(0, constructorParameterCount);
+        var labels = IntStream.range(0, constructorParameterCount)
           .mapToObj(index -> new SimpleEntry<>(index, new Label()))
           .collect(toList());
-        Label switchEnd = new Label();
+        var switchEnd = new Label();
 
         newMethodVisitor.visitLookupSwitchInsn(switchEnd, propertyIndices.toArray(), labels.stream()
           .map(Entry::getValue)
@@ -878,13 +855,10 @@ public final class Assembler {
       newMethodVisitor.visitTypeInsn(NEW, "java/lang/StringBuilder");
       newMethodVisitor.visitInsn(DUP);
       newMethodVisitor.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
-      newMethodVisitor.visitLdcInsn(format("%s{constructorId=", newClassName));
+      newMethodVisitor.visitLdcInsn(format("%s{constructorId=%s", newClassName,
+        constructorIdText(newClassName, isStringConstructor, constructorId)));
       newMethodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
         "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
-      newMethodVisitor.visitVarInsn(ALOAD, 0);
-      newMethodVisitor.visitFieldInsn(GETFIELD, newClassName, "constructorId", constructorFieldDescriptor);
-      newMethodVisitor.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
-        format("(%s)Ljava/lang/StringBuilder;", constructorFieldDescriptor), false);
 
       for (int index = 0; index < constructorParameterCount; index++) {
         newMethodVisitor.visitLdcInsn(format(", property%d=", index));
@@ -910,27 +884,53 @@ public final class Assembler {
     }
   }
 
-  // FFI entry-point for `createIdrisConstructorClassTyped` — variant with the
-  // boolean boxed as Object (Idris `Bool` -> `Object`) and the field
-  // descriptors passed as a java.util.List<String>.
-  public void createIdrisConstructorClassTyped(String newClassName, Object isStringConstructor,
-                                                List<String> fieldDescriptors) {
-    createIdrisConstructorClassTyped(newClassName, intToBoolean((int) isStringConstructor),
-      fieldDescriptors, Collections.emptyList());
+  private static String constructorIdText(String className, boolean isStringConstructor, int constructorId) {
+    return isStringConstructor ? className : Integer.toString(constructorId);
   }
 
-  // FFI entry-point for the TCon-interface variant.
+  // The constructor id is a per-class constant: bake it into the getter
+  // instead of storing it as a field in every instance.
+  private static void visitConstructorIdGetter(ClassWriter classWriter, String className,
+                                               boolean isStringConstructor, int constructorId) {
+    var getterName = isStringConstructor ? "getStringConstructorId" : "getConstructorId";
+    var descriptor = isStringConstructor ? "()Ljava/lang/String;" : "()I";
+    var getter = classWriter.visitMethod(ACC_PUBLIC, getterName, descriptor, null, null);
+    getter.visitCode();
+    if (isStringConstructor) {
+      getter.visitLdcInsn(className);
+      getter.visitInsn(ARETURN);
+    } else {
+      getter.visitLdcInsn(constructorId);
+      getter.visitInsn(IRETURN);
+    }
+    getter.visitMaxs(-1, -1);
+    getter.visitEnd();
+  }
+
+  // Nullary constructors are immutable and carry no state beyond their class:
+  // share a single instance per class instead of allocating at every use.
+  private static void visitSingleton(ClassWriter classWriter, String className) {
+    var instanceDescriptor = "L" + className + ";";
+    classWriter.visitField(ACC_PUBLIC + ACC_STATIC + ACC_FINAL, "INSTANCE", instanceDescriptor, null, null)
+      .visitEnd();
+    var clinit = classWriter.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
+    clinit.visitCode();
+    clinit.visitTypeInsn(NEW, className);
+    clinit.visitInsn(DUP);
+    clinit.visitMethodInsn(INVOKESPECIAL, className, "<init>", "()V", false);
+    clinit.visitFieldInsn(PUTSTATIC, className, "INSTANCE", instanceDescriptor);
+    clinit.visitInsn(RETURN);
+    clinit.visitMaxs(-1, -1);
+    clinit.visitEnd();
+  }
+
+  // FFI entry-point for the TCon-interface variant. Like the untyped creator,
+  // the constructor id is a per-class constant supplied at creation time.
   public void createIdrisConstructorClassTypedWithIfaces(String newClassName, Object isStringConstructor,
-                                                          List<String> fieldDescriptors,
+                                                          int constructorId, List<String> fieldDescriptors,
                                                           List<String> tconInterfaces) {
     createIdrisConstructorClassTyped(newClassName, intToBoolean((int) isStringConstructor),
-      fieldDescriptors, tconInterfaces);
-  }
-
-  public void createIdrisConstructorClassTyped(String newClassName, boolean isStringConstructor,
-                                                List<String> fieldDescriptors) {
-    createIdrisConstructorClassTyped(newClassName, isStringConstructor, fieldDescriptors,
-      Collections.emptyList());
+      constructorId, fieldDescriptors, tconInterfaces);
   }
 
   // Emit a specialised constructor class whose `property<N>` fields carry the
@@ -943,13 +943,13 @@ public final class Assembler {
   // throws `UnsupportedOperationException` — destructuring always uses the
   // typed accessors via the spec class's static type.
   public void createIdrisConstructorClassTyped(String newClassName, boolean isStringConstructor,
-                                                List<String> fieldDescriptors,
+                                                int constructorId, List<String> fieldDescriptors,
                                                 List<String> tconInterfaces) {
     if (cws.containsKey(newClassName)) {
       return;
     }
     var constructorClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
-    String[] interfaces = new String[1 + tconInterfaces.size()];
+    var interfaces = new String[1 + tconInterfaces.size()];
     interfaces[0] = "io/github/mmhelloworld/idrisjvm/runtime/IdrisObject";
     for (int i = 0; i < tconInterfaces.size(); i++) {
       interfaces[i + 1] = tconInterfaces.get(i);
@@ -958,31 +958,24 @@ public final class Assembler {
       interfaces);
     constructorClassWriter.visitSource(format("IdrisGenerated$%s.idr", newClassName.replaceAll("/", "\\$")), null);
 
-    String idDescriptor = isStringConstructor ? "Ljava/lang/String;" : "I";
-    constructorClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "constructorId", idDescriptor, null, null).visitEnd();
-
     for (int i = 0; i < fieldDescriptors.size(); i++) {
       constructorClassWriter.visitField(ACC_PRIVATE + ACC_FINAL, "property" + i, fieldDescriptors.get(i), null, null).visitEnd();
     }
 
-    // <init>(idDescriptor, fieldDescriptors...)V
-    StringBuilder ctorSig = new StringBuilder("(").append(idDescriptor);
+    // <init>(fieldDescriptors...)V
+    var ctorSig = new StringBuilder("(");
     for (String d : fieldDescriptors) {
       ctorSig.append(d);
     }
     ctorSig.append(")V");
 
-    MethodVisitor ctor = constructorClassWriter.visitMethod(ACC_PUBLIC, "<init>", ctorSig.toString(), null, null);
+    var ctor = constructorClassWriter.visitMethod(ACC_PUBLIC, "<init>", ctorSig.toString(), null, null);
     ctor.visitCode();
     // super()
     ctor.visitVarInsn(ALOAD, 0);
     ctor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
-    // this.constructorId = arg0
-    ctor.visitVarInsn(ALOAD, 0);
-    ctor.visitVarInsn(isStringConstructor ? ALOAD : ILOAD, 1);
-    ctor.visitFieldInsn(PUTFIELD, newClassName, "constructorId", idDescriptor);
     // assign each property — local index widens by 2 for long/double
-    int localIdx = 2;
+    int localIdx = 1;
     for (int i = 0; i < fieldDescriptors.size(); i++) {
       String d = fieldDescriptors.get(i);
       ctor.visitVarInsn(ALOAD, 0);
@@ -994,16 +987,10 @@ public final class Assembler {
     ctor.visitMaxs(-1, -1);
     ctor.visitEnd();
 
-    // getConstructorId / getStringConstructorId — same as the untyped variant
-    String constructorGetter = isStringConstructor ? "getStringConstructorId" : "getConstructorId";
-    MethodVisitor getId = constructorClassWriter.visitMethod(ACC_PUBLIC, constructorGetter,
-      format("()%s", idDescriptor), null, null);
-    getId.visitCode();
-    getId.visitVarInsn(ALOAD, 0);
-    getId.visitFieldInsn(GETFIELD, newClassName, "constructorId", idDescriptor);
-    getId.visitInsn(isStringConstructor ? ARETURN : IRETURN);
-    getId.visitMaxs(-1, -1);
-    getId.visitEnd();
+    visitConstructorIdGetter(constructorClassWriter, newClassName, isStringConstructor, constructorId);
+    if (fieldDescriptors.isEmpty()) {
+      visitSingleton(constructorClassWriter, newClassName);
+    }
 
     // Typed per-slot accessors: getInt0()I, getLong1()J, getRef2()Ljava/lang/Object;, etc.
     for (int i = 0; i < fieldDescriptors.size(); i++) {
@@ -1060,13 +1047,10 @@ public final class Assembler {
     ts.visitTypeInsn(NEW, "java/lang/StringBuilder");
     ts.visitInsn(DUP);
     ts.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
-    ts.visitLdcInsn(format("%s{constructorId=", newClassName));
+    ts.visitLdcInsn(format("%s{constructorId=%s", newClassName,
+      constructorIdText(newClassName, isStringConstructor, constructorId)));
     ts.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
       "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
-    ts.visitVarInsn(ALOAD, 0);
-    ts.visitFieldInsn(GETFIELD, newClassName, "constructorId", idDescriptor);
-    ts.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
-      format("(%s)Ljava/lang/StringBuilder;", appendSigFor(idDescriptor)), false);
     for (int i = 0; i < fieldDescriptors.size(); i++) {
       String d = fieldDescriptors.get(i);
       ts.visitLdcInsn(format(", property%d=", i));

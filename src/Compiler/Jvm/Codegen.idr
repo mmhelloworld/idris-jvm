@@ -1012,18 +1012,18 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
     assembleConSpec : (isTailCall: Bool) -> InferredType -> Maybe Int
                    -> SpecialisedConstructor -> List NamedCExp -> Core ()
     assembleConSpec isTailCall returnType tag spec args = do
-        let constructorIdType = maybe inferredStringType (const IInt) tag
-        new spec.specClassName
-        dup
-        maybe (ldc . StringConst $ spec.specClassName) iconst tag
-        -- `fieldTypes`, not `paramTypes`: the emitted class's `<init>`
-        -- descriptor carries the refined slot types, and
-        -- `assembleParameter`'s `asmCast` emits the Object→family-interface
-        -- checkcast for refined recursive slots at construction.
-        let constructorTypes = constructorIdType :: spec.fieldTypes
-        traverse_ assembleParameter (zip args spec.fieldTypes)
-        let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid constructorTypes
-        invokeMethod InvokeSpecial spec.specClassName "<init>" descriptor False
+        case spec.fieldTypes of
+          [] => field GetStatic spec.specClassName "INSTANCE" ("L" ++ spec.specClassName ++ ";")
+          _ => do
+            new spec.specClassName
+            dup
+            -- `fieldTypes`, not `paramTypes`: the emitted class's `<init>`
+            -- descriptor carries the refined slot types, and
+            -- `assembleParameter`'s `asmCast` emits the Object→family-interface
+            -- checkcast for refined recursive slots at construction.
+            traverse_ assembleParameter (zip args spec.fieldTypes)
+            let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid spec.fieldTypes
+            invokeMethod InvokeSpecial spec.specClassName "<init>" descriptor False
         -- The spec class is a sibling of the natural constructor class (both
         -- extend Object and implement IdrisObject) — it is NOT a subclass.
         -- A `checkcast` to the natural class would either throw
@@ -1067,23 +1067,35 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
           Nothing => do
             let fileName = fst $ getSourceLocationFromFc fc
             let constructorClassName = getIdrisConstructorClassName !getProgramName (jvmSimpleName name)
-            let constructorIdType = maybe inferredStringType (const IInt) tag
-            new constructorClassName
-            dup
-            maybe (ldc . StringConst $ constructorClassName) iconst tag
             let constructorParameterCountNat = length args
             let constructorParameterCount = the Int $ cast constructorParameterCountNat
-            let constructorTypes = constructorIdType :: replicate constructorParameterCountNat inferredObjectType
-            let argsWithTypes = zip args $ drop 1 constructorTypes
-            traverse_ assembleParameter argsWithTypes
-            let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid constructorTypes
+            let constructorId = fromMaybe 0 tag
             hasConstructor <- coreLift $ AsmGlobalState.hasConstructor constructorClassName
-            when (not hasConstructor) $ do
-                coreLift $ AsmGlobalState.addConstructor constructorClassName
+            if hasConstructor
+              then do
+                -- The id is baked into the class as a per-class constant, so a
+                -- name shared between different tags would silently dispatch
+                -- every instance as the first-created tag (the TcContinue bug
+                -- fixed by `uniquifyTcContinue`) — crash instead.
+                existingId <- coreLift $ AsmGlobalState.getConstructorId constructorClassName
+                when (existingId /= constructorId) $ asmCrash
+                  ("Constructor class " ++ constructorClassName ++ " with id " ++ show existingId
+                    ++ " is reused with a different id " ++ show constructorId)
+              else do
+                coreLift $ AsmGlobalState.addConstructor constructorClassName constructorId
                 natIfaces <- getNaturalToTConIfaces
                 let ifaces = fromMaybe [] $ SortedMap.lookup constructorClassName natIfaces
-                createIdrisConstructorClassWithIfaces constructorClassName (isNothing tag) constructorParameterCount ifaces
-            invokeMethod InvokeSpecial constructorClassName "<init>" descriptor False
+                createIdrisConstructorClassWithIfaces constructorClassName (isNothing tag) constructorId
+                    constructorParameterCount ifaces
+            case args of
+              [] => field GetStatic constructorClassName "INSTANCE" ("L" ++ constructorClassName ++ ";")
+              _ => do
+                new constructorClassName
+                dup
+                let parameterTypes = replicate constructorParameterCountNat inferredObjectType
+                traverse_ assembleParameter (zip args parameterTypes)
+                let descriptor = getMethodDescriptor $ MkInferredFunctionType IVoid parameterTypes
+                invokeMethod InvokeSpecial constructorClassName "<init>" descriptor False
             let constructorType = IRef constructorClassName Class []
             asmCast constructorType returnType
             when isTailCall $ asmReturn returnType
@@ -2962,7 +2974,7 @@ preRegisterConstructorSpecs plan = do
     registerClass byBase (MkSpecialisedCon _ _ tag _ fieldTypes specClassName tconClassName tconFamilyBase) = do
       hasIt <- coreLift $ AsmGlobalState.hasConstructor specClassName
       when (not hasIt) $ do
-        coreLift $ AsmGlobalState.addConstructor specClassName
+        coreLift $ AsmGlobalState.addConstructor specClassName (fromMaybe 0 tag)
         -- A spec class needs an AsmState because `createIdrisConstructorClassTyped`
         -- is a method on the `Assembler` instance bundled into the state.  The
         -- Jname's "class" component is the spec class name; the "method"
@@ -2975,7 +2987,8 @@ preRegisterConstructorSpecs plan = do
                            else if tconFamilyBase /= ""
                                   then sort (fromMaybe [] (SortedMap.lookup tconFamilyBase byBase))
                                   else []
-        createIdrisConstructorClassTypedWithIfaces specClassName (isNothing tag) descriptors tconIfaces
+        createIdrisConstructorClassTypedWithIfaces specClassName (isNothing tag) (fromMaybe 0 tag)
+            descriptors tconIfaces
 
 -- Emit a single specialised method using the existing assembly pipeline.
 -- The spec has its own AsmState (so it can register a fresh Function with the

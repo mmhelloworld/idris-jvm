@@ -1,6 +1,6 @@
 Spec class MkT$I$I$I: PRESENT
 Spec fields: TYPED
-Spec <init>: (IIII)V
+Spec <init>: (III)V
 Typed accessors: getInt0 + getInt1 + getInt2
 Construction: spec ctor, primitive args
 sumT pattern match: typed accessors (getInt0/1/2)

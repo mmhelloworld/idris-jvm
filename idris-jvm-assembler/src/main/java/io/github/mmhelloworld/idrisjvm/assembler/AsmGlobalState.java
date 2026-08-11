@@ -16,12 +16,10 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
-import java.util.Set;
 import java.util.stream.Stream;
 
 import static java.io.File.pathSeparator;
@@ -49,7 +47,7 @@ public final class AsmGlobalState {
     }
 
     private static Map<String, Object> functions = new HashMap<>();
-    private static Set<String> constructors = new HashSet<>();
+    private static Map<String, Integer> constructors = new HashMap<>();
     private static String programName;
     private static Map<String, Object> fcAndDefinitionsByName;
     private static Map<String, Assembler> assemblers = new HashMap<>();
@@ -61,7 +59,7 @@ public final class AsmGlobalState {
         AsmGlobalState.programName = programName;
         AsmGlobalState.fcAndDefinitionsByName = fcAndDefinitionsByName;
         functions = new HashMap<>();
-        constructors = new HashSet<>();
+        constructors = new HashMap<>();
         assemblers = new HashMap<>();
     }
 
@@ -147,11 +145,18 @@ public final class AsmGlobalState {
     }
 
     public static synchronized boolean hasConstructor(String name) {
-        return constructors.contains(name);
+        return constructors.containsKey(name);
     }
 
-    public static synchronized void addConstructor(String name) {
-        constructors.add(name);
+    public static synchronized void addConstructor(String name, int constructorId) {
+        constructors.put(name, constructorId);
+    }
+
+    // The constructor id is baked into the generated class as a per-class
+    // constant, so a construction site reusing the class with a different id
+    // is a miscompilation. Codegen checks against the recorded id and crashes.
+    public static synchronized int getConstructorId(String name) {
+        return constructors.get(name);
     }
 
     public static void classCodeEnd(String outputDirectory, String outputFile, String mainClass)

@@ -19,9 +19,10 @@ else
   echo "Spec fields: NOT TYPED"
 fi
 
-# 2. Constructor signature (int, int, int, int) — tag + 3 slots.
-if javap -p "$spec_class" 2>/dev/null | grep -qE 'MkT\$I\$I\$I\(int, int, int, int\)'; then
-  echo "Spec <init>: (IIII)V"
+# 2. Constructor signature (int, int, int) — 3 slots; the constructor id is
+# a per-class constant baked into getConstructorId, not a parameter.
+if javap -p "$spec_class" 2>/dev/null | grep -qE 'MkT\$I\$I\$I\(int, int, int\)'; then
+  echo "Spec <init>: (III)V"
 else
   echo "Spec <init>: WRONG SIGNATURE"
 fi

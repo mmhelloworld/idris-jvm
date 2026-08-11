@@ -22,6 +22,18 @@ should target this file (`CHANGELOG_NEXT`).
   reserving string parsing for literals beyond 64 bits. `fib 38` improves
   from 1.87s to 0.20s, matching equivalent Java (0.13s) up to JVM startup.
 
+* The JVM backend now emits nullary data constructors as shared singletons
+  (a `public static final INSTANCE` per generated class) instead of
+  allocating a fresh object at every use, and bakes the constructor id into
+  `getConstructorId()` as a per-class constant instead of storing it as a
+  field in every instance, shrinking constructor objects and their `<init>`
+  signatures. Tail-recursion continuation constructors (`TcContinue_<arity>`,
+  which reuse one name per arity with the tag selecting the continuation)
+  are renamed to per-tag classes to keep constructor ids per-class constants,
+  and the backend now fails at compile time if a constructor class is ever
+  reused with a different id. Allocation on the `matMul` JMH benchmark drops
+  by 19% B/op.
+
 * The compile-time evaluator now folds signed `div`/`mod` constants with
   explicit Euclidean semantics instead of delegating to the host compiler's
   operators. This fixes REPL evaluation and type-level `div`/`mod` on negative

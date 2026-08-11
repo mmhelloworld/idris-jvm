@@ -2208,6 +2208,52 @@ inlineCallbackLambdasDef lambdas (name, fc, MkNmFun args body) =
   (name, fc, MkNmFun args (inlineCallbackLambdas lambdas body))
 inlineCallbackLambdasDef _ def = def
 
+-- `Compiler.TailRec` reuses one `TcContinue_<arity>` constructor name for
+-- every continuation of that arity within a mutual tail-recursion group,
+-- distinguishing continuations by tag alone.  The backend emits one class
+-- per constructor NAME with the constructor id baked in as a per-class
+-- constant, so a shared name with differing tags would collapse every
+-- continuation onto the tag of whichever construction site was assembled
+-- first.  Rename each occurrence to a per-tag name so every constructor
+-- name maps to exactly one tag.
+uniquifyTcContinueName : Name -> Maybe Int -> Name
+uniquifyTcContinueName name@(UN (Basic rawName)) (Just tag) =
+  if "TcContinue_" `isPrefixOf` rawName
+    then UN (Basic (rawName ++ "_" ++ show tag))
+    else name
+uniquifyTcContinueName name _ = name
+
+mutual
+  uniquifyTcContinue : NamedCExp -> NamedCExp
+  uniquifyTcContinue (NmLam fc x body) = NmLam fc x (uniquifyTcContinue body)
+  uniquifyTcContinue (NmLet fc x val body) = NmLet fc x (uniquifyTcContinue val) (uniquifyTcContinue body)
+  uniquifyTcContinue (NmApp fc f args) = NmApp fc (uniquifyTcContinue f) (uniquifyTcContinue <$> args)
+  uniquifyTcContinue (NmCon fc n ci tag args) =
+    NmCon fc (uniquifyTcContinueName n tag) ci tag (uniquifyTcContinue <$> args)
+  uniquifyTcContinue (NmOp fc op args) = NmOp fc op (map uniquifyTcContinue args)
+  uniquifyTcContinue (NmExtPrim fc n args) = NmExtPrim fc n (uniquifyTcContinue <$> args)
+  uniquifyTcContinue (NmForce fc reason t) = NmForce fc reason (uniquifyTcContinue t)
+  uniquifyTcContinue (NmDelay fc reason t) = NmDelay fc reason (uniquifyTcContinue t)
+  uniquifyTcContinue (NmConCase fc sc alts def) =
+    NmConCase fc (uniquifyTcContinue sc) (uniquifyTcContinueConAlt <$> alts)
+      (uniquifyTcContinue <$> def)
+  uniquifyTcContinue (NmConstCase fc sc alts def) =
+    NmConstCase fc (uniquifyTcContinue sc) (uniquifyTcContinueConstAlt <$> alts)
+      (uniquifyTcContinue <$> def)
+  uniquifyTcContinue e = e
+
+  uniquifyTcContinueConAlt : NamedConAlt -> NamedConAlt
+  uniquifyTcContinueConAlt (MkNConAlt n ci tag args body) =
+    MkNConAlt (uniquifyTcContinueName n tag) ci tag args (uniquifyTcContinue body)
+
+  uniquifyTcContinueConstAlt : NamedConstAlt -> NamedConstAlt
+  uniquifyTcContinueConstAlt (MkNConstAlt c body) = MkNConstAlt c (uniquifyTcContinue body)
+
+uniquifyTcContinueDef : (Name, FC, NamedDef) -> (Name, FC, NamedDef)
+uniquifyTcContinueDef (name, fc, MkNmFun args body) =
+  (name, fc, MkNmFun args (uniquifyTcContinue body))
+uniquifyTcContinueDef def = def
+
 export
 optimize : String -> LazyList (Name, FC, NamedDef) -> LazyList (Name, FC, NamedDef)
 optimize programName allDefs =
@@ -2215,7 +2261,7 @@ optimize programName allDefs =
       inlinedDefs = inlineCallbackLambdasDef callbackLambdas <$> allDefs
       tailRecOptimizedDefs = concatMap (Lazy.fromList . optimizeTailRecursion programName) inlinedDefs
       tailCallOptimizedDefs = TailRec.functions tailRecLoopFunctionName $ toList tailRecOptimizedDefs
-  in uniquifyDefSiteFcs . toNameFcDef <$> fromList tailCallOptimizedDefs
+  in uniquifyDefSiteFcs . uniquifyTcContinueDef . toNameFcDef <$> fromList tailCallOptimizedDefs
 
 getArity : InferredFunctionType -> Nat
 getArity (MkInferredFunctionType _ args) = length args

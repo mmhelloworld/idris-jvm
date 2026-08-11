@@ -122,6 +122,24 @@ entry points (`sum`, `product`, `length`, `elem`) for `List`.
 
 ## Attack order
 
+Step 2 is **implemented** (2026-08-11): nullary constructors are shared
+singletons, constructor ids are per-class constants (field and `<init>`
+parameter removed). Tail-recursion continuations (`TcContinue_<arity>`,
+one name per arity with the tag selecting the continuation) are renamed to
+per-tag classes by `uniquifyTcContinue` in the optimizer, and codegen now
+fails the build if a constructor class is ever reused with a different id.
+matMul allocation drops 19.2% B/op vs the 0.8.4 release.
+
+Step 3 is **implemented** (2026-08-11): `assembleBranch` lowers 1–2 case
+switches to direct compares (a `dup` + pop-stub covers the two-case shape
+without a temp local), and `case` over a primitive comparison jumps
+straight to the branch bodies via `comparisonFalseJump` instead of
+materializing 0/1 and re-switching. `Prelude`'s Int `<` shrinks 32 → 8
+bytecode bytes. JMH: sievePrimes +15.8%, matMul +12.4% over step 2, with
+allocation unchanged — confirming the inlining-budget mechanism.
+Cumulative vs the 0.8.4 release: sievePrimes +65% throughput, matMul
++9.6% throughput and −19.2% B/op.
+
 Step 1 is **implemented** (2026-08-08): `assembleInteger` folds `BI` literals
 to primitive constants when the target type is primitive; `assembleCast`
 folds `cast Integer -> Int*/Bits*/String` of literals with the runtime's

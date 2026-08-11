@@ -703,15 +703,45 @@ fillTableSwitchLabels defaultLabel labels cases = reverse $ go (head cases) (zip
        then go1 (singleton label) (currentValue + 1) rest
        else go1 (singleton defaultLabel) (currentValue + 1) (toList cases)
 
+||| Compare the switch value (on the stack) against a constant and jump to
+||| the given label on equality.
+branchOnEquals : {auto stateRef: Ref AsmState AsmState} -> Int -> (label: String) -> Core ()
+branchOnEquals 0 label = ifeq label
+branchOnEquals value label = do
+  iconst value
+  ificmpeq label
+
 assembleBranch : {auto stateRef: Ref AsmState AsmState} -> (defaultLabel: String) -> (labels: List1 String)
                -> (cases: List1 Int) -> Core ()
 assembleBranch defaultLabel labels cases =
-  let min = head cases
-      max = last cases
-      isTableSwitch = shouldUseTableSwitch (cast min) (cast max) (cast $ length labels)
-  in if isTableSwitch
-        then tableSwitch min max defaultLabel $ fillTableSwitchLabels defaultLabel labels cases
-        else lookupSwitch defaultLabel labels cases
+  -- One- and two-case switches (booleans, two-constructor types like List
+  -- and Maybe, if/else) compile to direct compares: the same branches the
+  -- JIT would produce, but in far fewer bytecode bytes than a lookupswitch,
+  -- which matters for the JIT's bytecode-size-driven inlining budgets.
+  case zip (toList cases) (toList labels) of
+    [(caseValue, label)] => do
+      branchOnEquals caseValue label
+      goto defaultLabel
+    [(case1, label1), (case2, label2)] => do
+      -- The value is needed for two compares but conditional jumps consume
+      -- it: test a dup'd copy first, and route the match through a stub that
+      -- pops the surviving original before entering the case body.
+      popStubLabel <- newLabel
+      createLabel popStubLabel
+      dup
+      branchOnEquals case1 popStubLabel
+      branchOnEquals case2 label2
+      goto defaultLabel
+      labelStart popStubLabel
+      pop
+      goto label1
+    _ =>
+      let min = head cases
+          max = last cases
+          isTableSwitch = shouldUseTableSwitch (cast min) (cast max) (cast $ length labels)
+      in if isTableSwitch
+            then tableSwitch min max defaultLabel $ fillTableSwitchLabels defaultLabel labels cases
+            else lookupSwitch defaultLabel labels cases
 
 parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef: Ref AsmState AsmState}
   mutual
@@ -1733,12 +1763,107 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
       traverse_ caseAssembler $ toList switchCasesWithEndLabel
       maybe (assembleMissingDefault returnType fc defaultLabel) (assembleDefault returnType defaultLabel) def
 
+    -- A comparison primitive compiled as a conditional jump: assembles the
+    -- operands and jumps to the given label when the comparison is FALSE,
+    -- falling through when it is TRUE.
+    binaryCmpFalseJump : InferredType -> (String -> Core ()) -> NamedCExp -> NamedCExp
+                       -> (String -> Core ())
+    binaryCmpFalseJump exprType falseJump x y label = do
+        assembleExpr False exprType x
+        assembleExpr False exprType y
+        falseJump label
+
+    compareToFalseJump : String -> (String -> Core ()) -> NamedCExp -> NamedCExp
+                       -> (String -> Core ())
+    compareToFalseJump className falseJump x y label = do
+        let exprType = IRef className Class []
+        assembleExpr False exprType x
+        assembleExpr False exprType y
+        invokeMethod InvokeVirtual className "compareTo" ("(L" ++ className ++ ";)I") False
+        falseJump label
+
+    -- Mirrors the comparison table in `assembleExprOp`, but produces a jump
+    -- instead of materializing 0/1.
+    comparisonFalseJump : NamedCExp -> Maybe (String -> Core ())
+    comparisonFalseJump (NmOp _ (LT DoubleType) [x, y]) = Just $ binaryCmpFalseJump IDouble (\l => do dcmpg; ifge l) x y
+    comparisonFalseJump (NmOp _ (LTE DoubleType) [x, y]) = Just $ binaryCmpFalseJump IDouble (\l => do dcmpg; ifgt l) x y
+    comparisonFalseJump (NmOp _ (EQ DoubleType) [x, y]) = Just $ binaryCmpFalseJump IDouble (\l => do dcmpl; ifne l) x y
+    comparisonFalseJump (NmOp _ (GTE DoubleType) [x, y]) = Just $ binaryCmpFalseJump IDouble (\l => do dcmpl; iflt l) x y
+    comparisonFalseJump (NmOp _ (GT DoubleType) [x, y]) = Just $ binaryCmpFalseJump IDouble (\l => do dcmpl; ifle l) x y
+    comparisonFalseJump (NmOp _ (LT IntegerType) [x, y]) = Just $ compareToFalseJump bigIntegerClass ifge x y
+    comparisonFalseJump (NmOp _ (LTE IntegerType) [x, y]) = Just $ compareToFalseJump bigIntegerClass ifgt x y
+    comparisonFalseJump (NmOp _ (EQ IntegerType) [x, y]) = Just $ compareToFalseJump bigIntegerClass ifne x y
+    comparisonFalseJump (NmOp _ (GTE IntegerType) [x, y]) = Just $ compareToFalseJump bigIntegerClass iflt x y
+    comparisonFalseJump (NmOp _ (GT IntegerType) [x, y]) = Just $ compareToFalseJump bigIntegerClass ifle x y
+    comparisonFalseJump (NmOp _ (LT StringType) [x, y]) = Just $ compareToFalseJump stringClass ifge x y
+    comparisonFalseJump (NmOp _ (LTE StringType) [x, y]) = Just $ compareToFalseJump stringClass ifgt x y
+    comparisonFalseJump (NmOp _ (EQ StringType) [x, y]) = Just $ compareToFalseJump stringClass ifne x y
+    comparisonFalseJump (NmOp _ (GTE StringType) [x, y]) = Just $ compareToFalseJump stringClass iflt x y
+    comparisonFalseJump (NmOp _ (GT StringType) [x, y]) = Just $ compareToFalseJump stringClass ifle x y
+    comparisonFalseJump (NmOp _ (LT Bits64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareUnsignedLong ifge) x y
+    comparisonFalseJump (NmOp _ (LTE Bits64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareUnsignedLong ifgt) x y
+    comparisonFalseJump (NmOp _ (EQ Bits64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareUnsignedLong ifne) x y
+    comparisonFalseJump (NmOp _ (GTE Bits64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareUnsignedLong iflt) x y
+    comparisonFalseJump (NmOp _ (GT Bits64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareUnsignedLong ifle) x y
+    comparisonFalseJump (NmOp _ (LT Int64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareSignedLong ifge) x y
+    comparisonFalseJump (NmOp _ (LTE Int64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareSignedLong ifgt) x y
+    comparisonFalseJump (NmOp _ (EQ Int64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareSignedLong ifne) x y
+    comparisonFalseJump (NmOp _ (GTE Int64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareSignedLong iflt) x y
+    comparisonFalseJump (NmOp _ (GT Int64Type) [x, y]) = Just $ binaryCmpFalseJump ILong (compareSignedLong ifle) x y
+    comparisonFalseJump (NmOp _ (LT Bits32Type) [x, y]) = Just $ binaryCmpFalseJump IInt (compareUnsignedInt ifge) x y
+    comparisonFalseJump (NmOp _ (LTE Bits32Type) [x, y]) = Just $ binaryCmpFalseJump IInt (compareUnsignedInt ifgt) x y
+    comparisonFalseJump (NmOp _ (EQ Bits32Type) [x, y]) = Just $ binaryCmpFalseJump IInt (compareUnsignedInt ifne) x y
+    comparisonFalseJump (NmOp _ (GTE Bits32Type) [x, y]) = Just $ binaryCmpFalseJump IInt (compareUnsignedInt iflt) x y
+    comparisonFalseJump (NmOp _ (GT Bits32Type) [x, y]) = Just $ binaryCmpFalseJump IInt (compareUnsignedInt ifle) x y
+    comparisonFalseJump (NmOp _ (LT ty) [x, y]) = Just $ binaryCmpFalseJump IInt ificmpge x y
+    comparisonFalseJump (NmOp _ (LTE ty) [x, y]) = Just $ binaryCmpFalseJump IInt ificmpgt x y
+    comparisonFalseJump (NmOp _ (EQ ty) [x, y]) = Just $ binaryCmpFalseJump IInt ificmpne x y
+    comparisonFalseJump (NmOp _ (GTE ty) [x, y]) = Just $ binaryCmpFalseJump IInt ificmplt x y
+    comparisonFalseJump (NmOp _ (GT ty) [x, y]) = Just $ binaryCmpFalseJump IInt ificmple x y
+    comparisonFalseJump _ = Nothing
+
+    -- `case` alternatives over exactly the boolean constants 0/1, as
+    -- (zero-branch, one-branch).
+    boolSwitchAlts : List NamedConstAlt -> Maybe (Maybe NamedCExp, Maybe NamedCExp)
+    boolSwitchAlts [MkNConstAlt (I 0) z] = Just (Just z, Nothing)
+    boolSwitchAlts [MkNConstAlt (I 1) o] = Just (Nothing, Just o)
+    boolSwitchAlts [MkNConstAlt (I 0) z, MkNConstAlt (I 1) o] = Just (Just z, Just o)
+    boolSwitchAlts [MkNConstAlt (I 1) o, MkNConstAlt (I 0) z] = Just (Just z, Just o)
+    boolSwitchAlts _ = Nothing
+
+    -- `case (x < y) of 0/1` with the comparison as scrutinee: jump straight
+    -- to the branch bodies, skipping the 0/1 materialization and re-switch.
+    -- A comparison only ever produces 0 or 1, so a missing side can only be
+    -- the default (or the missing-default crash), never an arbitrary value.
+    assembleFusedBooleanSwitch : (returnType: InferredType) -> FC -> (String -> Core ())
+                               -> (zeroCase : Maybe NamedCExp) -> (oneCase : Maybe NamedCExp)
+                               -> Maybe NamedCExp -> Core ()
+    assembleFusedBooleanSwitch returnType fc cmpJump zeroCase oneCase def = do
+        trueLabel <- newLabel
+        createLabel trueLabel
+        falseLabel <- newLabel
+        createLabel falseLabel
+        let defBody = case def of
+                        Just expr => assembleExpr True returnType expr
+                        Nothing => do
+                          defaultValue returnType
+                          asmReturn returnType
+        let trueBody = maybe defBody (assembleExpr True returnType) oneCase
+        let falseBody = maybe defBody (assembleExpr True returnType) zeroCase
+        cmpJump falseLabel
+        assembleCaseWithScope trueLabel falseLabel trueBody
+        assembleCaseWithScope falseLabel methodEndLabel falseBody
+
     assembleConstantSwitch : (returnType: InferredType) -> (switchExprType: InferredType) -> FC -> NamedCExp
                            -> List NamedConstAlt -> Maybe NamedCExp -> Core ()
-    assembleConstantSwitch returnType IInt fc sc alts def = do
-        let switchExprAsm = Just $ assembleExpr False IInt sc
-        let caseIntMapper = constantAltIntExpr fc
-        assembleSwitch returnType fc switchExprAsm caseIntMapper assembleExprConstAlt alts def
+    assembleConstantSwitch returnType IInt fc sc alts def =
+        case (comparisonFalseJump sc, boolSwitchAlts alts) of
+          (Just cmpJump, Just (zeroCase, oneCase)) =>
+            assembleFusedBooleanSwitch returnType fc cmpJump zeroCase oneCase def
+          _ => do
+            let switchExprAsm = Just $ assembleExpr False IInt sc
+            let caseIntMapper = constantAltIntExpr fc
+            assembleSwitch returnType fc switchExprAsm caseIntMapper assembleExprConstAlt alts def
       where
         assembleExprConstAlt : (String, Int, NamedConstAlt, String) -> Core ()
         assembleExprConstAlt (labelStart, _, (MkNConstAlt _ expr), labelEnd) =

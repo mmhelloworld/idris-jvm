@@ -34,6 +34,16 @@ should target this file (`CHANGELOG_NEXT`).
   reused with a different id. Allocation on the `matMul` JMH benchmark drops
   by 19% B/op.
 
+* The JVM backend now compiles one- and two-case switches (booleans,
+  if/else, and two-constructor types such as `List` and `Maybe`) to direct
+  compare-and-branch instructions instead of `lookupswitch`, and fuses
+  `case` over a primitive comparison into a single conditional jump instead
+  of materializing 0/1 and re-dispatching on it. Generated methods shrink
+  substantially — `Prelude`'s `Int` less-than drops from 32 to 8 bytecode
+  bytes — keeping hot combinators inside the JIT's bytecode-size-driven
+  inlining budgets: +16% throughput on the sievePrimes JMH benchmark and
+  +12% on matMul with no allocation change.
+
 * The compile-time evaluator now folds signed `div`/`mod` constants with
   explicit Euclidean semantics instead of delegating to the host compiler's
   operators. This fixes REPL evaluation and type-level `div`/`mod` on negative

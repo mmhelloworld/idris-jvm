@@ -3185,12 +3185,13 @@ assembleSpec : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn SyntaxInfo}
             -> SpecialisationPlan -> ConSpecialisationPlan -> SortedSet Name
             -> SortedMap String (List String)
             -> SortedMap String (List CallbackSlot)
+            -> (narrowableClasses : SortedSet String)
             -> SpecialisedSignature -> Core ()
-assembleSpec plan conPlan natLive natIfaces cbSigs (MkSpecialisedSig specName def specType) = do
+assembleSpec plan conPlan natLive natIfaces cbSigs narrowableClasses (MkSpecialisedSig specName def specType) = do
   asmState <- coreLift $ AsmState.fromIdrisName specName
   stateRef <- newRef AsmState asmState
   setSpecialisationPlan {stateRef} plan
-  setConSpecialisationPlan {stateRef} conPlan
+  setConSpecialisationPlan {stateRef} conPlan narrowableClasses
   setNaturalConsLive {stateRef} natLive
   setNaturalToTConIfaces {stateRef} natIfaces
   setCallbackSlotSigs {stateRef} cbSigs
@@ -3205,12 +3206,13 @@ assembleNameFcStateRefs : {auto c : Ref Ctxt Defs}
                         -> SortedSet Name
                         -> SortedMap String (List String)
                         -> (liveFns : SortedSet Name)
+                        -> (narrowableClasses : SortedSet String)
                         -> SortedMap String NamedDef
                         -> LazyList (Name, FC, Ref AsmState AsmState) -> Core ()
-assembleNameFcStateRefs _ _ _ _ _ _ [] = pure ()
-assembleNameFcStateRefs plan conPlan natLive natIfaces liveFns defs ((name, fc, stateRef) :: rest) = do
+assembleNameFcStateRefs _ _ _ _ _ _ _ [] = pure ()
+assembleNameFcStateRefs plan conPlan natLive natIfaces liveFns narrowableClasses defs ((name, fc, stateRef) :: rest) = do
   setSpecialisationPlan {stateRef} plan
-  setConSpecialisationPlan {stateRef} conPlan
+  setConSpecialisationPlan {stateRef} conPlan narrowableClasses
   setNaturalConsLive {stateRef} natLive
   setNaturalToTConIfaces {stateRef} natIfaces
   -- Dead-function elimination: emit the natural method only when it's live
@@ -3235,9 +3237,9 @@ assembleNameFcStateRefs plan conPlan natLive natIfaces liveFns defs ((name, fc, 
     assemble {stateRef=stateRef} name fc
   cbSigs <- getCallbackSlotSigs {stateRef}
   traverse_ (\sp => when (SortedSet.contains sp.name liveFns) $
-                      assembleSpec plan conPlan natLive natIfaces cbSigs sp)
+                      assembleSpec plan conPlan natLive natIfaces cbSigs narrowableClasses sp)
             (fromMaybe [] $ SortedMap.lookup name plan)
-  assembleNameFcStateRefs plan conPlan natLive natIfaces liveFns defs rest
+  assembleNameFcStateRefs plan conPlan natLive natIfaces liveFns narrowableClasses defs rest
 
 getNamedDefsByName : String -> LazyList (Name, FC, Ref AsmState AsmState) -> Core (SortedMap String NamedDef)
 getNamedDefsByName programName nameFcStateRefs = go SortedMap.empty nameFcStateRefs where
@@ -3337,10 +3339,13 @@ record PlanState where
   conPlan : ConSpecialisationPlan
   recordSpecClasses : SortedSet String
   tconIfaceClasses : SortedSet String
+  -- recordSpecClasses + tconIfaceClasses, maintained incrementally so plan
+  -- installs never recompute it (see setConSpecialisationPlan)
+  narrowableClasses : SortedSet String
   familyMembers : SortedMap String (SortedSet Name)
 
 emptyPlanState : PlanState
-emptyPlanState = MkPlanState SortedMap.empty SortedMap.empty SortedSet.empty SortedSet.empty SortedMap.empty
+emptyPlanState = MkPlanState SortedMap.empty SortedMap.empty SortedSet.empty SortedSet.empty SortedSet.empty SortedMap.empty
 
 -- What one `step` changed, for dirty propagation in the worklist fixpoint.
 record StepEffects where
@@ -3751,6 +3756,11 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate
                              , tconIfaceClasses := if tconClassName == ""
                                  then ps.tconIfaceClasses
                                  else SortedSet.insert tconClassName ps.tconIfaceClasses
+                             , narrowableClasses :=
+                                 let n1 = if isRecordCon conInfo
+                                            then SortedSet.insert specName ps.narrowableClasses
+                                            else ps.narrowableClasses
+                                 in if tconClassName == "" then n1 else SortedSet.insert tconClassName n1
                              , familyMembers := if tconClassName == ""
                                  then ps.familyMembers
                                  else SortedMap.insert tconClassName
@@ -3971,7 +3981,7 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate
       -- post-pass can rewire NmRef[orig] → NmRef[spec] using the latest plan,
       -- and so emission of the function body can look up constructor specs.
       setSpecialisationPlan {stateRef = asmStateRef} ps.funPlan
-      setConSpecialisationPlan {stateRef = asmStateRef} ps.conPlan
+      setConSpecialisationPlan {stateRef = asmStateRef} ps.conPlan ps.narrowableClasses
       inferFunctionType (Just initialFunctionType) def
       inferDef
       -- Refine the natural return type to a family interface when the body
@@ -4009,7 +4019,7 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate
                 asmState <- coreLift $ AsmState.fromIdrisName specFnName
                 specRef <- newRef AsmState asmState
                 setSpecialisationPlan {stateRef = specRef} p.funPlan
-                setConSpecialisationPlan {stateRef = specRef} p.conPlan
+                setConSpecialisationPlan {stateRef = specRef} p.conPlan p.narrowableClasses
                 setCallbackSlotSigs {stateRef = specRef} !(getCallbackSlotSigs {stateRef = asmStateRef})
                 inferFunctionType {stateRef = specRef} (Just initialFunctionType) def
                 inferDef {stateRef = specRef}
@@ -4158,7 +4168,11 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable roots =
     -- rewritten graph, used by emission to drop dead functions (natural
     -- methods whose every caller was rewritten to a spec, and the natural
     -- constructor classes only those dead bodies build).
-    loop (buildReverseDeps defs reachable) (SortedSet.fromList reachable)
+    -- Computed ONCE for the whole fixpoint (the plan is converged here);
+    -- where-block nullary bindings are lambda-lifted and would recompute
+    -- per reference.
+    let narrowables = conPlanNarrowableClassesOf conPlan
+    in loop narrowables (buildReverseDeps defs reachable) (SortedSet.fromList reachable)
          SortedSet.empty SortedMap.empty SortedMap.empty roots
   where
     slotMatch : InferredType -> InferredType -> Bool
@@ -4195,10 +4209,10 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable roots =
     -- construction sites, the names its rewritten body references).  Both
     -- natural functions and specs are nodes; the name is the site ORIGIN so
     -- `loop` can drop sites in dead (unreachable) functions.
-    gatherForSpec : SortedSet Name -> NamedDef -> SortedMap String (List CallbackSlot)
+    gatherForSpec : (narrowables : SortedSet String) -> SortedSet Name -> NamedDef -> SortedMap String (List CallbackSlot)
                  -> SpecialisedSignature
                  -> Core (Name, List (Name, List InferredType), SortedSet Name, Bool)
-    gatherForSpec current def cbSigs (MkSpecialisedSig specName specDef specType) = do
+    gatherForSpec narrowables current def cbSigs (MkSpecialisedSig specName specDef specType) = do
       let specParams = specType.parameterTypes
       let arity = case def of
                     MkNmFun ps _ => length ps
@@ -4212,39 +4226,39 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable roots =
       asmState <- coreLift $ AsmState.fromIdrisName specName
       specRef <- newRef AsmState asmState
       setSpecialisationPlan {stateRef = specRef} plan
-      setConSpecialisationPlan {stateRef = specRef} conPlan
+      setConSpecialisationPlan {stateRef = specRef} conPlan narrowables
       setNaturalConsLive {stateRef = specRef} current
       setCallbackSlotSigs {stateRef = specRef} cbSigs
       (sites, refs) <- drain {stateRef = specRef} specInitial specDef
       specType' <- inferredFunctionType <$> getCurrentFunction {stateRef = specRef}
       pure (specName, sites, refs, maybe True (/= specType') prevSpecType)
 
-    gatherFor : SortedSet Name -> Name
+    gatherFor : (narrowables : SortedSet String) -> SortedSet Name -> Name
              -> Core (List (Name, List (Name, List InferredType), SortedSet Name), Bool)
-    gatherFor current name = do
+    gatherFor narrowables current name = do
       let nameStr = jvmSimpleName name
       let Just asmStateRef = SortedMap.lookup nameStr stateRefs
             | Nothing => pure ([], False)
       let Just def = SortedMap.lookup nameStr defs
             | Nothing => pure ([], False)
       setSpecialisationPlan {stateRef = asmStateRef} plan
-      setConSpecialisationPlan {stateRef = asmStateRef} conPlan
+      setConSpecialisationPlan {stateRef = asmStateRef} conPlan narrowables
       setNaturalConsLive {stateRef = asmStateRef} current
       initialFunctionType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
       (naturalSites, natRefs) <- drain {stateRef = asmStateRef} initialFunctionType def
       finalType <- inferredFunctionType <$> getCurrentFunction {stateRef = asmStateRef}
       let specs = fromMaybe [] $ SortedMap.lookup name plan
       cbSigs <- getCallbackSlotSigs {stateRef = asmStateRef}
-      specResults <- traverse (gatherForSpec current def cbSigs) specs
+      specResults <- traverse (gatherForSpec narrowables current def cbSigs) specs
       let nodes = (name, naturalSites, natRefs)
                     :: map (\(sn, s, r, _) => (sn, s, r)) specResults
       pure (nodes, finalType /= initialFunctionType || any (\(_, _, _, c) => c) specResults)
 
-    onePass : SortedSet Name -> List Name
+    onePass : (narrowables : SortedSet String) -> SortedSet Name -> List Name
            -> Core (List (Name, List (Name, List InferredType), SortedSet Name), List Name)
-    onePass current names = do
+    onePass narrowables current names = do
       results <- the (Core (List (List (Name, List (Name, List InferredType), SortedSet Name), Maybe Name))) $
-                   traverse (\n => do (nodes, tyCh) <- gatherFor current n
+                   traverse (\n => do (nodes, tyCh) <- gatherFor narrowables current n
                                       pure (nodes, if tyCh then Just n else Nothing))
                             names
       pure (join (map Builtin.fst results), mapMaybe Builtin.snd results)
@@ -4286,15 +4300,16 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable roots =
     -- so a typed read implies no live function builds the natural class.
     -- (The full-graph rescan this replaced made `naturalConsLive` ~50% of
     -- the build.)
-    loop : SortedMap Name (SortedSet Name) -> SortedSet Name -> SortedSet Name
+    loop : (narrowables : SortedSet String)
+        -> SortedMap Name (SortedSet Name) -> SortedSet Name -> SortedSet Name
         -> SortedMap Name (List (Name, List InferredType)) -> SortedMap Name (SortedSet Name)
         -> SortedSet Name -> Core (SortedSet Name, SortedSet Name)
-    loop revDeps dirty current sitesByFn refsByFn liveFns =
+    loop narrowables revDeps dirty current sitesByFn refsByFn liveFns =
       case SortedSet.toList dirty of
         [] => pure (current, liveFns)
         _ => do
           let names = filter (\n => SortedSet.contains n dirty) reachable
-          (nodes, typeChanged) <- onePass current names
+          (nodes, typeChanged) <- onePass narrowables current names
           let sitesByFn' = foldl (\m, (node, sites, _) => SortedMap.insert node sites m) sitesByFn nodes
           let refsByFn'  = foldl (\m, (node, _, refs) => SortedMap.insert node refs m) refsByFn nodes
           -- Grow the live set: reachability can only have gained edges from
@@ -4313,7 +4328,7 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable roots =
           let dirtyFromTypes = if isNil delta
                                  then SortedSet.empty
                                  else unionAll (map (revDepsOf revDeps) typeChanged)
-          loop revDeps (SortedSet.union dirtyFromLive dirtyFromTypes) merged sitesByFn' refsByFn' liveFns'
+          loop narrowables revDeps (SortedSet.union dirtyFromLive dirtyFromTypes) merged sitesByFn' refsByFn' liveFns'
 
 -- For each spec entry with a TCon-family interface, find every sibling
 -- DCon's natural class and register that natural class to implement the
@@ -4492,7 +4507,8 @@ compileToJvmBytecode outputDirectory outputFile term = do
     preRegisterConstructorSpecs conPlan
     preRegisterCallbackInterfaces programName plan callbackSigs
     let reachableNameFcStateRefs = filter (\(n, _, _) => SortedSet.contains n reachableSet) nameFcStateRefs
-    assembleNameFcStateRefs plan conPlan natLive natIfaces liveFns namedDefsByName reachableNameFcStateRefs
+    let narrowableClasses = conPlanNarrowableClassesOf conPlan
+    assembleNameFcStateRefs plan conPlan natLive natIfaces liveFns narrowableClasses namedDefsByName reachableNameFcStateRefs
     coreLift $ do
         exportDefs $ mapMaybe (getExport noMangleMap . fst) allDefs
         mainAsmState <- AsmState.fromIdrisName mainFunctionName

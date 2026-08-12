@@ -2680,25 +2680,33 @@ export
 getConSpecialisationPlan : {auto stateRef: Ref AsmState AsmState} -> Core ConSpecialisationPlan
 getConSpecialisationPlan = specialisedConstructorPlan <$> getState
 
+-- One-shot derivation of the narrowable-class set from a (converged) plan.
+-- Callers inside the plan fixpoint must NOT use this per install — they
+-- maintain the set incrementally in PlanState (rebuilding it per def per
+-- iteration was ~half the whole-program codegen profile at compiler scale).
 export
-setConSpecialisationPlan : {auto stateRef: Ref AsmState AsmState} -> ConSpecialisationPlan -> Core ()
-setConSpecialisationPlan plan =
-    updateState $ { specialisedConstructorPlan := plan
-                  , conPlanNarrowableClasses := narrowableClasses }
+conPlanNarrowableClassesOf : ConSpecialisationPlan -> SortedSet String
+conPlanNarrowableClassesOf plan = foldl addEntries SortedSet.empty (SortedMap.toList plan)
   where
     isRecordConInfo : ConInfo -> Bool
     isRecordConInfo RECORD = True
     isRecordConInfo UNIT = True
     isRecordConInfo _ = False
 
-    entryClasses : SpecialisedConstructor -> List String
-    entryClasses sc =
-      (if sc.tconClassName == "" then [] else [sc.tconClassName])
-      ++ (if isRecordConInfo sc.conInfo then [sc.specClassName] else [])
+    addOne : SortedSet String -> SpecialisedConstructor -> SortedSet String
+    addOne acc sc =
+      let acc1 = if sc.tconClassName == "" then acc else SortedSet.insert sc.tconClassName acc
+      in if isRecordConInfo sc.conInfo then SortedSet.insert sc.specClassName acc1 else acc1
 
-    narrowableClasses : SortedSet String
-    narrowableClasses = SortedSet.fromList $
-      concatMap (concatMap entryClasses . snd) (SortedMap.toList plan)
+    addEntries : SortedSet String -> (Name, List SpecialisedConstructor) -> SortedSet String
+    addEntries acc (_, entries) = foldl addOne acc entries
+
+export
+setConSpecialisationPlan : {auto stateRef: Ref AsmState AsmState} -> ConSpecialisationPlan
+                         -> (narrowableClasses : SortedSet String) -> Core ()
+setConSpecialisationPlan plan narrowableClasses =
+    updateState $ { specialisedConstructorPlan := plan
+                  , conPlanNarrowableClasses := narrowableClasses }
 
 export
 getConPlanNarrowableClasses : {auto stateRef: Ref AsmState AsmState} -> Core (SortedSet String)

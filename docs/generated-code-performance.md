@@ -151,9 +151,24 @@ sievePrimes 2.15x, matMul +37% with −25% B/op.
 
 ## Self-hosted compiler performance (vs the 0.8.5 release)
 
-Measured 2026-08-12 with a stage-2 build (the compiler compiled by
-itself, so steps 1–4 are in its own bytecode), identical installed
-libraries for both compilers:
+**Compiling the compiler itself** (305 modules + whole-program codegen,
+clean builds, interleaved runs, identical installed libraries; medians
+across 3 valid runs each — one run discarded as load-poisoned, ambient
+load ±15%):
+
+| Phase | 0.8.5 | steps 1–6 | delta |
+|---|---|---|---|
+| Typecheck (305 modules) | ~424 s | ~385 s | ~9–10% faster |
+| Whole-program JVM codegen | ~83 s | ~62 s | ~25% faster, while also running the specialisation machinery 0.8.5 lacks |
+| Total | ~507 s | ~470 s | ~7–9% faster |
+
+The codegen-phase JFR on this workload also exposed the
+narrowable-class-set rebuild (fixed in `6a581f8f`: incremental
+maintenance in PlanState; the rebuild was ~half the phase's samples).
+Golden-suite and small-package timings below predate that fix.
+
+Earlier small-workload measurements (2026-08-12, stage-2 builds,
+identical installed libraries):
 
 - `--build` of the base library (~140 modules, elaborator-heavy):
   ~54 s → ~49–51 s, roughly **5–10% faster** (noisy machine; medians of

@@ -767,8 +767,8 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
     callbackSigOfVariableWithArity _ _ = pure Nothing
 
     assembleExpr : (isTailCall: Bool) -> InferredType -> NamedCExp -> Core ()
-    assembleExpr isTailCall returnType (NmDelay _ _ expr) =
-        assembleSubMethodWithScope isTailCall returnType Nothing Nothing expr
+    assembleExpr isTailCall returnType (NmDelay _ reason expr) =
+        assembleDelay isTailCall returnType reason expr
     assembleExpr isTailCall returnType (NmLocal _ loc) = do
         let variableName = jvmSimpleName loc
         index <- getVariableIndex variableName
@@ -1548,7 +1548,16 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                                 -> (parameterName : Maybe Name) -> NamedCExp -> Core ()
     assembleSubMethodWithScope1 isTailCall returnType parameterName body = do
         parentScope <- getScope !getCurrentScopeIndex
-        withScope $ assembleSubMethod isTailCall returnType Nothing parameterName parentScope body
+        withScope $ assembleSubMethod isTailCall returnType Nothing Nothing parameterName parentScope body
+
+    -- Delay assembly: `Inf` (codata) delays are plain `Delayed` closures —
+    -- the Chez reference backend's default laziness does not memoize at all,
+    -- and per-cell MemoizedDelayed wrappers dominated stream-building
+    -- profiles.  `Lazy` (and unknown) delays keep memoization.
+    assembleDelay : (isTailCall: Bool) -> InferredType -> LazyReason -> NamedCExp -> Core ()
+    assembleDelay isTailCall returnType reason body = do
+        parentScope <- getScope !getCurrentScopeIndex
+        withScope $ assembleSubMethod isTailCall returnType (Just reason) Nothing Nothing parentScope body
 
     assembleMethodReference : (isTailCall: Bool) -> InferredType
                             -> (isMethodReference : Bool) -> (arity: Nat) -> (functionName: Name)
@@ -1577,7 +1586,8 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                 then pure $ jvmSimpleName name ++ show !newDynamicVariableIndex
                 else pure $ jvmSimpleName name
         let parameterValueVariableName = UN $ Basic parameterValueVariable
-        withScope $ assembleSubMethod isTailCall returnType (Just (assembleValue parentScope parameterValueVariable))
+        withScope $ assembleSubMethod isTailCall returnType Nothing
+            (Just (assembleValue parentScope parameterValueVariable))
             (Just parameterValueVariableName) parentScope
             (substituteVariableSubMethodBody (NmLocal (getFC body) parameterValueVariableName) body)
       where
@@ -1613,14 +1623,19 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
     assembleSubMethodWithScope isTailCall returnType _ parameterName body =
       assembleSubMethodWithScope1 isTailCall returnType parameterName body
 
-    assembleSubMethod : (isTailCall: Bool) -> InferredType -> (parameterValueExpr: Maybe (Core ()))
+    assembleSubMethod : (isTailCall: Bool) -> InferredType -> (delayReason: Maybe LazyReason)
+                      -> (parameterValueExpr: Maybe (Core ()))
                       -> (parameterName: Maybe Name) -> Scope -> NamedCExp -> Core ()
-    assembleSubMethod isTailCall lambdaReturnType parameterValueExpr parameterName declaringScope expr = do
+    assembleSubMethod isTailCall lambdaReturnType delayReason parameterValueExpr parameterName declaringScope expr = do
         scope <- getScope !getCurrentScopeIndex
         maybe (pure ()) (setScopeCounter . succ) (parentIndex scope)
         let lambdaBodyReturnType = returnType scope
         let lambdaType = getLambdaTypeByParameter parameterName
-        when (lambdaType == DelayedLambda) $ do
+        let memoize = lambdaType == DelayedLambda
+                        && (case delayReason of
+                              Just LInf => False
+                              _ => True)
+        when memoize $ do
             new "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed"
             dup
         let isExtracted = isJust parameterValueExpr
@@ -1680,7 +1695,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             asmInvokeDynamic lambdaClassName lambdaMethodName interfaceMethodName invokeDynamicDescriptor
                 (maybe (getSamDesc lambdaType) getMethodDescriptor mCallbackSig)
                 implementationMethodDescriptor instantiatedMethodDescriptor
-            when (lambdaType == DelayedLambda) $
+            when memoize $
                 invokeMethod InvokeSpecial "io/github/mmhelloworld/idrisjvm/runtime/MemoizedDelayed" "<init>"
                     "(Lio/github/mmhelloworld/idrisjvm/runtime/Delayed;)V" False
         let staticCall = do

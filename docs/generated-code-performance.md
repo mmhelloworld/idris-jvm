@@ -120,6 +120,31 @@ entry points (`sum`, `product`, `length`, `elem`) for `List`.
 9. **`mod`/`div` zero checks** load `BigInteger.ZERO.intValue()` and call
    Prelude `==` instead of `ifeq` (minor; mostly JIT-recoverable).
 
+## Self-hosted compiler performance (vs the 0.8.5 release)
+
+Measured 2026-08-12 with a stage-2 build (the compiler compiled by
+itself, so steps 1–4 are in its own bytecode), identical installed
+libraries for both compilers:
+
+- `--build` of the base library (~140 modules, elaborator-heavy):
+  ~54 s → ~49–51 s, roughly **5–10% faster** (noisy machine; medians of
+  4 interleaved runs). Elaboration is dominated by BigInteger
+  arithmetic, SortedMap operations, and closures — exactly the step-5
+  territory — so the modest delta is expected.
+- Whole `tests/jvm` suite (68 golden tests, each invoking the compiler
+  for small programs): aggregate per-test time **−23%** (1099 s → 841 s)
+  under the stage-2 binary.
+- Small single-program codegen (`-o`): parity at 2–3 s (JVM startup
+  dominates).
+
+Stage-2 self-hosting itself is newly green: the self-built compiler
+passes all 68 jvm tests. Two blockers were found and fixed on the way —
+see the commit log for `af6c6d06` (call-site normalization costs that
+were quadratic at compiler scale) and `138578f3` (site logs must depend
+only on pass-stable inputs, or the natural-liveness pass and final
+assembly disagree and natural callees get eliminated while still
+referenced).
+
 ## Attack order
 
 Step 4 is **implemented** (2026-08-12): call-site argument types are

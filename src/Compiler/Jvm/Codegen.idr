@@ -3311,6 +3311,19 @@ buildSpecialisationPlan
   -> Core (SpecialisationPlan, ConSpecialisationPlan)
 buildSpecialisationPlan programName defs stateRefs reachable = iterate
   where
+    -- Functions whose body dispatches on type constructors never get a
+    -- spec: their branches are Type-discriminated, so a primitive-typed
+    -- slot does not match the natural body's dispatch.  This used to be an
+    -- accident of the acceptance rules (Type-valued arguments logged
+    -- unacceptable types, blocking the whole site); with call-site
+    -- normalization the guard must be explicit.
+    typeCaseFunctions : SortedSet String
+    typeCaseFunctions = SortedSet.fromList $ mapMaybe hasTypeCase (SortedMap.toList defs)
+      where
+        hasTypeCase : (String, NamedDef) -> Maybe String
+        hasTypeCase (name, MkNmFun _ body) = if containsTypeCase body then Just name else Nothing
+        hasTypeCase _ = Nothing
+
     alreadySpecFor : List SpecialisedSignature -> InferredFunctionType -> Bool
     alreadySpecFor existing (MkInferredFunctionType retType params) = any (\s => s.type.parameterTypes == params && s.type.returnType == retType) existing
 
@@ -3423,9 +3436,17 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate
           in strict || extended)
 
     processSite : PlanState -> Name -> InferredFunctionType -> Core (PlanState, Maybe Name)
-    processSite ps callee fnType =
+    processSite ps callee fnType = do
+      when (shouldDebug && (debugFunction `isInfixOf` show callee)) $ do
+        mNat <- naturalType callee
+        coreLift $ printLn $ "[plan] site " ++ show callee
+          ++ " logged=" ++ showSep " -> " (show <$> (fnType.parameterTypes ++ [fnType.returnType]))
+          ++ " natural=" ++ maybe "?" (\n => showSep " -> " (show <$> (n.parameterTypes ++ [n.returnType]))) mNat
       case SortedMap.lookup (jvmSimpleName callee) defs of
-        Just def@(MkNmFun compiledParams _) => do
+        Just def@(MkNmFun compiledParams _) =>
+          if SortedSet.contains (jvmSimpleName callee) typeCaseFunctions
+            then pure (ps, Nothing)
+            else do
               -- A specialised signature only earns its emission when it is
               -- strictly narrower than the callee's natural signature.  A
               -- duplicate (`spec == natural`) or a widening (`spec` has

@@ -122,6 +122,20 @@ entry points (`sum`, `product`, `length`, `elem`) for `List`.
 
 ## Attack order
 
+Step 4 is **implemented** (2026-08-12): call-site argument types are
+normalized before landing in the specialisation plan's site log
+(`normalizeSiteArgTypes`), so one un-narrowable argument (a `Nil`
+accumulator logging as `IdrisObject`) no longer blocks the typed-callback
+spec for the rest of the signature. `mapAppend`/`filterAppend` now earn
+`$sp` variants calling their callbacks through `Fn$` interfaces, and the
+cascade reaches constructor specialisation (primitive-typed `CONS$…`
+cells). Type-case functions are excluded from specialisation explicitly
+(`containsTypeCase`) — previously an accident of the acceptance rules.
+JMH: sievePrimes +24.6%, matMul +20.0% over step 3. Cumulative vs the
+0.8.4 release: **sievePrimes 2.06x, matMul +31.5% with −19.1% B/op**.
+Debug aid: `IDRIS_JVM_DEBUG=<name>` prints each plan site's logged vs
+natural types.
+
 Step 2 is **implemented** (2026-08-11): nullary constructors are shared
 singletons, constructor ids are per-class constants (field and `<init>`
 parameter removed). Tail-recursion continuations (`TcContinue_<arity>`,

@@ -44,6 +44,18 @@ should target this file (`CHANGELOG_NEXT`).
   inlining budgets: +16% throughput on the sievePrimes JMH benchmark and
   +12% on matMul with no allocation change.
 
+* The JVM backend's higher-order specialisation now reaches the standard
+  list combinators. Call-site argument types are normalized before being
+  logged for the specialisation plan, so one argument the plan cannot
+  narrow (e.g. a `Nil` accumulator) no longer blocks a typed-callback
+  specialisation for the others — `mapAppend`/`filterAppend` now get
+  `$sp` variants whose callbacks are invoked through typed `Fn$` interfaces
+  instead of the boxed `Function.apply` bridge, which in turn lets the
+  constructor-specialisation plan store list elements in primitive-typed
+  `CONS$…` cells. Functions whose bodies dispatch on type constructors are
+  now explicitly excluded from specialisation (previously an accident of
+  the acceptance rules).
+
 * The compile-time evaluator now folds signed `div`/`mod` constants with
   explicit Euclidean semantics instead of delegating to the host compiler's
   operators. This fixes REPL evaluation and type-level `div`/`mod` on negative

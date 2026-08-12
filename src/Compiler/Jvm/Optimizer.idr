@@ -668,6 +668,32 @@ isTypeCase : NamedConAlt -> Bool
 isTypeCase (MkNConAlt _ _ Nothing _ _) = True
 isTypeCase _ = False
 
+-- Whether a body dispatches on type constructors anywhere (a con case with
+-- a tagless alternative — the same predicate emission uses to pick the
+-- string-based constructor switch).  Such functions must not be
+-- specialised: their branches are Type-discriminated and a primitive-typed
+-- parameter slot does not match the natural Type-valued dispatch.
+export
+containsTypeCase : NamedCExp -> Bool
+containsTypeCase (NmLam _ _ body) = containsTypeCase body
+containsTypeCase (NmLet _ _ value body) = containsTypeCase value || containsTypeCase body
+containsTypeCase (NmApp _ f args) = containsTypeCase f || any containsTypeCase args
+containsTypeCase (NmCon _ _ _ _ args) = any containsTypeCase args
+containsTypeCase (NmOp _ _ args) = any containsTypeCase (toList args)
+containsTypeCase (NmExtPrim _ _ args) = any containsTypeCase args
+containsTypeCase (NmForce _ _ t) = containsTypeCase t
+containsTypeCase (NmDelay _ _ t) = containsTypeCase t
+containsTypeCase (NmConCase _ sc alts def) =
+  any isTypeCase alts
+  || containsTypeCase sc
+  || any (\(MkNConAlt _ _ _ _ e) => containsTypeCase e) alts
+  || maybe False containsTypeCase def
+containsTypeCase (NmConstCase _ sc alts def) =
+  containsTypeCase sc
+  || any (\(MkNConstAlt _ e) => containsTypeCase e) alts
+  || maybe False containsTypeCase def
+containsTypeCase _ = False
+
 export
 substituteVariableSubMethodBody : NamedCExp -> NamedCExp -> NamedCExp
 substituteVariableSubMethodBody variable (NmConCase fc _ alts def) = NmConCase fc variable alts def
@@ -921,6 +947,61 @@ adjustCallbackSlotTypes programName declSlots (arg :: args) (slot :: slots) =
                  Nothing => slot
   in adjusted :: adjustCallbackSlotTypes programName (drop 1 declSlots) args slots
 adjustCallbackSlotTypes _ _ _ slots = slots
+
+-- Reference-type narrowings a function spec can accept: RECORD/UNIT spec
+-- classes and TCon-family interfaces registered in the constructor plan
+-- (mirrors PlanState.recordSpecClasses/tconIfaceClasses, which are derived
+-- from the same entries in buildSpecialisationPlan).
+conPlanNarrowable : ConSpecialisationPlan -> InferredType -> Bool
+conPlanNarrowable conPlan (IRef cls _ _) =
+    any (\(_, entries) => any matches entries) (SortedMap.toList conPlan)
+  where
+    isRecordConInfo : ConInfo -> Bool
+    isRecordConInfo RECORD = True
+    isRecordConInfo UNIT = True
+    isRecordConInfo _ = False
+
+    matches : SpecialisedConstructor -> Bool
+    matches sc = (sc.tconClassName /= "" && sc.tconClassName == cls)
+                 || (sc.specClassName == cls && isRecordConInfo sc.conInfo)
+conPlanNarrowable _ _ = False
+
+-- Normalize call-site argument types for the callSiteLog: a slot keeps its
+-- inferred type only when it is a narrowing the specialisation plan accepts
+-- (mirrors isAtLeastAsSpecific* in buildSpecialisationPlan); anything else
+-- is logged as the callee's natural slot type.  Without this, ONE
+-- unacceptable argument blocks the spec for every acceptable one —
+-- mapAppend/filterAppend never earned their typed-callback variants
+-- because their SnocList accumulator argument is a natural constructor
+-- class the plan cannot narrow to.
+export
+normalizeSiteArgTypes : ConSpecialisationPlan -> (calleeSlots : List InferredType)
+                      -> List InferredType -> List InferredType
+normalizeSiteArgTypes conPlan = go
+  where
+    -- Note: `idrisObjectType` is NOT kept — the extended acceptance in
+    -- buildSpecialisationPlan treats it as a no-op narrowing gated behind
+    -- a record/family narrowing elsewhere in the signature, so keeping it
+    -- here would fail the strict path for signatures whose only real
+    -- narrowing is a typed callback (an `IdrisObject`-typed Nil accumulator
+    -- blocked mapAppend's callback spec exactly this way).
+    acceptable : InferredType -> InferredType -> Bool
+    acceptable natural inferred =
+      inferred == natural
+      || (isObjectType natural
+          && (isPrimitive inferred
+              || conPlanNarrowable conPlan inferred))
+      || (natural == inferredLambdaType && isJust (parseCallbackIfaceType inferred))
+
+    go : List InferredType -> List InferredType -> List InferredType
+    go _ [] = []
+    go slots (inferred :: rest) =
+      let natural = case fromMaybe inferredObjectType (head' slots) of
+                      IUnknown => inferredObjectType
+                      ty => ty
+          t = if inferred == IUnknown then inferredObjectType else inferred
+          normalized = if acceptable natural t then t else natural
+      in normalized :: go (drop 1 slots) rest
 
 export
 getJavaLambdaType : {auto stateRef: Ref AsmState AsmState} -> FC -> List NamedCExp -> Core JavaLambdaType
@@ -1490,15 +1571,17 @@ mutual
         let calleeSlots = maybe [] parameterTypes mFunctionType
         declSigs <- fromMaybe [] . SortedMap.lookup (jvmSimpleName idrisName) <$> getCallbackSlotSigs
         inferredArgTypes <- inferAppArgs calleeSlots declSigs args
-        -- Normalize unknown slots to Object before logging: spec routing
-        -- (`rewriteSpecCalls`) matches logged parameter types against the
-        -- spec signature EXACTLY, and spec signatures use Object for
-        -- unrefined slots.  Without this a spec body's recursive call —
-        -- whose con-case binders infer as IUnknown — fails the match and
-        -- recurses into the NATURAL variant, so only the first iteration
-        -- runs specialised (zipWith/takeUntil kept allocating boxed CONS
-        -- cells from their second element on).
-        let normalizedArgTypes = map (\ty => if ty == IUnknown then inferredObjectType else ty) inferredArgTypes
+        -- Normalize slots before logging: spec routing (`rewriteSpecCalls`)
+        -- matches logged parameter types against the spec signature EXACTLY,
+        -- and spec signatures use Object for unrefined slots.  IUnknown maps
+        -- to Object (a spec body's recursive call — whose con-case binders
+        -- infer as IUnknown — would otherwise fail the match and recurse
+        -- into the NATURAL variant, so only the first iteration ran
+        -- specialised), and types the plan cannot narrow to (e.g. natural
+        -- constructor classes) map to the callee's natural slot type so one
+        -- such argument does not block a spec for the acceptable ones.
+        conPlan <- getConSpecialisationPlan
+        let normalizedArgTypes = normalizeSiteArgTypes conPlan calleeSlots inferredArgTypes
         -- Spec-return propagation (design doc §14).  If a registered spec of
         -- this callee matches the call's argument types, the call WILL be
         -- rewritten to that spec by `rewriteSpecCalls` (same parameter-type

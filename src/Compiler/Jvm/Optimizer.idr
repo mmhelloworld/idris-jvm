@@ -957,42 +957,50 @@ conPlanNarrowable : SortedSet String -> InferredType -> Bool
 conPlanNarrowable narrowableClasses (IRef cls _ _) = SortedSet.contains cls narrowableClasses
 conPlanNarrowable _ _ = False
 
--- Normalize call-site argument types for the callSiteLog: a slot keeps its
--- inferred type only when it is a narrowing the specialisation plan accepts
--- (mirrors isAtLeastAsSpecific* in buildSpecialisationPlan); anything else
--- is logged as the callee's natural slot type.  Without this, ONE
--- unacceptable argument blocks the spec for every acceptable one —
--- mapAppend/filterAppend never earned their typed-callback variants
--- because their SnocList accumulator argument is a natural constructor
--- class the plan cannot narrow to.
+-- Normalize call-site argument types for the callSiteLog: types the
+-- specialisation plan can never accept for a spec slot — natural
+-- constructor classes and the bare `IdrisObject` interface — are logged
+-- as plain Object.  Without this, ONE such argument blocks the spec for
+-- every acceptable one: mapAppend/filterAppend never earned their
+-- typed-callback variants because their SnocList accumulator argument is
+-- a constructor class the plan cannot narrow to.
+--
+-- Every other type is logged RAW, exactly as before normalization
+-- existed.  In particular the callee's natural parameter types must NOT
+-- be consulted here: function types keep evolving during the
+-- natural-cons-live fixpoint whose type-ripple gate does not re-dirty
+-- callers on pure type changes, so a log that depends on callee types
+-- can flip between the liveness pass and final assembly — the natural
+-- callee is then eliminated as dead while a caller still emits a natural
+-- call (NoSuchMethodError on `mkPrec` during a stage-2 self-build).
 export
-normalizeSiteArgTypes : (conPlanNarrowableClasses : SortedSet String) -> (calleeSlots : List InferredType)
+normalizeSiteArgTypes : (conPlanNarrowableClasses : SortedSet String)
                       -> List InferredType -> List InferredType
-normalizeSiteArgTypes narrowableClasses = go
+normalizeSiteArgTypes narrowableClasses = map normalize
   where
-    -- Note: `idrisObjectType` is NOT kept — the extended acceptance in
+    -- `idrisObjectType` is also scrubbed — the extended acceptance in
     -- buildSpecialisationPlan treats it as a no-op narrowing gated behind
     -- a record/family narrowing elsewhere in the signature, so keeping it
-    -- here would fail the strict path for signatures whose only real
-    -- narrowing is a typed callback (an `IdrisObject`-typed Nil accumulator
-    -- blocked mapAppend's callback spec exactly this way).
-    acceptable : InferredType -> InferredType -> Bool
-    acceptable natural inferred =
-      inferred == natural
-      || (isObjectType natural
-          && (isPrimitive inferred
-              || conPlanNarrowable narrowableClasses inferred))
-      || (natural == inferredLambdaType && isJust (parseCallbackIfaceType inferred))
+    -- fails the strict path for signatures whose only real narrowing is a
+    -- typed callback (an `IdrisObject`-typed Nil accumulator blocked
+    -- mapAppend's callback spec exactly this way).
+    -- Junk = generated reference types the plan can never accept: natural
+    -- constructor classes and other program classes that are neither a
+    -- registered narrowable class nor a typed callback interface.  JDK and
+    -- runtime classes (String, BigInteger, Function3, ChannelIo, ...) are
+    -- kept raw — they can legitimately equal a callee's natural slot type.
+    isJunk : InferredType -> Bool
+    isJunk ty@(IRef cls _ _) =
+      ty == idrisObjectType
+      || (not (conPlanNarrowable narrowableClasses ty)
+          && isNothing (parseCallbackIfaceType ty)
+          && not ("java/" `isPrefixOf` cls)
+          && not ("io/github/mmhelloworld/" `isPrefixOf` cls))
+    isJunk _ = False
 
-    go : List InferredType -> List InferredType -> List InferredType
-    go _ [] = []
-    go slots (inferred :: rest) =
-      let natural = case fromMaybe inferredObjectType (head' slots) of
-                      IUnknown => inferredObjectType
-                      ty => ty
-          t = if inferred == IUnknown then inferredObjectType else inferred
-          normalized = if acceptable natural t then t else natural
-      in normalized :: go (drop 1 slots) rest
+    normalize : InferredType -> InferredType
+    normalize IUnknown = inferredObjectType
+    normalize ty = if isJunk ty then inferredObjectType else ty
 
 export
 getJavaLambdaType : {auto stateRef: Ref AsmState AsmState} -> FC -> List NamedCExp -> Core JavaLambdaType
@@ -1572,7 +1580,7 @@ mutual
         -- constructor classes) map to the callee's natural slot type so one
         -- such argument does not block a spec for the acceptable ones.
         narrowableClasses <- getConPlanNarrowableClasses
-        let normalizedArgTypes = normalizeSiteArgTypes narrowableClasses calleeSlots inferredArgTypes
+        let normalizedArgTypes = normalizeSiteArgTypes narrowableClasses inferredArgTypes
         -- Spec-return propagation (design doc §14).  If a registered spec of
         -- this callee matches the call's argument types, the call WILL be
         -- rewritten to that spec by `rewriteSpecCalls` (same parameter-type

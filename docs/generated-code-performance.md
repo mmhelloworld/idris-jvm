@@ -149,6 +149,21 @@ the next list-code lever together with consumer-side typed reads. JMH:
 matMul +10.5%/−7.3% B/op, sieve +2.2%/−3.1%. Cumulative vs 0.8.4:
 sievePrimes 2.15x, matMul +37% with −25% B/op.
 
+**Strict ranges: attempted and reverted** (2026-08-12). Rewriting
+`rangeFromTo` as a strict backward-consing loop removed the
+`Stream`/`takeUntil`/`SnocList` pipeline (listbig +21%) but regressed
+the sievePrimes JMH benchmark by 23%: the new builder emits `CONS$I$L`
+spec cells into consumer chains whose own conses are NATURAL cells
+(case-binder heads are Object-typed while naturals are live — the
+narrowing gate is correct), so every `getProperty` site became
+bimorphic, and the dispatch penalty exceeded the construction savings.
+The old stream path emitted natural cells — monomorphic, JIT-friendly.
+Lesson: at current machinery, cell-shape *consistency* beats cell-shape
+*quality*; strict ranges are blocked on consumer-side typing (narrowing
+case binders of spec cells and re-spec'ing user conses built from
+them). Single-shot timings showed parity — only sustained JMH loops
+exposed the bimorphic cost.
+
 ## Self-hosted compiler performance (vs the 0.8.5 release)
 
 **Compiling the compiler itself** (305 modules + whole-program codegen,

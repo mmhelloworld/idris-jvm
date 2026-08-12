@@ -950,20 +950,11 @@ adjustCallbackSlotTypes _ _ _ slots = slots
 
 -- Reference-type narrowings a function spec can accept: RECORD/UNIT spec
 -- classes and TCon-family interfaces registered in the constructor plan
--- (mirrors PlanState.recordSpecClasses/tconIfaceClasses, which are derived
--- from the same entries in buildSpecialisationPlan).
-conPlanNarrowable : ConSpecialisationPlan -> InferredType -> Bool
-conPlanNarrowable conPlan (IRef cls _ _) =
-    any (\(_, entries) => any matches entries) (SortedMap.toList conPlan)
-  where
-    isRecordConInfo : ConInfo -> Bool
-    isRecordConInfo RECORD = True
-    isRecordConInfo UNIT = True
-    isRecordConInfo _ = False
-
-    matches : SpecialisedConstructor -> Bool
-    matches sc = (sc.tconClassName /= "" && sc.tconClassName == cls)
-                 || (sc.specClassName == cls && isRecordConInfo sc.conInfo)
+-- (mirrors PlanState.recordSpecClasses/tconIfaceClasses).  The class set is
+-- precomputed by `setConSpecialisationPlan` — scanning the plan per
+-- argument was quadratic over the whole program.
+conPlanNarrowable : SortedSet String -> InferredType -> Bool
+conPlanNarrowable narrowableClasses (IRef cls _ _) = SortedSet.contains cls narrowableClasses
 conPlanNarrowable _ _ = False
 
 -- Normalize call-site argument types for the callSiteLog: a slot keeps its
@@ -975,9 +966,9 @@ conPlanNarrowable _ _ = False
 -- because their SnocList accumulator argument is a natural constructor
 -- class the plan cannot narrow to.
 export
-normalizeSiteArgTypes : ConSpecialisationPlan -> (calleeSlots : List InferredType)
+normalizeSiteArgTypes : (conPlanNarrowableClasses : SortedSet String) -> (calleeSlots : List InferredType)
                       -> List InferredType -> List InferredType
-normalizeSiteArgTypes conPlan = go
+normalizeSiteArgTypes narrowableClasses = go
   where
     -- Note: `idrisObjectType` is NOT kept — the extended acceptance in
     -- buildSpecialisationPlan treats it as a no-op narrowing gated behind
@@ -990,7 +981,7 @@ normalizeSiteArgTypes conPlan = go
       inferred == natural
       || (isObjectType natural
           && (isPrimitive inferred
-              || conPlanNarrowable conPlan inferred))
+              || conPlanNarrowable narrowableClasses inferred))
       || (natural == inferredLambdaType && isJust (parseCallbackIfaceType inferred))
 
     go : List InferredType -> List InferredType -> List InferredType
@@ -1580,8 +1571,8 @@ mutual
         -- specialised), and types the plan cannot narrow to (e.g. natural
         -- constructor classes) map to the callee's natural slot type so one
         -- such argument does not block a spec for the acceptable ones.
-        conPlan <- getConSpecialisationPlan
-        let normalizedArgTypes = normalizeSiteArgTypes conPlan calleeSlots inferredArgTypes
+        narrowableClasses <- getConPlanNarrowableClasses
+        let normalizedArgTypes = normalizeSiteArgTypes narrowableClasses calleeSlots inferredArgTypes
         -- Spec-return propagation (design doc §14).  If a registered spec of
         -- this callee matches the call's argument types, the call WILL be
         -- rewritten to that spec by `rewriteSpecCalls` (same parameter-type

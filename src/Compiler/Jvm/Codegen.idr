@@ -3311,19 +3311,6 @@ buildSpecialisationPlan
   -> Core (SpecialisationPlan, ConSpecialisationPlan)
 buildSpecialisationPlan programName defs stateRefs reachable = iterate
   where
-    -- Functions whose body dispatches on type constructors never get a
-    -- spec: their branches are Type-discriminated, so a primitive-typed
-    -- slot does not match the natural body's dispatch.  This used to be an
-    -- accident of the acceptance rules (Type-valued arguments logged
-    -- unacceptable types, blocking the whole site); with call-site
-    -- normalization the guard must be explicit.
-    typeCaseFunctions : SortedSet String
-    typeCaseFunctions = SortedSet.fromList $ mapMaybe hasTypeCase (SortedMap.toList defs)
-      where
-        hasTypeCase : (String, NamedDef) -> Maybe String
-        hasTypeCase (name, MkNmFun _ body) = if containsTypeCase body then Just name else Nothing
-        hasTypeCase _ = Nothing
-
     alreadySpecFor : List SpecialisedSignature -> InferredFunctionType -> Bool
     alreadySpecFor existing (MkInferredFunctionType retType params) = any (\s => s.type.parameterTypes == params && s.type.returnType == retType) existing
 
@@ -3443,10 +3430,7 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate
           ++ " logged=" ++ showSep " -> " (show <$> (fnType.parameterTypes ++ [fnType.returnType]))
           ++ " natural=" ++ maybe "?" (\n => showSep " -> " (show <$> (n.parameterTypes ++ [n.returnType]))) mNat
       case SortedMap.lookup (jvmSimpleName callee) defs of
-        Just def@(MkNmFun compiledParams _) =>
-          if SortedSet.contains (jvmSimpleName callee) typeCaseFunctions
-            then pure (ps, Nothing)
-            else do
+        Just def@(MkNmFun compiledParams body) => do
               -- A specialised signature only earns its emission when it is
               -- strictly narrower than the callee's natural signature.  A
               -- duplicate (`spec == natural`) or a widening (`spec` has
@@ -3462,6 +3446,17 @@ buildSpecialisationPlan programName defs stateRefs reachable = iterate
                 else
                   let existing = fromMaybe [] $ SortedMap.lookup callee ps.funPlan
                   in if alreadySpecFor existing fnType
+                       then pure (ps, Nothing)
+                       -- Type-case bodies never get a spec: their branches
+                       -- are Type-discriminated, so a primitive-typed slot
+                       -- does not match the natural dispatch.  This used to
+                       -- be an accident of the acceptance rules (Type-valued
+                       -- arguments logged unacceptable types, blocking the
+                       -- whole site); with call-site normalization the guard
+                       -- must be explicit.  Checked here — only when a new
+                       -- spec would be created — to keep it off the per-site
+                       -- hot path.
+                       else if containsTypeCase body
                        then pure (ps, Nothing)
                        else
                          let sig     = mkSpecSig def callee fnType (cast $ length existing)

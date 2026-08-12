@@ -666,6 +666,12 @@ record AsmState where
     currentIdrisFunction : Function
     specialisationPlan : SpecialisationPlan
     specialisedConstructorPlan : ConSpecialisationPlan
+    -- JVM class names call-site normalization may keep as a reference-type
+    -- narrowing: RECORD/UNIT spec classes and TCon-family interfaces from
+    -- `specialisedConstructorPlan`.  Precomputed by `setConSpecialisationPlan`
+    -- — deriving it per argument was quadratic over the whole program and
+    -- blew compile times up by an order of magnitude.
+    conPlanNarrowableClasses : SortedSet String
     currentScopeIndex : Int
     scopeCounter : Int
     labelCounter : Int
@@ -718,7 +724,7 @@ namespace AsmState
     lineNumberLabels <- Map.newTreeMap {key=Int} {value=String}
     variableLiveLabels <- Map.newTreeMap {key=String} {value=String}
     let function = MkFunction name (MkInferredFunctionType IUnknown []) (subtyping scopes) 0 (NmCrash emptyFC "uninitialized function")
-    pure $ MkAsmState function SortedMap.empty SortedMap.empty 0 0 0 0 lineNumberLabels variableLiveLabels assembler [] [] SortedSet.empty SortedMap.empty SortedMap.empty IUnknown
+    pure $ MkAsmState function SortedMap.empty SortedMap.empty SortedSet.empty 0 0 0 0 lineNumberLabels variableLiveLabels assembler [] [] SortedSet.empty SortedMap.empty SortedMap.empty IUnknown
 
   export
   fromIdrisName : Name -> IO AsmState
@@ -2677,7 +2683,27 @@ getConSpecialisationPlan = specialisedConstructorPlan <$> getState
 
 export
 setConSpecialisationPlan : {auto stateRef: Ref AsmState AsmState} -> ConSpecialisationPlan -> Core ()
-setConSpecialisationPlan plan = updateState $ { specialisedConstructorPlan := plan }
+setConSpecialisationPlan plan =
+    updateState $ { specialisedConstructorPlan := plan
+                  , conPlanNarrowableClasses := narrowableClasses }
+  where
+    isRecordConInfo : ConInfo -> Bool
+    isRecordConInfo RECORD = True
+    isRecordConInfo UNIT = True
+    isRecordConInfo _ = False
+
+    entryClasses : SpecialisedConstructor -> List String
+    entryClasses sc =
+      (if sc.tconClassName == "" then [] else [sc.tconClassName])
+      ++ (if isRecordConInfo sc.conInfo then [sc.specClassName] else [])
+
+    narrowableClasses : SortedSet String
+    narrowableClasses = SortedSet.fromList $
+      concatMap (concatMap entryClasses . snd) (SortedMap.toList plan)
+
+export
+getConPlanNarrowableClasses : {auto stateRef: Ref AsmState AsmState} -> Core (SortedSet String)
+getConPlanNarrowableClasses = conPlanNarrowableClasses <$> getState
 
 export
 getConSiteLog : {auto stateRef: Ref AsmState AsmState}

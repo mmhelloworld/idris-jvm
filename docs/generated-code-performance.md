@@ -138,6 +138,17 @@ turns out to be term-traversal-bound rather than Integer-bound, so the
 compiler-speed lever from here is allocation (closures, SortedMap) —
 not arithmetic.
 
+Step 6 is **implemented** (2026-08-12) as the thunk-read overhaul (items
+7 and part of 6 of the list below; profiling showed these dominated
+post-step-5, not constructor reads): `MemoizedDelayed` is double-checked
+locking with a plain value field, and `Inf` delays are unmemoized plain
+closures (Chez-default parity; `Lazy`/top-level stay memoized). listbig
+0.72s → 0.58s user; thunk machinery vanishes from its profile — the
+remainder is 91% range construction (`takeUntil`/`SnocList`), which is
+the next list-code lever together with consumer-side typed reads. JMH:
+matMul +10.5%/−7.3% B/op, sieve +2.2%/−3.1%. Cumulative vs 0.8.4:
+sievePrimes 2.15x, matMul +37% with −25% B/op.
+
 ## Self-hosted compiler performance (vs the 0.8.5 release)
 
 Measured 2026-08-12 with a stage-2 build (the compiler compiled by

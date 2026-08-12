@@ -2607,15 +2607,14 @@ getAndUpdateState f = do
     pure state
 
 export
-loadBigInteger : {auto stateRef: Ref AsmState AsmState} -> Integer -> Core ()
-loadBigInteger 0 = field GetStatic "java/math/BigInteger" "ZERO" "Ljava/math/BigInteger;"
-loadBigInteger 1 = field GetStatic "java/math/BigInteger" "ONE" "Ljava/math/BigInteger;"
-loadBigInteger 10 = field GetStatic "java/math/BigInteger" "TEN" "Ljava/math/BigInteger;"
-loadBigInteger value =
+-- Load an Idris Integer constant in canonical runtime form: a boxed Long
+-- when the value fits in 64 bits, a BigInteger only beyond that.
+loadIntegerConstant : {auto stateRef: Ref AsmState AsmState} -> Integer -> Core ()
+loadIntegerConstant value =
     if value >= -9223372036854775808 && value <= 9223372036854775807
         then do
             ldc $ Int64Const $ cast value
-            invokeMethod InvokeStatic "java/math/BigInteger" "valueOf" "(J)Ljava/math/BigInteger;" False
+            invokeMethod InvokeStatic "java/lang/Long" "valueOf" "(J)Ljava/lang/Long;" False
         else do
             new "java/math/BigInteger"
             dup
@@ -3199,7 +3198,7 @@ mutual
       getIdrisConstructorType : Name -> InferredType
       getIdrisConstructorType name =
         if isBoolTySpec name then IBool
-        else if name == preludetypes "Nat" then inferredBigIntegerType
+        else if name == preludetypes "Nat" then inferredObjectType
         else inferredObjectType
 
   parseJvmReferenceType (NmApp fc (NmRef _ name) _) = do

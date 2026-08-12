@@ -127,7 +127,24 @@ objToDouble = invokeMethod InvokeStatic conversionClass "toDouble" "(Ljava/lang/
 export
 asmCast : {auto stateRef: Ref AsmState AsmState} -> (sourceType: InferredType) -> (targetType: InferredType) -> Core ()
 
-asmCast ty1@(IRef class1 _ _) ty2@(IRef class2 _ _) = when (class1 /= class2) (checkcast class2)
+asmCast ty1@(IRef class1 _ _) ty2@(IRef class2 _ _) =
+  if class1 == class2 then pure ()
+  -- Idris Integer values are Long-when-fits (typed Object); a BigInteger
+  -- target only arises at FFI boundaries, so convert instead of checkcast,
+  -- and canonicalize BigIntegers arriving FROM such boundaries.
+  else if class2 == "java/math/BigInteger"
+    then invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "toBigInteger" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+  else if class1 == "java/math/BigInteger"
+    then do
+      invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "canonical" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+      when (class2 /= "java/lang/Object") (checkcast class2)
+  else checkcast class2
+
+asmCast (IRef "java/math/BigInteger" _ _) IUnknown =
+  invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "canonical" "(Ljava/lang/Object;)Ljava/lang/Object;" False
+
+asmCast IUnknown (IRef "java/math/BigInteger" _ _) =
+  invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "toBigInteger" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
 
 asmCast IUnknown ty@(IRef clazz _ _) = checkcast clazz
 
@@ -316,7 +333,7 @@ loadVar sourceLocTys (IRef "java/math/BigInteger" _ _) (IRef "java/math/BigInteg
 loadVar sourceLocTys _ (IRef "java/math/BigInteger" _ _) var =
     let loadInstr = \index => do
       aload index
-      invokeMethod InvokeStatic conversionClass "toInteger" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
+      invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "toBigInteger" "(Ljava/lang/Object;)Ljava/math/BigInteger;" False
     in opWithWordSize sourceLocTys loadInstr var
 
 loadVar sourceLocTys ty IFloat var =

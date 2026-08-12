@@ -120,6 +120,24 @@ entry points (`sum`, `product`, `length`, `elem`) for `List`.
 9. **`mod`/`div` zero checks** load `BigInteger.ZERO.intValue()` and call
    Prelude `==` instead of `ifeq` (minor; mostly JIT-recoverable).
 
+Step 5 is **implemented** (2026-08-12): `Integer`/`Nat` values are boxed
+`long`s while they fit in 64 bits, promoting to `BigInteger` on overflow
+(canonical form; `java.lang.Integer` boxes arriving via `believe_me` are
+tolerated). A new runtime `IdrisInteger` class carries arithmetic
+(overflow-checked long fast paths), comparisons, casts, canonical
+hashing for `case` dispatch, and FFI conversion at `BigInteger`-declared
+boundaries. A Nat microbenchmark (tail-recursive counting, naive Nat fib,
+big-Integer multiply chain) runs 3.2x faster end to end (0.79s → 0.25s
+user, interleaved isolated runs); the stage-2 self-build stays green
+and the base-library build improves to ~47s (0.8.5 control: 52s).
+NOTE: `jvm/integers` golden-test duration is NOT a performance witness —
+it is ~13s of compilation plus 0.15s of execution, identical under both
+representations; earlier suite-run timings of it (43–92s) vary purely
+with parallel load. The Int-bound JMH pair is unchanged, as expected. Elaboration
+turns out to be term-traversal-bound rather than Integer-bound, so the
+compiler-speed lever from here is allocation (closures, SortedMap) —
+not arithmetic.
+
 ## Self-hosted compiler performance (vs the 0.8.5 release)
 
 Measured 2026-08-12 with a stage-2 build (the compiler compiled by

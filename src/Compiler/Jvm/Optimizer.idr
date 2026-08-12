@@ -50,7 +50,8 @@ namespace InferredPrimType
   getInferredType : PrimType -> InferredType
   getInferredType Bits64Type = ILong
   getInferredType Int64Type = ILong
-  getInferredType IntegerType = inferredBigIntegerType
+  -- Integer values are Long-when-fits / BigInteger-otherwise, typed Object
+  getInferredType IntegerType = inferredObjectType
   getInferredType DoubleType = IDouble
   getInferredType StringType = inferredStringType
   getInferredType CharType = IChar
@@ -1120,7 +1121,13 @@ mutual
         ignore $ inferExpr sc
         when (constantType /= IInt) $ do
             constantExprVariable <- generateVariable "constantCaseExpr"
-            addVariableType constantExprVariable constantType
+            -- Integer switches: the constant type is a marker (BigInteger);
+            -- the runtime scrutinee is the canonical Long-or-BigInteger
+            -- representation typed Object (mirrors assembleConstantSwitch)
+            let scrutineeType = if constantType == inferredBigIntegerType
+                                  then inferredObjectType
+                                  else constantType
+            addVariableType constantExprVariable scrutineeType
             hashCodePositionVariable <- generateVariable "hashCodePosition"
             addVariableType hashCodePositionVariable IInt
         sortedAlts <- sortConstCases constantType alts
@@ -1146,7 +1153,7 @@ mutual
     inferExpr (NmPrimVal fc (B16 _)) = pure IInt
     inferExpr (NmPrimVal fc (B32 _)) = pure IInt
     inferExpr (NmPrimVal fc (B64 _)) = pure ILong
-    inferExpr (NmPrimVal fc (BI _)) = pure inferredBigIntegerType
+    inferExpr (NmPrimVal fc (BI _)) = pure inferredObjectType
     inferExpr (NmPrimVal fc (Str _)) = pure inferredStringType
     inferExpr (NmPrimVal fc (Ch _)) = pure IChar
     inferExpr (NmPrimVal fc (Db _)) = pure IDouble
@@ -1828,10 +1835,11 @@ namespace TermType
   getConstantType (B64 _) = ILong
   getConstantType (Ch _ ) = IInt
   getConstantType (Str _) = inferredStringType
-  getConstantType (BI _) = inferredBigIntegerType
+  getConstantType (BI _) = inferredObjectType
   getConstantType (Db _) = IDouble
   getConstantType (PrT IntType    ) = IInt
-  getConstantType (PrT IntegerType) = inferredBigIntegerType
+  -- Integer values are Long-when-fits / BigInteger-otherwise, typed Object
+  getConstantType (PrT IntegerType) = inferredObjectType
   getConstantType (PrT Int8Type   ) = IInt
   getConstantType (PrT Int16Type  ) = IInt
   getConstantType (PrT Int32Type  ) = IInt
@@ -1862,7 +1870,7 @@ namespace TermType
   getConstructorType : {auto c : Ref Ctxt Defs} -> Name -> Core InferredType
   getConstructorType name =
     if isBoolTySpec name then pure IInt
-    else if name == preludetypes "Nat" then pure inferredBigIntegerType
+    else if name == preludetypes "Nat" then pure inferredObjectType
     else pure inferredObjectType
 
   mutual

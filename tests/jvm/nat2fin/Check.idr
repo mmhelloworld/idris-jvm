@@ -14,7 +14,7 @@ isOptimized [] = False
 isOptimized (_ :: _ :: []) = False
 isOptimized (_ :: []) = False
 isOptimized (line1 :: line2 :: line3 :: rest) = (("long 375l" `isSuffixOf` line1) &&
-  ("Method java/math/BigInteger.valueOf:(J)Ljava/math/BigInteger;" `isSuffixOf` line2) &&
+  ("Method java/lang/Long.valueOf:(J)Ljava/lang/Long;" `isSuffixOf` line2) &&
   ("Method M_Data/M_Fin.show$show_Show_$lparFin$s$n$rpar:" `isInfixOf` line3)) ||
   isOptimized (line2 :: line3 :: rest)
 

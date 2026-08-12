@@ -31,8 +31,8 @@ integerCompareUnsigned = invokeMethod InvokeStatic "java/lang/Integer" "compareU
 
 export
 add : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
-add (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "add"
-                           "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+add (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "add"
+                           "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
 add (Signed (P 64)) = ladd
 add (Signed (P 32)) = iadd
 add (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("add" ++ show n)
@@ -44,8 +44,8 @@ add (Unsigned n) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/ru
 
 export
 sub : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
-sub (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "subtract"
-                           "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+sub (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "subtract"
+                           "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
 sub (Signed (P 64)) = lsub
 sub (Signed (P 32)) = isub
 sub (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("sub" ++ show n)
@@ -57,8 +57,8 @@ sub (Unsigned n) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/ru
 
 export
 mul : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
-mul (Signed Unlimited) = invokeMethod InvokeVirtual "java/math/BigInteger" "multiply"
-                           "(Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+mul (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "multiply"
+                           "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
 mul (Signed (P 64)) = lmul
 mul (Signed (P 32)) = imul
 mul (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("mul" ++ show n)
@@ -70,8 +70,8 @@ mul (Unsigned n) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/ru
 
 export
 div : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
-div (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidDiv"
-                           "(Ljava/math/BigInteger;Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+div (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "euclidDiv"
+                           "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
 div (Signed (P 64)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidDiv"
                         "(JJ)J" False
 div (Signed (P 32)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidDiv"
@@ -84,8 +84,8 @@ div (Unsigned n) = idiv
 
 export
 mod : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
-mod (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidMod"
-                           "(Ljava/math/BigInteger;Ljava/math/BigInteger;)Ljava/math/BigInteger;" False
+mod (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "euclidMod"
+                           "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
 mod (Signed (P 64)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidMod"
                         "(JJ)J" False
 mod (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" "euclidMod"
@@ -96,9 +96,8 @@ mod (Unsigned n) = irem
 
 export
 shl : {auto stateRef: Ref AsmState AsmState} -> IntKind -> Core ()
-shl (Signed Unlimited) = do
-  invokeMethod InvokeVirtual "java/math/BigInteger" "intValueExact" "()I" False
-  invokeMethod InvokeVirtual "java/math/BigInteger" "shiftLeft" "(I)Ljava/math/BigInteger;" False
+shl (Signed Unlimited) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisInteger" "shiftLeft"
+                           "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;" False
 shl (Signed (P 64)) = do l2i; lshl
 shl (Signed (P 32)) = ishl
 shl (Signed (P n)) = invokeMethod InvokeStatic "io/github/mmhelloworld/idrisjvm/runtime/IdrisMath" ("shl" ++ show n)

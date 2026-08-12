@@ -56,6 +56,19 @@ should target this file (`CHANGELOG_NEXT`).
   now explicitly excluded from specialisation (previously an accident of
   the acceptance rules).
 
+* The JVM backend now represents Idris `Integer` (and therefore `Nat`)
+  values as boxed `long`s while they fit in 64 bits, promoting to
+  `BigInteger` only on overflow — the standard small-integer strategy.
+  Arithmetic, comparisons, casts, and hash-based `case` dispatch go
+  through a new runtime `IdrisInteger` class whose fast paths use
+  primitive `long` operations with overflow checks; FFI boundaries
+  declared as `BigInteger` convert in both directions automatically.
+  Idiomatic `Nat`-heavy code speeds up dramatically — a `Nat`
+  microbenchmark (tail-recursive counting, naive `Nat` fib, a
+  big-Integer multiply chain) runs 3.2x faster end to end including JVM
+  startup — and the self-hosted compiler builds the base library about
+  10% faster than the 0.8.5 release.
+
 * The compile-time evaluator now folds signed `div`/`mod` constants with
   explicit Euclidean semantics instead of delegating to the host compiler's
   operators. This fixes REPL evaluation and type-level `div`/`mod` on negative

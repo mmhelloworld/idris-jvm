@@ -149,6 +149,25 @@ the next list-code lever together with consumer-side typed reads. JMH:
 matMul +10.5%/−7.3% B/op, sieve +2.2%/−3.1%. Cumulative vs 0.8.4:
 sievePrimes 2.15x, matMul +37% with −25% B/op.
 
+**Synthetic-family consumer typing: structurally closed** (2026-08-13).
+Carrier-safe family accessors landed (family interfaces declare member
+accessor unions, natural carriers implement unboxing bridges, consumer
+narrowing ungated from natural-liveness — user ADT families like
+`Run$F`/`Tree$F`/`Shape$F` now dispatch through cheap interface
+accessors). But extending this to the synthetic List/Maybe families is
+blocked by shape sharing, not carrier mixing: `calcListy` assigns the
+CONS shape to ANY two-argument constructor including non-recursive
+pairs, so (a) `CONS$I$L`'s tail slot can never be typed `List$X` (a
+pair's tail is not a list — the typed-traversal chain hard-stops at
+every list tail), and (b) mapping synthetic shapes to their prelude
+TCons for return refinement lets pair cells masquerade as List-family
+members (wrong-instantiation interfaces leak into list positions; found
+by jvm032). Box-caching `getProperty` on spec cells was also measured
+and rejected: +22% B/op on matMul from field bloat in pipelines that
+never re-read generically. List-typed traversal therefore requires
+de-sharing the intrinsic constructor shapes — a frontend-level change —
+and strict Prelude ranges stay reverted behind the same boundary.
+
 **Strict ranges: attempted and reverted** (2026-08-12). Rewriting
 `rangeFromTo` as a strict backward-consing loop removed the
 `Stream`/`takeUntil`/`SnocList` pipeline (listbig +21%) but regressed

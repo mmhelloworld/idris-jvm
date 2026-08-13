@@ -3,8 +3,8 @@ Family interface Run$F: PRESENT
 Done$I + Step$I$L implement Run$F: OK
 Step recursive slot: typed Run$F
 sumRun$sp(int, Run$F) -> int: SINGLE
-sumRun$sp Done alt: typed accessor via family checkcast
-sumRun$sp Step alt: typed accessor via family checkcast
+sumRun$sp Done alt: typed accessor via family interface
+sumRun$sp Step alt: typed accessor via family interface
 sumRun$sp tail-rec: no Run$F checkcast
 IdrisList$Cons still present: OK
 6

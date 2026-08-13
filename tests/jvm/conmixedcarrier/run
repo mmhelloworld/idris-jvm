@@ -54,16 +54,14 @@ fi
 sumrun_body=$(echo "$disassembly" | awk '/static int sumRun\$sp[0-9]+\(int, .*Run\$F\)/,/^$/')
 
 # Typed dispatch in BOTH alts.
-if echo "$sumrun_body" | grep -q 'checkcast.*Done\$I' \
-   && echo "$sumrun_body" | grep -qE 'Done\$I\.getInt0:\(\)I'; then
-  echo "sumRun\$sp Done alt: typed accessor via family checkcast"
+if echo "$sumrun_body" | grep -qE 'invokeinterface.*Run\$F\.getInt0:\(\)I'; then
+  echo "sumRun\$sp Done alt: typed accessor via family interface"
 else
   echo "sumRun\$sp Done alt: NO FAMILY DISPATCH"
 fi
 
-if echo "$sumrun_body" | grep -q 'checkcast.*Step\$I\$L' \
-   && echo "$sumrun_body" | grep -qE 'getRef1:\(\).*Run\$F'; then
-  echo "sumRun\$sp Step alt: typed accessor via family checkcast"
+if echo "$sumrun_body" | grep -qE 'invokeinterface.*Run\$F\.getRef1:\(\)LM_Main/Run\$F'; then
+  echo "sumRun\$sp Step alt: typed accessor via family interface"
 else
   echo "sumRun\$sp Step alt: NO FAMILY DISPATCH"
 fi

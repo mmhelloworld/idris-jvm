@@ -1219,19 +1219,17 @@ mutual
                   _ => Nothing
             -- (c) `mByFamily`: the discriminant is typed as a TCon
             --     family-instantiation interface (e.g. `Maybe$I`, `Run$F`).
-            --     Mirrors `mSpecByFamily` in Codegen's
-            --     `assembleConCaseExpr` via the shared
-            --     `findUniqueFamilyMember` (uniqueness-checked) — sound
-            --     only when the natural class is also dead, because live
-            --     natural siblings `implements` every active family
-            --     instantiation and could therefore inhabit the
-            --     interface-typed discriminant.
+            --     Mirrors Codegen's `assembleConCaseExpr` family path via
+            --     the shared `findUniqueFamilyMember` (uniqueness-checked).
+            --     No natural-liveness gate: emission reads through the
+            --     interface's typed accessors, which BOTH carriers
+            --     implement (spec classes as field reads, natural classes
+            --     as unboxing bridges), so a live natural sibling
+            --     inhabiting the interface-typed discriminant is safe.
             let mByFamily : Maybe (List InferredType)
                 mByFamily = case discriminantTy of
-                  IRef varClass _ _ =>
-                    if SortedSet.contains name natLive
-                      then Nothing
-                      else (\sc => sc.fieldTypes) <$> findUniqueFamilyMember conPlan name varClass
+                  IRef varClass Interface _ =>
+                    (\sc => sc.fieldTypes) <$> findUniqueFamilyMember conPlan name varClass
                   _ => Nothing
             let mUniqueSafe : Maybe (List InferredType)
                 mUniqueSafe = if not (isSingleConstructor conInfo)

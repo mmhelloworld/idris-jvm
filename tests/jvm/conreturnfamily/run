@@ -59,10 +59,9 @@ fi
 
 # ...and its Full alt reads the fields via typed accessors (no boxed
 # getProperty / Conversion.toInt on the field path).
-if echo "$usebox_body" | grep -q 'checkcast.*Full\$I\$I\$I' \
-   && echo "$usebox_body" | grep -qE 'getInt0:\(\)' \
+if echo "$usebox_body" | grep -qE 'invokeinterface.*Box\$F\.getInt0:\(\)' \
    && ! echo "$usebox_body" | grep -qE 'getProperty'; then
-  echo "useBox\$sp Full alt: family checkcast + typed getInt (no getProperty)"
+  echo "useBox\$sp Full alt: family interface + typed getInt (no getProperty)"
 else
   echo "useBox\$sp Full alt: NO TYPED READ"
 fi

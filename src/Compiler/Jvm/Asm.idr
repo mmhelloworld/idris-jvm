@@ -1483,14 +1483,14 @@ asmCreateMethod : Assembler -> (access: Int) -> (sourceFileName: String) -> (cla
                 (annotations: JList JAnnotation) ->
                 (parameterAnnotations: JList (JList JAnnotation)) -> PrimIO ()
 
-%foreign "jvm:.createIdrisConstructorClass(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean int int java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
-asmCreateIdrisConstructorClassWithIfaces : Assembler -> String -> Bool -> (constructorId: Int) -> (parameterCount: Int) -> JList String -> PrimIO ()
+%foreign "jvm:.createIdrisConstructorClass(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean int int java/util/List java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+asmCreateIdrisConstructorClassWithIfaces : Assembler -> String -> Bool -> (constructorId: Int) -> (parameterCount: Int) -> JList String -> (accessorShapes: JList String) -> PrimIO ()
 
 %foreign "jvm:.createIdrisConstructorClassTyped(io/github/mmhelloworld/idrisjvm/assembler/Assembler String boolean int java/util/List java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 asmCreateIdrisConstructorClassTypedWithIfaces : Assembler -> String -> Bool -> (constructorId: Int) -> JList String -> JList String -> PrimIO ()
 
-%foreign "jvm:.createIdrisTypeConstructorInterface(io/github/mmhelloworld/idrisjvm/assembler/Assembler String void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
-asmCreateIdrisTypeConstructorInterface : Assembler -> String -> PrimIO ()
+%foreign "jvm:.createIdrisTypeConstructorInterface(io/github/mmhelloworld/idrisjvm/assembler/Assembler String java/util/List void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
+asmCreateIdrisTypeConstructorInterface : Assembler -> String -> (memberShapes: JList String) -> PrimIO ()
 
 %foreign "jvm:.createIdrisFunctionInterface(io/github/mmhelloworld/idrisjvm/assembler/Assembler String String void),io/github/mmhelloworld/idrisjvm/assembler/Assembler"
 asmCreateIdrisFunctionInterface : Assembler -> String -> String -> PrimIO ()
@@ -1628,7 +1628,7 @@ parameters {auto state: Ref AsmState AsmState}
   public export
   %inline
   createIdrisConstructorClassWithIfaces : String -> Bool -> (constructorId: Int) -> (parameterCount: Int)
-                                        -> List String -> Core ()
+                                        -> List String -> (accessorShapes: List String) -> Core ()
 
   public export
   %inline
@@ -1637,7 +1637,7 @@ parameters {auto state: Ref AsmState AsmState}
 
   public export
   %inline
-  createIdrisTypeConstructorInterface : String -> Core ()
+  createIdrisTypeConstructorInterface : String -> (memberShapes: List String) -> Core ()
 
   public export
   %inline
@@ -2203,17 +2203,17 @@ parameters {auto state: Ref AsmState AsmState}
         jparamAnns <- toJList <$> (traverse (\paramAnn => toJList <$> (traverse toJAnnotation paramAnn)) paramAnns)
         primIO $ asmCreateMethod (assembler state) jaccs sourceFileName className methodName desc (maybeToNullable sig) (toJList $ maybeToNullable exceptions) janns jparamAnns
 
-  createIdrisConstructorClassWithIfaces className isStringConstructor constructorId constructorParameterCount tconInterfaces = do
+  createIdrisConstructorClassWithIfaces className isStringConstructor constructorId constructorParameterCount tconInterfaces accessorShapes = do
     state <- getState
-    coreLift $ primIO $ asmCreateIdrisConstructorClassWithIfaces (assembler state) className isStringConstructor constructorId constructorParameterCount (toJList tconInterfaces)
+    coreLift $ primIO $ asmCreateIdrisConstructorClassWithIfaces (assembler state) className isStringConstructor constructorId constructorParameterCount (toJList tconInterfaces) (toJList accessorShapes)
 
   createIdrisConstructorClassTypedWithIfaces className isStringConstructor constructorId fieldDescriptors tconInterfaces = do
     state <- getState
     coreLift $ primIO $ asmCreateIdrisConstructorClassTypedWithIfaces (assembler state) className isStringConstructor constructorId (toJList fieldDescriptors) (toJList tconInterfaces)
 
-  createIdrisTypeConstructorInterface interfaceName = do
+  createIdrisTypeConstructorInterface interfaceName memberShapes = do
     state <- getState
-    coreLift $ primIO $ asmCreateIdrisTypeConstructorInterface (assembler state) interfaceName
+    coreLift $ primIO $ asmCreateIdrisTypeConstructorInterface (assembler state) interfaceName (toJList memberShapes)
 
   createIdrisFunctionInterface interfaceName typedApplyDescriptor = do
     state <- getState

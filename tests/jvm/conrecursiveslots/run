@@ -60,10 +60,9 @@ else
   echo "sumLeft\$sp(int, Tree\$F) -> int: MISSING"
 fi
 
-# ...uses the typed accessor via the family checkcast...
-if echo "$sumleft_body" | grep -q 'checkcast.*Node\$I\$L\$L' \
-   && echo "$sumleft_body" | grep -qE 'getRef1:\(\).*Tree\$F'; then
-  echo "sumLeft\$sp Node alt: family checkcast + typed getRef1"
+# ...reads slots via the family interface's typed accessors...
+if echo "$sumleft_body" | grep -qE 'invokeinterface.*Tree\$F\.getRef1:\(\).*Tree\$F'; then
+  echo "sumLeft\$sp Node alt: family interface + typed getRef1"
 else
   echo "sumLeft\$sp Node alt: NO FAMILY DISPATCH"
 fi

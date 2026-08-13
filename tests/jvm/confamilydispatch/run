@@ -47,17 +47,15 @@ fi
 area_body=$(echo "$disassembly" | awk '/static int area\$sp[0-9]+\(.*Shape\$F\)/,/^$/')
 
 # Family-interface dispatch in BOTH alts of the same spec body.
-if echo "$area_body" | grep -q 'checkcast.*Circle\$I' \
-   && echo "$area_body" | grep -qE 'invokevirtual.*Circle\$I\.getInt0:\(\)I'; then
-  echo "area\$sp Circle alt: typed accessor via family checkcast"
+if echo "$area_body" | grep -qE 'invokeinterface.*Shape\$F\.getInt0:\(\)I'; then
+  echo "area\$sp Circle alt: typed accessor via family interface"
 else
   echo "area\$sp Circle alt: NO FAMILY DISPATCH"
 fi
 
-if echo "$area_body" | grep -q 'checkcast.*Rect\$I\$I' \
-   && echo "$area_body" | grep -qE 'invokevirtual.*Rect\$I\$I\.getInt0:\(\)I' \
-   && echo "$area_body" | grep -qE 'invokevirtual.*Rect\$I\$I\.getInt1:\(\)I'; then
-  echo "area\$sp Rect alt: typed accessor via family checkcast"
+if echo "$area_body" | grep -qE 'invokeinterface.*Shape\$F\.getInt0:\(\)I' \
+   && echo "$area_body" | grep -qE 'invokeinterface.*Shape\$F\.getInt1:\(\)I'; then
+  echo "area\$sp Rect alt: typed accessor via family interface"
 else
   echo "area\$sp Rect alt: NO FAMILY DISPATCH"
 fi
@@ -66,9 +64,8 @@ fi
 # slot-suffix keying retained there, Maybe$I unchanged).
 sumo_body=$(echo "$disassembly" | awk '/static int sumO\$sp[0-9]+\(.*Maybe\$I\)/,/^$/')
 
-if echo "$sumo_body" | grep -q 'checkcast.*JUST\$I' \
-   && echo "$sumo_body" | grep -qE 'invokevirtual.*JUST\$I\.getInt0:\(\)I'; then
-  echo "sumO\$sp Just alt: typed accessor via family checkcast"
+if echo "$sumo_body" | grep -qE 'invokeinterface.*Maybe\$I\.getInt0:\(\)I'; then
+  echo "sumO\$sp Just alt: typed accessor via family interface"
 else
   echo "sumO\$sp Just alt: NO FAMILY DISPATCH"
 fi

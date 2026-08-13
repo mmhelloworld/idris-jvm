@@ -572,16 +572,106 @@ public final class Assembler {
   // on this interface, and function-spec parameters can then narrow
   // `Object → LFamilyInterface;` while staying type-safe over sibling
   // constructors (e.g. both `Cons$I` and `Nil$I` implement `List$I`).
-  public void createIdrisTypeConstructorInterface(String interfaceName) {
+  // `memberShapes` carries one field-descriptor string per data-carrying
+  // member shape of this instantiation (e.g. "ILjava/lang/Object;" for
+  // CONS$I$L). The interface declares the union of the members' typed
+  // accessors so consumers can read slots through the interface — spec
+  // classes implement them as field reads, natural carriers as unboxing
+  // bridges (see createIdrisConstructorClass). Members lacking an accessor
+  // (nullary or different shape) simply never receive those calls: reads
+  // are always guarded by constructor-id dispatch, and ASM-emitted classes
+  // are not required to implement every interface method at load time.
+  public void createIdrisTypeConstructorInterface(String interfaceName, List<String> memberShapes) {
     if (!cws.containsKey(interfaceName)) {
       var interfaceClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
       interfaceClassWriter.visit(JAVA_VERSION, ACC_PUBLIC + ACC_INTERFACE + ACC_ABSTRACT,
         interfaceName, null, "java/lang/Object",
         new String[]{"io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"});
       interfaceClassWriter.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
+      for (var accessor : accessorUnion(memberShapes).entrySet()) {
+        interfaceClassWriter.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, accessor.getKey(),
+          "()" + accessor.getValue(), null, null).visitEnd();
+      }
       interfaceClassWriter.visitEnd();
       cws.put(interfaceName, interfaceClassWriter);
     }
+  }
+
+  // Split a concatenated field-descriptor string into per-slot descriptors.
+  static java.util.List<String> splitDescriptors(String shape) {
+    var slots = new java.util.ArrayList<String>();
+    int i = 0;
+    while (i < shape.length()) {
+      int start = i;
+      while (shape.charAt(i) == '[') {
+        i++;
+      }
+      if (shape.charAt(i) == 'L') {
+        i = shape.indexOf(';', i) + 1;
+      } else {
+        i++;
+      }
+      slots.add(shape.substring(start, i));
+    }
+    return slots;
+  }
+
+  // Union of (accessorName -> returnDescriptor) across member shapes.
+  private static java.util.Map<String, String> accessorUnion(List<String> memberShapes) {
+    var union = new java.util.LinkedHashMap<String, String>();
+    for (String shape : memberShapes) {
+      var slots = splitDescriptors(shape);
+      for (int i = 0; i < slots.size(); i++) {
+        union.putIfAbsent(accessorNameFor(slots.get(i), i), slots.get(i));
+      }
+    }
+    return union;
+  }
+
+  // Unboxing bridge from an Object-typed natural field to a typed accessor
+  // return. Reference returns checkcast (family-refined slot interfaces are
+  // implemented by natural carriers too, so the cast holds for both).
+  private static void visitNaturalAccessorBridge(ClassWriter classWriter, String className,
+                                                 String accessorName, String descriptor, int slot) {
+    var conversion = "io/github/mmhelloworld/idrisjvm/runtime/Conversion";
+    var bridge = classWriter.visitMethod(ACC_PUBLIC, accessorName, "()" + descriptor, null, null);
+    bridge.visitCode();
+    bridge.visitVarInsn(ALOAD, 0);
+    bridge.visitFieldInsn(GETFIELD, className, "property" + slot, "Ljava/lang/Object;");
+    switch (descriptor.charAt(0)) {
+      case 'I':
+        bridge.visitMethodInsn(INVOKESTATIC, conversion, "toInt", "(Ljava/lang/Object;)I", false);
+        break;
+      case 'J':
+        bridge.visitMethodInsn(INVOKESTATIC, conversion, "toLong", "(Ljava/lang/Object;)J", false);
+        break;
+      case 'D':
+        bridge.visitMethodInsn(INVOKESTATIC, conversion, "toDouble", "(Ljava/lang/Object;)D", false);
+        break;
+      case 'Z':
+        bridge.visitMethodInsn(INVOKESTATIC, conversion, "toBoolean", "(Ljava/lang/Object;)Z", false);
+        break;
+      case 'C':
+        bridge.visitMethodInsn(INVOKESTATIC, conversion, "toChar", "(Ljava/lang/Object;)C", false);
+        break;
+      case 'B':
+        bridge.visitMethodInsn(INVOKESTATIC, conversion, "toByte", "(Ljava/lang/Object;)B", false);
+        break;
+      case 'S':
+        bridge.visitMethodInsn(INVOKESTATIC, conversion, "toShort", "(Ljava/lang/Object;)S", false);
+        break;
+      case 'F':
+        bridge.visitMethodInsn(INVOKESTATIC, conversion, "toFloat", "(Ljava/lang/Object;)F", false);
+        break;
+      default:
+        if (!descriptor.equals("Ljava/lang/Object;")) {
+          bridge.visitTypeInsn(CHECKCAST, descriptor.substring(1, descriptor.length() - 1));
+        }
+        break;
+    }
+    bridge.visitInsn(returnOpcodeFor(descriptor));
+    bridge.visitMaxs(-1, -1);
+    bridge.visitEnd();
   }
 
   // FFI entry-point: emit a typed callback SAM interface for higher-order
@@ -771,14 +861,15 @@ public final class Assembler {
   // field in every instance. String-constructor ids are the class name.
   public void createIdrisConstructorClassWithIfaces(String newClassName, Object isStringConstructor,
                                                      int constructorId, int constructorParameterCount,
-                                                     List<String> tconInterfaces) {
+                                                     List<String> tconInterfaces,
+                                                     List<String> accessorShapes) {
     createIdrisConstructorClass(newClassName, intToBoolean((int) isStringConstructor), constructorId,
-      constructorParameterCount, tconInterfaces);
+      constructorParameterCount, tconInterfaces, accessorShapes);
   }
 
   public void createIdrisConstructorClass(String newClassName, boolean isStringConstructor,
                                           int constructorId, int constructorParameterCount,
-                                          List<String> tconInterfaces) {
+                                          List<String> tconInterfaces, List<String> accessorShapes) {
     if (!cws.containsKey(newClassName)) {
       var newClassWriter = new IdrisClassWriter(COMPUTE_MAXS + COMPUTE_FRAMES);
       MethodVisitor newMethodVisitor;
@@ -878,6 +969,21 @@ public final class Assembler {
       newMethodVisitor.visitInsn(ARETURN);
       newMethodVisitor.visitMaxs(-1, -1);
       newMethodVisitor.visitEnd();
+
+      // Typed accessor bridges: the family interfaces this natural class
+      // implements declare its spec siblings' accessors; provide unboxing
+      // implementations over the Object-typed fields so interface-accessor
+      // reads are carrier-safe under mixed spec/natural values.
+      var bridged = new java.util.HashSet<String>();
+      for (String shape : accessorShapes) {
+        var slots = splitDescriptors(shape);
+        for (int i = 0; i < slots.size() && i < constructorParameterCount; i++) {
+          String accessorName = accessorNameFor(slots.get(i), i);
+          if (bridged.add(accessorName)) {
+            visitNaturalAccessorBridge(newClassWriter, newClassName, accessorName, slots.get(i), i);
+          }
+        }
+      }
 
       newClassWriter.visitEnd();
       cws.put(newClassName, newClassWriter);

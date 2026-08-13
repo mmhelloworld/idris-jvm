@@ -1109,6 +1109,9 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             let constructorParameterCountNat = length args
             let constructorParameterCount = the Int $ cast constructorParameterCountNat
             let constructorId = fromMaybe 0 tag
+            conPlanForShapes <- getConSpecialisationPlan
+            let accessorShapes = nub $ map (\sc => concat (getJvmTypeDescriptor <$> sc.fieldTypes))
+                                           (fromMaybe [] $ SortedMap.lookup name conPlanForShapes)
             hasConstructor <- coreLift $ AsmGlobalState.hasConstructor constructorClassName
             if hasConstructor
               then do
@@ -1125,7 +1128,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                 natIfaces <- getNaturalToTConIfaces
                 let ifaces = fromMaybe [] $ SortedMap.lookup constructorClassName natIfaces
                 createIdrisConstructorClassWithIfaces constructorClassName (isNothing tag) constructorId
-                    constructorParameterCount ifaces
+                    constructorParameterCount ifaces accessorShapes
             case args of
               [] => field GetStatic constructorClassName "INSTANCE" ("L" ++ constructorClassName ++ ";")
               _ => do
@@ -2118,33 +2121,42 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
             --     instantiation, so a `Maybe$I`-typed value may hold a
             --     natural `Just` when `Just` is natural-live, and a
             --     checkcast to `JUST$I` would throw.
-            let mSpecByFamily : Maybe SpecialisedConstructor
-                mSpecByFamily = case idrisObjectVariableType of
-                                  IRef varClassName _ _ =>
-                                    if SortedSet.contains name natLive
-                                      then Nothing
-                                      else findUniqueFamilyMember conPlan name varClassName
-                                  _ => Nothing
+            -- (c) Family-interface accessor reads: the discriminant is
+            --     statically typed as a family-instantiation interface.  The
+            --     interface declares the members' typed accessors and BOTH
+            --     carriers implement them (spec classes as field reads,
+            --     natural classes as unboxing bridges), so this path needs
+            --     NO natural-liveness gate — a natural cell inhabiting the
+            --     interface-typed discriminant answers the same accessors.
+            let mFamily : Maybe (String, SpecialisedConstructor)
+                mFamily = case idrisObjectVariableType of
+                            IRef varClassName Interface _ =>
+                              (\sc => (varClassName, sc)) <$> findUniqueFamilyMember conPlan name varClassName
+                            _ => Nothing
             let mSpec : Maybe SpecialisedConstructor
-                mSpec = mSpecByClass <|> mSpecByFamily <|> uniqueSafe
-            let constructorClassName : String
-                constructorClassName = maybe naturalClassName specClassName mSpec
-            let constructorType : InferredType
-                constructorType = maybe naturalType (\sc => IRef sc.specClassName Class []) mSpec
-            let mSlotTypes : Maybe (List InferredType)
-                mSlotTypes = (\sc => sc.fieldTypes) <$> mSpec
-            -- When `uniqueSafe` or `mSpecByFamily` selected the spec, the
-            -- discriminant's static type doesn't equal `constructorType` but
-            -- the cast is provably safe — force the typed-accessor path.
-            let forceCast = isJust uniqueSafe || isJust mSpecByFamily
-            bindArg forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes 0 args
+                mSpec = mSpecByClass <|> uniqueSafe
+            case (mSpec, mFamily) of
+              (Just _, _) => do
+                let constructorClassName = maybe naturalClassName specClassName mSpec
+                let constructorType = maybe naturalType (\sc => IRef sc.specClassName Class []) mSpec
+                let mSlotTypes = (\sc => sc.fieldTypes) <$> mSpec
+                let forceCast = isJust uniqueSafe
+                bindArg InvokeVirtual False forceCast constructorClassName constructorType mSlotTypes
+                  idrisObjectVariableType variableTypes 0 args
+              (Nothing, Just (ifaceName, sc)) =>
+                bindArg InvokeInterface True True ifaceName (IRef ifaceName Interface [])
+                  (Just sc.fieldTypes) idrisObjectVariableType variableTypes 0 args
+              (Nothing, Nothing) =>
+                bindArg InvokeVirtual False False naturalClassName naturalType Nothing
+                  idrisObjectVariableType variableTypes 0 args
             assembleExpr True returnType expr
         where
 
-          bindArg : Bool -> String -> InferredType -> Maybe (List InferredType)
+          bindArg : InvocationType -> (isInterfaceCall : Bool) -> Bool -> String -> InferredType
+                 -> Maybe (List InferredType)
                  -> InferredType -> Map Int InferredType -> Int -> List Name -> Core ()
-          bindArg _ _ _ _ _ _ _ [] = pure ()
-          bindArg forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes index (var :: vars) = do
+          bindArg _ _ _ _ _ _ _ _ _ [] = pure ()
+          bindArg invocationType isInterfaceCall forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes index (var :: vars) = do
               let variableName = jvmSimpleName var
               when (used variableName expr) $ do
                 -- Only emit a direct invokevirtual on the constructor's class
@@ -2172,9 +2184,9 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                     -- body's `NmLocal` load uses the right instruction.
                     Just slotTy => do
                       loadVar variableTypes idrisObjectVariableType constructorType idrisObjectVariableIndex
-                      invokeMethod InvokeVirtual constructorClassName
+                      invokeMethod invocationType constructorClassName
                         (specConAccessorName slotTy index)
-                        ("()" ++ getJvmTypeDescriptor slotTy) False
+                        ("()" ++ getJvmTypeDescriptor slotTy) isInterfaceCall
                       variableIndex <- getVariableIndex variableName
                       storeVar slotTy slotTy variableIndex
                     -- Non-spec class → existing boxed getProperty.
@@ -2191,7 +2203,7 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
                     variableIndex <- getVariableIndex variableName
                     storeVar inferredObjectType !(getVariableType variableName) variableIndex
                 markVariableLive variableName
-              bindArg forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes (index + 1) vars
+              bindArg invocationType isInterfaceCall forceCast constructorClassName constructorType mSlotTypes idrisObjectVariableType variableTypes (index + 1) vars
 
     assembleConstructorSwitch : InferredType -> FC -> Int -> List NamedConAlt -> Maybe NamedCExp -> Core ()
     assembleConstructorSwitch _ fc _ [] _ = throw $ GenericMsg fc "Empty cases"
@@ -3133,7 +3145,7 @@ preRegisterConstructorSpecs : {auto c : Ref Ctxt Defs} -> {auto s : Ref Syn Synt
 preRegisterConstructorSpecs plan = do
     let entries = snd =<< SortedMap.toList plan
     let actives = nub $ mapMaybe activeIface entries
-    traverse_ createIface actives
+    traverse_ (createIface entries) actives
     traverse_ (registerClass (activesByBase entries)) entries
   where
     activeIface : SpecialisedConstructor -> Maybe String
@@ -3152,11 +3164,21 @@ preRegisterConstructorSpecs plan = do
                       then acc
                       else SortedMap.insert sc.tconFamilyBase (sc.tconClassName :: existing) acc
 
-    createIface : String -> Core ()
-    createIface tconClassName = do
+    -- One field-descriptor string per member shape (e.g. "ILjava/lang/Object;"),
+    -- for the interface's typed-accessor union.
+    shapeOf : SpecialisedConstructor -> String
+    shapeOf sc = concat (getJvmTypeDescriptor <$> sc.fieldTypes)
+
+    memberShapesOf : List SpecialisedConstructor -> String -> List String
+    memberShapesOf entries tconClassName =
+      nub $ map shapeOf $ filter (\sc => sc.tconClassName == tconClassName
+                                          || (sc.tconClassName == "" && sc.tconFamilyBase /= "")) entries
+
+    createIface : List SpecialisedConstructor -> String -> Core ()
+    createIface entries tconClassName = do
       tconAsm <- coreLift $ AsmState.fromJavaName (Jqualified tconClassName "<clinit>")
       tconRef <- newRef AsmState tconAsm
-      createIdrisTypeConstructorInterface tconClassName
+      createIdrisTypeConstructorInterface tconClassName (memberShapesOf entries tconClassName)
 
     registerClass : SortedMap String (List String) -> SpecialisedConstructor -> Core ()
     registerClass byBase (MkSpecialisedCon _ _ tag _ fieldTypes specClassName tconClassName tconFamilyBase) = do

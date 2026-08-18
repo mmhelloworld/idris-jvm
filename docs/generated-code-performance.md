@@ -185,6 +185,15 @@ exposed the bimorphic cost.
 
 ## Self-hosted compiler performance (vs the 0.8.5 release)
 
+Re-measured 2026-08-18 at HEAD (stage-2 with thunk overhaul and
+carrier-safe accessors in the compiler's own bytecode), interleaved
+runs under moderate ambient load (one 3.7-hour load-poisoned 0.8.5 run
+discarded): current 610s/554s (typecheck 530/480, codegen 80/74) vs
+0.8.5 658s (typecheck 554, codegen 104) — total ~11% faster, typecheck
+~9% faster, codegen ~26% faster. Consistent with the 2026-08-12
+measurement below; the post-8-12 changes held or slightly improved the
+deltas.
+
 **Compiling the compiler itself** (305 modules + whole-program codegen,
 clean builds, interleaved runs, identical installed libraries; medians
 across 3 valid runs each — one run discarded as load-poisoned, ambient

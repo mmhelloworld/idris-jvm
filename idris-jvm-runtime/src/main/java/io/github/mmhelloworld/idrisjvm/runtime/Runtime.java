@@ -39,6 +39,59 @@ public final class Runtime {
         return obj.getProperty(0); // return the result from `TcDone`
     }
 
+    /**
+     * Mutable trampoline frame for mutually tail-recursive function groups. One frame is allocated
+     * per trampoline entry and reused across all iterations: {@code fn} selects the next function in
+     * the group (0 = done, result in {@code args[0]}) and {@code args} carries its arguments. The
+     * single concrete class keeps every dispatch and argument read monomorphic.
+     */
+    public static final class TcFrame {
+        public int fn;
+        public final Object[] args;
+
+        public TcFrame(int arity) {
+            this.args = new Object[arity];
+        }
+    }
+
+    public static Object tcNewFrame(Object arity) {
+        return new TcFrame(Math.max(1, Conversion.toInt(arity)));
+    }
+
+    public static Object tcSet(Object frame, Object index, Object value) {
+        ((TcFrame) frame).args[Conversion.toInt(index)] = value;
+        return frame;
+    }
+
+    public static Object tcSetFn(Object frame, Object fn) {
+        ((TcFrame) frame).fn = Conversion.toInt(fn);
+        return frame;
+    }
+
+    public static Object tcGet(Object frame, Object index) {
+        return ((TcFrame) frame).args[Conversion.toInt(index)];
+    }
+
+    public static Object tcGetFn(Object frame) {
+        return ((TcFrame) frame).fn;
+    }
+
+    public static Object tcDone(Object frame, Object value) {
+        var typedFrame = (TcFrame) frame;
+        typedFrame.fn = 0;
+        typedFrame.args[0] = value;
+        return frame;
+    }
+
+    public static Object tailRecFrame(Object fObj, Object frameObj) {
+        var f = (Function<Object, Object>) fObj;
+        var frame = (TcFrame) frameObj;
+        while (frame.fn != 0) {
+            f.apply(frame);
+        }
+        return frame.args[0];
+    }
+
     public static IdrisList getProgramArgs() {
         return programArgsList;
     }

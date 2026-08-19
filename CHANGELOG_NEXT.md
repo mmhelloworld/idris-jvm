@@ -105,3 +105,17 @@ should target this file (`CHANGELOG_NEXT`).
   automatically after a JDK or classpath change, and CDS is skipped
   when `IDRIS2_JVM_CLASSPATH` is set since user-supplied class
   directories cannot be archived.
+
+* Mutually tail-recursive functions run on a reusable mutable trampoline
+  frame instead of allocating a continuation object per iteration. The
+  `Compiler.TailRec` transform now emits calls to static runtime frame
+  helpers (`Runtime.TcFrame`: an int function-index plus an argument
+  array, reused across all iterations of a trampoline run) and dispatches
+  on an integer switch, replacing the per-iteration `TcContinue_*`
+  constructor allocations and their megamorphic `getConstructorId`/
+  `getProperty` dispatch with monomorphic field and array accesses.
+  Trampoline continuations were ~28% of all allocation when the compiler
+  typechecks its own sources (the evaluator's `eval`/`evalLocal`/
+  `evalTree` group runs at arity 10); the self-hosted compiler
+  typechecks the compiler sources ~9% faster, narrowing the gap to the
+  Chez backend on the same workload from ~2.2x to ~2.05x.

@@ -241,11 +241,35 @@ tcFunction = MN "$tcOpt"
 tcArgName : Name
 tcArgName = MN "$a" 0
 
-tcContinueName : (arity: Nat) -> Name
-tcContinueName arity = UN (Basic $ "TcContinue_" ++ show arity)
+tcFrameArgName : Name
+tcFrameArgName = MN "$tcFrame" 0
 
-tcDoneName : Name
-tcDoneName = UN $ Basic "TcDone"
+-- The trampoline runs on a single mutable frame (Runtime.TcFrame) instead of
+-- a fresh TcContinue constructor per iteration: `fn` selects the group
+-- member to run next (0 = done, result in slot 0) and the argument slots are
+-- overwritten in place. The helpers below are static methods on the runtime
+-- class, so they resolve by name without any backend support and stay
+-- monomorphic (one frame class program-wide).
+tcRuntimeHelper : String -> Name
+tcRuntimeHelper fn = NS (mkNamespace "io.github.mmhelloworld.idrisjvm.runtime.Runtime") (UN $ Basic fn)
+
+tcHelperApp : String -> List NamedCExp -> NamedCExp
+tcHelperApp fn args = NmApp EmptyFC (NmRef EmptyFC (tcRuntimeHelper fn)) args
+
+tcIntLit : Int -> NamedCExp
+tcIntLit value = NmPrimVal EmptyFC (I value)
+
+-- Store a function index and its arguments into the frame, returning the
+-- frame. Built by nesting (each helper returns the frame) so no value is
+-- discarded: `tcSetFn(tcSet(tcSet(frame, 0, a0), 1, a1), ix)`. Argument
+-- expressions only read locals, never the frame, so storing while later
+-- arguments are still unevaluated cannot alias.
+tcFillFrame : NamedCExp -> (index : Int) -> List NamedCExp -> NamedCExp
+tcFillFrame frame ix values =
+  let withArgs = foldl store frame (zip [0 .. cast (length values)] values)
+  in tcHelperApp "tcSetFn" [withArgs, tcIntLit ix]
+  where store : NamedCExp -> (Int, NamedCExp) -> NamedCExp
+        store acc (slot, value) = tcHelperApp "tcSet" [acc, tcIntLit slot, value]
 
 export
 appendToName : String -> Name -> Name
@@ -254,22 +278,30 @@ appendToName suffix n =
   in NS ns (UN $ Basic (show name ++ suffix))
 
 -- Converts a single function in a mutually tail-recursive
--- group of functions to a single branch in a pattern match.
--- Recursive function calls will be replaced with an
--- applied data constructor whose tag indicates the
--- branch in the pattern match to use next, and whose values
--- will be used as the arguments for the next function.
-conAlt : TcGroup -> TcFunction -> (NamedConAlt, Function)
+-- group of functions to a single branch in an integer switch
+-- on the frame's function index. The branch reads the function's
+-- arguments out of the frame and calls the converted function,
+-- which receives the frame as an extra trailing parameter (trailing
+-- so `$idrisTailRec` self-call rebinding, which stores parameters
+-- by position, still hits the original argument slots). Recursive
+-- calls within the group store the callee's index and arguments
+-- back into the frame instead of allocating a constructor.
+conAlt : TcGroup -> TcFunction -> (NamedConstAlt, Function)
 conAlt (MkTcGroup tcIx funs) (MkTcFunction n ix args exp fc) =
-  let name = tcContinueName (length args)
-      localArgs = (NmLocal emptyFC) <$> args
-      functionApplication = NmApp emptyFC (NmRef emptyFC newName) localArgs
-      tailRecOptimizedFunction = MkFunction newName fc args (toTc exp)
-   in (MkNConAlt name DATACON (Just ix) args functionApplication, tailRecOptimizedFunction)
+  let frameLocal = NmLocal EmptyFC tcArgName
+      argReads = map (\slot => tcHelperApp "tcGet" [frameLocal, tcIntLit slot])
+                     [0 .. cast (length args)]
+      boundArgReads = zipWith (\argRead, _ => argRead) argReads args
+      functionApplication = NmApp emptyFC (NmRef emptyFC newName) (boundArgReads ++ [frameLocal])
+      tailRecOptimizedFunction = MkFunction newName fc (args ++ [tcFrameArgName]) (toTc exp)
+   in (MkNConstAlt (I ix) functionApplication, tailRecOptimizedFunction)
 
    where
      newName : Name
      newName = appendToName ("$tc" ++ show ix) n
+
+     frameArg : NamedCExp
+     frameArg = NmLocal EmptyFC tcFrameArgName
 
      mutual
 
@@ -277,14 +309,14 @@ conAlt (MkTcGroup tcIx funs) (MkTcFunction n ix args exp fc) =
        -- (an expression not corresponding to a recursive
        -- call in tail position).
        tcDone : NamedCExp -> NamedCExp
-       tcDone x = NmCon EmptyFC tcDoneName DATACON (Just 0) [x]
+       tcDone x = tcHelperApp "tcDone" [frameArg, x]
 
        -- this is returned in case we arrived at a recursive call
        -- in tail position. The index indicates the next "function"
        -- to call, the list of expressions are the function's
        -- arguments.
        tcContinue : (index : Int) -> List NamedCExp -> NamedCExp
-       tcContinue ix values = NmCon EmptyFC (tcContinueName $ length values) DATACON (Just ix) values
+       tcContinue ix values = tcFillFrame frameArg ix values
 
        -- recursively converts an expression. Only the `NmApp` case is
        -- interesting, the rest is pretty much boiler plate.
@@ -309,23 +341,23 @@ conAlt (MkTcGroup tcIx funs) (MkTcFunction n ix args exp fc) =
 maxCasesInTcFunction : Nat
 maxCasesInTcFunction = 10
 
-splitTcFun : Int -> List NamedConAlt -> List Function
+splitTcFun : Int -> List NamedConstAlt -> List Function
 splitTcFun groupIndex branches = go [] 0 branches where
 
   getSplitTcFunName : Int -> Name
   getSplitTcFunName 0 = tcFunction groupIndex
   getSplitTcFunName index = MN ("$tcOpt$" ++ show groupIndex) index
 
-  createFunction : Int -> Bool -> List NamedConAlt -> Function
+  createFunction : Int -> Bool -> List NamedConstAlt -> Function
   createFunction index hasNext branches =
     let tcArg = NmLocal emptyFC tcArgName
         defaultBranch =
           if hasNext then Just (NmApp emptyFC (NmRef emptyFC $ getSplitTcFunName (index + 1)) [tcArg]) else Nothing
-        switch = NmConCase EmptyFC tcArg branches defaultBranch
+        switch = NmConstCase EmptyFC (tcHelperApp "tcGetFn" [tcArg]) branches defaultBranch
         splitTcFunName = getSplitTcFunName index
     in MkFunction splitTcFunName emptyFC [tcArgName] switch
 
-  go : List Function -> Int -> List NamedConAlt -> List Function
+  go : List Function -> Int -> List NamedConstAlt -> List Function
   go acc _ [] = acc
   go acc index branches =
     let (currentCases, nextCases) = splitAt maxCasesInTcFunction branches
@@ -350,13 +382,19 @@ convertTcGroup loop g@(MkTcGroup gindex fs) =
         local : Name -> NamedCExp
         local = NmLocal EmptyFC
 
+        -- every function in the group shares the frame, so it is sized for
+        -- the largest member (the runtime keeps at least one slot for the
+        -- result)
+        maxArity : Int
+        maxArity = foldl (\acc, f => max acc (cast (length f.args))) 0 (values fs)
+
         toFun : TcFunction -> Function
         toFun (MkTcFunction n ix args x _) =
           let exps  = map local args
-              tcArg = NmCon EmptyFC (tcContinueName $ length exps) DATACON (Just ix) exps
+              frame = tcFillFrame (tcHelperApp "tcNewFrame" [tcIntLit maxArity]) ix exps
               argName = (UN $ Basic "arg")
               tcFun = NmLam emptyFC argName (NmApp emptyFC (NmRef EmptyFC tcFunName) [NmLocal emptyFC argName])
-              body  = NmApp EmptyFC (NmRef EmptyFC loop) [tcFun,tcArg]
+              body  = NmApp EmptyFC (NmRef EmptyFC loop) [tcFun,frame]
            in MkFunction n emptyFC args body
 
 -- Tail recursion optimizations: Converts all groups of

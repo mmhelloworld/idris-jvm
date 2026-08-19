@@ -733,9 +733,18 @@ isIoAction expr = False
 voidTypeExpr : NamedCExp
 voidTypeExpr = NmCon emptyFC (UN (Basic "void")) TYCON Nothing []
 
+runtimeClassNamespace : Namespace
+runtimeClassNamespace = mkNamespace "io.github.mmhelloworld.idrisjvm.runtime.Runtime"
+
 tailRecLoopFunctionName : Name
-tailRecLoopFunctionName =
-  NS (mkNamespace "io.github.mmhelloworld.idrisjvm.runtime.Runtime") (UN $ Basic "tailRec")
+tailRecLoopFunctionName = NS runtimeClassNamespace (UN $ Basic "tailRecFrame")
+
+-- Static helpers on the runtime class (the trampoline frame operations from
+-- `Compiler.TailRec` and the loop itself) resolve by name to invokestatic
+-- with an all-Object signature; they have no inferred function type.
+isRuntimeClassFunction : Name -> Bool
+isRuntimeClassFunction (NS ns _) = ns == runtimeClassNamespace
+isRuntimeClassFunction _ = False
 
 -- Derive a typed callback signature from a literal lambda's own body for
 -- POLYMORPHIC callback slots (type arguments are erased in NamedCExp, so
@@ -1569,7 +1578,7 @@ mutual
         mFunctionType <- findFunctionType functionName
         retType <- case mFunctionType of
             Just functionType => pure $ returnType functionType
-            Nothing => if idrisName == tailRecLoopFunctionName
+            Nothing => if isRuntimeClassFunction idrisName
                          then pure inferredObjectType
                          else throw $ GenericMsg fc "Unknown type for function \{show functionName}"
         let calleeSlots = maybe [] parameterTypes mFunctionType

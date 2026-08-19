@@ -305,6 +305,28 @@ concurrent-marking latency buys nothing for a batch compiler). Ship an
 AppCDS archive for the ~20–25% short-invocation win (golden tests, IDE
 mode startup, small builds) — requires packing the loose classes into a
 jar at build time. Never cap the JIT at C1, and never use SerialGC.
+(Both landed: `fe5e2ccd`.)
+
+### Trampoline frames (landed after the flag tuning)
+
+JFR on the stage-2 typecheck workload attributed 41% of stacks to
+`Runtime.tailRec`, ~28% of sampled allocation to `TcContinue_*`/`TcDone`
+trampoline continuations (the evaluator's `eval`/`evalLocal`/`evalTree`
+group runs at arity 10, allocating a 10-field object per mutual tail
+call), and ~9% leaf time to their megamorphic `getProperty` reads.
+`Compiler.TailRec` now emits a single mutable `Runtime.TcFrame` per
+trampoline entry — int function-index plus argument array, overwritten
+in place each iteration via static helpers that resolve by name with no
+backend support — and the `$tcOpt` dispatcher switches on the integer
+index instead of constructor ids. Constructor machinery (and the
+specialisation plan) never sees frames. Self tail recursion was already
+compiled to native loops (`markTailRecursion`), so this covers exactly
+the mutual groups. Interleaved stage-2 measurement: typecheck of the
+compiler sources 390–395 s → **353–370 s (~9% faster)**; the gap to
+Chez on the shared workload narrows from ~2.2× to ~2.05× (chez 173 s
+alongside the 353 s run). All 68 jvm golden tests pass; remaining
+trampoline residue is argument boxing (`Long.valueOf`/`toInt`), which a
+typed-frame variant could target later.
 
 ## Attack order
 

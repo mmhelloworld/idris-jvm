@@ -13,6 +13,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.net.JarURLConnection;
+import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -71,12 +73,40 @@ public final class AsmGlobalState {
 
     private static void copyPackage(String outputDirectory, String packagePath) {
         ClassLoader classLoader = getSystemClassLoader();
+        // Anchor on a class file because jars need not contain directory entries; when the runtime
+        // classes are packaged in a jar (jar-only launcher classpaths), enumerate the jar's entries —
+        // a package path only streams as a file listing when the classpath entry is a directory.
+        var anchor = classLoader.getResource("runtimeclasses/" + packagePath + "/Runtime.class");
+        if (anchor != null && "jar".equals(anchor.getProtocol())) {
+            copyPackageFromJar(classLoader, anchor, outputDirectory, packagePath);
+            return;
+        }
         try (InputStream stream = classLoader.getResourceAsStream(packagePath);
              BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
             String className;
             while ((className = reader.readLine()) != null) {
                 if (className.endsWith(".class")) {
                     copyRuntimeClass(classLoader, className, packagePath, outputDirectory);
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static void copyPackageFromJar(ClassLoader classLoader, URL anchor, String outputDirectory,
+                                           String packagePath) {
+        var prefix = "runtimeclasses/" + packagePath + "/";
+        try {
+            var connection = (JarURLConnection) anchor.openConnection();
+            connection.setUseCaches(false);
+            try (var jar = connection.getJarFile()) {
+                for (var entries = jar.entries(); entries.hasMoreElements();) {
+                    var name = entries.nextElement().getName();
+                    if (name.startsWith(prefix) && name.endsWith(".class")
+                        && name.indexOf('/', prefix.length()) < 0) {
+                        copyRuntimeClass(classLoader, name.substring(prefix.length()), packagePath, outputDirectory);
+                    }
                 }
             }
         } catch (IOException e) {

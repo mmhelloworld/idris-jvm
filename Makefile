@@ -192,6 +192,7 @@ install-idris2:
 	install ${TARGET} ${DESTDIR}${PREFIX}/bin
 	mkdir -p ${DESTDIR}${PREFIX}/bin/${NAME}_app
 	cp -rf ${TARGETDIR}/${NAME}_app ${DESTDIR}${PREFIX}/bin/
+	rm -f ${DESTDIR}${PREFIX}/bin/${NAME}_app/*.jsa
 
 install-bootstrap-libs:
 	${MAKE} -C libs/prelude install IDRIS2=${TARGET} IDRIS2_PATH=${IDRIS2_BOOT_PATH} IDRIS2_INC_CGS=${IDRIS2_CG}

@@ -13,7 +13,10 @@ import org.objectweb.asm.Type;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.jar.JarOutputStream;
+import java.util.zip.ZipEntry;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Deque;
 import java.util.HashMap;
@@ -233,8 +236,33 @@ public final class Assembler {
   public static void createExecutable(String directoryName, String fileName, String mainClass) throws IOException {
     String javaOptsProp = System.getProperty("JAVA_OPTS", System.getenv("JAVA_OPTS"));
     String javaOpts = javaOptsProp == null ? "-Xss8m -Xms2g -Xmx3g" : javaOptsProp;
+    createClassesJar(directoryName, fileName);
     createPosixExecutable(directoryName, fileName, mainClass, javaOpts);
     createWindowsExecutable(directoryName, fileName, mainClass, javaOpts);
+  }
+
+  // CDS (-XX:SharedArchiveFile) refuses any non-empty directory on the classpath, so the launchers
+  // use a jar-only classpath: this packs the generated classes (and any loose resources) into a jar
+  // next to the dependency jars. The loose class files are kept for tooling that reads them in place.
+  private static void createClassesJar(String directoryName, String fileName) throws IOException {
+    var appDirectory = new File(directoryName, fileName + "_app").toPath();
+    var jarPath = appDirectory.resolve(fileName + "-classes.jar");
+    Files.deleteIfExists(jarPath);
+    // The JVM refuses (but never regenerates) a CDS archive whose jars changed, so drop it on rebuild;
+    // the next run retrains it.
+    Files.deleteIfExists(appDirectory.resolve(fileName + ".jsa"));
+    try (var jar = new JarOutputStream(Files.newOutputStream(jarPath));
+         var files = Files.walk(appDirectory)) {
+      for (var file : (Iterable<Path>) files.filter(Files::isRegularFile)::iterator) {
+        var name = appDirectory.relativize(file).toString().replace(File.separatorChar, '/');
+        if (!name.contains("/") && (name.endsWith(".jar") || name.endsWith(".jsa"))) {
+          continue;
+        }
+        jar.putNextEntry(new ZipEntry(name));
+        Files.copy(file, jar);
+        jar.closeEntry();
+      }
+    }
   }
 
   // replace it with IdrisSystem.getEnv when 0.8.0 Idris JVM runtime is used
@@ -272,33 +300,48 @@ public final class Assembler {
 
   private static void createWindowsExecutable(String directoryName, String fileName, String mainClass,
                                               String javaOpts) throws IOException {
-    File exe = new File(directoryName, fileName + ".bat");
-    String batHeader = "@echo off";
-    String classpath = "%~dp0\\" + fileName + "_app;" + "%~dp0\\" + fileName + "_app\\*";
+    var exe = new File(directoryName, fileName + ".bat");
+    var batHeader = "@echo off";
+    var setAppDir = "set \"APP_DIR=%~dp0" + fileName + "_app\"";
     // Build the classpath into a variable so IDRIS2_JVM_CLASSPATH (project dependency jars resolved by
     // Maven/Gradle/the IDE) can be appended only when set — avoiding a trailing ';' that would put the
     // CWD on the classpath. Quote the final -cp value so a %~dp0 install path with spaces survives.
-    String setClasspath = "set \"IDRIS2_CLASSPATH=" + classpath + "\"";
-    String appendClasspath =
+    // Jars only: a directory entry would prevent CDS archive dumping.
+    var setClasspath = "set \"IDRIS2_CLASSPATH=%APP_DIR%\\*\"";
+    var appendClasspath =
       "if not \"%IDRIS2_JVM_CLASSPATH%\"==\"\" set \"IDRIS2_CLASSPATH=%IDRIS2_CLASSPATH%;%IDRIS2_JVM_CLASSPATH%\"";
-    String javaCommand = Stream.of("java", "%JAVA_OPTS%", javaOpts, "-cp", "\"%IDRIS2_CLASSPATH%\"", mainClass, "%*")
+    // CDS only applies when the classpath is exactly the app jars: an IDRIS2_JVM_CLASSPATH entry
+    // pointing at a class directory would make every run fail the archive dump, noisily.
+    var clearCdsOpts = "set \"CDS_OPTS=\"";
+    var setCdsOpts = "if \"%IDRIS2_JVM_CLASSPATH%\"==\"\" set \"CDS_OPTS=-Xlog:cds*=off -XX:+AutoCreateSharedArchive"
+      + " -XX:SharedArchiveFile=%APP_DIR%\\" + fileName + ".jsa\"";
+    var javaCommand = Stream.of("java", "-XX:+UseParallelGC", "%CDS_OPTS%", "%JAVA_OPTS%", javaOpts,
+        "-cp", "\"%IDRIS2_CLASSPATH%\"", mainClass, "%*")
       .filter(Assembler::isNotNullOrEmpty)
       .collect(joining(" "));
-    Files.write(exe.toPath(), createExecutableFileContent(batHeader, setClasspath, appendClasspath, javaCommand));
+    Files.write(exe.toPath(), createExecutableFileContent(batHeader, setAppDir, setClasspath, appendClasspath,
+      clearCdsOpts, setCdsOpts, javaCommand));
   }
 
   private static void createPosixExecutable(String directoryName, String fileName, String mainClass, String javaOpts) throws IOException {
-    File shExe = new File(directoryName, fileName);
-    String shHeader = "#!/bin/sh";
+    var shExe = new File(directoryName, fileName);
+    var shHeader = "#!/bin/sh";
+    var setAppDir = "APP_DIR=\"`dirname \"$0\"`/" + fileName + "_app\"";
     // `${IDRIS2_JVM_CLASSPATH:+:$IDRIS2_JVM_CLASSPATH}` appends `:<value>` only when the env var is
     // set and non-empty (so no stray trailing ':'), letting a project's dependency jars (resolved by
     // Maven/Gradle/the IDE) join the runtime classpath without editing the generated launcher.
-    String classpath = "\"`dirname $0`/" + fileName + "_app:" + "`dirname $0`/" + fileName
-      + "_app/*${IDRIS2_JVM_CLASSPATH:+:$IDRIS2_JVM_CLASSPATH}\"";
-    String javaCommand = Stream.of("java", "$JAVA_OPTS", javaOpts, "-cp", classpath, mainClass, "\"$@\"")
+    // Jars only: a directory entry would prevent CDS archive dumping.
+    var classpath = "\"$APP_DIR/*${IDRIS2_JVM_CLASSPATH:+:$IDRIS2_JVM_CLASSPATH}\"";
+    // CDS only applies when the classpath is exactly the app jars: an IDRIS2_JVM_CLASSPATH entry
+    // pointing at a class directory would make every run fail the archive dump, noisily.
+    var clearCdsOpts = "CDS_OPTS=\"\"";
+    var setCdsOpts = "[ -n \"$IDRIS2_JVM_CLASSPATH\" ] || CDS_OPTS=\"-Xlog:cds*=off -XX:+AutoCreateSharedArchive"
+      + " -XX:SharedArchiveFile=$APP_DIR/" + fileName + ".jsa\"";
+    var javaCommand = Stream.of("java", "-XX:+UseParallelGC", "$CDS_OPTS", "$JAVA_OPTS", javaOpts,
+        "-cp", classpath, mainClass, "\"$@\"")
       .filter(Assembler::isNotNullOrEmpty)
       .collect(joining(" "));
-    Files.write(shExe.toPath(), createExecutableFileContent(shHeader, javaCommand));
+    Files.write(shExe.toPath(), createExecutableFileContent(shHeader, setAppDir, clearCdsOpts, setCdsOpts, javaCommand));
     if (!"windows".equals(getOsName())) {
       setPosixFilePermissions(shExe.toPath(), PosixFilePermissions.fromString("rwxr-xr-x"));
     }

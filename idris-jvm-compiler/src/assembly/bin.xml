@@ -33,6 +33,10 @@
         <fileSet>
             <directory>${project.parent.basedir}/build/exec</directory>
             <outputDirectory>/exec</outputDirectory>
+            <!-- CDS archives record absolute jar paths and the exact JDK; each machine trains its own -->
+            <excludes>
+                <exclude>**/*.jsa</exclude>
+            </excludes>
         </fileSet>
     </fileSets>
 </assembly>

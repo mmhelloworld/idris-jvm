@@ -89,3 +89,19 @@ should target this file (`CHANGELOG_NEXT`).
 
 
 
+
+* Generated launchers are tuned for the JVM's actual behavior on
+  Idris workloads. Executables now run with `-XX:+UseParallelGC`
+  (measured 4-10% faster than the default G1 on compile workloads —
+  a single compute thread with a high allocation rate wants a
+  throughput collector; override at runtime via
+  `JAVA_OPTS="-XX:-UseParallelGC ..."`), and enable class data
+  sharing: the generated classes are packed into a
+  `<program>-classes.jar` so the classpath is jar-only, and the
+  launcher passes `-XX:+AutoCreateSharedArchive` so the first run
+  trains a CDS archive next to the app jars and later runs map it.
+  Short-lived invocations start ~20-25% faster (a small `--check`
+  drops from ~1.5s to ~1.2s); the archive regenerates itself
+  automatically after a JDK or classpath change, and CDS is skipped
+  when `IDRIS2_JVM_CLASSPATH` is set since user-supplied class
+  directories cannot be archived.

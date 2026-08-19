@@ -119,3 +119,17 @@ should target this file (`CHANGELOG_NEXT`).
   `evalTree` group runs at arity 10); the self-hosted compiler
   typechecks the compiler sources ~9% faster, narrowing the gap to the
   Chez backend on the same workload from ~2.2x to ~2.05x.
+
+* Trampoline frame operations use primitive-typed signatures and a
+  per-thread frame pool. The frame helpers take `int` slot and function
+  indexes and `tcGetFn` returns `int` straight into the dispatch switch
+  (the backend knows their fixed signatures, so no Integer boxing or
+  unboxing survives on the hot path), and exhausted frames return to a
+  small thread-local pool instead of being reallocated on every
+  trampoline entry — frames and their argument arrays were ~15% of all
+  allocation when the compiler typechecks its own sources, since every
+  top-level call into a mutual-recursion group (e.g. `Name.compare`
+  from map lookups) enters the trampoline. Together with the frame
+  change this brings the self-hosted typecheck of the compiler sources
+  from ~390s to ~310-350s and the gap to the Chez backend on the same
+  workload from ~2.2x to ~1.8-1.9x.

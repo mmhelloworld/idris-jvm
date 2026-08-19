@@ -324,9 +324,25 @@ compiled to native loops (`markTailRecursion`), so this covers exactly
 the mutual groups. Interleaved stage-2 measurement: typecheck of the
 compiler sources 390–395 s → **353–370 s (~9% faster)**; the gap to
 Chez on the shared workload narrows from ~2.2× to ~2.05× (chez 173 s
-alongside the 353 s run). All 68 jvm golden tests pass; remaining
-trampoline residue is argument boxing (`Long.valueOf`/`toInt`), which a
-typed-frame variant could target later.
+alongside the 353 s run). All 68 jvm golden tests pass.
+
+Follow-up (`ae6ae33a`): the helpers got primitive-typed signatures (int
+indexes, `tcGetFn` returns int straight into the dispatch switch; the
+backend carries the fixed signatures in `runtimeClassFunctionType`) and
+frames come from a per-thread pool — re-profiling showed frames plus
+argument arrays at ~15% of allocation because every top-level call into
+a mutual group enters the trampoline (`Name.compare` once per map
+comparison). Result: typecheck 353–370 s → **311–347 s**, chez gap
+~1.8–1.9× (chez 174 s alongside the 311 s run). Bootstrap note:
+intermediate boots emitting the earlier all-Object helper descriptors
+cannot run against the primitive-only runtime — boot from the 0.8.4
+release, which predates the helpers.
+
+Remaining ranked targets from the post-frame profile: `CONS` at 20.7%
+of allocation (`getFnArgs` spine-building 6.1% + `reverseOnto` 3.6% —
+frontend-algorithmic), `Name.compare` ~8% inclusive (SortedMap
+comparisons), the termination checker's `sizeCompare` group ~7%, and
+lambda instantiation ~8%.
 
 ## Attack order
 

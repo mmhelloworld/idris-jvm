@@ -740,11 +740,28 @@ tailRecLoopFunctionName : Name
 tailRecLoopFunctionName = NS runtimeClassNamespace (UN $ Basic "tailRecFrame")
 
 -- Static helpers on the runtime class (the trampoline frame operations from
--- `Compiler.TailRec` and the loop itself) resolve by name to invokestatic
--- with an all-Object signature; they have no inferred function type.
+-- `Compiler.TailRec` and the loop itself) resolve by name to invokestatic;
+-- they have no inferred function type.
 isRuntimeClassFunction : Name -> Bool
 isRuntimeClassFunction (NS ns _) = ns == runtimeClassNamespace
 isRuntimeClassFunction _ = False
+
+-- Fixed signatures for the trampoline frame helpers, matching the primitive
+-- overloads in the runtime class: int-typed slot indexes and function
+-- indexes keep the hot loop free of Integer boxing, and `tcGetFn`'s int
+-- return feeds the `$tcOpt` integer switch without an unbox.
+export
+runtimeClassFunctionType : Name -> Maybe InferredFunctionType
+runtimeClassFunctionType (NS ns (UN (Basic function))) =
+  if ns /= runtimeClassNamespace then Nothing else case function of
+    "tcNewFrame" => Just $ MkInferredFunctionType inferredObjectType [IInt]
+    "tcSet" => Just $ MkInferredFunctionType inferredObjectType [inferredObjectType, IInt, inferredObjectType]
+    "tcSetFn" => Just $ MkInferredFunctionType inferredObjectType [inferredObjectType, IInt]
+    "tcGet" => Just $ MkInferredFunctionType inferredObjectType [inferredObjectType, IInt]
+    "tcGetFn" => Just $ MkInferredFunctionType IInt [inferredObjectType]
+    "tcDone" => Just $ MkInferredFunctionType inferredObjectType [inferredObjectType, inferredObjectType]
+    _ => Nothing
+runtimeClassFunctionType _ = Nothing
 
 -- Derive a typed callback signature from a literal lambda's own body for
 -- POLYMORPHIC callback slots (type arguments are erased in NamedCExp, so
@@ -1575,7 +1592,9 @@ mutual
                 pure IUnknown -- The type will not be used as it is in tail call position
     inferExprApp (NmApp fc (NmRef _ idrisName) args) = do
         let functionName = jvmName !getProgramName idrisName
-        mFunctionType <- findFunctionType functionName
+        mFunctionType <- case runtimeClassFunctionType idrisName of
+            Just helperType => pure (Just helperType)
+            Nothing => findFunctionType functionName
         retType <- case mFunctionType of
             Just functionType => pure $ returnType functionType
             Nothing => if isRuntimeClassFunction idrisName

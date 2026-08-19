@@ -845,9 +845,11 @@ parameters {auto c : Ref Ctxt Defs} {auto s : Ref Syn SyntaxInfo} {auto stateRef
       else do
         markCallSiteLine fc
         let jname = jvmName !getProgramName idrisName
-        functionType <- case !(findFunctionType jname) of
-            Just ty => pure ty
-            Nothing => pure $ MkInferredFunctionType inferredObjectType $ replicate (length args) inferredObjectType
+        functionType <- case runtimeClassFunctionType idrisName of
+            Just helperType => pure helperType
+            Nothing => case !(findFunctionType jname) of
+                Just ty => pure ty
+                Nothing => pure $ MkInferredFunctionType inferredObjectType $ replicate (length args) inferredObjectType
         let paramTypes = parameterTypes functionType
         if paramTypes == []
             then assembleNmAppNilArity isTailCall returnType idrisName

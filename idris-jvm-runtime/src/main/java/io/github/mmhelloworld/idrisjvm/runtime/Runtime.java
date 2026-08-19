@@ -4,6 +4,8 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
 import java.nio.channels.Channels;
+import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
@@ -40,10 +42,12 @@ public final class Runtime {
     }
 
     /**
-     * Mutable trampoline frame for mutually tail-recursive function groups. One frame is allocated
+     * Mutable trampoline frame for mutually tail-recursive function groups. One frame is acquired
      * per trampoline entry and reused across all iterations: {@code fn} selects the next function in
      * the group (0 = done, result in {@code args[0]}) and {@code args} carries its arguments. The
-     * single concrete class keeps every dispatch and argument read monomorphic.
+     * single concrete class keeps every dispatch and argument read monomorphic, and exhausted frames
+     * return to a small per-thread pool since entries (every top-level call into a mutual group) far
+     * outnumber the frames live at once.
      */
     public static final class TcFrame {
         public int fn;
@@ -54,25 +58,31 @@ public final class Runtime {
         }
     }
 
-    public static Object tcNewFrame(Object arity) {
-        return new TcFrame(Math.max(1, Conversion.toInt(arity)));
+    private static final int TC_FRAME_POOL_LIMIT = 64;
+    private static final ThreadLocal<ArrayDeque<TcFrame>> TC_FRAME_POOL =
+        ThreadLocal.withInitial(ArrayDeque::new);
+
+    public static Object tcNewFrame(int arity) {
+        var size = Math.max(1, arity);
+        var frame = TC_FRAME_POOL.get().pollLast();
+        return frame != null && frame.args.length >= size ? frame : new TcFrame(size);
     }
 
-    public static Object tcSet(Object frame, Object index, Object value) {
-        ((TcFrame) frame).args[Conversion.toInt(index)] = value;
+    public static Object tcSet(Object frame, int index, Object value) {
+        ((TcFrame) frame).args[index] = value;
         return frame;
     }
 
-    public static Object tcSetFn(Object frame, Object fn) {
-        ((TcFrame) frame).fn = Conversion.toInt(fn);
+    public static Object tcSetFn(Object frame, int fn) {
+        ((TcFrame) frame).fn = fn;
         return frame;
     }
 
-    public static Object tcGet(Object frame, Object index) {
-        return ((TcFrame) frame).args[Conversion.toInt(index)];
+    public static Object tcGet(Object frame, int index) {
+        return ((TcFrame) frame).args[index];
     }
 
-    public static Object tcGetFn(Object frame) {
+    public static int tcGetFn(Object frame) {
         return ((TcFrame) frame).fn;
     }
 
@@ -89,7 +99,14 @@ public final class Runtime {
         while (frame.fn != 0) {
             f.apply(frame);
         }
-        return frame.args[0];
+        var result = frame.args[0];
+        // clear before pooling so a parked frame does not pin the values it carried
+        Arrays.fill(frame.args, null);
+        var pool = TC_FRAME_POOL.get();
+        if (pool.size() < TC_FRAME_POOL_LIMIT) {
+            pool.offerLast(frame);
+        }
+        return result;
     }
 
     public static IdrisList getProgramArgs() {

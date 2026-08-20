@@ -70,3 +70,4 @@ classes/**
 # Compiler build profiling output
 profiling/results/
 profiling/history.csv
+profiling/workloads/

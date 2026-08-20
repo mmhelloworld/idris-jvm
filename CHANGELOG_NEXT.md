@@ -133,3 +133,10 @@ should target this file (`CHANGELOG_NEXT`).
   change this brings the self-hosted typecheck of the compiler sources
   from ~390s to ~310-350s and the gap to the Chez backend on the same
   workload from ~2.2x to ~1.8-1.9x.
+
+* The termination checker's `knownOr` combinator no longer re-executes
+  its first comparison on success: `case !x of Unknown => y; _ => x`
+  returned the action `x` itself, sequencing the whole (often recursive)
+  size comparison a second time whenever it produced a known result, and
+  `knownOr` calls nest so re-runs compounded. It now returns the
+  already-computed value.

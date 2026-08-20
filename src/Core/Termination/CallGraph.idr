@@ -151,7 +151,10 @@ mutual
         conIfGuarded tm = pure tm
 
   knownOr : Core SizeChange -> Core SizeChange -> Core SizeChange
-  knownOr x y = case !x of Unknown => y; _ => x
+  -- return the computed result: `_ => x` would sequence the action x a
+  -- second time, re-running the whole (often recursive) comparison whenever
+  -- it succeeded — and knownOr calls nest, so re-runs compounded
+  knownOr x y = case !x of Unknown => y; known => pure known
 
   plusLazy : Core SizeChange -> Core SizeChange -> Core SizeChange
   plusLazy x y = case !x of Smaller => pure Smaller; x => pure $ x |+| !y

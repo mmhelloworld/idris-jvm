@@ -91,34 +91,39 @@ entry points (`sum`, `product`, `length`, `elem`) for `List`.
 1. **`getProperty(int)` for field access** — every head/tail read is a
    megamorphic `invokeinterface IdrisObject.getProperty` plus an int switch,
    instead of `checkcast` + `getfield`. (Typed accessors on the
-   monomorphization branch address this.)
+   monomorphization branch address this.) — **partial**: done for user
+   ADT families, synthetic List/Maybe blocked (see below)
 2. **Nullary constructors allocate** — `new NIL(0)` per use instead of a
-   shared singleton (`Nil`, `Nothing`, `()` …).
+   shared singleton (`Nil`, `Nothing`, `()` …). — **done** (step 2)
 3. **`constructorId` is an instance field** in every generated constructor
    class though it is a per-class constant; `getConstructorId()` should
    return a literal, saving a field, a constructor arg, and 4+ bytes/object.
+   — **done** (step 2)
 4. **Boolean-as-int + `lookupswitch`** — comparisons call a Prelude function
    returning 0/1, then `lookupswitch {0,1}` on the result, often with a
    second internal booleanize-and-switch (`$lt$$lt_Ord_Int`). Emit
    `if_icmplt`/`ifeq` directly for known primitive comparisons; use `ifeq`
    rather than 2-case `lookupswitch`. Also shrinks bytecode, which matters
-   for JIT inlining budgets.
+   for JIT inlining budgets. — **done** (step 3)
 5. **`Integer`/`Nat` are `BigInteger` everywhere** — e.g. `String.length`
    returns `BigInteger`. A long-backed fast path with overflow promotion
    (the standard Scheme-style smallint scheme) would transform idiomatic
-   `Nat` code.
+   `Nat` code. — **done** (step 5)
 6. **Range/list construction** — `[1..n]` runs through
    `takeUntil`/`SnocList` appends (~30% of pipeline samples between
    `takeUntil$sp0` and `SnocList.<>>`). An intrinsic for `enumFromTo` on
-   `Int` (or fusion into the consumer) would help common code.
+   `Int` (or fusion into the consumer) would help common code. — **open**:
+   strict rewrite attempted and reverted (bimorphic dispatch, see below)
 7. **`MemoizedDelayed`** — reads go through a mutable `Delayed` field and a
    lambda indirection; the field is not final so the JIT cannot fold constant
    reads (`getstatic csegen + invokevirtual evaluate + checkcast` per use).
-   Lazy-holder-class-per-constant would allow constant folding.
+   Lazy-holder-class-per-constant would allow constant folding. — **done**
+   (thunk-read overhaul)
 8. **`Runtime.tailRec`** allocates a `TcContinue` constructor object per
-   iteration for mutual tail recursion.
+   iteration for mutual tail recursion. — **done** (trampoline frames,
+   `81b3368a`/`b118e1f1`)
 9. **`mod`/`div` zero checks** load `BigInteger.ZERO.intValue()` and call
-   Prelude `==` instead of `ifeq` (minor; mostly JIT-recoverable).
+   Prelude `==` instead of `ifeq` (minor; mostly JIT-recoverable). — **open**
 
 Step 5 is **implemented** (2026-08-12): `Integer`/`Nat` values are boxed
 `long`s while they fit in 64 bits, promoting to `BigInteger` on overflow
@@ -342,7 +347,12 @@ Remaining ranked targets from the post-frame profile: `CONS` at 20.7%
 of allocation (`getFnArgs` spine-building 6.1% + `reverseOnto` 3.6% —
 frontend-algorithmic), `Name.compare` ~8% inclusive (SortedMap
 comparisons), the termination checker's `sizeCompare` group ~7%, and
-lambda instantiation ~8%.
+lambda instantiation ~8%. The `sizeCompare` item was since fixed
+(`dd41240d`): `knownOr`'s fallthrough re-sequenced the whole comparison
+whenever it produced a known result, compounding down the recursion —
+real win but mostly below ambient noise on the full build. The others
+are consolidated in *Remaining optimizations* at the end of this
+document.
 
 ## Attack order
 
@@ -388,15 +398,72 @@ for long-range values. Result: `fib 38` went from 1.87 s to 0.20 s user time
 released compiler (identical output) and the full `tests/jvm` suite
 (`nat2fin`'s bytecode-pattern check updated to the new literal encoding).
 
-| Step | Change | Expected effect | Effort |
-|---|---|---|---|
-| 1 | Constant-fold `BI` literals to primitives; `BigInteger.valueOf` for the rest | ~10–15× on numeric code; helps everything incl. the self-hosted compiler | Small |
-| 2 | Singleton nullary constructors + constant `getConstructorId` | Allocation cut across all programs | Small |
-| 3 | Direct branches for primitive comparisons, drop double-booleanization | Modest CPU, big bytecode-size/inlining win | Medium |
-| 4 | Specialize `mapAppend`/`filterAppend`/`sum` like `foldl$sp0` | Kills the top boxing hotspot | Medium |
-| 5 | Long-backed Integer/Nat fast path | Large for idiomatic code | Large |
-| 6 | Typed constructor fields/accessors | Remaining boxing + dispatch | Large (monomorphization branch) |
+| Step | Change | Expected effect | Effort | Done |
+|---|---|---|---|---|
+| 1 | Constant-fold `BI` literals to primitives; `BigInteger.valueOf` for the rest | ~10–15× on numeric code; helps everything incl. the self-hosted compiler | Small | ✅ 2026-08-08 |
+| 2 | Singleton nullary constructors + constant `getConstructorId` | Allocation cut across all programs | Small | ✅ 2026-08-11 |
+| 3 | Direct branches for primitive comparisons, drop double-booleanization | Modest CPU, big bytecode-size/inlining win | Medium | ✅ 2026-08-11 |
+| 4 | Specialize `mapAppend`/`filterAppend`/`sum` like `foldl$sp0` | Kills the top boxing hotspot | Medium | ✅ 2026-08-12 (`sum` still dictionary-dispatched — see Hotspot 3) |
+| 5 | Long-backed Integer/Nat fast path | Large for idiomatic code | Large | ✅ 2026-08-12 |
+| 6 | Typed constructor fields/accessors | Remaining boxing + dispatch | Large (monomorphization branch) | ◑ Partial — user ADT families ✅ 2026-08-13; synthetic List/Maybe blocked on shape de-sharing |
+
+Landed beyond the original plan: thunk-read overhaul (2026-08-12),
+launcher tuning — ParallelGC + AppCDS (`fe5e2ccd`), reusable trampoline
+frames with typed helpers and per-thread pooling (`81b3368a`,
+`b118e1f1`), incremental narrowable-class-set maintenance (`6a581f8f`),
+termination-checker `sizeCompare` re-run fix (`dd41240d`), and the
+`profiling/` typecheck-workload + Chez-comparison harness (`f35b4d93`).
 
 Since the compiler is self-hosted on this backend, steps 1–4 also reduce
 compile times. The JMH harness under `benchmark/jmh` (`gc.alloc.rate.norm`)
 is the regression gate; steps 2 and 4 should show up directly as B/op drops.
+
+## Remaining optimizations (ranked)
+
+Ranked by the post-trampoline-frame JFR profile of the stage-2
+compiler-typechecks-itself workload (the remaining ~1.8–1.9× gap to
+Chez), plus the still-open generated-code items above. Measure with
+`profiling/profile-typecheck.sh` (cpu.md + alloc.md) and the JMH
+harness.
+
+1. **`CONS` allocation — 20.7% of sampled allocation.** Largest single
+   share. Known drivers: `getFnArgs` builds a spine list per
+   application inspection (6.1%) and `reverseOnto` (3.6%). These are
+   frontend-algorithmic — avoid materializing spines (accumulate
+   arity/iterate in place) rather than making cells cheaper.
+2. **`Name.compare` — ~8% inclusive.** Every `SortedMap`/`SortedSet`
+   operation on names pays a structural comparison. Ideas: cache a
+   comparison key (interned id or precomputed string form) on `Name`,
+   or move hot name maps to hashing. Frontend change.
+3. **Lambda instantiation — ~8%.** Closure allocation in the
+   evaluator/elaborator. Levers: more CSE-lifted lambda inlining in
+   the optimizer, arity-specialized closure classes, or reducing
+   closure creation in hot frontend paths.
+4. **De-share the intrinsic constructor shapes** (frontend change) so
+   synthetic List/Maybe families can be typed. `calcListy` assigns the
+   CONS shape to any two-argument constructor including pairs, which
+   blocks both typed list tails (`CONS$I$L` with a `List$X` tail slot)
+   and return-type refinement for prelude TCons. This is the gate for
+   completing step 6 — and it unblocks item 5 below.
+5. **Strict ranges / list construction** (blocked on item 4).
+   `[1..n]` still runs the `Stream`/`takeUntil`/`SnocList` pipeline
+   (91% of the listbig profile post-thunk-overhaul). The strict
+   rewrite was correct but reverted: mixing spec cells into
+   natural-cell consumer chains made every `getProperty` site
+   bimorphic (sievePrimes −23%). Needs consumer-side typing first, or
+   an `enumFromTo` intrinsic that emits cells matching the consumer.
+6. **Interface dictionaries constructed per call (Hotspot 3).**
+   `sum xs` still builds `MkFoldable` + 6 closures per call-site
+   evaluation and dispatches boxed. CSE constant dictionaries into
+   memoized `csegen` constants consistently; specialize `sum`/
+   `product`/`length`/`elem` for `List` like `foldl$sp0`.
+7. **`ConstantDynamic` for huge `BigInteger` literals** — literals
+   beyond long range still parse a string per evaluation; a condy
+   `ldc` would parse once per class. Minor, small effort.
+8. **`mod`/`div` zero checks** still load `BigInteger.ZERO.intValue()`
+   and call Prelude `==` instead of `ifeq`. Minor; mostly
+   JIT-recoverable.
+
+Not worth revisiting (measured and rejected): box-caching
+`getProperty` on spec cells (+22% B/op on matMul), strict ranges as-is
+(bimorphic dispatch), SerialGC, capping the JIT at C1.

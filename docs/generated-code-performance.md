@@ -426,11 +426,40 @@ Chez), plus the still-open generated-code items above. Measure with
 `profiling/profile-typecheck.sh` (cpu.md + alloc.md) and the JMH
 harness.
 
-1. **`CONS` allocation — 20.7% of sampled allocation.** Largest single
-   share. Known drivers: `getFnArgs` builds a spine list per
-   application inspection (6.1%) and `reverseOnto` (3.6%). These are
-   frontend-algorithmic — avoid materializing spines (accumulate
-   arity/iterate in place) rather than making cells cheaper.
+1. **`CONS` allocation — DONE (20260831), 20.7% → cut by ~40%
+   absolute.** JFR caller attribution (20260820 run) showed the share
+   was *not* diffuse — three owners covered most of it, each fixed:
+   - `getFnArgs` spine-building (6.9% of all allocation) was 97%
+     termination checker: `sizeCompareTyCon` 5.1% + `sizeCompareCon`
+     1.7% built two throwaway arg lists per size comparison,
+     recursively. Fixed by lockstep spine comparison
+     (`sizeCompareSpines`/`sizeCompareConSpine` in
+     `Core/Termination/CallGraph.idr`) — walk both `App` chains
+     directly, heads via the allocation-free `getFn`. Now 0.07%.
+   - `reverseOnto` (3.7%) was mostly `Namespace.isParentOf` (2.1%),
+     because base's `isSuffixOfBy` was `isPrefixOfBy p (reverse left)
+     (reverse right)` — two full copies per name-visibility check.
+     Fixed allocation-free via length + `drop` + `isPrefixOfBy`
+     (drop shares the tail). Now 1.7% (the residual is
+     `tailRecAppend`/`Core.traverse'`/lexer callers).
+   - `mapAppend` + `SnocList.<>>` (2.3%) was mostly `Eval.evalMeta`'s
+     `map (EmptyFC,) args ++ stk`: snoc-accumulate, convert, then copy
+     again for `++`. Fixed with a hand-fused one-pass `stackArgsOnto`
+     (same trick as the `closeArgs` specialization above it), leaving
+     only the ~1% of cells that actually escape into the stack.
+
+   Measured on the typecheck workload (stage-2 build, 20260831
+   profile): total sampled allocation 425 → 392 GiB (−8%), `CONS`
+   class 23.7% → 15.5% of the smaller total (−40% absolute bytes).
+   Interleaved timing (one clean round, elevated ambient load —
+   ratios comparable, absolutes inflated): chez 236s vs JVM 375s =
+   **1.59×**, down from the 1.8–1.9× band.
+   The `CallGraph` lambda and `Right$I`/`Right` (Core-monad wrapper)
+   shares were unchanged in absolute bytes — the monadic structure of
+   `sizeCompare` survives, so those now top the by-site table and
+   belong to items 2/3 below. The remaining `CONS` residue is a long
+   tail (biggest single site: `reverseOnto` 1.7%). All three fixes
+   are shared-frontend/libs changes — upstream-PR candidates.
 2. **`Name.compare` — ~8% inclusive.** Every `SortedMap`/`SortedSet`
    operation on names pays a structural comparison. Ideas: cache a
    comparison key (interned id or precomputed string form) on `Name`,

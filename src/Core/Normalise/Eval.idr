@@ -259,11 +259,15 @@ parameters (defs : Defs) (topopts : EvalOpts)
                FC -> Name -> Int -> List (Closure free) ->
                Stack free -> Core (NF free)
     evalMeta env fc nm i args stk
-        = let args' = if isNil stk then map (EmptyFC,) args
-                         else map (EmptyFC,) args ++ stk
-                        in
-              evalRef env True fc Func (Resolved i) args'
-                          (NApp fc (NMeta nm i args) stk)
+        = evalRef env True fc Func (Resolved i) (stackArgsOnto args stk)
+                  (NApp fc (NMeta nm i args) stk)
+      where
+        -- Hand-fused `map (EmptyFC,) args ++ stk` (same reasoning as
+        -- closeArgs above): one pass, no snoc accumulator from the
+        -- tail-recursive map and no intermediate list for the append
+        stackArgsOnto : List (Closure free) -> Stack free -> Stack free
+        stackArgsOnto [] stk = stk
+        stackArgsOnto (a :: as) stk = (EmptyFC, a) :: stackArgsOnto as stk
 
     -- The commented out logging here might still be useful one day, but
     -- evalRef is used a lot and even these tiny checks turn out to be

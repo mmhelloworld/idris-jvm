@@ -168,7 +168,7 @@ mutual
 
   sizeCompareCon : {auto defs : Defs} -> Nat -> Term vars -> Term vars -> Core Bool
   sizeCompareTyCon : {auto defs : Defs} -> Nat -> Term vars -> Term vars -> Core Bool
-  sizeCompareConArgs : {auto defs : Defs} -> Nat -> Term vars -> List (Term vars) -> Core Bool
+  sizeCompareConSpine : {auto defs : Defs} -> Nat -> Term vars -> Term vars -> Core Bool
   sizeCompareApp : {auto defs : Defs} -> Nat -> Term vars -> Term vars -> Core SizeChange
 
   sizeCompare fuel s (Erased _ (Dotted t)) = sizeCompare fuel s t
@@ -204,47 +204,50 @@ mutual
           then pure Smaller
           else knownOr (sizeCompareApp fuel s t) (pure $ if sizeEq s t then Same else Unknown)
 
-  sizeCompareProdConArgs : {auto defs : Defs} -> Nat -> List (Term vars) -> List (Term vars) -> Core SizeChange
-  sizeCompareProdConArgs _ [] [] = pure Same
-  sizeCompareProdConArgs fuel (x :: xs) (y :: ys) =
-    case !(sizeCompare fuel x y) of
+  -- Pairwise product of s's and t's argument spines, walking both App
+  -- chains in lockstep rather than materializing argument lists; the
+  -- comparison runs last-argument-first, which is fine because |*| is
+  -- commutative. Unknown if the spines have different lengths.
+  sizeCompareSpines : {auto defs : Defs} -> Nat -> (s, t : Term vars) -> Core SizeChange
+  sizeCompareSpines fuel (App _ g b) (App _ f a) =
+    case !(sizeCompare fuel b a) of
       Unknown => pure Unknown
-      t => (t |*|) <$> sizeCompareProdConArgs fuel xs ys
-  sizeCompareProdConArgs _ _ _ = pure Unknown
+      r => (r |*|) <$> sizeCompareSpines fuel g f
+  sizeCompareSpines _ (App {}) _ = pure Unknown
+  sizeCompareSpines _ _ (App {}) = pure Unknown
+  sizeCompareSpines _ _ _ = pure Same
 
   sizeCompareTyCon fuel s t =
-    let (f, args) = getFnArgs t in
-    let (g, args') = getFnArgs s in
-    case f of
-      Ref _ (TyCon {}) cn => case g of
+    case getFn t of
+      Ref _ (TyCon {}) cn => case getFn s of
         Ref _ (TyCon {}) cn' => if cn == cn'
-            then (Unknown /=) <$> sizeCompareProdConArgs fuel args' args
+            then (Unknown /=) <$> sizeCompareSpines fuel s t
             else pure False
         _ => pure False
       _ => pure False
 
   sizeCompareCon fuel s t
-      = let (f, args) = getFnArgs t in
-        case f of
-             Ref _ (DataCon t a) cn =>
+      = case getFn t of
+             Ref _ (DataCon {}) cn =>
                 -- if s is smaller or equal to an arg, then it is smaller than t
-                if !(sizeCompareConArgs (minus fuel 1) s args) then pure True
-                else let (g, args') = getFnArgs s in
-                    case (fuel, g) of
-                        (S k, Ref _ (DataCon t' a') cn') => do
+                if !(sizeCompareConSpine (minus fuel 1) s t) then pure True
+                else case (fuel, getFn s) of
+                        (S k, Ref _ (DataCon {}) cn') => do
                                 -- if s is a matching DataCon, applied to same number of args,
-                                -- no Unknown args, and at least one Smaller
-                                if cn == cn' && length args == length args'
-                                  then (Smaller ==) <$> sizeCompareProdConArgs k args' args
+                                -- no Unknown args, and at least one Smaller (a length
+                                -- mismatch comes back Unknown, failing the Smaller check)
+                                if cn == cn'
+                                  then (Smaller ==) <$> sizeCompareSpines k s t
                                   else pure False
                         _ => pure $ False
              _ => pure False
 
-  sizeCompareConArgs _ s [] = pure False
-  sizeCompareConArgs fuel s (t :: ts)
-      = case !(sizeCompare fuel s t) of
-          Unknown => sizeCompareConArgs fuel s ts
+  -- whether s is smaller than (or as small as) some argument in t's spine
+  sizeCompareConSpine fuel s (App _ f a)
+      = case !(sizeCompare fuel s a) of
+          Unknown => sizeCompareConSpine fuel s f
           _ => pure True
+  sizeCompareConSpine _ _ _ = pure False
 
   sizeCompareApp fuel (App _ f _) t = sizeCompare fuel f t
   sizeCompareApp _ _ t = pure Unknown
@@ -257,14 +260,13 @@ mutual
   sizeCompareAsserted _ Nothing _ = pure Unknown
 
   -- if the argument is an 'assert_smaller', return the thing it's smaller than
+  -- (a Ref applied to exactly four arguments, the third of which is `b`)
   asserted : Name -> Term vars -> Maybe (Term vars)
-  asserted aSmaller tm
-       = case getFnArgs tm of
-              (Ref _ nt fn, [_, _, b, _])
-                   => if fn == aSmaller
-                         then Just b
-                         else Nothing
-              _ => Nothing
+  asserted aSmaller (App _ (App _ (App _ (App _ (Ref _ _ fn) _) _) b) _)
+       = if fn == aSmaller
+            then Just b
+            else Nothing
+  asserted _ _ = Nothing
 
   -- Calculate the size change for the given argument.  i.e., return the
   -- relative size of the given argument to each entry in 'pats'.

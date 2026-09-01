@@ -827,7 +827,12 @@ suffixOfBy match left right
 public export
 isSuffixOfBy : (eq : a -> b -> Bool) ->
                (left : List a) -> (right : List b) -> Bool
-isSuffixOfBy p left right = isPrefixOfBy p (reverse left) (reverse right)
+isSuffixOfBy p left right
+    = let ll = length left
+          lr = length right
+      -- after dropping, the lists have equal length, so prefix = suffix;
+      -- unlike matching reversed copies, this allocates nothing
+      in ll <= lr && isPrefixOfBy p left (drop (minus lr ll) right)
 
 ||| The isSuffixOf function takes two lists and returns True iff the first list
 ||| is a suffix of the second when comparing elements using `==`.

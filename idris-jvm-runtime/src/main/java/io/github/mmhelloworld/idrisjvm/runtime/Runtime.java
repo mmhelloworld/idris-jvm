@@ -50,8 +50,8 @@ public final class Runtime {
      * outnumber the frames live at once.
      */
     public static final class TcFrame {
-        public int fn;
-        public final Object[] args;
+        private int fn;
+        private final Object[] args;
 
         public TcFrame(int arity) {
             this.args = new Object[arity];

@@ -132,7 +132,7 @@ tolerated). A new runtime `IdrisInteger` class carries arithmetic
 (overflow-checked long fast paths), comparisons, casts, canonical
 hashing for `case` dispatch, and FFI conversion at `BigInteger`-declared
 boundaries. A Nat microbenchmark (tail-recursive counting, naive Nat fib,
-big-Integer multiply chain) runs 3.2x faster end to end (0.79s → 0.25s
+big-Integer multiply chain) runs 3.2x faster end-to-end (0.79s → 0.25s
 user, interleaved isolated runs); the stage-2 self-build stays green
 and the base-library build improves to ~47s (0.8.5 control: 52s).
 NOTE: `jvm/integers` golden-test duration is NOT a performance witness —
@@ -323,7 +323,7 @@ call), and ~9% leaf time to their megamorphic `getProperty` reads.
 trampoline entry — int function-index plus argument array, overwritten
 in place each iteration via static helpers that resolve by name with no
 backend support — and the `$tcOpt` dispatcher switches on the integer
-index instead of constructor ids. Constructor machinery (and the
+index instead of constructor IDs. Constructor machinery (and the
 specialisation plan) never sees frames. Self tail recursion was already
 compiled to native loops (`markTailRecursion`), so this covers exactly
 the mutual groups. Interleaved stage-2 measurement: typecheck of the
@@ -371,11 +371,11 @@ Debug aid: `IDRIS_JVM_DEBUG=<name>` prints each plan site's logged vs
 natural types.
 
 Step 2 is **implemented** (2026-08-11): nullary constructors are shared
-singletons, constructor ids are per-class constants (field and `<init>`
+singletons, constructor IDs are per-class constants (field and `<init>`
 parameter removed). Tail-recursion continuations (`TcContinue_<arity>`,
 one name per arity with the tag selecting the continuation) are renamed to
 per-tag classes by `uniquifyTcContinue` in the optimizer, and codegen now
-fails the build if a constructor class is ever reused with a different id.
+fails the build if a constructor class is ever reused with a different ID.
 matMul allocation drops 19.2% B/op vs the 0.8.4 release.
 
 Step 3 is **implemented** (2026-08-11): `assembleBranch` lowers 1–2 case
@@ -462,7 +462,7 @@ harness.
    are shared-frontend/libs changes — upstream-PR candidates.
 2. **`Name.compare` — ~8% inclusive.** Every `SortedMap`/`SortedSet`
    operation on names pays a structural comparison. Ideas: cache a
-   comparison key (interned id or precomputed string form) on `Name`,
+   comparison key (interned ID or precomputed string form) on `Name`,
    or move hot name maps to hashing. Frontend change.
 3. **Lambda instantiation — ~8%.** Closure allocation in the
    evaluator/elaborator. Levers: more CSE-lifted lambda inlining in

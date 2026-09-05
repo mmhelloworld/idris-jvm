@@ -18,30 +18,53 @@ public final class Conversion {
     private Conversion() {
     }
 
+    // The converters below take an Object because the value comes from a generic slot (constructor field,
+    // closure argument, trampoline frame) whose static type the code generator only knows as Object. They are
+    // deliberately written as instanceof chains ordered by observed frequency rather than as pattern switches:
+    // on JDK 21 a pattern switch over Object compiles to a SwitchBootstraps.typeSwitch invokedynamic, which
+    // costs about a third more per call than a plain class check on the fast path.
+
+    /**
+     * Unboxes an Idris value living in a generic slot to a JVM {@code int}. Idris {@code Int}, {@code Bool},
+     * enumeration constructors and {@code Char} values computed in int positions are boxed as {@link Integer};
+     * {@code Char} values produced in char positions are boxed as {@link Character}; primitive comparisons
+     * stored generically are boxed as {@link Boolean}.
+     */
     public static int toInt(Object that) {
-      return switch (that) {
-        case Number number -> number.intValue();
-        case Character c -> c;
-        case Boolean b -> boolToInt1(b);
-        default -> throw new NumberFormatException(format("Unable to convert value %s of type %s to int", that, that.getClass()));
-      };
+        if (that instanceof Integer integer) {
+            return integer;
+        }
+        if (that instanceof Character character) {
+            return character;
+        }
+        if (that instanceof Boolean bool) {
+            return boolToInt1(bool);
+        }
+        if (that instanceof Number number) {
+            return number.intValue();
+        }
+        throw new NumberFormatException(format("Unable to convert value %s of type %s to int", that, that.getClass()));
     }
 
     public static char toChar(Object that) {
-      return switch (that) {
-        case Character c -> c;
-        case Integer i -> (char) (int) i;
-        default -> throw new IllegalArgumentException(format("Unable to convert value %s of type %s to char", that, that.getClass()));
-      };
+        if (that instanceof Character character) {
+            return character;
+        }
+        if (that instanceof Integer integer) {
+            return (char) (int) integer;
+        }
+        throw new IllegalArgumentException(format("Unable to convert value %s of type %s to char", that, that.getClass()));
     }
 
     public static boolean toBoolean(Object that) {
-      return switch (that) {
-        case Boolean b -> b;
-        case Integer i -> intToBoolean1(i);
-        default -> throw new IllegalArgumentException(format("Unable to convert value %s of type %s to boolean",
-          that, that.getClass()));
-      };
+        if (that instanceof Integer integer) {
+            return intToBoolean1(integer);
+        }
+        if (that instanceof Boolean bool) {
+            return bool;
+        }
+        throw new IllegalArgumentException(format("Unable to convert value %s of type %s to boolean",
+            that, that.getClass()));
     }
 
     public static boolean toBoolean1(Object that) {
@@ -65,12 +88,14 @@ public final class Conversion {
     }
 
     public static float toFloat(Object that) {
-      return switch (that) {
-        case Double v -> v.floatValue();
-        case Float v -> v;
-        default -> throw new IllegalArgumentException(format("Unable to convert value %s of type %s to float",
-          that, that.getClass()));
-      };
+        if (that instanceof Double doubleValue) {
+            return doubleValue.floatValue();
+        }
+        if (that instanceof Float floatValue) {
+            return floatValue;
+        }
+        throw new IllegalArgumentException(format("Unable to convert value %s of type %s to float",
+            that, that.getClass()));
     }
 
     public static BigInteger toInteger(String value) {
@@ -85,13 +110,17 @@ public final class Conversion {
     }
 
     public static BigInteger toInteger(Object value) {
-      return switch (value) {
-        case BigInteger bigInteger -> bigInteger;
-        case Integer i -> BigInteger.valueOf(i);
-        case Long l -> BigInteger.valueOf(l);
-        default -> throw new IllegalArgumentException(format("Unable to convert value %s of type %s to BigInteger",
-          value, value.getClass()));
-      };
+        if (value instanceof BigInteger bigInteger) {
+            return bigInteger;
+        }
+        if (value instanceof Long longValue) {
+            return BigInteger.valueOf(longValue);
+        }
+        if (value instanceof Integer integer) {
+            return BigInteger.valueOf(integer);
+        }
+        throw new IllegalArgumentException(format("Unable to convert value %s of type %s to BigInteger",
+            value, value.getClass()));
     }
 
     public static int toInt(String value) {

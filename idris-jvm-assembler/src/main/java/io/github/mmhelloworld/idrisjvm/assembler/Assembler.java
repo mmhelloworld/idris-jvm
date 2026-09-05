@@ -631,9 +631,9 @@ public final class Assembler {
         interfaceName, null, "java/lang/Object",
         new String[]{"io/github/mmhelloworld/idrisjvm/runtime/IdrisObject"});
       interfaceClassWriter.visitSource(format("IdrisGenerated$%s.idr", interfaceName.replaceAll("/", "\\$")), null);
-      for (var accessor : accessorUnion(memberShapes).entrySet()) {
-        interfaceClassWriter.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, accessor.getKey(),
-          "()" + accessor.getValue(), null, null).visitEnd();
+      for (var accessor : accessorUnion(memberShapes)) {
+        interfaceClassWriter.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, accessor.name(),
+          "()" + accessor.descriptor(), null, null).visitEnd();
       }
       interfaceClassWriter.visitEnd();
       cws.put(interfaceName, interfaceClassWriter);
@@ -659,13 +659,20 @@ public final class Assembler {
     return slots;
   }
 
-  // Union of (accessorName -> returnDescriptor) across member shapes.
-  private static java.util.Map<String, String> accessorUnion(List<String> memberShapes) {
-    var union = new java.util.LinkedHashMap<String, String>();
+  /** A typed slot accessor of a family interface: its method name and return descriptor. */
+  private record Accessor(String name, String descriptor) {
+  }
+
+  // Union of slot accessors across member shapes, keyed by BOTH name and descriptor. Two members can
+  // type the same slot index differently (a family-refined reference slot in one shape, plain Object
+  // in another), and every constructor implements the accessor of its own shape, so each variant must
+  // be declared or an interface call typed against the undeclared variant fails with NoSuchMethodError.
+  private static java.util.Set<Accessor> accessorUnion(List<String> memberShapes) {
+    var union = new java.util.LinkedHashSet<Accessor>();
     for (String shape : memberShapes) {
       var slots = splitDescriptors(shape);
       for (int i = 0; i < slots.size(); i++) {
-        union.putIfAbsent(accessorNameFor(slots.get(i), i), slots.get(i));
+        union.add(new Accessor(accessorNameFor(slots.get(i), i), slots.get(i)));
       }
     }
     return union;
@@ -1017,13 +1024,14 @@ public final class Assembler {
       // implements declare its spec siblings' accessors; provide unboxing
       // implementations over the Object-typed fields so interface-accessor
       // reads are carrier-safe under mixed spec/natural values.
-      var bridged = new java.util.HashSet<String>();
+      var bridged = new java.util.HashSet<Accessor>();
       for (String shape : accessorShapes) {
         var slots = splitDescriptors(shape);
         for (int i = 0; i < slots.size() && i < constructorParameterCount; i++) {
-          String accessorName = accessorNameFor(slots.get(i), i);
-          if (bridged.add(accessorName)) {
-            visitNaturalAccessorBridge(newClassWriter, newClassName, accessorName, slots.get(i), i);
+          var accessor = new Accessor(accessorNameFor(slots.get(i), i), slots.get(i));
+          // keyed by name AND descriptor: sibling shapes may refine the same slot differently
+          if (bridged.add(accessor)) {
+            visitNaturalAccessorBridge(newClassWriter, newClassName, accessor.name(), accessor.descriptor(), i);
           }
         }
       }

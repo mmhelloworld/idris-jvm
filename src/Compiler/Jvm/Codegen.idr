@@ -3171,16 +3171,27 @@ preRegisterConstructorSpecs plan = do
     shapeOf : SpecialisedConstructor -> String
     shapeOf sc = concat (getJvmTypeDescriptor <$> sc.fieldTypes)
 
-    memberShapesOf : List SpecialisedConstructor -> String -> List String
-    memberShapesOf entries tconClassName =
-      nub $ map shapeOf $ filter (\sc => sc.tconClassName == tconClassName
-                                          || (sc.tconClassName == "" && sc.tconFamilyBase /= "")) entries
+    -- Members of an instantiation interface: the specs typed at exactly
+    -- that instantiation, plus the under-determined specs of the SAME
+    -- TCon (they `implements` every active instantiation of their base).
+    -- Under-determined specs of other TCons are not members — their
+    -- shapes would only add unrelated accessor declarations.
+    memberShapesOf : SortedMap String (List String) -> List SpecialisedConstructor -> String -> List String
+    memberShapesOf byBase entries tconClassName =
+      nub $ map shapeOf $ filter isMember entries
+      where
+        isMember : SpecialisedConstructor -> Bool
+        isMember sc =
+             sc.tconClassName == tconClassName
+          || (sc.tconClassName == "" && sc.tconFamilyBase /= ""
+              && elem tconClassName (fromMaybe [] (SortedMap.lookup sc.tconFamilyBase byBase)))
 
     createIface : List SpecialisedConstructor -> String -> Core ()
     createIface entries tconClassName = do
       tconAsm <- coreLift $ AsmState.fromJavaName (Jqualified tconClassName "<clinit>")
       tconRef <- newRef AsmState tconAsm
-      createIdrisTypeConstructorInterface tconClassName (memberShapesOf entries tconClassName)
+      createIdrisTypeConstructorInterface tconClassName
+        (memberShapesOf (activesByBase entries) entries tconClassName)
 
     registerClass : SortedMap String (List String) -> SpecialisedConstructor -> Core ()
     registerClass byBase (MkSpecialisedCon _ _ tag _ fieldTypes specClassName tconClassName tconFamilyBase) = do

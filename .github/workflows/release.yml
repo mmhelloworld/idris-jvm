@@ -20,6 +20,8 @@ jobs:
   release:
     name: "Release"
     runs-on: "ubuntu-latest"
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -79,11 +81,13 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Publish to Github
-        uses: "marvinpinto/action-automatic-releases@latest"
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: latest
-          prerelease: false
-          title: "Release ${{ github.event.inputs.release-version }}"
-          files: |
+        # release:prepare already created and pushed the v<version> tag, so
+        # attach the zip to that tag instead of recreating a rolling "latest"
+        # tag, which replaced the previous release on every run.
+        run: |
+          gh release create "v${{ github.event.inputs.release-version }}" \
+            --title "Release ${{ github.event.inputs.release-version }}" \
+            --notes "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for the changes in this release." \
             idris-jvm-compiler/target/idris2-*.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

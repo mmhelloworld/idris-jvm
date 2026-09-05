@@ -1893,10 +1893,36 @@ namespace TermType
       | Nothing => coreLift $ printLn $ "Missing type for " ++ show name
     coreLift $ printLn $ show name ++ "(" ++ show conInfo ++ ")" ++ ": " ++ show ty
 
+  -- An enumeration is a data type whose constructors all carry the
+  -- frontend's `ENUM` flag (`TTImp.ProcessData.calcEnum`: every
+  -- constructor is nullary).  `Compiler.Opts.Constructor` already lowers
+  -- such constructors to `B8`/`B16`/`B32` tags and their case trees to
+  -- constant switches, so at the JVM level an enumeration value IS an
+  -- int — only the declaration-driven signature still said Object, which
+  -- boxed every `Ordering`-like result on the way out of a function and
+  -- unboxed it again at every consumer.
+  isEnumType : {auto c : Ref Ctxt Defs} -> Name -> Core Bool
+  isEnumType tyName = do
+    defs <- get Ctxt
+    Just (TCon _ _ _ _ _ (Just dcons@(_ :: _)) _) <- lookupDefExact tyName (gamma defs)
+      | _ => pure False
+    allM (isEnumCon defs) dcons
+   where
+    isEnumFlag : DefFlag -> Bool
+    isEnumFlag (ConType (ENUM _)) = True
+    isEnumFlag _ = False
+
+    isEnumCon : Defs -> Name -> Core Bool
+    isEnumCon defs dcon = do
+      Just gdef <- lookupCtxtExact dcon (gamma defs)
+        | Nothing => pure False
+      pure $ any isEnumFlag (flags gdef)
+
   getConstructorType : {auto c : Ref Ctxt Defs} -> Name -> Core InferredType
   getConstructorType name =
     if isBoolTySpec name then pure IInt
     else if name == preludetypes "Nat" then pure inferredObjectType
+    else if !(isEnumType name) then pure IInt
     else pure inferredObjectType
 
   mutual
@@ -2508,6 +2534,8 @@ inferDef = do
         log  <- callSiteLog <$> getState
         plan <- getSpecialisationPlan
         let rewritten = rewriteSpecCalls log plan expr
+        when (shouldDebugFunction jname) $ coreLift $
+          printLn "[rewritten] \{show jname}: \{showNamedCExp 0 rewritten}"
         let function' = { optimizedBody := rewritten } function
         setCurrentFunction function'
         coreLift $ addFunction jname function'

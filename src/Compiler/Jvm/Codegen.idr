@@ -4317,6 +4317,53 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable roots =
               fresh = filter (\x => not (SortedSet.contains x visited)) nbrs
           in go (fresh ++ fs) (foldl (\v, x => SortedSet.insert x v) visited fresh)
 
+    -- A parent name is drained when its natural OR any of its specs is
+    -- live (`gatherFor` drains both from the parent).
+    isLiveNode : SortedSet Name -> Name -> Bool
+    isLiveNode live n =
+      SortedSet.contains n live
+      || any (\sp => SortedSet.contains sp.name live) (fromMaybe [] (SortedMap.lookup n plan))
+
+    sameSet : SortedSet Name -> SortedSet Name -> Bool
+    sameSet xs ys = SortedSet.toList xs == SortedSet.toList ys
+
+    verificationBudget : Nat
+    verificationBudget = 4
+
+    -- Verification after the incremental loop converges.  Its type-ripple
+    -- gate (`dirtyFromTypes` is dropped in a round with an empty `delta`)
+    -- means a caller's last drain can predate its callee's FINAL inferred
+    -- type, so the rewrite decisions recorded in `refsByFn` (spec call vs
+    -- natural call) may differ from what final assembly — which re-infers
+    -- every function with the converged state — actually emits.  A natural
+    -- judged dead here but still called there is a NoSuchMethodError at
+    -- runtime (seen on `checkBindVar$idrisjvm$extr1` in a stage-2 build).
+    -- So re-drain every live function with the converged plans and
+    -- natural-live set, recompute the reachability closure from the roots
+    -- over the fresh refs, and repeat while a pass still changes a type,
+    -- the live set or the natural-live set: the last pass then produces
+    -- exactly the inference final assembly reproduces.  The budget bounds
+    -- the work; on exhausting it, keep the UNION of the live sets — a
+    -- superset only emits an extra natural method, never drops a called one.
+    verify : Nat -> (narrowables : SortedSet String) -> SortedSet Name
+          -> SortedMap Name (List (Name, List InferredType)) -> SortedMap Name (SortedSet Name)
+          -> SortedSet Name -> Core (SortedSet Name, SortedSet Name)
+    verify Z _ current _ _ liveFns = pure (current, liveFns)
+    verify (S k) narrowables current sitesByFn refsByFn liveFns = do
+      let names = filter (isLiveNode liveFns) reachable
+      (nodes, typeChanged) <- onePass narrowables current names
+      let sitesByFn' = foldl (\m, (node, sites, _) => SortedMap.insert node sites m) sitesByFn nodes
+      let refsByFn'  = foldl (\m, (node, _, refs) => SortedMap.insert node refs m) refsByFn nodes
+      let liveFns' = growReachable roots refsByFn' (SortedSet.toList roots)
+      let contribSites = SortedSet.toList liveFns' >>= \n => fromMaybe [] (SortedMap.lookup n sitesByFn')
+      let merged = SortedSet.union current (SortedSet.fromList (mapMaybe needsNatural contribSites))
+      let stable = isNil typeChanged && sameSet merged current && sameSet liveFns' liveFns
+      if stable
+        then pure (current, liveFns)
+        else if k == Z
+          then pure (merged, SortedSet.union liveFns liveFns')
+          else verify k narrowables merged sitesByFn' refsByFn' liveFns'
+
     -- Worklist fixpoint with PERSISTENT per-node state, processed
     -- INCREMENTALLY.  Draining re-runs only dirty functions: (a) one whose
     -- referenced constructor became natural-live (its `inferConCaseExpr`
@@ -4341,7 +4388,7 @@ computeNaturalConsLive defs stateRefs plan conPlan reachable roots =
         -> SortedSet Name -> Core (SortedSet Name, SortedSet Name)
     loop narrowables revDeps dirty current sitesByFn refsByFn liveFns =
       case SortedSet.toList dirty of
-        [] => pure (current, liveFns)
+        [] => verify verificationBudget narrowables current sitesByFn refsByFn liveFns
         _ => do
           let names = filter (\n => SortedSet.contains n dirty) reachable
           (nodes, typeChanged) <- onePass narrowables current names

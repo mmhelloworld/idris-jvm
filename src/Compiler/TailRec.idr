@@ -374,10 +374,30 @@ convertTcGroup loop g@(MkTcGroup gindex fs) =
       branchesAndFunctions  = map (conAlt g) functions
       branches = map fst branchesAndFunctions
       tailRecOptimizedFunctions = map snd branchesAndFunctions
-   in (splitTcFun gindex branches ++ tailRecOptimizedFunctions) ++ map toFun functions
+   in (loopFunction :: splitTcFun gindex branches ++ tailRecOptimizedFunctions) ++ map toFun functions
 
   where tcFunName : Name
         tcFunName = tcFunction gindex
+
+        tcLoopName : Name
+        tcLoopName = MN "$tcLoop" gindex
+
+        -- The trampoline loop is emitted PER GROUP rather than shared in the
+        -- runtime: `while (fn != 0) dispatch(frame)` becomes a `$idrisTailRec`
+        -- self-loop (lowered to a jvm goto) around a direct call to this
+        -- group's dispatcher.  A shared runtime loop calls the dispatcher
+        -- through one `Function.apply` site that sees every group in the
+        -- program — megamorphic, never inlined — and each entry allocated a
+        -- closure over the dispatcher to pass in.  `tcResult` reads slot 0,
+        -- clears the frame and returns it to the pool.
+        loopFunction : Function
+        loopFunction =
+          let frame = NmLocal EmptyFC tcArgName
+              dispatch = NmApp EmptyFC (NmRef EmptyFC tcFunName) [frame]
+              body = NmConstCase EmptyFC (tcHelperApp "tcGetFn" [frame])
+                       [MkNConstAlt (I 0) (tcHelperApp "tcResult" [frame])]
+                       (Just (NmApp EmptyFC (NmRef EmptyFC idrisTailRecName) [dispatch]))
+          in MkFunction tcLoopName emptyFC [tcArgName] body
 
         local : Name -> NamedCExp
         local = NmLocal EmptyFC
@@ -392,9 +412,7 @@ convertTcGroup loop g@(MkTcGroup gindex fs) =
         toFun (MkTcFunction n ix args x _) =
           let exps  = map local args
               frame = tcFillFrame (tcHelperApp "tcNewFrame" [tcIntLit maxArity]) ix exps
-              argName = (UN $ Basic "arg")
-              tcFun = NmLam emptyFC argName (NmApp emptyFC (NmRef EmptyFC tcFunName) [NmLocal emptyFC argName])
-              body  = NmApp EmptyFC (NmRef EmptyFC loop) [tcFun,frame]
+              body  = NmApp EmptyFC (NmRef EmptyFC tcLoopName) [frame]
            in MkFunction n emptyFC args body
 
 -- Tail recursion optimizations: Converts all groups of

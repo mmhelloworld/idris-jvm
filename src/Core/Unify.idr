@@ -239,10 +239,15 @@ postpone loc mode logstr env x y
          logNF "unify.postpone" 10 "Y" env y
          pure (constrain c)
   where
+    -- Plain `UndefinedName`, not `undefinedName`: this fires inside
+    -- auto-implicit search (searchLocalWith/searchName), which catches the
+    -- error and moves on, so the "did you mean" candidate scan over every
+    -- name in the context that `undefinedName` performs eagerly would be
+    -- computed and discarded — it was ~7% of a self-hosting typecheck.
     checkDefined : Defs -> NF vars -> Core ()
     checkDefined defs (NApp _ (NRef _ n) _)
         = do Just _ <- lookupCtxtExact n (gamma defs)
-                  | _ => undefinedName loc n
+                  | _ => throw (UndefinedName loc n)
              pure ()
     checkDefined _ _ = pure ()
 

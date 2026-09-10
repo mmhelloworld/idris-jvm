@@ -1739,8 +1739,11 @@ getSearchData : {auto c : Ref Ctxt Defs} ->
                 Core SearchData
 getSearchData fc defaults target
     = do defs <- get Ctxt
+         -- Plain `UndefinedName`: reached from auto-implicit search
+         -- (`concreteDets`), which catches the error, so the eager
+         -- "did you mean" scan of `undefinedName` would be wasted work.
          Just (TCon _ _ dets u _ _ _) <- lookupDefExact target (gamma defs)
-              | _ => undefinedName fc target
+              | _ => throw (UndefinedName fc target)
          hs <- case lookup !(toFullNames target) (typeHints defs) of
                        Just hs => filterM (\x => notHidden x (gamma defs)) hs
                        Nothing => pure []

@@ -62,9 +62,22 @@ public final class Runtime {
     private static final ThreadLocal<ArrayDeque<TcFrame>> TC_FRAME_POOL =
         ThreadLocal.withInitial(ArrayDeque::new);
 
+    /** The thread that initialized the runtime: the program's main thread, which runs nearly every trampoline. */
+    private static final Thread MAIN_THREAD = Thread.currentThread();
+
+    /** The main thread's frame pool, reached without a ThreadLocal lookup. */
+    private static final ArrayDeque<TcFrame> MAIN_THREAD_POOL = new ArrayDeque<>();
+
+    // Every trampoline entry takes a frame from the pool and every exit returns one; the ThreadLocal
+    // lookup alone was 3% of a self-hosting typecheck. Thread.currentThread() is an intrinsic, so the
+    // main thread pays a single reference compare instead.
+    private static ArrayDeque<TcFrame> framePool() {
+        return Thread.currentThread() == MAIN_THREAD ? MAIN_THREAD_POOL : TC_FRAME_POOL.get();
+    }
+
     public static Object tcNewFrame(int arity) {
         var size = Math.max(1, arity);
-        var frame = TC_FRAME_POOL.get().pollLast();
+        var frame = framePool().pollLast();
         return frame != null && frame.args.length >= size ? frame : new TcFrame(size);
     }
 
@@ -93,20 +106,30 @@ public final class Runtime {
         return frame;
     }
 
+    /**
+     * Ends a trampoline: reads the result the group stored in slot 0, clears the frame so a parked frame
+     * does not pin the values it carried, and returns the frame to the pool. The generated per-group
+     * loop calls this once the frame's function index reaches 0.
+     */
+    public static Object tcResult(Object frameObj) {
+        var frame = (TcFrame) frameObj;
+        var result = frame.args[0];
+        Arrays.fill(frame.args, null);
+        var pool = framePool();
+        if (pool.size() < TC_FRAME_POOL_LIMIT) {
+            pool.offerLast(frame);
+        }
+        return result;
+    }
+
+    /** Shared trampoline loop, kept for code generated before the per-group loops. */
     public static Object tailRecFrame(Object fObj, Object frameObj) {
         var f = (Function<Object, Object>) fObj;
         var frame = (TcFrame) frameObj;
         while (frame.fn != 0) {
             f.apply(frame);
         }
-        var result = frame.args[0];
-        // clear before pooling so a parked frame does not pin the values it carried
-        Arrays.fill(frame.args, null);
-        var pool = TC_FRAME_POOL.get();
-        if (pool.size() < TC_FRAME_POOL_LIMIT) {
-            pool.offerLast(frame);
-        }
-        return result;
+        return tcResult(frame);
     }
 
     public static IdrisList getProgramArgs() {

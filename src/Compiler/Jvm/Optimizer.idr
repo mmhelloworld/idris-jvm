@@ -760,6 +760,7 @@ runtimeClassFunctionType (NS ns (UN (Basic function))) =
     "tcGet" => Just $ MkInferredFunctionType inferredObjectType [inferredObjectType, IInt]
     "tcGetFn" => Just $ MkInferredFunctionType IInt [inferredObjectType]
     "tcDone" => Just $ MkInferredFunctionType inferredObjectType [inferredObjectType, inferredObjectType]
+    "tcResult" => Just $ MkInferredFunctionType inferredObjectType [inferredObjectType]
     _ => Nothing
 runtimeClassFunctionType _ = Nothing
 

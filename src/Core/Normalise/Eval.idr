@@ -47,6 +47,16 @@ public export
 Stack : Scoped
 Stack vars = List (FC, Closure vars)
 
+||| Look up a local by de Bruijn index, walking the environment with an Int
+||| counter rather than a Nat so that backends which box Nat (the JVM) do not
+||| allocate on every step. `Right c` is the closure bound at the index;
+||| `Left n` means the index runs past the local environment and `n` is the
+||| remaining index into the free variables.
+total
+findLocal : Int -> LocalEnv free vars -> Either Int (Closure free)
+findLocal n [] = Left n
+findLocal n (c :: locs) = if n == 0 then Right c else findLocal (n - 1) locs
+
 evalWithOpts : {auto c : Ref Ctxt Defs} ->
                {free, vars : _} ->
                Defs -> EvalOpts ->
@@ -226,9 +236,29 @@ parameters (defs : Defs) (topopts : EvalOpts)
                 Stack free ->
                 LocalEnv free vars ->
                 Core (NF free)
+    -- No local environment: the index already counts from the head of the
+    -- free variables (vars = [] here, so the proof is at that type as it is)
+    evalLocal env fc mrig idx prf stk []
+        = evalFreeLocal env fc mrig idx prf stk
+    evalLocal env fc mrig idx prf stk locs
+        = case findLocal (cast idx) locs of
+               Right x => evalLocClosure env fc mrig stk x
+               -- The index points past the local environment, at position n
+               -- of the free variables. The IsVar proof is erased and only the
+               -- index is used at run time, so rebuild the proof at the shifted
+               -- index (as mkPrf in Core.TTC does).
+               Left n => evalFreeLocal {nm} env fc mrig (cast n) (believe_me prf) stk
+
     -- If it's one of the free variables, we are done unless the free
     -- variable maps to a let-binding
-    evalLocal env fc mrig idx prf stk []
+    evalFreeLocal : {auto c : Ref Ctxt Defs} ->
+                    {free : _} ->
+                    Env Term free ->
+                    FC -> Maybe Bool ->
+                    (idx : Nat) -> (0 p : IsVar nm idx free) ->
+                    Stack free ->
+                    Core (NF free)
+    evalFreeLocal env fc mrig idx prf stk
         = if not (holesOnly topopts || argHolesOnly topopts)
              -- if we know it's not a let, no point in even running `getBinder`
              && fromMaybe True mrig
@@ -237,11 +267,6 @@ parameters (defs : Defs) (topopts : EvalOpts)
                     Let _ _ val _ => eval env LocalEnv.empty val stk
                     _ => pure $ NApp fc (NLocal mrig idx prf) stk
              else pure $ NApp fc (NLocal mrig idx prf) stk
-    evalLocal env fc mrig Z First stk (x :: locs)
-        = evalLocClosure env fc mrig stk x
-    evalLocal {vars = x :: xs} {free}
-              env fc mrig (S idx) (Later p) stk (_ :: locs)
-        = evalLocal {vars = xs} env fc mrig idx p stk locs
 
     updateLocal : EvalOpts -> Env Term free ->
                   (idx : Nat) -> (0 p : IsVar nm idx (vars ++ free)) ->

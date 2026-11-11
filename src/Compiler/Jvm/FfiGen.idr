@@ -16,6 +16,8 @@ module Compiler.Jvm.FfiGen
 
 import Data.List
 
+import Parser.Lexer.Source
+
 %hide Prelude.print
 
 --------------------------------------------------------------------------------
@@ -112,9 +114,15 @@ splitBinary s = case reverse (splitOn '/' s) of
 packageOf : String -> String
 packageOf s = joinBy "/" (fst (splitBinary s))
 
+-- A JVM simple class name that cannot be an Idris identifier (`Type`, or a keyword such as
+-- `data`) gets a trailing underscore everywhere it is used: marker, namespace, qualified
+-- references and the reference scan, so `org/objectweb/asm/Type` is `Type_.getObjectType`.
+escapeReserved : String -> String
+escapeReserved n = if n `elem` ("Type" :: keywords) then n ++ "_" else n
+
 export
 simpleType : String -> String
-simpleType s = sanitizeType (snd (splitBinary s))
+simpleType s = escapeReserved (sanitizeType (snd (splitBinary s)))
 
 moduleName : String -> String
 moduleName pkg = joinBy "." (map capitalize (splitOn '/' pkg))
@@ -440,11 +448,19 @@ arityTable classes =
       -- their own generic arity so a marker like `AbstractList` is parameterised, not bare.
       fromSupers = concatMap superArities classes
       used = concatMap (\ci => concatMap memberUses (members ci)) classes
-  in declared ++ fromSupers ++ used
+      -- a SAM's generic signature is a usage too (`Iterable.iterator() : Iterator<T>` pins
+      -- Iterator's arity even when no imported member mentions it)
+      fromSams = concatMap samUses (concatMap funcIfaces classes)
+  in declared ++ fromSupers ++ used ++ fromSams
   where memberUses : MemberInfo -> List (String, Nat)
         memberUses m = case methodGTypes m of
           Just (ps, r) => concatMap collectGArities (r :: ps)
           Nothing      => []
+        samUses : FuncIface -> List (String, Nat)
+        samUses f = if fiGenSig f == "" then []
+                    else case parseMethodGSig (fiGenSig f) of
+                           Just (ps, r) => concatMap collectGArities (r :: ps)
+                           Nothing      => []
 
 --------------------------------------------------------------------------------
 -- Type rendering (parameterised)
@@ -785,13 +801,23 @@ infraLines =
 -- reference-type binaries used by a class's signatures (excludes builtins). Includes
 -- types that appear ONLY in generic signatures (e.g. Map$Entry inside Set<Map.Entry<K,V>>),
 -- which the erased descriptor never mentions, so they still get a marker generated.
+-- reference-type binaries a (possibly array) erased type names (excludes builtins)
+jtypeRefs : JType -> List String
+jtypeRefs (JRef _ n) = if isBuiltinRef n then [] else [n]
+jtypeRefs (JArray t) = jtypeRefs t
+jtypeRefs (JPrim _)  = []
+
+-- reference-type binaries a functional interface's SAM signature names. Its `Struct`-pair
+-- synonym spells them out (`Iterable ty0 = (..., Java.Util.Iterator Object)`), so they need
+-- a marker and an import edge even when no imported class's members mention them.
+fiRefs : FuncIface -> List String
+fiRefs f = concatMap jtypeRefs (fiParams f) ++ jtypeRefs (fiRet f)
+
 refsOf : ClassInfo -> List String
 refsOf ci = concatMap memberRefs (members ci)
   where
     typeRef : JType -> List String
-    typeRef (JRef _ n) = if isBuiltinRef n then [] else [n]
-    typeRef (JArray t) = typeRef t
-    typeRef (JPrim _)  = []
+    typeRef = jtypeRefs
     gRef : GType -> List String
     gRef (GCls n as) = (if isBuiltinRef n then [] else [n]) ++ concatMap gRef as
     gRef (GArr t)    = gRef t
@@ -838,7 +864,11 @@ boundClassesOf classes pkg = filter (\ci => packageOf (binary ci) == pkg) classe
 importPkgsOf : List ClassInfo -> String -> List String
 importPkgsOf classes pkg =
   let depPkgs = map packageOf (concatMap (\ci => refsOf ci ++ supers ci) (boundClassesOf classes pkg))
-  in nub (filter (/= pkg) ("java/lang" :: depPkgs))
+      -- a functional interface living in `pkg` is rendered there as a synonym naming its
+      -- SAM's types, so their packages are imports of `pkg` too
+      fiPkgs  = map packageOf (concatMap fiRefs
+                  (filter (\f => packageOf (fiBinary f) == pkg) (concatMap funcIfaces classes)))
+  in nub (filter (/= pkg) ("java/lang" :: depPkgs ++ fiPkgs))
 
 -- longest common path-prefix (segment-wise) of the given packages, e.g.
 -- [["java","util"],["java","lang"]] -> ["java"].
@@ -1023,11 +1053,12 @@ export
 renderAll : (refs : Maybe ScanRefs) -> List ClassInfo -> List (String, String)
 renderAll refs classes =
   let imported  = map binary classes
+      allFis    = concatMap funcIfaces classes
       allBins   = nub ("java/lang/Object" :: imported
-                        ++ concatMap refsOf classes ++ concatMap supers classes)
+                        ++ concatMap refsOf classes ++ concatMap supers classes
+                        ++ concatMap fiRefs allFis)
       pkgs      = nub ("java/lang" :: map packageOf allBins)
       ar        = arityOf (arityTable classes)
-      allFis    = concatMap funcIfaces classes
       fi        = \n => find (\f => fiBinary f == n) allFis
       keep      = case refs of
                     Nothing => \_, _, _ => True

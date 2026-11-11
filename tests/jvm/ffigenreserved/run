@@ -1,0 +1,20 @@
+rm -rf build
+
+# ASM ships inside the compiler's own idris2_app, so no --jvm-classpath is needed to reflect it.
+$1 --no-banner --no-color --console-width 0 \
+   --jvm-ffi-import org/objectweb/asm/Type \
+   -o ffigenreserved Main.idr > /dev/null 2>&1
+
+GEN=build/jvm-ffi/src/Org/Objectweb/Asm.idr
+if grep -q '^data Type_ : Type where \[external\]' $GEN 2>/dev/null \
+   && grep -q '^namespace Type_' $GEN 2>/dev/null; then
+  echo "Reserved: marker and namespace renamed to Type_"
+else
+  echo "Reserved: NOT RENAMED"
+fi
+
+# The generated program needs ASM on its runtime classpath; borrow the compiler's copy.
+ASM=$(ls "$(dirname "$1")"/idris2_app/asm-*.jar | head -1)
+IDRIS2_JVM_CLASSPATH="$ASM" ./build/exec/ffigenreserved${IDRIS_EXEC_EXT}
+
+rm -rf build

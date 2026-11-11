@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,6 +33,7 @@ import static io.github.mmhelloworld.idrisjvm.runtime.Directories.getWorkingDir;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.READ;
 import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
 import static java.nio.file.StandardOpenOption.WRITE;
@@ -203,8 +205,18 @@ public final class ChannelIo implements ReadableByteChannel, WritableByteChannel
     }
 
     private static ChannelIo open(Path path, OpenOption... openOptions) throws IOException {
-        ensureParentDirectory(path);
+        // Only a write can need the parent directory. Creating it for a read-only open turned every
+        // probe for a missing file (the compiler trying `<source dir>/Foo/Bar.idr` for each imported
+        // module) into an empty `Foo/` directory left behind in the project.
+        if (isWriting(openOptions)) {
+            ensureParentDirectory(path);
+        }
         return new ChannelIo(path, FileChannel.open(path, openOptions));
+    }
+
+    private static boolean isWriting(OpenOption... openOptions) {
+        return Arrays.stream(openOptions)
+            .anyMatch(option -> option == WRITE || option == APPEND || option == CREATE || option == CREATE_NEW);
     }
 
     private static void ensureParentDirectory(Path path) throws IOException {

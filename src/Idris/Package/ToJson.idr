@@ -81,7 +81,9 @@ namespace Package
             preinstall
             postinstall
             preclean
-            postclean) =
+            postclean
+            jvmimports
+            jvmclasspath) =
     let optionalFields = catMaybes $
           [ "version"     ~~= version
           , "langversion" ~~= langversion
@@ -105,6 +107,8 @@ namespace Package
           , "postinstall" ~~= snd <$> postinstall
           , "preclean"    ~~= snd <$> preclean
           , "postclean"   ~~= snd <$> postclean
+          , "jvmimports"  ~~= jvmimports
+          , "jvmclasspath" ~~= jvmclasspath
           ]
         fields =
           [ "name"    ~= name

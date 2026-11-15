@@ -1,4 +1,5 @@
-rm -rf build Java
+rm -rf build
+GEN=build/jvm-ffi/src/Java/Util.idr
 
 # One invocation: --jvm-ffi-import reflects the class (and its generic signatures) off the
 # classpath and writes the binding modules before Main.idr is compiled.
@@ -6,58 +7,58 @@ $1 --no-banner --no-color --console-width 0 \
    --jvm-ffi-import java/util/ArrayList,java/util/HashMap \
    -o ffigen Main.idr > /dev/null 2>&1
 
-# 1. The package module was generated.
-if [ -f Java/Util.idr ]; then
-  echo "Generated Java/Util.idr: PRESENT"
+# 1. The package module was generated under the build directory, not the source tree.
+if [ -f $GEN ] && [ ! -e Java ]; then
+  echo "Generated $GEN: PRESENT, source tree untouched"
 else
-  echo "Generated Java/Util.idr: MISSING"
+  echo "Generated $GEN: MISSING"
 fi
 
 # 1b. Generated-code header comment (do not edit by hand).
-if head -1 Java/Util.idr 2>/dev/null | grep -q '@generated'; then
+if head -1 $GEN 2>/dev/null | grep -q '@generated'; then
   echo "Header: GENERATED MARKER PRESENT"
 else
   echo "Header: MISSING"
 fi
 
 # 2. Parameterised marker type, derived from the class's generic arity.
-if grep -q '^data ArrayList : Type -> Type where' Java/Util.idr 2>/dev/null; then
+if grep -q '^data ArrayList : Type -> Type where' $GEN 2>/dev/null; then
   echo "Marker: data ArrayList : Type -> Type"
 else
   echo "Marker: NOT PARAMETERIZED"
 fi
 
 # 2b. A referenced supertype is parameterised from its own generic arity (not bare).
-if grep -q '^data AbstractList : Type -> Type where' Java/Util.idr 2>/dev/null; then
+if grep -q '^data AbstractList : Type -> Type where' $GEN 2>/dev/null; then
   echo "Supertype: data AbstractList : Type -> Type"
 else
   echo "Supertype: NOT PARAMETERIZED"
 fi
 
 # 2c. A functional interface becomes a Struct-pair synonym that jlambda targets.
-if grep -q '^Comparator ty0 = (Struct "java/util/Comparator compare"' Java/Util.idr 2>/dev/null; then
+if grep -q '^Comparator ty0 = (Struct "java/util/Comparator compare"' $GEN 2>/dev/null; then
   echo "Functional: Comparator = Struct-pair synonym"
 else
   echo "Functional: NOT A SAM SYNONYM"
 fi
 
 # 2d. The functional-interface wrapper accepts an Idris function and bridges it via jlambda.
-if grep -qE '^  sort : .*ArrayList e -> \(e -> e -> Int\) -> io \(\)' Java/Util.idr 2>/dev/null \
-   && grep -q 'sort {e} arg0 arg1 = primIO (prim__sort arg0 (jlambda arg1))' Java/Util.idr 2>/dev/null; then
+if grep -qE '^  sort : .*ArrayList e -> \(e -> e -> Int\) -> io \(\)' $GEN 2>/dev/null \
+   && grep -q 'sort {e} arg0 arg1 = primIO (prim__sort arg0 (jlambda arg1))' $GEN 2>/dev/null; then
   echo "Lambda: sort accepts (e -> e -> Int), passes (jlambda arg1)"
 else
   echo "Lambda: MISSING"
 fi
 
 # 3. get returns the element type (not Object) — generics preserved through the signature.
-if grep -qE '^  get : .*ArrayList e -> Int -> io e' Java/Util.idr 2>/dev/null; then
+if grep -qE '^  get : .*ArrayList e -> Int -> io e' $GEN 2>/dev/null; then
   echo "Typed return: get : ArrayList e -> Int -> io e"
 else
   echo "Typed return: ERASED"
 fi
 
 # 4. Subtyping instance from the reflected hierarchy, parameterised.
-if grep -q '^Inherits (Java.Util.ArrayList e) (Java.Util.List e) where' Java/Util.idr 2>/dev/null; then
+if grep -q '^Inherits (Java.Util.ArrayList e) (Java.Util.List e) where' $GEN 2>/dev/null; then
   echo "Subtyping: Inherits (ArrayList e) (List e)"
 else
   echo "Subtyping: MISSING"
@@ -65,7 +66,7 @@ fi
 
 # 6. Null-safety: a curated JDK nullable method (HashMap <: java.util.Map) returns io (Maybe v),
 #    so a missing key is `Nothing` rather than a raw null leaking into Idris.
-if grep -qE '^  get : .*HashMap k v -> .* -> io \(Maybe v\)' Java/Util.idr 2>/dev/null; then
+if grep -qE '^  get : .*HashMap k v -> .* -> io \(Maybe v\)' $GEN 2>/dev/null; then
   echo "Nullable: HashMap.get : ... -> io (Maybe v)"
 else
   echo "Nullable: NOT WRAPPED"
@@ -73,7 +74,7 @@ fi
 
 # 7. Demand-driven generation: only members referenced by Main are emitted. Main uses
 #    ArrayList.{new,add,size,sort,get} but never `clear`, so `clear` is pruned (size kept).
-if grep -qE '^  size :' Java/Util.idr 2>/dev/null && ! grep -qE '^  clear :' Java/Util.idr 2>/dev/null; then
+if grep -qE '^  size :' $GEN 2>/dev/null && ! grep -qE '^  clear :' $GEN 2>/dev/null; then
   echo "Pruned: referenced size kept, unreferenced clear omitted"
 else
   echo "Pruned: NOT DEMAND-DRIVEN"
@@ -81,3 +82,5 @@ fi
 
 # 5. Runtime: build a list, read back a typed element; then a HashMap hit/miss as Maybe.
 ./build/exec/ffigen${IDRIS_EXEC_EXT}
+
+rm -rf build

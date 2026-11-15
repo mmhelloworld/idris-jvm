@@ -35,6 +35,7 @@ import Idris.CommandLine
 import Idris.Doc.HTML
 import Idris.Doc.String
 import Idris.Error
+import Idris.JvmFfi
 import Idris.ModTree
 import Idris.Pretty
 import Idris.ProcessIdr
@@ -82,6 +83,8 @@ data DescField  : Type where
   PPostinstall  : FC -> String -> DescField
   PPreclean     : FC -> String -> DescField
   PPostclean    : FC -> String -> DescField
+  PJvmImports   : FC -> String -> DescField
+  PJvmClasspath : FC -> String -> DescField
 
 field : String -> Rule DescField
 field fname
@@ -102,6 +105,8 @@ field fname
     <|> strField PPostbuild "postbuild"
     <|> strField PPreinstall "preinstall"
     <|> strField PPostinstall "postinstall"
+    <|> strField PJvmImports "jvmimports"
+    <|> strField PJvmClasspath "jvmclasspath"
     <|> strField PPreclean "preclean"
     <|> strField PPostclean "postclean"
     <|> do start <- location
@@ -259,6 +264,8 @@ addField (PPreinstall fc e)  pkg = pure $ { preinstall := Just (fc, e) } pkg
 addField (PPostinstall fc e) pkg = pure $ { postinstall := Just (fc, e) } pkg
 addField (PPreclean fc e)    pkg = pure $ { preclean := Just (fc, e) } pkg
 addField (PPostclean fc e)   pkg = pure $ { postclean := Just (fc, e) } pkg
+addField (PJvmImports fc e)  pkg = pure $ { jvmimports := Just e } pkg
+addField (PJvmClasspath fc e) pkg = pure $ { jvmclasspath := Just e } pkg
 
 addFields : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
@@ -495,6 +502,19 @@ withWarnings op = do o <- catch op $ \err =>
       ignore emitWarnings
       update Ctxt { warnings := [] }
 
+-- JVM FFI bindings for the classes named in the package file's `jvmimports` plus any
+-- `--jvm-ffi-import` on the command line. The package's own `jvmclasspath` applies only when
+-- no `--jvm-classpath` was given (the build tool's resolved classpath wins).
+generatePkgJvmFfiBindings : {auto c : Ref Ctxt Defs} ->
+                            {auto s : Ref Syn SyntaxInfo} ->
+                            {auto o : Ref ROpts REPLOpts} ->
+                            PkgDesc -> List CLOpt -> (sources : List String) -> Core ()
+generatePkgJvmFfiBindings pkg opts sources
+    = do session <- getSession
+         when (jvmClasspath session == "") $
+           whenJust (jvmclasspath pkg) $ \cp => setSession ({ jvmClasspath := cp } session)
+         generateJvmFfiBindings (jvmImportClasses pkg ++ jvmFfiImportsOf opts) sources
+
 prepareCompilation : {auto c : Ref Ctxt Defs} ->
                      {auto s : Ref Syn SyntaxInfo} ->
                      {auto o : Ref ROpts REPLOpts} ->
@@ -513,6 +533,9 @@ prepareCompilation pkg opts =
     let toBuild = maybe (map snd (modules pkg))
                         (\m => snd m :: map snd (modules pkg))
                         (mainmod pkg)
+    -- Every option is known now (build dir, classpath), so generate and compile the JVM FFI
+    -- binding modules the package (and the command line) ask for before anything imports them
+    generatePkgJvmFfiBindings pkg opts toBuild
     buildAll toBuild
 
 assertIdrisCompatibility : PkgDesc -> Core ()
@@ -1046,6 +1069,10 @@ partitionOpts opts = foldr pOptUpdate (MkPFR [] [] False) opts
     optType WarningsAsErrors       = POpt
     optType HashesInsteadOfModTime = POpt
     optType Profile                = POpt
+    -- JVM FFI generation inputs: a build tool passes the resolved dependency classpath
+    -- (and possibly extra classes) alongside --build/--install
+    optType (JvmClasspath _)       = POpt
+    optType (JvmFfiImport _)       = POpt
     optType (ConsoleWidth n)       = PIgnore
     optType (Color b)              = PIgnore
     optType NoBanner               = PIgnore
@@ -1075,6 +1102,8 @@ errorMsg = unlines
   , "    --directive <directive>"
   , "    --build-dir <dir>"
   , "    --output-dir <dir>"
+  , "    --jvm-classpath <classpath>"
+  , "    --jvm-ffi-import <classes>"
   ]
 
 export
@@ -1086,7 +1115,10 @@ processPackageOpts opts
     = do (MkPFR cmds@(_::_) opts' err) <- pure $ partitionOpts opts
              | (MkPFR Nil opts' _) => pure False
          if err
-           then coreLift $ putStrLn errorMsg
+           -- a rejected option is a misconfiguration: fail the build rather than report
+           -- success to the build tool that passed it
+           then coreLift $ do putStrLn errorMsg
+                              exitWith (ExitFailure 1)
            else traverse_ (processPackage opts') cmds
          pure True
 
@@ -1109,6 +1141,7 @@ findIpkg fname
         setOutputDir (outputdir pkg)
         processOptions (options pkg)
         addDeps pkg
+        generatePkgJvmFfiBindings pkg [] (map snd (modules pkg))
         case fname of
              Nothing => pure Nothing
              Just srcpath  =>

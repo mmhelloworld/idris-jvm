@@ -85,11 +85,10 @@ idris2 --cg jvm --jvm-ffi-import java/util/ArrayList,java/util/List  Main.idr
    └─ loadMainFile          Driver.idr:202    (Main.idr imports Java.Util, now present)
 ```
 
-`.` is on `extra_dirs` by default (`Core/Options.idr`), so `import Java.Util`
-resolves with no extra flags. The hook runs in `preOptions` — after `updateEnv`
-has configured paths but before `loadMainFile` triggers import resolution
-(`Core/Directory.idr:209 nsToSource`) — which guarantees the generated module
-exists by the time it is imported.
+The hook originally ran in `preOptions` and wrote `Java/Util.idr` next to the user's
+sources; it now runs once all options are known and compiles the bindings under the
+build directory (§5.10), which still guarantees the generated module is importable by
+the time `loadMainFile` resolves imports.
 
 ## 4. Module & namespace layout
 
@@ -100,6 +99,10 @@ Generated bindings are organized by Java package and class:
   `java/lang/*` → `Java.Lang`.
 - **One namespace per class** inside that module, named after the simple class
   name: `java.util.List` → `namespace List`. Members are `List.add`, `List.size`.
+- **Reserved simple names.** A class whose simple name is an Idris reserved word (`Type`, or a
+  keyword such as `data`) gets a trailing underscore everywhere — marker, namespace, qualified
+  references and the demand-driven scan — so `org.objectweb.asm.Type` is used as
+  `Type_.getObjectType`. The rule lives in `simpleType`, the single naming point.
 - **One marker type per class** at module top-level, named after the class
   (`data List : Type where [external]`). The top-level type `List` and the
   same-named `namespace List` coexist — this is exactly what an Idris `record`
@@ -220,6 +223,13 @@ package graph is cyclic, no per-namespace ordering avoids forward references; gr
 declaration kind makes every cross-namespace reference *backward*. (`mutual` is
 insufficient on its own — it does not resolve forward references in interface-
 implementation headers.)
+
+The import graph (and the marker set) also covers the types a **functional interface's SAM
+signature** names: `java.lang.Iterable` is rendered as a synonym spelling out
+`Java.Util.Iterator Object`, so `Iterator` needs a marker, an arity (from the SAM's generic
+signature) and a `java/lang → java/util` edge even when no imported member mentions it.
+Importing `org/apache/commons/lang3/StringUtils` alone (which only *references* `Iterable`)
+failed with `Undefined name Java.Util.Iterator` until `fiRefs` fed all three.
 
 Two related details, independent of cycles but exercised by the same imports:
 
@@ -392,7 +402,7 @@ parameter is `Maybe`: `Nothing` restores the unfiltered whole-API form.
 Add `JvmFfiImport (List String)` to `CLOpt` and a `MkOpt ["--jvm-ffi-import"] …`
 entry (modeled on the existing `--source-dir` option). Comma-separated class list.
 
-### 5.5 Generation hook — `src/Idris/SetOptions.idr`
+### 5.5 Generation hook — `src/Idris/JvmFfi.idr` (originally `Idris/SetOptions.idr`, see §5.10)
 
 ```idris
 preOptions (JvmFfiImport classes :: opts) = do
@@ -404,6 +414,43 @@ preOptions (JvmFfiImport classes :: opts) = do
     coreLift $ do mkdirAll (dirOf modPath); writeFile modPath (renderPackage pkg cs)
   preOptions opts
 ```
+
+### 5.10 Build integration (package file, build directory, Maven)
+
+The first cut wrote the generated modules into the source tree and was driven only by
+`--jvm-ffi-import`, which left real projects (the Spring Boot library hand-writes ~80 bindings)
+unable to adopt it. The generator is now driven by the build:
+
+- **Package file fields.** `jvmimports = "java/util/ArrayList, java/util/HashMap"` names the
+  classes (comma-separated internal names); `jvmclasspath = "..."` optionally names jars/dirs to
+  resolve them against. `--jvm-ffi-import` still works for a plain `idris2 Main.idr` compile and
+  is merged with the package's list in a package build. A `--jvm-classpath` on the command line
+  (what a build tool passes) takes precedence over the package's `jvmclasspath`.
+- **Nothing is written into the source tree.** Generated sources go to
+  `<build dir>/jvm-ffi/src/<Pkg>.idr` and are compiled, as their own little source tree (the
+  source and build directories are switched for the duration of `buildAll`), into
+  `<build dir>/jvm-ffi/ttc/<ttc version>/`. That `ttc` directory is then added to the import
+  search path (`addExtraDir`), so `import Java.Util` resolves exactly like a module from an
+  installed package: `ModTree` finds no source for it under the project's source dir, assumes
+  it lives in a package directory, and `nsToPath` finds the TTC. Generated files are rewritten
+  only when their contents change, so repeated loads (every IDE `:load`, every REPL start)
+  reuse the TTCs.
+- **When it runs.** Once every option is known, in three places: `Idris.Package.prepareCompilation`
+  (after `preOptions`, before `buildAll` of the package's own modules), `Idris.Package.findIpkg`
+  (REPL / IDE sessions that pick up the package file), and `Idris.Driver` right after `preOptions`
+  for the plain-compile form. Generation lives in `Idris.JvmFfi` because compiling the generated
+  modules needs `Idris.ModTree`, which `Idris.SetOptions` cannot import.
+- **Maven.** `idris-maven-plugin`'s `compile`/`package`/`test` goals pass the project's resolved
+  compile (or test) classpath as `--jvm-classpath`, so `jvmimports` resolves the project's own
+  dependencies, not only the JDK. The ipkg stays the single source of truth for *which* classes.
+- **Reference scan.** For a package build the scan covers the package's listed modules (and
+  main); for a plain compile, the entry files and every `.idr` under their directories.
+
+Known limitation, deliberately deferred: a **library** whose own modules import generated
+bindings (the Spring Boot case) also needs those bindings *installed* with it, and two libraries
+generating the same package module (`Java.Util`) with different pruned member sets would clash
+on the import path. The next step is a full-API mode plus installing the generated TTCs
+alongside the package, or namespacing a library's generated modules under its own prefix.
 
 ## 6. The `jvm:` descriptor grammar (reference)
 

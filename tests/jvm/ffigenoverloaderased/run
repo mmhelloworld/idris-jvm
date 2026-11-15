@@ -1,12 +1,12 @@
-rm -rf build Java Java.idr
+rm -rf build
 
 # Generate StringBuilder bindings (a class with same-erased-type `append` overloads) and compile.
 $1 --no-banner --no-color --console-width 0 \
    --jvm-ffi-import java/lang/StringBuilder \
    -o ffigenoverloaderased Main.idr > /dev/null 2>&1
 
-# All generated binding source (cycle handling may emit an umbrella Java.idr plus per-package stubs).
-gen=$(cat Java.idr Java/*.idr 2>/dev/null)
+# All generated binding source (cycle handling may emit an umbrella build/jvm-ffi/src/Java.idr plus per-package stubs).
+gen=$(cat build/jvm-ffi/src/Java.idr build/jvm-ffi/src/Java/*.idr 2>/dev/null)
 
 # 1. Overloads get DISTINCT prim names: the canonical `prim__append` plus tagged `prim__Append1`,
 #    never a second `prim__append` (which would be the ambiguity that broke compilation).
@@ -28,3 +28,5 @@ fi
 
 # 3. The group compiles and runs: appending then reversing "idris" + "-on-jvm".
 ./build/exec/ffigenoverloaderased${IDRIS_EXEC_EXT}
+
+rm -rf build

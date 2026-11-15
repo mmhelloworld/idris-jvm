@@ -1,7 +1,6 @@
 module Idris.SetOptions
 
 import Compiler.Common
-import Compiler.Jvm.Reflection
 
 import Core.Binary
 import Core.Context
@@ -13,6 +12,7 @@ import Libraries.Utils.Path
 import Libraries.Data.List.Extra
 
 import Idris.CommandLine
+import Idris.JvmFfi
 import Idris.Package.Types
 import Idris.Parser
 import Idris.Pretty
@@ -388,88 +388,6 @@ setIncrementalCG failOnError cgn
                          coreLift $ exitWith (ExitFailure 1)
                  else pure ()
 
--- Directory portion of a file path (everything up to the last '/'), or "." if none.
-ffiDirOf : String -> String
-ffiDirOf p = case break (== '/') (reverse (unpack p)) of
-               (_, '/' :: dir) => pack (reverse dir)
-               _               => "."
-
-writeBindingModule : {auto c : Ref Ctxt Defs} -> (root : String) -> (String, String) -> Core ()
-writeBindingModule root (relPath, contents)
-    = do let path = root </> relPath
-         ensureDirectoryExists (ffiDirOf path)
-         Right () <- coreLift $ writeFile path contents
-           | Left err => throw (FileErr path err)
-         pure ()
-
--- Recursively collect every `.idr` source path under `dir`. A leaf (file) lists as empty via
--- `listDirOrEmpty`, so we recurse into anything that is not itself an `.idr` file; this avoids a
--- separate is-directory check. Bounded by the project tree, and only runs under --jvm-ffi-import.
-covering
-gatherIdrSources : String -> IO (List String)
-gatherIdrSources dir
-    = do entries <- listDirOrEmpty dir
-         concat <$> traverse visit entries
-  where
-    visit : String -> IO (List String)
-    visit entry = let path = dir </> entry in
-                  if extension entry == Just "idr"
-                     then pure [path]
-                     else gatherIdrSources path
-
--- Source files to scan for `Class.member` references: the entry files named on the command line,
--- plus every `.idr` under their directories (so references in helper modules are seen too).
-covering
-ffiScanSources : (root : String) -> List CLOpt -> IO (List String)
-ffiScanSources root opts
-    = do let inputs = mapMaybe (\o => case o of InputFile f => Just f; _ => Nothing) opts
-         let dirs   = nub (if null inputs then [root] else map ffiDirOf inputs)
-         walked <- concat <$> traverse gatherIdrSources dirs
-         pure (nub (inputs ++ walked))
-
-||| Reflect the named JVM classes off the classpath and write generated Idris FFI binding
-||| modules (one Idris module per Java package) so user code can import them. Runs in
-||| `preOptions`, before the main file is loaded.
-|||
-||| Demand-driven: the user's sources are scanned for `Class.member` references and only the
-||| referenced members are emitted (markers/`Inherits`/infra are always emitted), so compiling
-||| against a few JDK classes does not elaborate their entire public API. Generated modules are
-||| excluded from the scan (their `@generated` header marker) so a stale prior generation does
-||| not pin every member.
-generateJvmFfiBindings : {auto c : Ref Ctxt Defs} -> List CLOpt -> List String -> Core ()
-generateJvmFfiBindings opts classes
-    = do cp <- jvmClasspath <$> getSession
-         infos <- for classes $ \cn => do
-                    Right ci <- coreLift (reflectClass cp cn)
-                      | Left err => throw (UserError ("JVM FFI import failed for " ++ cn ++ ": " ++ err))
-                    pure ci
-         dirs <- getDirs
-         let root = fromMaybe "." (source_dir dirs)
-         sources <- coreLift (ffiScanSources root opts)
-         contents <- for sources $ \f => do
-                       Right s <- coreLift (readFile f)
-                         | Left _ => pure ""
-                       -- skip generated binding modules: they reference everything and would
-                       -- defeat the scan.
-                       pure (if isInfixOf "@generated" s then "" else s)
-         let classNames = map (\ci => simpleType (binary ci)) infos
-         let scans = map (scanReferences classNames) contents
-         let refs = MkScanRefs (nub (concatMap qualified scans)) (nub (concatMap bare scans))
-         traverse_ (writeBindingModule root) (renderAll (Just refs) infos)
-
-||| Reflect the named JVM classes and print their callable member catalog (signatures only) to
-||| stdout, then stop. Unlike `--jvm-ffi-import`, this generates no modules and elaborates
-||| nothing — it is a discovery aid (and the data source for IDE completion) so a member can be
-||| found *before* it is referenced, breaking the demand-driven importer's chicken-and-egg.
-generateJvmFfiCatalog : {auto c : Ref Ctxt Defs} -> List String -> Core ()
-generateJvmFfiCatalog classes
-    = do cp <- jvmClasspath <$> getSession
-         infos <- for classes $ \cn => do
-                    Right ci <- coreLift (reflectClass cp cn)
-                      | Left err => throw (UserError ("JVM FFI list failed for " ++ cn ++ ": " ++ err))
-                    pure ci
-         coreLift $ putStrLn (renderCatalog infos)
-
 ||| Options to be processed before type checking. Return whether to continue.
 export
 preOptions : {auto c : Ref Ctxt Defs} ->
@@ -628,9 +546,10 @@ preOptions (NoCSE :: opts)
 preOptions (JvmClasspath cp :: opts)
     = do setSession ({ jvmClasspath := cp } !getSession)
          preOptions opts
-preOptions (JvmFfiImport classes :: opts)
-    = do generateJvmFfiBindings opts classes
-         preOptions opts
+-- Binding generation runs once every option is known (Idris.Driver for a plain compile,
+-- Idris.Package for a package build), since it writes under the build directory and needs the
+-- classpath; the option only names the classes.
+preOptions (JvmFfiImport _ :: opts) = preOptions opts
 preOptions (JvmFfiList classes :: opts)
     = do generateJvmFfiCatalog classes
          pure False

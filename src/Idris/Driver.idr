@@ -13,6 +13,7 @@ import Core.Unify
 import Idris.CommandLine
 import Idris.Env
 import Idris.IDEMode.REPL
+import Idris.JvmFfi
 import Idris.Package
 import Idris.ProcessIdr
 import Idris.REPL
@@ -171,6 +172,14 @@ stMain cgs opts
          -- continue
          True <- preOptions opts
             | False => pure ()
+
+         -- JVM FFI imports named on the command line: generate and compile their binding
+         -- modules now that every option (build dir, classpath) has been applied. A package
+         -- build handles its own `jvmimports` in Idris.Package.
+         flip catch quitWithError $
+            do d <- getDirs
+               srcs <- coreLift (jvmFfiScanSources (source_dir d) opts)
+               generateJvmFfiBindings (jvmFfiImportsOf opts) srcs
 
          -- If there's a --build or --install, just do that then quit
          done <- flip catch quitWithError $ processPackageOpts opts

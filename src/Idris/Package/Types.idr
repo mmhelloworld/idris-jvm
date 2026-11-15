@@ -5,6 +5,7 @@ import Core.Name.Namespace
 import Data.List
 import Data.Maybe
 import Data.String
+import Data.List1
 import Idris.Version
 import Libraries.Data.String.Extra
 import Libraries.Text.PrettyPrint.Prettyprinter
@@ -189,6 +190,8 @@ record PkgDesc where
   postinstall : Maybe (FC, String) -- Script to run after installing
   preclean : Maybe (FC, String) -- Script to run before cleaning
   postclean : Maybe (FC, String) -- Script to run after cleaning
+  jvmimports : Maybe String -- JVM classes (comma-separated internal names) to generate FFI bindings for
+  jvmclasspath : Maybe String -- jars/dirs the JVM FFI reflector resolves those classes against
 
 export
 initPkgDesc : String -> PkgDesc
@@ -197,7 +200,13 @@ initPkgDesc pname
                 Nothing Nothing Nothing Nothing Nothing
                 [] []
                 Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-                Nothing Nothing Nothing Nothing
+                Nothing Nothing Nothing Nothing Nothing Nothing
+
+||| The JVM classes named by the `jvmimports` field, as internal names (`java/util/ArrayList`).
+export
+jvmImportClasses : PkgDesc -> List String
+jvmImportClasses pkg
+    = maybe [] (filter (/= "") . map trim . forget . split (== ',')) (jvmimports pkg)
 
 export
 Show PkgDesc where
@@ -225,7 +234,9 @@ Show PkgDesc where
              maybe "" (\m => "Preinstall: " ++ snd m ++ "\n") (preinstall pkg) ++
              maybe "" (\m => "Postinstall: " ++ snd m ++ "\n") (postinstall pkg) ++
              maybe "" (\m => "Preclean: " ++ snd m ++ "\n") (preclean pkg) ++
-             maybe "" (\m => "Postclean: " ++ snd m ++ "\n") (postclean pkg)
+             maybe "" (\m => "Postclean: " ++ snd m ++ "\n") (postclean pkg) ++
+             maybe "" (\m => "JvmImports: " ++ m ++ "\n") (jvmimports pkg) ++
+             maybe "" (\m => "JvmClasspath: " ++ m ++ "\n") (jvmclasspath pkg)
 
 export
 Pretty Void PkgDesc where
@@ -277,6 +288,12 @@ Pretty Void PkgDesc where
 
     , comment "script to run after cleaning"
     , strField "postclean"   (snd <$> desc.postclean)
+
+    , comment "JVM classes (internal names, comma-separated) to generate FFI bindings for"
+    , strField "jvmimports"  desc.jvmimports
+
+    , comment "jars/dirs the JVM FFI reflector resolves those classes against"
+    , strField "jvmclasspath" desc.jvmclasspath
     ]
 
   where

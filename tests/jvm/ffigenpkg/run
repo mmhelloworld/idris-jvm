@@ -1,0 +1,33 @@
+rm -rf build
+
+# The package file declares `jvmimports`; `--build` generates, compiles and imports the bindings.
+$1 --no-banner --no-color --console-width 0 --build ffigenpkg.ipkg > /dev/null 2>&1
+
+GEN=build/jvm-ffi/src/Java/Util.idr
+if [ -f $GEN ] && [ ! -e src/Java ]; then
+  echo "Generated $GEN: PRESENT, source tree untouched"
+else
+  echo "Generated $GEN: MISSING"
+fi
+
+# The generated module was compiled under build/jvm-ffi/ttc (how `import Java.Util` resolves).
+if ls build/jvm-ffi/ttc/*/Java/Util.ttc > /dev/null 2>&1; then
+  echo "Compiled: build/jvm-ffi/ttc/<version>/Java/Util.ttc"
+else
+  echo "Compiled: MISSING"
+fi
+
+# A second build must not regenerate or recompile an unchanged binding module.
+before=$(ls -l build/jvm-ffi/ttc/*/Java/Util.ttc | awk '{print $6, $7, $8}')
+sleep 1
+$1 --no-banner --no-color --console-width 0 --build ffigenpkg.ipkg > /dev/null 2>&1
+after=$(ls -l build/jvm-ffi/ttc/*/Java/Util.ttc | awk '{print $6, $7, $8}')
+if [ "$before" = "$after" ]; then
+  echo "Rebuild: generated module left untouched"
+else
+  echo "Rebuild: REGENERATED"
+fi
+
+./build/exec/ffigenpkg${IDRIS_EXEC_EXT}
+
+rm -rf build

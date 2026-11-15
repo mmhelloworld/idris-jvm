@@ -1,0 +1,9 @@
+package ffigenpkg
+
+sourcedir = "src"
+main = Main
+executable = ffigenpkg
+
+-- JVM classes to generate FFI bindings for; the modules land under build/jvm-ffi and are
+-- importable as Java.Util without touching the source tree
+jvmimports = "java/util/ArrayList, java/util/HashMap"

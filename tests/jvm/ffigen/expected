@@ -1,4 +1,4 @@
-Generated Java/Util.idr: PRESENT
+Generated build/jvm-ffi/src/Java/Util.idr: PRESENT, source tree untouched
 Header: GENERATED MARKER PRESENT
 Marker: data ArrayList : Type -> Type
 Supertype: data AbstractList : Type -> Type

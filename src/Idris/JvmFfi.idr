@@ -97,6 +97,14 @@ writeBindingModule root (relPath, contents)
            pure ()
          pure path
 
+||| Put the generated bindings' TTC directory on the import search path. Registered even when
+||| nothing is generated yet: a long-lived ide-mode process must pick up bindings generated later
+||| by the IDE (which re-runs the compiler and then `:load-file`s) without a restart.
+export
+registerJvmFfiSearchDir : {auto c : Ref Ctxt Defs} -> Core ()
+registerJvmFfiSearchDir = do ffiRoot <- jvmFfiDir
+                             addExtraDir (ffiRoot </> "ttc")
+
 ||| Reflect `classes` off the session's JVM classpath, render their binding modules for the
 ||| members referenced from `scanSources` (demand-driven: markers, `Inherits` and the `Java.Lang`
 ||| infra are always emitted, member bindings only when referenced), compile them under
@@ -129,12 +137,18 @@ generateJvmFfiBindings classes scanSources
          dirs <- getDirs
          setSourceDir (Just srcRoot)
          setBuildDir ffiRoot
+         -- Build silently: this is an internal step, and in ide-mode the "Building Java.Util"
+         -- progress lines would otherwise go out as protocol messages (even before the greeting
+         -- when the package file is applied at startup). Errors still surface as exceptions.
+         output <- getOutput
+         setOutput (REPL NoneLvl)
          errs <- buildAll paths
+         setOutput output
          setSourceDir (source_dir dirs)
          setBuildDir (build_dir dirs)
          let [] = errs
            | (err :: _) => throw err
-         addExtraDir (ffiRoot </> "ttc")
+         registerJvmFfiSearchDir
 
 ||| Reflect the named JVM classes and print their callable member catalog (signatures only) to
 ||| stdout. Unlike binding generation this elaborates nothing — it is a discovery aid (and the

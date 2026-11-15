@@ -508,12 +508,18 @@ withWarnings op = do o <- catch op $ \err =>
 generatePkgJvmFfiBindings : {auto c : Ref Ctxt Defs} ->
                             {auto s : Ref Syn SyntaxInfo} ->
                             {auto o : Ref ROpts REPLOpts} ->
-                            PkgDesc -> List CLOpt -> (sources : List String) -> Core ()
-generatePkgJvmFfiBindings pkg opts sources
+                            PkgDesc -> (cliClasses : List String) -> Core ()
+generatePkgJvmFfiBindings pkg cliClasses
     = do session <- getSession
          when (jvmClasspath session == "") $
            whenJust (jvmclasspath pkg) $ \cp => setSession ({ jvmClasspath := cp } session)
-         generateJvmFfiBindings (jvmImportClasses pkg ++ jvmFfiImportsOf opts) sources
+         -- The reference scan is deliberately generous: the listed modules and main, plus every
+         -- source under the source directory (an IDE session's working file may be neither).
+         -- Over-approximating only emits a spare member; missing one breaks the build.
+         listed <- pure (maybe (map snd (modules pkg)) (\m => snd m :: map snd (modules pkg)) (mainmod pkg))
+         walked <- coreLift (jvmFfiScanSources (sourcedir pkg) [])
+         registerJvmFfiSearchDir
+         generateJvmFfiBindings (jvmImportClasses pkg ++ cliClasses) (nub (listed ++ walked))
 
 prepareCompilation : {auto c : Ref Ctxt Defs} ->
                      {auto s : Ref Syn SyntaxInfo} ->
@@ -535,7 +541,7 @@ prepareCompilation pkg opts =
                         (mainmod pkg)
     -- Every option is known now (build dir, classpath), so generate and compile the JVM FFI
     -- binding modules the package (and the command line) ask for before anything imports them
-    generatePkgJvmFfiBindings pkg opts toBuild
+    generatePkgJvmFfiBindings pkg (jvmFfiImportsOf opts)
     buildAll toBuild
 
 assertIdrisCompatibility : PkgDesc -> Core ()
@@ -1130,8 +1136,8 @@ export
 findIpkg : {auto c : Ref Ctxt Defs} ->
            {auto r : Ref ROpts REPLOpts} ->
            {auto s : Ref Syn SyntaxInfo} ->
-           Maybe String -> Core (Maybe String)
-findIpkg fname
+           (jvmFfiClasses : List String) -> Maybe String -> Core (Maybe String)
+findIpkg jvmFfiClasses fname
    = do Just (dir, ipkgn, up) <- coreLift findIpkgFile
              | Nothing => pure fname
         coreLift_ $ changeDir dir
@@ -1141,7 +1147,12 @@ findIpkg fname
         setOutputDir (outputdir pkg)
         processOptions (options pkg)
         addDeps pkg
-        generatePkgJvmFfiBindings pkg [] (map snd (modules pkg))
+        -- An editing session (REPL, IDE) must keep working when a class cannot be reflected,
+        -- e.g. the IDE did not pass the project classpath: warn on stderr (stdout may be the
+        -- ide-mode protocol channel) and carry on; the unresolved import then reports itself.
+        catch (generatePkgJvmFfiBindings pkg jvmFfiClasses)
+              (\err => coreLift $ ignore $ fPutStrLn stderr
+                          ("Warning: JVM FFI bindings not generated: " ++ show err))
         case fname of
              Nothing => pure Nothing
              Just srcpath  =>

@@ -146,7 +146,7 @@ process : {auto c : Ref Ctxt Defs} ->
 process (Interpret cmd)
     = replWrap $ interpret cmd
 process (LoadFile fname_in _)
-    = do let fname = case !(findIpkg (Just fname_in)) of
+    = do let fname = case !(findIpkg [] (Just fname_in)) of
                           Nothing => fname_in
                           Just f' => f'
          replWrap $ Idris.REPL.process (Load fname) >>= outputSyntaxHighlighting fname

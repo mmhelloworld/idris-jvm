@@ -173,14 +173,6 @@ stMain cgs opts
          True <- preOptions opts
             | False => pure ()
 
-         -- JVM FFI imports named on the command line: generate and compile their binding
-         -- modules now that every option (build dir, classpath) has been applied. A package
-         -- build handles its own `jvmimports` in Idris.Package.
-         flip catch quitWithError $
-            do d <- getDirs
-               srcs <- coreLift (jvmFfiScanSources (source_dir d) opts)
-               generateJvmFfiBindings (jvmFfiImportsOf opts) srcs
-
          -- If there's a --build or --install, just do that then quit
          done <- flip catch quitWithError $ processPackageOpts opts
 
@@ -199,9 +191,16 @@ stMain cgs opts
                when (not $ nobanner session) $ do
                  iputStrLn $ pretty0 banner
                  when (isCons cgs) $ iputStrLn (reflow "With codegen for:" <++> hsep (pretty0 . fst <$> cgs))
+               -- JVM FFI bindings are generated once everything is known: with a package
+               -- file, its `jvmimports` plus any --jvm-ffi-import (findIpkg); otherwise the
+               -- command-line classes against the sources next to the input file. A --build
+               -- handled its own above.
                fname <- if findipkg session
-                           then findIpkg fname
-                           else pure fname
+                           then findIpkg (jvmFfiImportsOf opts) fname
+                           else do d <- getDirs
+                                   srcs <- coreLift (jvmFfiScanSources (source_dir d) opts)
+                                   generateJvmFfiBindings (jvmFfiImportsOf opts) srcs
+                                   pure fname
                setMainFile fname
                result <- case fname of
                     Nothing => logTime 1 "Loading prelude" $ do

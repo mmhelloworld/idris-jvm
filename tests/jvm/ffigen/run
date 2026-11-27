@@ -1,4 +1,4 @@
-rm -rf build
+rm -rf build Java
 GEN=build/jvm-ffi/src/Java/Util.idr
 
 # One invocation: --jvm-ffi-import reflects the class (and its generic signatures) off the
@@ -7,8 +7,10 @@ $1 --no-banner --no-color --console-width 0 \
    --jvm-ffi-import java/util/ArrayList,java/util/HashMap \
    -o ffigen Main.idr > /dev/null 2>&1
 
-# 1. The package module was generated under the build directory, not the source tree.
-if [ -f $GEN ] && [ ! -e Java ]; then
+# 1. The package module was generated under the build directory; no generated source landed in
+#    the source tree. (Only files count: a compiler built with an older runtime leaves an empty
+#    `Java/` directory behind when probing for sources, which is not the generator's doing.)
+if [ -f $GEN ] && [ -z "$(find Java -type f 2>/dev/null)" ]; then
   echo "Generated $GEN: PRESENT, source tree untouched"
 else
   echo "Generated $GEN: MISSING"
@@ -83,4 +85,4 @@ fi
 # 5. Runtime: build a list, read back a typed element; then a HashMap hit/miss as Maybe.
 ./build/exec/ffigen${IDRIS_EXEC_EXT}
 
-rm -rf build
+rm -rf build Java

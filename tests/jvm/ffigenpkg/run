@@ -1,10 +1,12 @@
-rm -rf build
+rm -rf build src/Java
 
 # The package file declares `jvmimports`; `--build` generates, compiles and imports the bindings.
 $1 --no-banner --no-color --console-width 0 --build ffigenpkg.ipkg > /dev/null 2>&1
 
+# No generated source lands in the source tree (only files count: a compiler built with an older
+# runtime leaves an empty `src/Java/` directory behind when probing for sources).
 GEN=build/jvm-ffi/src/Java/Util.idr
-if [ -f $GEN ] && [ ! -e src/Java ]; then
+if [ -f $GEN ] && [ -z "$(find src/Java -type f 2>/dev/null)" ]; then
   echo "Generated $GEN: PRESENT, source tree untouched"
 else
   echo "Generated $GEN: MISSING"
@@ -30,4 +32,4 @@ fi
 
 ./build/exec/ffigenpkg${IDRIS_EXEC_EXT}
 
-rm -rf build
+rm -rf build src/Java

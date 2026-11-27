@@ -113,6 +113,40 @@
           </execution>
         </executions>
       </plugin>
+      <!-- The compiler's classes jar is packed at codegen time by the BOOT compiler's assembler, from
+           the runtime classes embedded in the boot's assembler jar. The launcher classpath is jar-only,
+           so without this step a freshly built compiler would run the boot's (older) runtime even though
+           the loose idris2_app/io/... classes unpacked above are current. Refresh the jar with them and
+           drop the CDS archive, which was dumped against the old jar. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>refresh-runtime-in-classes-jar</id>
+            <phase>process-classes</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <!-- rebuild rather than update: the unpacked class files carry their jar-entry
+                     timestamps, which are older than the archive, so an in-place update would skip them -->
+                <jar destfile="${basedir}/../build/exec/idris2_app/idris2-classes.jar.tmp">
+                  <zipfileset src="${basedir}/../build/exec/idris2_app/idris2-classes.jar"
+                              excludes="io/github/mmhelloworld/idrisjvm/runtime/**,META-INF/MANIFEST.MF"/>
+                  <fileset dir="${basedir}/../build/exec/idris2_app"
+                           includes="io/github/mmhelloworld/idrisjvm/runtime/**"/>
+                </jar>
+                <move file="${basedir}/../build/exec/idris2_app/idris2-classes.jar.tmp"
+                      tofile="${basedir}/../build/exec/idris2_app/idris2-classes.jar"/>
+                <delete file="${basedir}/../build/exec/idris2_app/idris2.jsa" quiet="true"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
